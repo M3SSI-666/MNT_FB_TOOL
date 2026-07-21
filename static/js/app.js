@@ -543,15 +543,38 @@ function renderAccTable(data){
 
 function filterAccounts(){ renderAccTable(_accData); }
 
-function startAccEdit(td){
+// Trường credential — server chỉ trả dấu che, phải nạp giá trị thật khi sửa.
+const ACC_SECRET_FIELDS = ["password","xs","twofa","pass_khoiphuc","email_khoiphuc"];
+const ACC_SECRET_MASK   = "••••••";
+
+async function startAccEdit(td){
     if(td.classList.contains("editing")) return;
     td.classList.add("editing");
-    const id=td.dataset.id, field=td.dataset.field, val=td.dataset.val||"";
+    const id=td.dataset.id, field=td.dataset.field;
+    let val=td.dataset.val||"";
+
+    // Ô đang bị che → hỏi server giá trị thật (chỉ máy tại chỗ được phép).
+    if(ACC_SECRET_FIELDS.includes(field) && val===ACC_SECRET_MASK){
+        td.textContent="…";
+        try{
+            const r=await API.accountSecrets(parseInt(id));
+            val=(r.data&&r.data[field])||"";
+        }catch(e){
+            td.classList.remove("editing"); td.textContent=ACC_SECRET_MASK;
+            Toast.error("Chỉ sửa được credential trên máy tại chỗ");
+            return;
+        }
+    }
+
     const inp=document.createElement("input"); inp.type="text"; inp.value=val==="-"?"":val;
     td.innerHTML=""; td.appendChild(inp); inp.focus(); inp.select();
     async function commit(){
-        const nv=inp.value; td.classList.remove("editing"); td.dataset.val=nv;
+        const nv=inp.value; td.classList.remove("editing");
+        const secret=ACC_SECRET_FIELDS.includes(field);
+        // Không giữ credential trong DOM sau khi sửa xong — che lại ngay.
+        td.dataset.val = secret ? (nv?ACC_SECRET_MASK:"") : nv;
         if(field==="link_profile") td.innerHTML=nv?`<a href="${nv}" target="_blank" style="color:var(--accent);font-size:12px">🔗</a>`:"-";
+        else if(secret) td.textContent=nv?ACC_SECRET_MASK:"-";
         else td.textContent=nv||"-";
         if(nv===val) return;
         td.classList.add("saving");

@@ -109,130 +109,174 @@ def _update_status(schedule_id: int, status: str):
 
 # ── Run 1 dòng lịch ──────────────────────────────────────────
 
+# Lỗi mạng thoáng qua không nên làm mất luôn lượt đăng của cả ngày.
+# CHỈ thử lại nhóm 'transient'; 'ratelimit' cố tình KHÔNG retry vì đăng dồn
+# khi Facebook đang chặn là cách nhanh nhất để acc bị khoá.
+MAX_ATTEMPTS      = 3
+RETRY_BASE_SEC    = 30
+
+
+def _should_retry(cat: str, attempt: int) -> bool:
+    return cat == "transient" and attempt < MAX_ATTEMPTS
+
+
+def _retry_delay(attempt: int) -> float:
+    """Backoff tăng gấp đôi mỗi lần, có jitter để 15 worker gặp sự cố mạng
+    cùng lúc không cùng thử lại một thời điểm."""
+    return jitter(RETRY_BASE_SEC * (2 ** (attempt - 1)), pct=0.3, floor=5)
+
+
+def _attempt_post(item: dict) -> str:
+    """Thực hiện đăng 1 dòng lịch. Trả về hậu tố trạng thái khi thành công,
+    raise exception khi thất bại (để lớp ngoài phân loại và quyết định retry)."""
+    acc_name  = item["ten_acc"]
+    page_name = item["ten_page"]
+    ma_ct     = item["ma_content"]
+    ma_nhom   = item["ma_nhom"]
+    tu_khoa   = item.get("tu_khoa", "")
+    mode      = (item.get("mode", "Hybrid") or "Hybrid").upper()
+
+    ct = get_content_by_code(ma_ct)
+    if not ct:
+        raise Exception(f"Không tìm thấy mã content '{ma_ct}'")
+    content  = ct.get("noi_dung", "").strip()
+    hook_anh = ct.get("link_anh_hook", "").strip()
+    link_anh = ct.get("link_anh", "").strip()
+
+    # Hook đứng đầu
+    if hook_anh:
+        others   = [u.strip() for u in link_anh.split(",") if u.strip() and u.strip() != hook_anh]
+        link_anh = ", ".join([hook_anh] + others)
+
+    logger.info(f"📝 Content ({len(content)}c): {content[:60]}...")
+
+    # ── ĐĂNG BÀI PAGE (wall) — Playwright ────────────────────
+    if LOAI == "page":
+        from page_via_poster import post_page_wall
+        acc_data = get_account_by_name(acc_name)
+        if not acc_data:
+            raise Exception(f"Không tìm thấy acc '{acc_name}'")
+        page_info = get_page_by_name(page_name)
+        page_uid  = page_info.get("page_uid", "") if page_info else ""
+        if not page_uid:
+            raise Exception(f"Không có Page UID cho '{page_name}'")
+        ok = post_page_wall(
+            acc_name=acc_name,
+            page_uid=page_uid,
+            message=content,
+            image_url=link_anh,
+            c_user=acc_data.get("c_user", ""),
+        )
+        if not ok:
+            raise Exception("Đăng tường Page thất bại")
+        return ""
+
+    # ── MODE HYBRID / PAGEVIA ─────────────────────────────────
+    if mode in ("HYBRID", "PAGEVIA"):
+        from page_via_poster import post_page_via
+        if not tu_khoa:
+            raise Exception("Mode=Hybrid nhưng thiếu Từ khóa")
+        page_info = get_page_by_name(page_name)
+        page_uid  = page_info.get("page_uid", "") if page_info else ""
+        if not page_uid:
+            raise Exception(f"Không có Page UID cho '{page_name}'")
+        first_uid = _parse_first_group_uid(ma_nhom)
+        if not first_uid:
+            raise Exception("Thiếu UID nhóm đầu để mở composer")
+        acc_data  = get_account_by_name(acc_name, page_name)
+        c_user_v  = acc_data.get("c_user", "") if acc_data else ""
+        count = post_page_via(
+            acc_name=acc_name, page_uid=page_uid,
+            first_group_uid=first_uid, search_kw=tu_khoa,
+            message=content, image_url=link_anh,
+            c_user=c_user_v,
+        )
+        if not count:
+            raise Exception("Hybrid thất bại")
+        return f" ({count} nhóm)"
+
+    # ── MODE VIA ──────────────────────────────────────────────
+    if mode == "VIA":
+        from via_poster import post_via_crosspost
+        if not tu_khoa:
+            raise Exception("Mode=Via nhưng thiếu Từ khóa")
+        first_uid = _parse_first_group_uid(ma_nhom)
+        if not first_uid:
+            raise Exception("Thiếu UID nhóm đầu để mở composer")
+        acc_data  = get_account_by_name(acc_name, page_name)
+        c_user_v  = acc_data.get("c_user", "") if acc_data else ""
+        count = post_via_crosspost(
+            acc_name=acc_name, search_kw=tu_khoa,
+            message=content, image_url=link_anh,
+            first_group_uid=first_uid,
+            c_user=c_user_v,
+        )
+        if not count:
+            raise Exception("Via thất bại")
+        return f" ({count} nhóm)"
+
+    # ── MODE không hỗ trợ ──────────────────────────────────────
+    # Mode "Page" (đăng qua HTTP API) đã bị loại bỏ — chỉ còn Playwright.
+    raise Exception(f"Mode '{mode}' không được hỗ trợ (chỉ còn Hybrid/Via — Playwright)")
+
+
+def _mark_cookie_dead(acc_name: str):
+    """Đánh dấu account để dễ thấy trong tab Tài khoản."""
+    try:
+        a = get_account_by_name(acc_name)
+        if a:
+            update_account_field(a["id"], "trang_thai", "Cookie hết hạn")
+    except Exception as e:
+        logger.warning(f"⚠️  Không đánh dấu được acc '{acc_name}' hết cookie: {e}")
+
+
 def _run_one(item: dict):
     sid      = item["id"]
     stt      = item.get("stt", sid)
     acc_name = item["ten_acc"]
-    page_name= item["ten_page"]
-    ma_ct    = item["ma_content"]
-    ma_nhom  = item["ma_nhom"]
-    tu_khoa  = item.get("tu_khoa", "")
     mode     = (item.get("mode", "Hybrid") or "Hybrid").upper()
     ts       = datetime.now().strftime("%H:%M")
 
     logger.info(f"\n{'='*55}")
-    logger.info(f"▶ [{LOAI}] STT {stt} | {acc_name} | Mode={mode} | {ma_ct} | {item['gio_dang']}")
+    logger.info(f"▶ [{LOAI}] STT {stt} | {acc_name} | Mode={mode} | {item['ma_content']} | {item['gio_dang']}")
     logger.info(f"{'='*55}")
 
     _update_status(sid, f"🔄 Đang chạy {ts}")
 
-    try:
-        # Lấy content
-        ct = get_content_by_code(ma_ct)
-        if not ct:
-            raise Exception(f"Không tìm thấy mã content '{ma_ct}'")
-        content  = ct.get("noi_dung", "").strip()
-        hook_anh = ct.get("link_anh_hook", "").strip()
-        link_anh = ct.get("link_anh", "").strip()
-
-        # Hook đứng đầu
-        if hook_anh:
-            others   = [u.strip() for u in link_anh.split(",") if u.strip() and u.strip() != hook_anh]
-            link_anh = ", ".join([hook_anh] + others)
-
-        logger.info(f"📝 Content ({len(content)}c): {content[:60]}...")
-
-        # ── ĐĂNG BÀI PAGE (wall) — Playwright ────────────────────
-        if LOAI == "page":
-            from page_via_poster import post_page_wall
-            acc_data = get_account_by_name(acc_name)
-            if not acc_data:
-                raise Exception(f"Không tìm thấy acc '{acc_name}'")
-            page_info = get_page_by_name(page_name)
-            page_uid  = page_info.get("page_uid", "") if page_info else ""
-            if not page_uid:
-                raise Exception(f"Không có Page UID cho '{page_name}'")
-            ok = post_page_wall(
-                acc_name=acc_name,
-                page_uid=page_uid,
-                message=content,
-                image_url=link_anh,
-                c_user=acc_data.get("c_user", ""),
-            )
-            if ok:
-                _update_status(sid, f"✅ {ts}")
-                logger.info(f"✅ STT {stt} hoàn thành (Playwright)")
-            else:
-                _update_status(sid, f"❌ {ts} (đăng tường Page thất bại)")
-
-        # ── MODE HYBRID / PAGEVIA ─────────────────────────────────
-        elif mode in ("HYBRID", "PAGEVIA"):
-            from page_via_poster import post_page_via
-            if not tu_khoa:
-                raise Exception("Mode=Hybrid nhưng thiếu Từ khóa")
-            page_info = get_page_by_name(page_name)
-            page_uid  = page_info.get("page_uid", "") if page_info else ""
-            if not page_uid:
-                raise Exception(f"Không có Page UID cho '{page_name}'")
-            first_uid = _parse_first_group_uid(ma_nhom)
-            if not first_uid:
-                raise Exception("Thiếu UID nhóm đầu để mở composer")
-            acc_data  = get_account_by_name(acc_name, page_name)
-            c_user_v  = acc_data.get("c_user", "") if acc_data else ""
-            count = post_page_via(
-                acc_name=acc_name, page_uid=page_uid,
-                first_group_uid=first_uid, search_kw=tu_khoa,
-                message=content, image_url=link_anh,
-                c_user=c_user_v,
-            )
-            if count:
-                _update_status(sid, f"✅ {ts} ({count} nhóm)")
-                logger.info(f"✅ STT {stt} hoàn thành Hybrid — {count} nhóm")
-            else:
-                _update_status(sid, f"❌ {ts} Hybrid thất bại")
-
-        # ── MODE VIA ──────────────────────────────────────────────
-        elif mode == "VIA":
-            from via_poster import post_via_crosspost
-            if not tu_khoa:
-                raise Exception("Mode=Via nhưng thiếu Từ khóa")
-            first_uid = _parse_first_group_uid(ma_nhom)
-            if not first_uid:
-                raise Exception("Thiếu UID nhóm đầu để mở composer")
-            acc_data  = get_account_by_name(acc_name, page_name)
-            c_user_v  = acc_data.get("c_user", "") if acc_data else ""
-            count = post_via_crosspost(
-                acc_name=acc_name, search_kw=tu_khoa,
-                message=content, image_url=link_anh,
-                first_group_uid=first_uid,
-                c_user=c_user_v,
-            )
-            if count:
-                _update_status(sid, f"✅ {ts} ({count} nhóm)")
-            else:
-                _update_status(sid, f"❌ {ts} Via thất bại")
-
-        # ── MODE không hỗ trợ ──────────────────────────────────────
-        # Mode "Page" (đăng qua HTTP API) đã bị loại bỏ — chỉ còn Playwright.
-        else:
-            raise Exception(f"Mode '{mode}' không được hỗ trợ (chỉ còn Hybrid/Via — Playwright)")
-
-    except CookieDeadError:
-        ts2 = datetime.now().strftime("%H:%M")
-        _update_status(sid, f"❌ {ts2} Cookie hết hạn")
-        logger.error(f"❌ STT {stt}: Cookie hết hạn — acc '{acc_name}' cần đăng nhập lại")
-        # Đánh dấu account để dễ thấy trong tab Tài khoản
+    for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            a = get_account_by_name(acc_name)
-            if a:
-                update_account_field(a["id"], "trang_thai", "Cookie hết hạn")
-        except Exception:
-            pass
-    except Exception as e:
-        ts2 = datetime.now().strftime("%H:%M")
-        cat, label = classify_error(e)
-        _update_status(sid, f"❌ {ts2} {label}")
-        logger.error(f"❌ STT {stt} lỗi [{cat}]: {e}")
+            suffix = _attempt_post(item)
+            done   = datetime.now().strftime("%H:%M")
+            _update_status(sid, f"✅ {done}{suffix}")
+            logger.info(f"✅ STT {stt} hoàn thành{suffix}")
+            return
+
+        except CookieDeadError:
+            ts2 = datetime.now().strftime("%H:%M")
+            _update_status(sid, f"❌ {ts2} Cookie hết hạn")
+            logger.error(f"❌ STT {stt}: Cookie hết hạn — acc '{acc_name}' cần đăng nhập lại")
+            _mark_cookie_dead(acc_name)
+            return
+
+        except Exception as e:
+            cat, label = classify_error(e)
+
+            if _should_retry(cat, attempt):
+                delay = _retry_delay(attempt)
+                logger.warning(
+                    f"⚠️  STT {stt} lỗi tạm thời (lần {attempt}/{MAX_ATTEMPTS}): {e} "
+                    f"— thử lại sau {delay:.0f}s"
+                )
+                _update_status(sid, f"🔄 Thử lại {attempt+1}/{MAX_ATTEMPTS} sau {delay:.0f}s")
+                time.sleep(delay)
+                continue
+
+            ts2 = datetime.now().strftime("%H:%M")
+            if cat == "transient":
+                label = f"{label} (đã thử {MAX_ATTEMPTS} lần)"
+            _update_status(sid, f"❌ {ts2} {label}")
+            logger.error(f"❌ STT {stt} lỗi [{cat}]: {e}")
+            return
 
 
 # ── Auto-refresh cookie ───────────────────────────────────────
@@ -276,12 +320,21 @@ def main():
         while True:
             now = datetime.now()
 
-            # Daily reset 00:01 — đưa MỌI dòng về Chờ (trừ 'X' tắt thủ công)
-            if now.hour == 0 and now.minute == 1 and last_reset_date != now.date():
+            # Reset đầu ngày — đưa MỌI dòng về Chờ (trừ 'X' tắt thủ công).
+            # Không khớp đúng phút 00:01: vòng lặp ngủ 60s CỘNG thời gian giãn
+            # cách giữa các worker, nên hoàn toàn có thể trôi qua phút đó và bỏ
+            # lỡ reset cả ngày. Chỉ cần đã sang ngày mới là reset.
+            if last_reset_date != now.date():
+                first_run       = last_reset_date is None
                 last_reset_date = now.date()
-                from db import reset_schedules_to_wait
-                n = reset_schedules_to_wait(LOAI)
-                logger.info(f"🌅 Reset ngày mới — {LOAI}: {n} dòng về Chờ")
+                if first_run:
+                    # Khởi động giữa ngày: chỉ ghi nhận ngày hiện tại. Reset ở
+                    # đây sẽ đưa các dòng ĐÃ đăng hôm nay về Chờ và đăng lại.
+                    logger.info(f"📅 Bắt đầu theo dõi ngày {now.date()} — không reset")
+                else:
+                    from db import reset_schedules_to_wait
+                    n = reset_schedules_to_wait(LOAI)
+                    logger.info(f"🌅 Reset ngày mới — {LOAI}: {n} dòng về Chờ")
 
             # Refresh cookie mỗi 10 phút
             if time.time() - last_refresh_check >= 600:

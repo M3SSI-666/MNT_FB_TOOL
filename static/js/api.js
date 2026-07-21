@@ -21,6 +21,7 @@ const API = {
     saveAccount:     (data)       => API.post("/api/accounts/save", data),
     deleteAccount:   (id)         => API.del(`/api/accounts/${id}`),
     updateAccField:  (id, f, v)   => API.post(`/api/accounts/${id}/field`, {field:f, value:v}),
+    accountSecrets:  (id)         => API.get(`/api/accounts/${id}/secrets`),
     reorderAccounts: (ids)        => API.post("/api/accounts/reorder", ids),
     insertAccRow:    (id, pos)    => API.post(`/api/accounts/${id}/insert-row`, {position:pos}),
 

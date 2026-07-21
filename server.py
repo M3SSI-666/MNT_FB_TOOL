@@ -368,16 +368,50 @@ def run_stop(loai):
 # API — Accounts
 # ═══════════════════════════════════════════════════════════════
 
+# Các trường credential không bao giờ được trả về trong danh sách tài khoản.
+# Muốn xem giá trị thật phải gọi /api/accounts/<id>/secrets từ máy local.
+SECRET_ACCOUNT_FIELDS = ("password", "xs", "twofa", "pass_khoiphuc", "email_khoiphuc")
+SECRET_MASK = "••••••"
+
+
+def _mask_account(row: dict) -> dict:
+    out = dict(row)
+    for f in SECRET_ACCOUNT_FIELDS:
+        out[f] = SECRET_MASK if (out.get(f) or "").strip() else ""
+    return out
+
+
 @app.route("/api/accounts")
 def api_accounts():
     loai = request.args.get("loai")
     rows = get_accounts(loai=loai)
-    return jsonify({"ok": True, "data": rows})
+    return jsonify({"ok": True, "data": [_mask_account(r) for r in rows]})
+
+
+@app.route("/api/accounts/<int:acc_id>/secrets")
+def api_account_secrets(acc_id):
+    """Trả về credential thật của 1 tài khoản — CHỈ cho máy local.
+
+    Phiên đăng nhập từ xa cố tình không được phép, vì mật khẩu Facebook và mã
+    2FA không nên đi qua mạng chỉ để hiển thị trên bảng điều khiển.
+    """
+    if not _is_local():
+        return jsonify({"ok": False, "error": "Chỉ xem được trên máy tại chỗ"}), 403
+    from db import get_account_by_id
+    row = get_account_by_id(acc_id)
+    if not row:
+        return jsonify({"ok": False, "error": "Không tìm thấy tài khoản"}), 404
+    return jsonify({"ok": True, "data": {f: row.get(f, "") for f in SECRET_ACCOUNT_FIELDS}})
 
 
 @app.route("/api/accounts/save", methods=["POST"])
 def api_accounts_save():
     data = request.json or {}
+    # Form gửi lại dấu che nếu người dùng không sửa trường đó — bỏ qua để
+    # không ghi đè credential thật bằng chuỗi "••••••".
+    for f in SECRET_ACCOUNT_FIELDS:
+        if data.get(f) == SECRET_MASK:
+            data.pop(f)
     try:
         acc_id = upsert_account(data)
         return jsonify({"ok": True, "id": acc_id})
@@ -388,6 +422,8 @@ def api_accounts_save():
 @app.route("/api/accounts/<int:acc_id>/field", methods=["POST"])
 def api_accounts_field(acc_id):
     body = request.json or {}
+    if body.get("field") in SECRET_ACCOUNT_FIELDS and body.get("value") == SECRET_MASK:
+        return jsonify({"ok": True, "skipped": True})   # không đổi gì
     try:
         update_account_field(acc_id, body["field"], body["value"])
         return jsonify({"ok": True})

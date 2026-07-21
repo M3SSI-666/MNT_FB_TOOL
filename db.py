@@ -11,11 +11,18 @@ from datetime import datetime
 DB_PATH = Path(__file__).parent / "data" / "app.db"
 
 
+# 4 tiến trình scheduler × MAX_WORKERS luồng cùng ghi vào một file SQLite.
+# Không có busy timeout thì luồng thứ hai vấp "database is locked" ngay lập tức,
+# nên cho nó chờ tới 15s để lấy khoá thay vì fail.
+BUSY_TIMEOUT_SEC = 15
+
+
 def _conn():
     """Tạo connection với row_factory để trả về dict."""
-    con = sqlite3.connect(str(DB_PATH))
+    con = sqlite3.connect(str(DB_PATH), timeout=BUSY_TIMEOUT_SEC)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA journal_mode=WAL")   # concurrent reads
+    con.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_SEC * 1000}")
     con.execute("PRAGMA foreign_keys=ON")
     return con
 
@@ -176,6 +183,12 @@ def insert_account_at(ref_id: int, position: str = "below") -> int:
             (new_idx,)
         )
         return cur.lastrowid
+
+
+def get_account_by_id(acc_id: int) -> dict | None:
+    with _conn() as con:
+        r = con.execute("SELECT * FROM accounts WHERE id = ?", (acc_id,)).fetchone()
+        return dict(r) if r else None
 
 
 def get_account_by_name(ten_acc: str, ten_page: str = "") -> dict | None:

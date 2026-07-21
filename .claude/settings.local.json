@@ -63,7 +63,11 @@
       "Bash(python test_basic.py)",
       "Bash(echo \"Exit code: $? \\(0 = tất cả pass\\)\")",
       "Bash(git --version)",
-      "Bash(git init *)"
+      "Bash(git init *)",
+      "Bash(git -c user.name=Duong -c user.email=tunglangvinh1234@gmail.com commit -q -m '@ *)",
+      "Bash(git -c user.name=\"Duong\" -c user.email=\"tunglangvinh1234@gmail.com\" commit -q --amend -F -)",
+      "Bash(python -m py_compile scheduler.py server.py db.py storage.py utils.py)",
+      "Bash(SCHEDULER_LOAI=homestay SCHEDULER_LOG_FILE=/dev/null python -c \"import scheduler; print\\('IMPORT OK', scheduler.MAX_ATTEMPTS\\)\")"
     ]
   }
 }
