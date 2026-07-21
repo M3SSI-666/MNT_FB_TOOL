@@ -1,0 +1,28 @@
+# ── Dữ liệu nhạy cảm (KHÔNG commit) ─────────────────────────────
+# LƯU Ý: git KHÔNG hỗ trợ comment ở cuối dòng — mọi ghi chú phải nằm
+# trên dòng riêng, nếu không pattern sẽ bị hỏng và file lọt vào commit.
+
+# SQLite (mật khẩu, cookie, 2FA) + media
+data/
+# cookie tài khoản Facebook
+cookies/*.json
+# profile trình duyệt (chứa session đăng nhập)
+profiles/
+
+# ── Runtime / rác ───────────────────────────────────────────────
+logs/*.log
+.runner_*.pid
+debug_*.png
+*.png
+
+# ── Python ──────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# ── Giữ lại thư mục rỗng (placeholder) ──────────────────────────
+!cookies/.gitkeep
+!logs/.gitkeep
+!profiles/.gitkeep
