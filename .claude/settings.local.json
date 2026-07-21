@@ -75,7 +75,8 @@
       "Bash(python -m py_compile via_poster.py page_via_poster.py fb_common.py server.py scheduler.py db.py)",
       "Bash(python -m pip install --dry-run -r requirements.txt)",
       "Bash(git add *)",
-      "Bash(git -c user.name=\"Duong\" -c user.email=\"tunglangvinh1234@gmail.com\" commit -q -F -)"
+      "Bash(git -c user.name=\"Duong\" -c user.email=\"tunglangvinh1234@gmail.com\" commit -q -F -)",
+      "Bash(sed -i 's|^python test_basic.py$|python test_basic.py   # 36 assertion, chạy trên DB tạm — không đụng data thật|' README.md)"
     ]
   }
 }

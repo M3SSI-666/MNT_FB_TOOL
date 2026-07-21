@@ -42,17 +42,32 @@ Bảng điều khiển: `http://localhost:8080`
 | `server.py` | Flask backend + login + mở cửa sổ app |
 | `scheduler.py` | Vòng lặp đọc lịch, chạy đăng bài đúng giờ |
 | `via_poster.py` / `page_via_poster.py` | Đăng bài bằng Playwright (Via / Hybrid / tường Page) |
+| `fb_common.py` | Helper Playwright dùng chung cho 2 file poster ở trên |
 | `cookie_exporter.py` | Đọc/refresh cookie từ profile trình duyệt |
 | `db.py` | Lớp dữ liệu SQLite (`data/app.db`) |
 | `utils.py` | Logger, jitter (chống nhịp cố định), phân loại lỗi |
 | `static/` `templates/` | Giao diện web |
 
+> Sửa selector Facebook: nếu hàm nằm trong `fb_common.py` thì chỉ sửa một chỗ,
+> cả hai poster cùng nhận. Đừng copy hàm ngược lại vào từng file.
+
 ## Mã lỗi trạng thái lịch
 - **Cookie hết hạn** → tài khoản bị đăng xuất, cần lấy lại `xs` (account tự bị đánh dấu).
-- **Lỗi mạng/tạm thời** → thử lại sau.
+- **Lỗi mạng/tạm thời** → đã tự thử lại 3 lần (cách nhau ~30s rồi ~60s) mà vẫn hỏng.
+- **Bị giới hạn — thử lại sau** → Facebook đang chặn. Cố ý **không** tự thử lại,
+  vì đăng dồn lúc này là cách nhanh nhất để acc bị khoá. Nên giãn lịch ra.
 - **Không thấy nút (FB đổi giao diện?)** → cần cập nhật selector.
+
+## Bảo mật
+- Bảng Tài khoản **che** password / `xs` / 2FA / thông tin khôi phục. Máy tại chỗ
+  bấm vào ô là hiện giá trị thật để sửa; phiên **truy cập từ xa không xem được**
+  credential (cố ý — mật khẩu Facebook không nên đi qua mạng chỉ để hiển thị).
+- `data/`, `cookies/`, `profiles/` không bao giờ được commit. Nếu sửa `.gitignore`,
+  nhớ rằng **git không hỗ trợ comment ở cuối dòng** — ghi chú phải nằm trên dòng
+  riêng, nếu không pattern hỏng và dữ liệu nhạy cảm lọt vào lịch sử git.
+- Kiểm tra nhanh trước khi commit: `git check-ignore -q data/app.db && echo OK`
 
 ## Test
 ```
-python test_basic.py
+python test_basic.py   # 36 assertion, chạy trên DB tạm — không đụng data thật
 ```
