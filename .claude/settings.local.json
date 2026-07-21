@@ -67,7 +67,15 @@
       "Bash(git -c user.name=Duong -c user.email=tunglangvinh1234@gmail.com commit -q -m '@ *)",
       "Bash(git -c user.name=\"Duong\" -c user.email=\"tunglangvinh1234@gmail.com\" commit -q --amend -F -)",
       "Bash(python -m py_compile scheduler.py server.py db.py storage.py utils.py)",
-      "Bash(SCHEDULER_LOAI=homestay SCHEDULER_LOG_FILE=/dev/null python -c \"import scheduler; print\\('IMPORT OK', scheduler.MAX_ATTEMPTS\\)\")"
+      "Bash(SCHEDULER_LOAI=homestay SCHEDULER_LOG_FILE=/dev/null python -c \"import scheduler; print\\('IMPORT OK', scheduler.MAX_ATTEMPTS\\)\")",
+      "Bash(python -X utf8 -)",
+      "Bash(python -m py_compile via_poster.py page_via_poster.py fb_common.py)",
+      "Bash(python -X utf8 -c ' *)",
+      "Bash(python -m pip list)",
+      "Bash(python -m py_compile via_poster.py page_via_poster.py fb_common.py server.py scheduler.py db.py)",
+      "Bash(python -m pip install --dry-run -r requirements.txt)",
+      "Bash(git add *)",
+      "Bash(git -c user.name=\"Duong\" -c user.email=\"tunglangvinh1234@gmail.com\" commit -q -F -)"
     ]
   }
 }

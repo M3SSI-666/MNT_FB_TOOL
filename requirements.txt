@@ -1,3 +1,7 @@
-flask>=3.0.0
-playwright
-pywebview
+# Ghim theo minor version: cho phép bản vá lỗi, chặn bản minor mới đổi API.
+# Playwright đặc biệt nhạy — mỗi bản minor có thể đổi selector engine và làm
+# hỏng toàn bộ luồng đăng bài trên máy vừa cài mới.
+flask>=3.1,<3.2
+werkzeug>=3.1,<3.2
+playwright>=1.60,<1.61
+pywebview>=6.2,<6.3
