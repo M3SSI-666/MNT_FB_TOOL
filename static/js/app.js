@@ -129,6 +129,7 @@ const PAGE_TITLES = {
 let _logInterval = null;
 function navigate(page) {
     if(page!=="logs") { clearInterval(_logInterval); _logInterval=null; }
+    _stopSchedAutoRefresh();   // rời trang lịch → ngừng tự làm mới
     document.querySelectorAll(".nav-item").forEach(el=>el.classList.toggle("active",el.dataset.page===page));
     document.querySelectorAll(".page").forEach(el=>el.style.display=el.id===`page-${page}`?"":"none");
     document.getElementById("header-title").textContent = PAGE_TITLES[page]||page;
@@ -147,11 +148,33 @@ function loadPageData(page) {
         const loai=page.replace("lich-","");
         renderSchedulePage(loai);
         loadSchedule(loai);
+        _startSchedAutoRefresh(loai);
     }
 }
 
 async function hardRefresh() {
     loadPageData(document.querySelector(".nav-item.active")?.dataset.page||"accounts");
+}
+
+// ── Tự làm mới bảng lịch mỗi 3 phút ───────────────────────────
+// Để người dùng theo dõi tình hình đăng bài mà không phải bấm Refresh.
+let _schedInterval = null;
+const SCHED_REFRESH_MS = 3 * 60 * 1000;   // 3 phút
+
+function _stopSchedAutoRefresh(){
+    clearInterval(_schedInterval);
+    _schedInterval = null;
+}
+
+function _startSchedAutoRefresh(loai){
+    _stopSchedAutoRefresh();   // tránh chồng nhiều timer khi chuyển tab / bấm Refresh
+    _schedInterval = setInterval(()=>_autoRefreshSchedule(loai), SCHED_REFRESH_MS);
+}
+
+async function _autoRefreshSchedule(loai){
+    // Đang sửa dở một ô → hoãn lần này, nếu vẽ lại bảng sẽ mất nội dung đang gõ.
+    if(document.querySelector(`#${loai}-table .editing`)) return;
+    await loadSchedule(loai);
 }
 
 // ── Tham gia nhóm ─────────────────────────────────────────────
