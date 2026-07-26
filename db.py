@@ -51,6 +51,8 @@ def init_db():
             pass_khoiphuc   TEXT DEFAULT '',
             twofa           TEXT DEFAULT '',
             ghi_chu         TEXT DEFAULT '',
+            nuoi_nick       INTEGER DEFAULT 0,      -- 1 = bật nuôi nick cho acc này
+            ngay_bat_dau_nuoi TEXT DEFAULT '',      -- mốc bắt đầu nuôi (rỗng = dùng created_at)
             created_at      TEXT DEFAULT (datetime('now','localtime'))
         );
 
@@ -119,6 +121,7 @@ def init_db():
             tu_khoa         TEXT DEFAULT '',
             mode            TEXT DEFAULT 'Hybrid',
             trang_thai      TEXT DEFAULT 'Chờ',     -- Chờ / ✅ HH:MM / ❌... / X
+            hoat_dong       TEXT DEFAULT 'dang_bai', -- dang_bai | nuoi_nick (slot bị chuyển thành phiên nuôi)
             updated_at      TEXT DEFAULT (datetime('now','localtime'))
         );
         CREATE INDEX IF NOT EXISTS idx_schedules_loai_status
@@ -138,6 +141,16 @@ def init_db():
             # Gán thứ tự ban đầu theo id để giữ nguyên thứ tự đang thấy
             for idx, row in enumerate(con.execute("SELECT id FROM pages ORDER BY id").fetchall()):
                 con.execute("UPDATE pages SET order_idx=? WHERE id=?", (idx, row["id"]))
+
+        # ── Migration: cột cho tính năng nuôi nick (DB cũ chưa có) ──
+        def _add_col(table, col, ddl):
+            existing = [r["name"] for r in con.execute(f"PRAGMA table_info({table})").fetchall()]
+            if col not in existing:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+
+        _add_col("accounts",  "nuoi_nick",         "nuoi_nick INTEGER DEFAULT 0")
+        _add_col("accounts",  "ngay_bat_dau_nuoi", "ngay_bat_dau_nuoi TEXT DEFAULT ''")
+        _add_col("schedules", "hoat_dong",         "hoat_dong TEXT DEFAULT 'dang_bai'")
     print(f"✅ DB initialized: {DB_PATH}")
 
 
@@ -242,7 +255,8 @@ def update_account_field(acc_id: int, field: str, value: str):
     safe = {
         "ten_acc","loai_dang","thoi_gian_nghi","link_profile","email_sdt",
         "password","ten_page","c_user","xs","refresh","trang_thai",
-        "email_khoiphuc","pass_khoiphuc","twofa","ghi_chu"
+        "email_khoiphuc","pass_khoiphuc","twofa","ghi_chu",
+        "nuoi_nick","ngay_bat_dau_nuoi"
     }
     if field not in safe:
         raise ValueError(f"Field không hợp lệ: {field}")
@@ -429,12 +443,15 @@ def replace_schedules(loai: str, rows: list[dict]):
     with _conn() as con:
         con.execute("DELETE FROM schedules WHERE loai=?", (loai,))
         if rows:
+            # Mặc định hoat_dong='dang_bai' nếu row không khai báo (lịch cũ / không nuôi).
+            for r in rows:
+                r.setdefault("hoat_dong", "dang_bai")
             con.executemany(
                 """INSERT INTO schedules
                    (loai, stt, ma_content, ten_acc, ten_page, gio_dang,
-                    ma_nhom, tu_khoa, mode, trang_thai)
+                    ma_nhom, tu_khoa, mode, trang_thai, hoat_dong)
                    VALUES (:loai,:stt,:ma_content,:ten_acc,:ten_page,:gio_dang,
-                           :ma_nhom,:tu_khoa,:mode,:trang_thai)""",
+                           :ma_nhom,:tu_khoa,:mode,:trang_thai,:hoat_dong)""",
                 rows
             )
 

@@ -76,7 +76,12 @@
       "Bash(python -m pip install --dry-run -r requirements.txt)",
       "Bash(git add *)",
       "Bash(git -c user.name=\"Duong\" -c user.email=\"tunglangvinh1234@gmail.com\" commit -q -F -)",
-      "Bash(sed -i 's|^python test_basic.py$|python test_basic.py   # 36 assertion, chạy trên DB tạm — không đụng data thật|' README.md)"
+      "Bash(sed -i 's|^python test_basic.py$|python test_basic.py   # 36 assertion, chạy trên DB tạm — không đụng data thật|' README.md)",
+      "Bash(sed -i 's/const t={fn,ms,next:ms,/const t={fn,ms,next:now+ms,/' /tmp/sched_test.js)",
+      "Bash(node /tmp/sched_test.js)",
+      "Bash(rm -f /tmp/sched_test.js)",
+      "Bash(python -m py_compile nuoi_nick.py scheduler.py server.py db.py)",
+      "Bash(python -m py_compile nuoi_nick.py)"
     ]
   }
 }

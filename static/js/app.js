@@ -495,6 +495,7 @@ const ACC_FIELDS = [
     {key:"xs",label:"xs",mono:true},
     {key:"refresh",label:"Refresh"},
     {key:"trang_thai",label:"Trạng thái"},
+    {key:"nuoi_nick",label:"Nuôi",type:"check"},
     {key:"email_khoiphuc",label:"Email KP"},
     {key:"pass_khoiphuc",label:"Pass KP"},
     {key:"twofa",label:"2FA"},
@@ -505,7 +506,7 @@ let _accData=[];
 async function loadAccounts(){
     const tbody=document.getElementById("acc-table");
     const thead=document.getElementById("acc-thead");
-    tbody.innerHTML=`<tr><td colspan="17" class="loading"><span class="spin">↻</span></td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="18" class="loading"><span class="spin">↻</span></td></tr>`;
     try{
         const res=await API.accounts();
         _accData=res.data;
@@ -522,7 +523,7 @@ async function loadAccounts(){
                 .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1;min-width:80px"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px">${s.v}</div></div>`).join("");
         }
         renderAccTable(res.data);
-    }catch(e){ tbody.innerHTML=`<tr><td colspan="17" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
+    }catch(e){ tbody.innerHTML=`<tr><td colspan="18" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
 }
 
 function renderAccTable(data){
@@ -531,12 +532,18 @@ function renderAccTable(data){
     const filter=document.getElementById("acc-filter-loai")?.value||"";
     const rows=data.filter(r=>!filter||((r.loai_dang||"").includes(filter)));
     if(count) count.textContent=`${rows.length}/${data.length} tài khoản`;
-    if(!rows.length){ tbody.innerHTML=`<tr><td colspan="17" class="empty">Không có tài khoản nào</td></tr>`; return; }
+    if(!rows.length){ tbody.innerHTML=`<tr><td colspan="18" class="empty">Không có tài khoản nào</td></tr>`; return; }
     tbody.innerHTML=rows.map(r=>{
         const CENTER_KEYS=["loai_dang","thoi_gian_nghi","link_profile","refresh","trang_thai"];
         const tds=ACC_FIELDS.map(f=>{
             const val=(r[f.key]||"").toString();
             const esc=val.replace(/"/g,"&quot;");
+            if(f.type==="check"){
+                const on=(val==="1");
+                return `<td style="text-align:center"><input type="checkbox" ${on?"checked":""}
+                    onclick="toggleAccCheck(event,${r.id},'${f.key}')"
+                    style="width:16px;height:16px;cursor:pointer" title="Bật/tắt nuôi nick"></td>`;
+            }
             const center=CENTER_KEYS.includes(f.key)?"text-align:center;":"";
             const style=`${center}font-size:${f.mono?"11px":"12px"};color:var(--text-secondary);${f.mono?"font-family:var(--font-mono);":""}max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
             if(f.key==="loai_dang"){
@@ -565,6 +572,15 @@ function renderAccTable(data){
 }
 
 function filterAccounts(){ renderAccTable(_accData); }
+
+async function toggleAccCheck(e, id, field){
+    const on = e.target.checked;
+    try{
+        const r = await API.updateAccField(id, field, on ? 1 : 0);
+        if(r.ok){ const row=_accData.find(x=>x.id===id); if(row) row[field]=on?1:0; }
+        else { Toast.error(r.error); e.target.checked = !on; }
+    }catch(err){ Toast.error(err.message); e.target.checked = !on; }
+}
 
 // Trường credential — server chỉ trả dấu che, phải nạp giá trị thật khi sửa.
 const ACC_SECRET_FIELDS = ["password","xs","twofa","pass_khoiphuc","email_khoiphuc"];
@@ -1388,14 +1404,20 @@ function renderScheduleTable(loai,data){
         const st=r.trang_thai||"";
         let stBadge;
         if(st.startsWith("✅")) stBadge=`<span class="badge badge-success">${st}</span>`;
+        else if(st.startsWith("🌱")) stBadge=`<span class="badge" style="background:#064e3b;color:#6ee7b7">${st}</span>`;
         else if(st.startsWith("❌")) stBadge=`<span class="badge badge-danger">${st.slice(0,30)}</span>`;
         else if(st==="X") stBadge=`<span class="badge badge-muted">X</span>`;
         else if(st==="Chờ") stBadge=`<span class="badge badge-warning">Chờ</span>`;
         else stBadge=`<span class="badge badge-muted">${st||"-"}</span>`;
+        // Slot đã bị chuyển thành phiên nuôi nick — hiển thị khác để dễ phân biệt.
+        const isWarm=(r.hoat_dong||"dang_bai")==="nuoi_nick";
+        const contentCell=isWarm
+            ? `<td style="text-align:center"><span class="badge" style="background:#064e3b;color:#6ee7b7">🌱 Nuôi nick</span></td>`
+            : sc(r,"ma_content","text-align:center");
         return `<tr>
             ${sc(r,"gio_dang","font-weight:600;white-space:nowrap")}
             ${sc(r,"ten_acc","")} ${sc(r,"ten_page","color:var(--text-secondary)")}
-            ${sc(r,"ma_content","text-align:center")}
+            ${contentCell}
             ${sc(r,"tu_khoa","text-align:center;color:var(--text-secondary)")}
             ${sc(r,"mode","text-align:center")}
             <td class="editable" data-id="${r.id}" data-loai="${loai}" data-field="trang_thai" data-val="${(r.trang_thai||"").replace(/"/g,"&quot;")}" style="text-align:center" onclick="startSchedEdit(this)">${stBadge}</td>
@@ -1559,7 +1581,7 @@ async function runGen(){
                 keyword_pool:kwPool, acc_settings:accSettings,
             });
         }
-        if(res.ok){ Toast.success(`✅ Đã tạo ${res.total} dòng (${res.from}→${res.to})`); closeGen(); loadSchedule(_genLoai); }
+        if(res.ok){ Toast.success(`✅ Đã tạo ${res.total} dòng${res.nuoi?` · 🌱 ${res.nuoi} nuôi`:""} (${res.from}→${res.to})`); closeGen(); loadSchedule(_genLoai); }
         else Toast.error(res.error);
     }catch(e){ Toast.error(e.message); }
     btn.disabled=false; btn.innerHTML="▶ Tạo lịch";

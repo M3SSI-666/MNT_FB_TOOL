@@ -230,7 +230,44 @@ def _mark_cookie_dead(acc_name: str):
         logger.warning(f"⚠️  Không đánh dấu được acc '{acc_name}' hết cookie: {e}")
 
 
+def _run_warming(item: dict):
+    """Slot đã bị chuyển thành nuôi nick — chạy phiên nuôi thay vì đăng bài."""
+    sid      = item["id"]
+    stt      = item.get("stt", sid)
+    acc_name = item["ten_acc"]
+    ts       = datetime.now().strftime("%H:%M")
+
+    logger.info(f"\n{'='*55}")
+    logger.info(f"🌱 [{LOAI}] STT {stt} | {acc_name} | NUÔI NICK | {item['gio_dang']}")
+    logger.info(f"{'='*55}")
+    _update_status(sid, f"🌱 Đang nuôi {ts}")
+
+    try:
+        from nuoi_nick import run_warming_session
+        acc_data = get_account_by_name(acc_name)
+        c_user_v = acc_data.get("c_user", "") if acc_data else ""
+        run_warming_session(acc_name=acc_name, c_user=c_user_v)
+        done = datetime.now().strftime("%H:%M")
+        _update_status(sid, f"🌱 {done} (đã nuôi)")
+        logger.info(f"✅ STT {stt} nuôi xong")
+    except CookieDeadError:
+        ts2 = datetime.now().strftime("%H:%M")
+        _update_status(sid, f"❌ {ts2} Cookie hết hạn")
+        logger.error(f"❌ STT {stt}: Cookie hết hạn khi nuôi — acc '{acc_name}'")
+        _mark_cookie_dead(acc_name)
+    except Exception as e:
+        ts2 = datetime.now().strftime("%H:%M")
+        cat, label = classify_error(e)
+        _update_status(sid, f"❌ {ts2} Nuôi lỗi: {label}")
+        logger.error(f"❌ STT {stt} nuôi lỗi [{cat}]: {e}")
+
+
 def _run_one(item: dict):
+    # Slot nuôi nick đi đường riêng, không dùng retry của đăng bài.
+    if (item.get("hoat_dong") or "dang_bai") == "nuoi_nick":
+        _run_warming(item)
+        return
+
     sid      = item["id"]
     stt      = item.get("stt", sid)
     acc_name = item["ten_acc"]

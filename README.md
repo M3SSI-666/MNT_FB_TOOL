@@ -43,6 +43,7 @@ Bảng điều khiển: `http://localhost:8080`
 | `scheduler.py` | Vòng lặp đọc lịch, chạy đăng bài đúng giờ |
 | `via_poster.py` / `page_via_poster.py` | Đăng bài bằng Playwright (Via / Hybrid / tường Page) |
 | `fb_common.py` | Helper Playwright dùng chung cho 2 file poster ở trên |
+| `nuoi_nick.py` | Tính năng nuôi nick (ramp-up + phiên hoạt động giống người) |
 | `cookie_exporter.py` | Đọc/refresh cookie từ profile trình duyệt |
 | `db.py` | Lớp dữ liệu SQLite (`data/app.db`) |
 | `utils.py` | Logger, jitter (chống nhịp cố định), phân loại lỗi |
@@ -50,6 +51,22 @@ Bảng điều khiển: `http://localhost:8080`
 
 > Sửa selector Facebook: nếu hàm nằm trong `fb_common.py` thì chỉ sửa một chỗ,
 > cả hai poster cùng nhận. Đừng copy hàm ngược lại vào từng file.
+
+## Nuôi nick
+Tick cột **Nuôi** ở bảng Tài khoản để bật cho từng nick. Khi **Tạo lịch**, một số
+slot đăng của nick đó bị **chuyển thành phiên nuôi** (hiện badge 🌱 trong bảng lịch)
+— nick càng non chuyển càng nhiều (đăng ít, nuôi nhiều), càng già chuyển càng ít.
+Cùng scheduler chạy, tới slot nuôi thì mở phiên 5–8 phút làm các hành động **ngẫu
+nhiên tập con + xáo thứ tự**: lướt feed, xem story, like, xác nhận lời mời kết bạn.
+
+> **Mặc định an toàn:** phần *gửi* lời mời kết bạn và *nhắn tin* **TẮT sẵn**
+> (`nuoi_enable_addfriend`, `nuoi_enable_message` trong bảng `settings`). Gửi kết
+> bạn hàng loạt là hành động dễ khóa nick nhất — chỉ bật khi đã chạy thử
+> non-headless và chấp nhận rủi ro. Nhắn tin cần thư viện câu (`nuoi_msg_pool`) +
+> nhóm chat nội bộ (`nuoi_msg_group_url`), xây sau.
+>
+> Chỉnh thông số nuôi (số like, số/tốc độ kết bạn, độ dài phiên, bật/tắt hành động)
+> qua bảng `settings` — xem mặc định ở `DEFAULTS` trong [nuoi_nick.py](nuoi_nick.py).
 
 ## Mã lỗi trạng thái lịch
 - **Cookie hết hạn** → tài khoản bị đăng xuất, cần lấy lại `xs` (account tự bị đánh dấu).

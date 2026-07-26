@@ -93,6 +93,63 @@ check("parse UID số thuần",            _pfg("123456789") == "123456789")
 check("parse slug chữ",                _pfg("homestaytimescity") == "homestaytimescity")
 check("chuỗi rỗng -> rỗng",            _pfg("") == "")
 
+# ── nuôi nick: ramp-up & chọn slot (logic thuần) ───────────────────────────
+import nuoi_nick
+from datetime import date
+
+# warm_ratio: nick non tỷ lệ cao, nick già tỷ lệ thấp
+check("nick 3 ngày ratio cao",         nuoi_nick.warm_ratio(3) == 0.7)
+check("nick 10 ngày ratio vừa",        nuoi_nick.warm_ratio(10) == 0.5)
+check("nick 25 ngày ratio thấp hơn",   nuoi_nick.warm_ratio(25) == 0.3)
+check("nick 60 ngày ratio thấp nhất",  nuoi_nick.warm_ratio(60) == 0.15)
+check("ratio giảm dần theo tuổi",
+      nuoi_nick.warm_ratio(3) > nuoi_nick.warm_ratio(10) > nuoi_nick.warm_ratio(25) > nuoi_nick.warm_ratio(60))
+
+# account_age_days
+check("tuổi nick tính đúng",           nuoi_nick.account_age_days("2026-07-20", today=date(2026,7,27)) == 7)
+check("rỗng -> 0 tuổi",                nuoi_nick.account_age_days("", "", today=date(2026,7,27)) == 0)
+check("ngay_bat_dau ưu tiên created",  nuoi_nick.account_age_days("2026-07-25","2026-01-01",today=date(2026,7,27)) == 2)
+
+# plan_warming_conversion: chỉ acc bật nuôi mới bị chuyển, số lượng theo ratio
+def _mkrows(acc, n):
+    return [{"ten_acc":acc,"gio_dang":f"{7+i:02d}:00","stt":i+1} for i in range(n)]
+
+sched = _mkrows("A",10) + _mkrows("B",10)
+n_conv = nuoi_nick.plan_warming_conversion(sched, {"A":3})   # chỉ A bật nuôi, non (ratio .7)
+a_warm = sum(1 for r in sched if r["ten_acc"]=="A" and r["hoat_dong"]=="nuoi_nick")
+b_warm = sum(1 for r in sched if r["ten_acc"]=="B" and r["hoat_dong"]=="nuoi_nick")
+check("acc không bật nuôi: 0 slot",    b_warm == 0)
+check("acc non chuyển ~70% (7/10)",    a_warm == 7)
+check("tổng converted khớp",           n_conv == a_warm)
+check("slot còn lại vẫn đăng bài",     any(r["hoat_dong"]=="dang_bai" for r in sched if r["ten_acc"]=="A"))
+
+# Nick già chuyển ít hơn nick non (cùng số slot)
+s2 = _mkrows("C",10)
+nuoi_nick.plan_warming_conversion(s2, {"C":60})   # già, ratio .15
+c_warm = sum(1 for r in s2 if r["hoat_dong"]=="nuoi_nick")
+check("nick già chuyển ít (~1-2)",     1 <= c_warm <= 2 and c_warm < 7)
+
+# Slot nuôi rải khắp chứ không dồn đầu (đều)
+s3 = _mkrows("D",10)
+nuoi_nick.plan_warming_conversion(s3, {"D":3})
+warm_idx = [i for i,r in enumerate(s3) if r["hoat_dong"]=="nuoi_nick"]
+check("slot nuôi trải rộng (không dồn)", warm_idx[-1]-warm_idx[0] >= 6)
+
+# select_session_activities: chỉ lấy hành động đang bật, luôn ≥1, chỉ tên hợp lệ
+import random as _rnd
+_ALL_ON = {"nuoi_enable_feed":1,"nuoi_enable_story":1,"nuoi_enable_accept":1,
+           "nuoi_enable_addfriend":1,"nuoi_enable_message":1}
+_valid = set(nuoi_nick._ACTIVITY_FNS)
+_samples = [nuoi_nick.select_session_activities(_ALL_ON, _rnd.Random(i)) for i in range(200)]
+check("phiên nào cũng ≥1 hành động",   all(len(s) >= 1 for s in _samples))
+check("chỉ chứa tên hành động hợp lệ",  all(set(s) <= _valid for s in _samples))
+check("không lặp hành động trong phiên", all(len(s)==len(set(s)) for s in _samples))
+check("có sự đa dạng giữa các phiên",   len({tuple(s) for s in _samples}) > 5)
+# Hành động bị tắt thì không bao giờ xuất hiện
+_only_feed = nuoi_nick.select_session_activities({"nuoi_enable_feed":1}, _rnd.Random(1))
+check("tắt hết trừ feed -> chỉ feed",  _only_feed == ["feed"])
+check("không bật gì -> rỗng",          nuoi_nick.select_session_activities({}, _rnd.Random(1)) == [])
+
 # ── server: KHÔNG rò rỉ credential qua /api/accounts ───────────────────────
 import server
 

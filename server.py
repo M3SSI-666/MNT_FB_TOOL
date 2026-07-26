@@ -735,6 +735,23 @@ def api_schedule_gen(loai):
     if not schedule:
         return jsonify({"ok": False, "error": "Không tạo được lịch"})
 
+    # ── Nuôi nick: chuyển một số slot của acc bật nuôi thành phiên nuôi ──
+    # Nick càng non → chuyển càng nhiều (đăng ít, nuôi nhiều). Đọc thẳng từ DB
+    # theo tên acc nên không cần đổi luồng gen ở frontend.
+    n_warm = 0
+    try:
+        from nuoi_nick import plan_warming_conversion, account_age_days
+        acc_names = {r["ten_acc"] for r in schedule}
+        warm_info = {}
+        for a in get_accounts():
+            if a["ten_acc"] in acc_names and int(a.get("nuoi_nick", 0) or 0) == 1:
+                warm_info[a["ten_acc"]] = account_age_days(
+                    a.get("ngay_bat_dau_nuoi", ""), a.get("created_at", ""))
+        if warm_info:
+            n_warm = plan_warming_conversion(schedule, warm_info)
+    except Exception as e:
+        logger.warning(f"Nuôi nick: bỏ qua chuyển slot ({e})")
+
     replace_schedules(loai, schedule)
 
     # Lưu thiết lập gần nhất để lần gen sau prefill (thay cho hardcode mặc định).
@@ -746,6 +763,7 @@ def api_schedule_gen(loai):
     }, ensure_ascii=False))
 
     return jsonify({"ok": True, "total": len(schedule),
+                    "nuoi": n_warm,
                     "from": schedule[0]["gio_dang"],
                     "to":   schedule[-1]["gio_dang"]})
 
