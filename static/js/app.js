@@ -492,7 +492,6 @@ const ACC_FIELDS = [
     {key:"email_sdt",label:"Email/SDT"},
     {key:"password",label:"Password",mono:true},
     {key:"ten_page",label:"Tên Page"},
-    {key:"page_uid",label:"UID Page",type:"page"},
     {key:"c_user",label:"c_user",mono:true},
     {key:"xs",label:"xs",mono:true},
     {key:"refresh",label:"Refresh"},
@@ -505,16 +504,13 @@ const ACC_FIELDS = [
     {key:"ghi_chu",label:"Ghi chú"},
 ];
 let _accData=[];
-let _pagesForAcc=[];   // danh sách page để chọn UID ở cột "UID Page"
 
 async function loadAccounts(){
     const tbody=document.getElementById("acc-table");
     const thead=document.getElementById("acc-thead");
-    tbody.innerHTML=`<tr><td colspan="20" class="loading"><span class="spin">↻</span></td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="19" class="loading"><span class="spin">↻</span></td></tr>`;
     try{
-        // Nạp kèm bảng Page để cột UID Page cho chọn thay vì gõ tay.
-        const [res, pg] = await Promise.all([API.accounts(), API.pages().catch(()=>({data:[]}))]);
-        _pagesForAcc = pg.data || [];
+        const res=await API.accounts();
         _accData=res.data;
         // Thead
         if(thead) thead.innerHTML=`<tr><th style="width:32px"></th>${ACC_FIELDS.map(f=>`<th style="text-align:center">${f.label}</th>`).join("")}<th style="width:60px;text-align:center">Xóa</th></tr>`;
@@ -529,7 +525,7 @@ async function loadAccounts(){
                 .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1;min-width:80px"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px">${s.v}</div></div>`).join("");
         }
         renderAccTable(res.data);
-    }catch(e){ tbody.innerHTML=`<tr><td colspan="20" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
+    }catch(e){ tbody.innerHTML=`<tr><td colspan="19" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
 }
 
 function renderAccTable(data){
@@ -538,31 +534,12 @@ function renderAccTable(data){
     const filter=document.getElementById("acc-filter-loai")?.value||"";
     const rows=data.filter(r=>!filter||((r.loai_dang||"").includes(filter)));
     if(count) count.textContent=`${rows.length}/${data.length} tài khoản`;
-    if(!rows.length){ tbody.innerHTML=`<tr><td colspan="20" class="empty">Không có tài khoản nào</td></tr>`; return; }
+    if(!rows.length){ tbody.innerHTML=`<tr><td colspan="19" class="empty">Không có tài khoản nào</td></tr>`; return; }
     tbody.innerHTML=rows.map(r=>{
         const CENTER_KEYS=["loai_dang","thoi_gian_nghi","link_profile","refresh","trang_thai","nuoi_interval"];
         const tds=ACC_FIELDS.map(f=>{
             const val=(r[f.key]||"").toString();
             const esc=val.replace(/"/g,"&quot;");
-            if(f.type==="page"){
-                // Chọn UID từ bảng Page — tránh gõ tay sai và tránh nhầm khi
-                // nhiều page trùng tên. UID này mới quyết định page đăng thật.
-                const opts=_pagesForAcc.map(p=>{
-                    const uid=(p.page_uid||"").toString();
-                    if(!uid) return "";
-                    const lbl=`${p.ten_page||"(không tên)"} — ${uid}`;
-                    return `<option value="${uid}" ${uid===val?"selected":""}>${lbl}</option>`;
-                }).join("");
-                const missing = val && !_pagesForAcc.some(p=>(p.page_uid||"").toString()===val);
-                return `<td style="text-align:center">
-                    <select onchange="toggleAccSelect(event,${r.id},'${f.key}')"
-                        style="max-width:190px;font-size:11px;font-family:var(--font-mono);padding:3px 4px"
-                        title="${val?esc:"Chưa gán — sẽ dò theo Tên Page (có thể nhầm nếu trùng tên)"}">
-                        <option value="" ${!val?"selected":""}>— theo tên —</option>
-                        ${opts}
-                        ${missing?`<option value="${esc}" selected>${esc} (không có trong bảng Page)</option>`:""}
-                    </select></td>`;
-            }
             if(f.type==="check"){
                 const on=(val==="1");
                 return `<td style="text-align:center"><input type="checkbox" ${on?"checked":""}
@@ -597,15 +574,6 @@ function renderAccTable(data){
 }
 
 function filterAccounts(){ renderAccTable(_accData); }
-
-async function toggleAccSelect(e, id, field){
-    const v = e.target.value;
-    try{
-        const r = await API.updateAccField(id, field, v);
-        if(r.ok){ const row=_accData.find(x=>x.id===id); if(row) row[field]=v; Toast.success("Đã lưu"); }
-        else Toast.error(r.error);
-    }catch(err){ Toast.error(err.message); }
-}
 
 async function toggleAccCheck(e, id, field){
     const on = e.target.checked;

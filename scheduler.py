@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from db import (
     get_schedules, update_schedule_status,
     get_content_by_code, get_uid_groups_by_code,
-    get_account_by_name, get_page_by_name, get_accounts, resolve_page_uid,
+    get_account_by_name, get_page_by_name, get_accounts,
     update_account_field,
 )
 from cookie_exporter import load_cookie, export_all_accounts
@@ -157,11 +157,10 @@ def _attempt_post(item: dict) -> str:
         acc_data = get_account_by_name(acc_name)
         if not acc_data:
             raise Exception(f"Không tìm thấy acc '{acc_name}'")
-        # UID gán cho acc quyết định page đăng; tên chỉ để gợi nhớ (có thể trùng).
-        page_uid = resolve_page_uid(acc_data, page_name)
+        page_info = get_page_by_name(page_name)
+        page_uid  = page_info.get("page_uid", "") if page_info else ""
         if not page_uid:
-            raise Exception(f"Không có Page UID cho '{page_name}' "
-                            f"— gán 'UID Page' cho acc '{acc_name}' ở bảng Tài khoản")
+            raise Exception(f"Không có Page UID cho '{page_name}'")
         ok = post_page_wall(
             acc_name=acc_name,
             page_uid=page_uid,
@@ -178,15 +177,14 @@ def _attempt_post(item: dict) -> str:
         from page_via_poster import post_page_via
         if not tu_khoa:
             raise Exception("Mode=Hybrid nhưng thiếu Từ khóa")
-        acc_data  = get_account_by_name(acc_name, page_name)
-        # UID gán cho acc quyết định page đăng; tên chỉ để gợi nhớ (có thể trùng).
-        page_uid  = resolve_page_uid(acc_data, page_name)
+        page_info = get_page_by_name(page_name)
+        page_uid  = page_info.get("page_uid", "") if page_info else ""
         if not page_uid:
-            raise Exception(f"Không có Page UID cho '{page_name}' "
-                            f"— gán 'UID Page' cho acc '{acc_name}' ở bảng Tài khoản")
+            raise Exception(f"Không có Page UID cho '{page_name}'")
         first_uid = _parse_first_group_uid(ma_nhom)
         if not first_uid:
             raise Exception("Thiếu UID nhóm đầu để mở composer")
+        acc_data  = get_account_by_name(acc_name, page_name)
         c_user_v  = acc_data.get("c_user", "") if acc_data else ""
         count = post_page_via(
             acc_name=acc_name, page_uid=page_uid,

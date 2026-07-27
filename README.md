@@ -52,17 +52,6 @@ Bảng điều khiển: `http://localhost:8080`
 > Sửa selector Facebook: nếu hàm nằm trong `fb_common.py` thì chỉ sửa một chỗ,
 > cả hai poster cùng nhận. Đừng copy hàm ngược lại vào từng file.
 
-## Page nào được đăng?
-Cột **UID Page** ở bảng Tài khoản (danh sách chọn, lấy từ bảng Page) mới là thứ
-**quyết định page đăng thật**. Cột *Tên Page* chỉ để bạn gợi nhớ.
-
-Lý do: tra theo tên không đáng tin — nhiều page **trùng tên** thì hệ thống lấy đại
-một cái, và so tên còn **phân biệt hoa/thường** (`HomeStay` ≠ `Homestay` → tra ra
-rỗng, lỗi "Không có Page UID").
-
-> Acc chưa gán UID vẫn chạy được (tự dò theo tên như cũ), nhưng **nên gán UID cho
-> mọi acc** — đó là cách duy nhất chắc chắn đăng đúng page.
-
 ## Nuôi nick
 Bật bằng cách tick cột **Nuôi** ở bảng Tài khoản. Cột **Chu kỳ (p)** cạnh nó quyết
 định bao lâu nuôi một lần — mặc định **150 phút (2h30)**, sửa được từng nick.

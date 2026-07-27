@@ -93,31 +93,6 @@ check("parse UID số thuần",            _pfg("123456789") == "123456789")
 check("parse slug chữ",                _pfg("homestaytimescity") == "homestaytimescity")
 check("chuỗi rỗng -> rỗng",            _pfg("") == "")
 
-# ── page: UID quyết định page đăng, KHÔNG dựa vào tên ──────────────────────
-# Hai page TRÙNG TÊN — tra theo tên sẽ lấy đại một cái, phải dùng UID.
-_p1 = db.upsert_page({"ten_page":"Homestay Times City","page_uid":"111"})
-_p2 = db.upsert_page({"ten_page":"Homestay Times City","page_uid":"222"})
-
-check("get_page_by_uid lấy đúng page",
-      (db.get_page_by_uid("222") or {}).get("page_uid") == "222")
-check("get_page_by_uid uid lạ -> None",  db.get_page_by_uid("999") is None)
-check("get_page_by_uid rỗng -> None",    db.get_page_by_uid("") is None)
-
-# acc đã gán UID → luôn ra đúng page đó, bất kể tên trùng
-check("acc có page_uid -> dùng UID đó",
-      db.resolve_page_uid({"page_uid":"222"}, "Homestay Times City") == "222")
-check("UID thắng cả khi tên trỏ page khác",
-      db.resolve_page_uid({"page_uid":"222"}, "Tên Sai Hoàn Toàn") == "222")
-
-# acc chưa gán UID → dự phòng theo tên (dữ liệu cũ vẫn chạy)
-check("chưa gán UID -> dò theo tên",
-      db.resolve_page_uid({"page_uid":""}, "Homestay Times City") in ("111","222"))
-check("tên không tồn tại -> rỗng",
-      db.resolve_page_uid({}, "Không Có Page Này") == "")
-check("tên sai hoa/thường -> rỗng (vì sao nên dùng UID)",
-      db.resolve_page_uid({}, "HOMESTAY TIMES CITY") == "")
-check("acc None + tên rỗng -> rỗng",     db.resolve_page_uid(None, "") == "")
-
 # ── nuôi nick: xếp phiên theo CHU KỲ (logic thuần) ─────────────────────────
 import nuoi_nick
 
