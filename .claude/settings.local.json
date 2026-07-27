@@ -81,7 +81,9 @@
       "Bash(node /tmp/sched_test.js)",
       "Bash(rm -f /tmp/sched_test.js)",
       "Bash(python -m py_compile nuoi_nick.py scheduler.py server.py db.py)",
-      "Bash(python -m py_compile nuoi_nick.py)"
+      "Bash(python -m py_compile nuoi_nick.py)",
+      "Bash(python -m py_compile fb_common.py via_poster.py page_via_poster.py nuoi_nick.py)",
+      "Bash(python -X utf8 -c \"import via_poster, page_via_poster, nuoi_nick; print\\('import OK'\\)\")"
     ]
   }
 }

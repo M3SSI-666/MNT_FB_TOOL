@@ -34,7 +34,7 @@ from utils import logger, jitter_ms, CookieDeadError
 # Helper dùng chung với poster còn lại — xem fb_common.py.
 # Giữ tên có gạch dưới để không phải sửa toàn bộ chỗ gọi trong file này.
 from fb_common import (
-    UA as _UA,
+    browser_launch_kwargs,
     find_profile_dir     as _find_profile_dir,
     human_delay          as _human_delay,
     jwait                as _jwait,
@@ -65,18 +65,7 @@ async def _run_crosspost(
     async with async_playwright() as p:
         ctx = await p.chromium.launch_persistent_context(
             user_data_dir=profile_dir,
-            headless=HEADLESS,
-            slow_mo=120,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-infobars",
-                "--start-maximized",
-                "--disable-notifications",
-            ],
-            user_agent=_UA,
-            viewport={"width": 1920, "height": 1080},
-            no_viewport=True,
+            **browser_launch_kwargs(HEADLESS),
         )
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
 

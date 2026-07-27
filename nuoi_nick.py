@@ -32,8 +32,8 @@ from collections import defaultdict
 from utils import logger, CookieDeadError
 from config import HEADLESS
 from cookie_exporter import load_cookie
-from fb_common import (UA, find_profile_dir, human_delay, jwait,
-                       view_stories, browse_and_like)
+from fb_common import (browser_launch_kwargs, find_profile_dir, human_delay,
+                       jwait, view_stories, browse_and_like)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -155,17 +155,7 @@ async def _open_context(p, acc_name: str, c_user: str):
     logger.info(f"  🗂️  Profile: {profile_dir}")
     ctx = await p.chromium.launch_persistent_context(
         user_data_dir=profile_dir,
-        headless=HEADLESS,
-        slow_mo=120,
-        args=[
-            "--disable-blink-features=AutomationControlled",
-            "--no-sandbox",
-            "--disable-infobars",
-            "--start-maximized",
-            "--disable-notifications",
-        ],
-        user_agent=UA,
-        no_viewport=True,
+        **browser_launch_kwargs(HEADLESS),
     )
     page = ctx.pages[0] if ctx.pages else await ctx.new_page()
 
