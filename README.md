@@ -53,11 +53,21 @@ Bảng điều khiển: `http://localhost:8080`
 > cả hai poster cùng nhận. Đừng copy hàm ngược lại vào từng file.
 
 ## Nuôi nick
-Tick cột **Nuôi** ở bảng Tài khoản để bật cho từng nick. Khi **Tạo lịch**, một số
-slot đăng của nick đó bị **chuyển thành phiên nuôi** (hiện badge 🌱 trong bảng lịch)
-— nick càng non chuyển càng nhiều (đăng ít, nuôi nhiều), càng già chuyển càng ít.
-Cùng scheduler chạy, tới slot nuôi thì mở phiên 5–8 phút làm các hành động **ngẫu
-nhiên tập con + xáo thứ tự**: lướt feed, xem story, like, xác nhận lời mời kết bạn.
+Bật bằng cách tick cột **Nuôi** ở bảng Tài khoản. Cột **Chu kỳ (p)** cạnh nó quyết
+định bao lâu nuôi một lần — mặc định **150 phút (2h30)**, sửa được từng nick.
+
+| Cột "Loại đăng" | Nick làm gì |
+|---|---|
+| Có (Homestay/Thuê/Bán) | Đăng bài bình thường; cứ mỗi *chu kỳ*, **một slot đăng biến thành phiên nuôi** (badge 🌱). Không thêm slot mới nên lịch không dày lên, và một slot chỉ đăng **hoặc** nuôi → không đụng nhau. |
+| **Để trống** | **Chỉ nuôi, không đăng gì.** Vào tab **Lịch Nuôi nick** → *Gen lịch* để xếp phiên mỗi *chu kỳ* phút. Dùng cho nick yếu thời gian đầu; khi nick khỏe thì điền Loại đăng để chuyển sang vừa đăng vừa nuôi. |
+
+Các phiên nuôi được **giãn cách tối thiểu 10 phút** với nhau nên không có chuyện
+nhiều nick cùng mở trình duyệt một lúc. Tới giờ, phiên nuôi kéo dài 5–8 phút, làm
+các hành động **bốc ngẫu nhiên tập con + xáo thứ tự**: lướt feed, xem story, like,
+xác nhận lời mời kết bạn.
+
+> Nick "chỉ nuôi" chạy bằng **runner Nuôi nick** riêng — nhớ bật nó ở tab
+> **Hành động** (giống các runner khác).
 
 > **Mặc định an toàn:** phần *gửi* lời mời kết bạn và *nhắn tin* **TẮT sẵn**
 > (`nuoi_enable_addfriend`, `nuoi_enable_message` trong bảng `settings`). Gửi kết

@@ -83,7 +83,14 @@
       "Bash(python -m py_compile nuoi_nick.py scheduler.py server.py db.py)",
       "Bash(python -m py_compile nuoi_nick.py)",
       "Bash(python -m py_compile fb_common.py via_poster.py page_via_poster.py nuoi_nick.py)",
-      "Bash(python -X utf8 -c \"import via_poster, page_via_poster, nuoi_nick; print\\('import OK'\\)\")"
+      "Bash(python -X utf8 -c \"import via_poster, page_via_poster, nuoi_nick; print\\('import OK'\\)\")",
+      "Bash(git checkout *)",
+      "Bash(python -m py_compile via_poster.py page_via_poster.py fb_common.py nuoi_nick.py)",
+      "Bash(sed -i 's/colspan=\"18\"/colspan=\"19\"/g' static/js/app.js)",
+      "Bash(sed -i 's/const CENTER_KEYS=\\\\[\"loai_dang\",\"thoi_gian_nghi\",\"link_profile\",\"refresh\",\"trang_thai\"\\\\];/const CENTER_KEYS=[\"loai_dang\",\"thoi_gian_nghi\",\"link_profile\",\"refresh\",\"trang_thai\",\"nuoi_interval\"];/' static/js/app.js)",
+      "Bash(sed -i 's/const runners=\\\\[\"homestay\",\"thue\",\"ban\",\"page\"\\\\];/const runners=[\"homestay\",\"thue\",\"ban\",\"page\",\"nuoi\"];/' static/js/app.js)",
+      "Bash(python -m py_compile server.py db.py scheduler.py nuoi_nick.py config.py)",
+      "Bash(python -m py_compile nuoi_nick.py server.py db.py scheduler.py config.py)"
     ]
   }
 }

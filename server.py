@@ -153,14 +153,17 @@ RUNNER_CFG = {
                  "log": str(LOG_DIR / "autopost_ban.log")},
     "page":     {"sheet": "Đăng bài Page", "pid_file": ".runner_page.pid",
                  "log": str(LOG_DIR / "autopost_page.log")},
+    "nuoi":     {"sheet": "Nuôi nick",     "pid_file": ".runner_nuoi.pid",
+                 "log": str(LOG_DIR / "autopost_nuoi.log")},
 }
 RUNNER_LOAI_MAP = {
     "homestay": "homestay",
     "thue":     "thue",
     "ban":      "ban",
     "page":     "page",
+    "nuoi":     "nuoi",
 }
-STAGGER = {"homestay": 0, "thue": 8, "ban": 16, "page": 24}
+STAGGER = {"homestay": 0, "thue": 8, "ban": 16, "page": 24, "nuoi": 32}
 
 
 def _runner_pid(loai):
@@ -740,15 +743,13 @@ def api_schedule_gen(loai):
     # theo tên acc nên không cần đổi luồng gen ở frontend.
     n_warm = 0
     try:
-        from nuoi_nick import plan_warming_conversion, account_age_days
+        from nuoi_nick import plan_warming_conversion
         acc_names = {r["ten_acc"] for r in schedule}
-        warm_info = {}
-        for a in get_accounts():
-            if a["ten_acc"] in acc_names and int(a.get("nuoi_nick", 0) or 0) == 1:
-                warm_info[a["ten_acc"]] = account_age_days(
-                    a.get("ngay_bat_dau_nuoi", ""), a.get("created_at", ""))
-        if warm_info:
-            n_warm = plan_warming_conversion(schedule, warm_info)
+        warm_accs = {a["ten_acc"]: a.get("nuoi_interval")
+                     for a in get_accounts()
+                     if a["ten_acc"] in acc_names and int(a.get("nuoi_nick", 0) or 0) == 1}
+        if warm_accs:
+            n_warm = plan_warming_conversion(schedule, warm_accs)
     except Exception as e:
         logger.warning(f"Nuôi nick: bỏ qua chuyển slot ({e})")
 
@@ -766,6 +767,38 @@ def api_schedule_gen(loai):
                     "nuoi": n_warm,
                     "from": schedule[0]["gio_dang"],
                     "to":   schedule[-1]["gio_dang"]})
+
+
+@app.route("/api/schedule/nuoi/gen", methods=["POST"])
+def api_schedule_nuoi_gen():
+    """
+    Gen lịch cho acc CHỈ NUÔI — acc có tick 'Nuôi' nhưng cột 'Loại đăng' để trống
+    (không được phân công đăng bài). Mỗi acc vào một phiên nuôi mỗi `nuoi_interval`
+    phút; các acc lệch pha nhau để không cùng mở trình duyệt một lúc.
+    """
+    from nuoi_nick import build_warming_schedule, normalize_interval
+    body  = request.json or {}
+    start = body.get("start", "07:00")
+    end   = body.get("end",   "23:00")
+
+    accs = [{"ten": a["ten_acc"], "interval": normalize_interval(a.get("nuoi_interval"))}
+            for a in get_accounts(trang_thai="Active")
+            if int(a.get("nuoi_nick", 0) or 0) == 1
+            and not (a.get("loai_dang") or "").strip()]
+
+    if not accs:
+        return jsonify({"ok": False,
+                        "error": "Không có acc nào 'chỉ nuôi' "
+                                 "(cần: tick Nuôi + để TRỐNG cột Loại đăng + Trạng thái Active)"})
+
+    rows = build_warming_schedule(accs, start, end)
+    if not rows:
+        return jsonify({"ok": False, "error": "Không tạo được lịch nuôi"})
+
+    replace_schedules("nuoi", rows)
+    set_setting("gen_prefs_nuoi", json.dumps({"start": start, "end": end}, ensure_ascii=False))
+    return jsonify({"ok": True, "total": len(rows), "accs": len(accs),
+                    "from": rows[0]["gio_dang"], "to": rows[-1]["gio_dang"]})
 
 
 @app.route("/api/schedule/page/gen", methods=["POST"])
@@ -904,6 +937,7 @@ def api_logs(loai):
         "thue":     str(LOG_DIR / "autopost_thue.log"),
         "ban":      str(LOG_DIR / "autopost_ban.log"),
         "page":     str(LOG_DIR / "autopost_page.log"),
+        "nuoi":     str(LOG_DIR / "autopost_nuoi.log"),
     }
     fname = log_map.get(loai)
     if not fname:

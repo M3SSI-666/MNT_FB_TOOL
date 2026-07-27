@@ -35,6 +35,7 @@ LOAI_SHEET_MAP = {
     "thue":     "Chéo Thuê",
     "ban":      "Chéo Bán",
     "page":     "Đăng bài Page",
+    "nuoi":     "Nuôi nick",
 }
 
 logger.info("=" * 60)

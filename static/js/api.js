@@ -51,6 +51,7 @@ const API = {
     scheduleGen:     (loai, data) => API.post(`/api/schedule/${loai}/gen`, data),
     scheduleGenData: (loai)       => API.get(`/api/schedule/${loai}/gen-data`),
     schedulePageGen: (data)       => API.post("/api/schedule/page/gen", data),
+    scheduleNuoiGen: (data)       => API.post("/api/schedule/nuoi/gen", data),
 
     // Logs
     logs: (loai, n=150) => API.get(`/api/logs/${loai}?n=${n}`),

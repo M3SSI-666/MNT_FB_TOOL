@@ -17,6 +17,7 @@ LOG_FILES = {
     "thue":     str(LOG_DIR / "autopost_thue.log"),
     "ban":      str(LOG_DIR / "autopost_ban.log"),
     "page":     str(LOG_DIR / "autopost_page.log"),
+    "nuoi":     str(LOG_DIR / "autopost_nuoi.log"),
 }
 LOG_FILE = str(LOG_DIR / "autopost.log")
 

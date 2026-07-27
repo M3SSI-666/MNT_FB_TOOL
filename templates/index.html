@@ -34,6 +34,7 @@
             <div class="nav-item" data-page="lich-thue"><span class="nav-icon">🏡</span> Lịch Thuê</div>
             <div class="nav-item" data-page="lich-ban"><span class="nav-icon">💰</span> Lịch Bán</div>
             <div class="nav-item" data-page="lich-page"><span class="nav-icon">📄</span> Lịch Đăng Page</div>
+            <div class="nav-item" data-page="lich-nuoi"><span class="nav-icon">🌱</span> Lịch Nuôi nick</div>
 
             <div class="nav-section">Vận hành</div>
             <div class="nav-item" data-page="tham-gia-nhom">
@@ -148,6 +149,7 @@
             <div class="page" id="page-lich-thue"     style="display:none" data-loai="thue"></div>
             <div class="page" id="page-lich-ban"      style="display:none" data-loai="ban"></div>
             <div class="page" id="page-lich-page"     style="display:none" data-loai="page"></div>
+            <div class="page" id="page-lich-nuoi"     style="display:none" data-loai="nuoi"></div>
 
             <!-- ══ PAGE: THAM GIA NHÓM ══════════════════════ -->
             <div class="page" id="page-tham-gia-nhom" style="display:none">
@@ -209,7 +211,7 @@
                     </div>
                 </div>
 
-                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px" id="runner-grid"></div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px" id="runner-grid"></div>
 
                 <!-- Mật khẩu truy cập từ xa -->
                 <div style="margin-top:28px;padding:16px 18px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);max-width:520px">
@@ -262,6 +264,10 @@
                     <div class="card" style="display:flex;flex-direction:column;min-height:220px">
                         <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#c084fc;flex-shrink:0">📄 Đăng Page</div>
                         <div class="log-box" id="log-page" style="flex:1;border:none;border-radius:0;margin:0"></div>
+                    </div>
+                    <div class="card" style="display:flex;flex-direction:column;min-height:220px">
+                        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#6ee7b7;flex-shrink:0">🌱 Nuôi nick</div>
+                        <div class="log-box" id="log-nuoi" style="flex:1;border:none;border-radius:0;margin:0"></div>
                     </div>
                     <div class="card" style="display:flex;flex-direction:column;min-height:220px;grid-column:1/-1">
                         <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#fb923c;flex-shrink:0">🔗 Tham gia nhóm</div>

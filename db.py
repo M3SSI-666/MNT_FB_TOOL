@@ -52,7 +52,7 @@ def init_db():
             twofa           TEXT DEFAULT '',
             ghi_chu         TEXT DEFAULT '',
             nuoi_nick       INTEGER DEFAULT 0,      -- 1 = bật nuôi nick cho acc này
-            ngay_bat_dau_nuoi TEXT DEFAULT '',      -- mốc bắt đầu nuôi (rỗng = dùng created_at)
+            nuoi_interval   INTEGER DEFAULT 150,    -- chu kỳ nuôi (phút), mặc định 2h30
             created_at      TEXT DEFAULT (datetime('now','localtime'))
         );
 
@@ -148,9 +148,9 @@ def init_db():
             if col not in existing:
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
 
-        _add_col("accounts",  "nuoi_nick",         "nuoi_nick INTEGER DEFAULT 0")
-        _add_col("accounts",  "ngay_bat_dau_nuoi", "ngay_bat_dau_nuoi TEXT DEFAULT ''")
-        _add_col("schedules", "hoat_dong",         "hoat_dong TEXT DEFAULT 'dang_bai'")
+        _add_col("accounts",  "nuoi_nick",     "nuoi_nick INTEGER DEFAULT 0")
+        _add_col("accounts",  "nuoi_interval", "nuoi_interval INTEGER DEFAULT 150")
+        _add_col("schedules", "hoat_dong",     "hoat_dong TEXT DEFAULT 'dang_bai'")
     print(f"✅ DB initialized: {DB_PATH}")
 
 
@@ -256,7 +256,7 @@ def update_account_field(acc_id: int, field: str, value: str):
         "ten_acc","loai_dang","thoi_gian_nghi","link_profile","email_sdt",
         "password","ten_page","c_user","xs","refresh","trang_thai",
         "email_khoiphuc","pass_khoiphuc","twofa","ghi_chu",
-        "nuoi_nick","ngay_bat_dau_nuoi"
+        "nuoi_nick","nuoi_interval"
     }
     if field not in safe:
         raise ValueError(f"Field không hợp lệ: {field}")

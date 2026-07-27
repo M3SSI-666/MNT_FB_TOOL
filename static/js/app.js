@@ -122,7 +122,7 @@ const PAGE_TITLES = {
     accounts:"Tài khoản", pages:"Page", content:"Content",
     "uid-groups":"UID Nhóm",
     "lich-homestay":"Lịch Homestay", "lich-thue":"Lịch Thuê",
-    "lich-ban":"Lịch Bán", "lich-page":"Lịch Đăng Page",
+    "lich-ban":"Lịch Bán", "lich-page":"Lịch Đăng Page", "lich-nuoi":"Lịch Nuôi nick",
     "tham-gia-nhom":"Tham gia nhóm", "hanh-dong":"Hành động", logs:"Logs",
 };
 
@@ -391,6 +391,7 @@ const RUNNER_LABELS = {
     thue:    {title:"Thuê",    icon:"🏡",color:"#60a5fa"},
     ban:     {title:"Bán",     icon:"💰",color:"#fbbf24"},
     page:    {title:"Đăng Page",icon:"📄",color:"#c084fc"},
+    nuoi:    {title:"Nuôi nick",icon:"🌱",color:"#6ee7b7"},
 };
 let _runnerStatus={};
 
@@ -496,6 +497,7 @@ const ACC_FIELDS = [
     {key:"refresh",label:"Refresh"},
     {key:"trang_thai",label:"Trạng thái"},
     {key:"nuoi_nick",label:"Nuôi",type:"check"},
+    {key:"nuoi_interval",label:"Chu kỳ (p)"},
     {key:"email_khoiphuc",label:"Email KP"},
     {key:"pass_khoiphuc",label:"Pass KP"},
     {key:"twofa",label:"2FA"},
@@ -506,7 +508,7 @@ let _accData=[];
 async function loadAccounts(){
     const tbody=document.getElementById("acc-table");
     const thead=document.getElementById("acc-thead");
-    tbody.innerHTML=`<tr><td colspan="18" class="loading"><span class="spin">↻</span></td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="19" class="loading"><span class="spin">↻</span></td></tr>`;
     try{
         const res=await API.accounts();
         _accData=res.data;
@@ -523,7 +525,7 @@ async function loadAccounts(){
                 .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1;min-width:80px"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px">${s.v}</div></div>`).join("");
         }
         renderAccTable(res.data);
-    }catch(e){ tbody.innerHTML=`<tr><td colspan="18" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
+    }catch(e){ tbody.innerHTML=`<tr><td colspan="19" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
 }
 
 function renderAccTable(data){
@@ -532,9 +534,9 @@ function renderAccTable(data){
     const filter=document.getElementById("acc-filter-loai")?.value||"";
     const rows=data.filter(r=>!filter||((r.loai_dang||"").includes(filter)));
     if(count) count.textContent=`${rows.length}/${data.length} tài khoản`;
-    if(!rows.length){ tbody.innerHTML=`<tr><td colspan="18" class="empty">Không có tài khoản nào</td></tr>`; return; }
+    if(!rows.length){ tbody.innerHTML=`<tr><td colspan="19" class="empty">Không có tài khoản nào</td></tr>`; return; }
     tbody.innerHTML=rows.map(r=>{
-        const CENTER_KEYS=["loai_dang","thoi_gian_nghi","link_profile","refresh","trang_thai"];
+        const CENTER_KEYS=["loai_dang","thoi_gian_nghi","link_profile","refresh","trang_thai","nuoi_interval"];
         const tds=ACC_FIELDS.map(f=>{
             const val=(r[f.key]||"").toString();
             const esc=val.replace(/"/g,"&quot;");
@@ -1331,6 +1333,8 @@ const SCHEDULE_LABELS = {
     ban:     {title:"Bán",      kw:"Chợ cư dân,Cộng,Làng,times city & park hill",
               defaultFirstGroup:"https://www.facebook.com/groups/346244929095372"},
     page:    {title:"Đăng Page", kw:"", defaultFirstGroup:""},
+    // Lịch cho acc CHỈ NUÔI: tick Nuôi + để trống cột Loại đăng
+    nuoi:    {title:"Nuôi nick", kw:"", defaultFirstGroup:""},
 };
 let _schedData={};
 
@@ -1487,6 +1491,31 @@ async function openGenSchedule(loai){
         return;
     }
 
+    if(loai==="nuoi"){
+        // Acc CHỈ NUÔI: tick Nuôi + để trống Loại đăng. Chu kỳ lấy từ cột
+        // "Chu kỳ (p)" của từng acc, nên form chỉ cần khung giờ hoạt động.
+        let pp={};
+        try{ const s=await API.settings(); pp=JSON.parse(s.data?.gen_prefs_nuoi||"{}"); }catch(e){ pp={}; }
+        const vStart=_escapeHtml(pp.start||"07:00"), vEnd=_escapeHtml(pp.end||"23:00");
+        let list=[];
+        try{
+            const r=await API.accounts();
+            list=(r.data||[]).filter(a=>String(a.nuoi_nick)==="1" && !(a.loai_dang||"").trim());
+        }catch(e){}
+        const info = list.length
+            ? list.map(a=>`${a.ten_acc} — mỗi ${a.nuoi_interval||150} phút`).join("<br>")
+            : `<span style="color:var(--warning)">Chưa có acc nào 'chỉ nuôi'. Cần: tick <b>Nuôi</b> + để <b>TRỐNG</b> cột Loại đăng.</span>`;
+        document.getElementById("gen-panel-body").innerHTML=`
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="field-group"><label>Giờ bắt đầu</label><input id="gen-nuoi-start" value="${vStart}"></div>
+                <div class="field-group"><label>Giờ kết thúc</label><input id="gen-nuoi-end" value="${vEnd}"></div>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);background:var(--bg-hover);padding:10px;border-radius:var(--radius-sm);line-height:1.7">
+                <b>Acc chỉ nuôi (${list.length}):</b><br>${info}
+            </div>`;
+        return;
+    }
+
     document.getElementById("gen-panel-body").innerHTML=`<div class="loading"><span class="spin">↻</span> Đang tải acc...</div>`;
     try{
         const res=await API.scheduleGenData(loai);
@@ -1555,7 +1584,12 @@ async function runGen(){
     const btn=document.getElementById("gen-run-btn"); btn.disabled=true; btn.innerHTML='<span class="spin">↻</span>';
     try{
         let res;
-        if(_genLoai==="page"){
+        if(_genLoai==="nuoi"){
+            res=await API.scheduleNuoiGen({
+                start: document.getElementById("gen-nuoi-start")?.value||"07:00",
+                end:   document.getElementById("gen-nuoi-end")?.value||"23:00",
+            });
+        } else if(_genLoai==="page"){
             res=await API.schedulePageGen({
                 acc: document.getElementById("gen-page-acc")?.value||"",
                 start_hour: parseInt(document.getElementById("gen-page-start")?.value||"7"),
@@ -1591,7 +1625,7 @@ async function runGen(){
 let _logAutoInterval=null;
 async function loadLogs(){
     const n=parseInt(document.getElementById("log-lines")?.value||"80");
-    const runners=["homestay","thue","ban","page"];
+    const runners=["homestay","thue","ban","page","nuoi"];
     await Promise.all(runners.map(async loai=>{
         const box=document.getElementById(`log-${loai}`); if(!box) return;
         try{

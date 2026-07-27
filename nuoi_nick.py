@@ -26,7 +26,6 @@ lần đầu để chỉnh. Nhắn tin mặc định TẮT cho tới khi có th�
 import time
 import asyncio
 import random
-from datetime import datetime, date
 from collections import defaultdict
 
 from utils import logger, CookieDeadError
@@ -80,44 +79,55 @@ def get_settings() -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════
-# Logic thuần — ramp-up & chọn slot (KHÔNG cần Playwright, test được)
+# Logic thuần — xếp phiên nuôi theo CHU KỲ (KHÔNG cần Playwright, test được)
 # ═══════════════════════════════════════════════════════════════
 
-# Đường cong nuôi: (tuổi_tối_đa_ngày, tỷ_lệ_slot_chuyển_thành_nuôi).
-# Nick non → chuyển nhiều (đăng ít, nuôi nhiều); nick già → chuyển ít.
-STAGE_CURVE = [(7, 0.7), (14, 0.5), (30, 0.3), (10**9, 0.15)]
+DEFAULT_INTERVAL_MIN = 150     # 2h30 — mỗi acc nuôi 1 lần mỗi chừng này phút
+MIN_INTERVAL_MIN     = 20      # chặn nhập quá dày (mở trình duyệt liên tục)
 
 
-def warm_ratio(age_days: int, curve=STAGE_CURVE) -> float:
-    for max_age, ratio in curve:
-        if age_days <= max_age:
-            return ratio
-    return curve[-1][1]
+def _parse_hhmm(s: str) -> int:
+    h, m = map(int, str(s).strip().split(":"))
+    return h * 60 + m
 
 
-def account_age_days(ngay_bat_dau_nuoi: str, created_at: str = "", today: date = None) -> int:
-    """Tuổi nick tính từ ngày bắt đầu nuôi (rỗng thì dùng created_at)."""
-    today = today or date.today()
-    src = (ngay_bat_dau_nuoi or created_at or "").strip()
-    if not src:
-        return 0
-    try:
-        d = datetime.strptime(src[:10], "%Y-%m-%d").date()
-        return max(0, (today - d).days)
-    except Exception:
-        return 0
+def _min_to_hhmm(m: int) -> str:
+    return f"{(m // 60) % 24:02d}:{m % 60:02d}"
 
 
-def plan_warming_conversion(schedule: list, warm_info: dict, curve=STAGE_CURVE) -> int:
+def _unwrap_times(times: list) -> list:
     """
-    Đánh dấu một tập con slot của mỗi acc BẬT nuôi thành hoat_dong='nuoi_nick'.
-    Sửa `schedule` tại chỗ. Trả về tổng số slot đã chuyển.
+    'HH:MM' theo thứ tự thời gian → phút liên tục, cộng 24h mỗi lần qua nửa đêm.
+    Cần vì lịch chạy xuyên đêm (vd 05:00 → 03:00 hôm sau) nên 02:00 phải được
+    hiểu là SAU 23:00, không phải trước.
+    """
+    out, prev, offset = [], None, 0
+    for t in times:
+        v = _parse_hhmm(t)
+        if prev is not None and v < prev:
+            offset += 24 * 60
+        prev = v
+        out.append(v + offset)
+    return out
 
-    schedule : list row dict đã gen (mỗi row có 'ten_acc'); thứ tự = thứ tự giờ.
-    warm_info: {ten_acc: age_days} — CHỈ chứa acc đang bật nuôi.
 
-    Cách chọn: rải đều khắp các slot của acc (không cụm) để phiên nuôi trải đều
-    cả ngày, thừa hưởng luôn cách stagger sẵn có của lịch đăng.
+def normalize_interval(value, default=DEFAULT_INTERVAL_MIN) -> int:
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(MIN_INTERVAL_MIN, v) if v > 0 else default
+
+
+def plan_warming_conversion(schedule: list, warm_accs: dict) -> int:
+    """
+    Với acc BẬT nuôi: cứ mỗi `chu kỳ` phút thì MỘT slot đăng của acc đó bị đổi
+    thành phiên nuôi (nuôi chen thẳng vào lịch đăng, không thêm slot mới nên
+    lịch không dày lên và một slot chỉ đăng HOẶC nuôi → không đụng nhau).
+
+    schedule  : list row đã gen, thứ tự theo thời gian; mỗi row có 'ten_acc','gio_dang'.
+    warm_accs : {ten_acc: chu_kỳ_phút} — CHỈ chứa acc đang bật nuôi.
+    Sửa `schedule` tại chỗ, trả về số slot đã chuyển.
     """
     by_acc = defaultdict(list)
     for i, row in enumerate(schedule):
@@ -126,24 +136,83 @@ def plan_warming_conversion(schedule: list, warm_info: dict, curve=STAGE_CURVE) 
 
     converted = 0
     for acc, idxs in by_acc.items():
-        if acc not in warm_info:
+        if acc not in warm_accs:
             continue
-        n = len(idxs)
-        if n == 0:
-            continue
-        ratio     = warm_ratio(warm_info[acc], curve)
-        n_convert = max(0, min(round(ratio * n), n))
-        if n_convert == 0:
-            continue
-        # Chọn đều: slot thứ round((j+0.5)*n/n_convert) — rải khắp dải thời gian.
-        chosen = set()
-        for j in range(n_convert):
-            k = min(n - 1, int((j + 0.5) * n / n_convert))
-            chosen.add(k)
-        for k in chosen:
-            schedule[idxs[k]]["hoat_dong"] = "nuoi_nick"
-        converted += len(chosen)
+        interval = normalize_interval(warm_accs[acc])
+        mins     = _unwrap_times([schedule[i]["gio_dang"] for i in idxs])
+        last     = None
+        for pos, i in enumerate(idxs):
+            t = mins[pos]
+            # Slot đầu tiên trong ngày cũng là phiên nuôi — "khởi động" nick
+            # trước khi bắt đầu đăng.
+            if last is None or (t - last) >= interval:
+                schedule[i]["hoat_dong"] = "nuoi_nick"
+                last = t
+                converted += 1
     return converted
+
+
+MIN_GAP_MIN = 10   # 2 phiên nuôi bất kỳ phải cách nhau ít nhất ngần này phút
+
+
+def build_warming_schedule(accs: list, start_str: str = "07:00",
+                           end_str: str = "23:00", min_gap: int = MIN_GAP_MIN) -> list:
+    """
+    Lịch cho acc CHỈ NUÔI (cột Loại Đăng để trống): không đăng gì, cứ mỗi
+    `chu kỳ` phút vào một phiên nuôi.
+
+    accs: [{"ten": str, "interval": phút}, ...]
+
+    Hai lớp chống trùng giờ:
+      1. Lệch pha ban đầu — mỗi acc bắt đầu ở một mốc khác nhau.
+      2. Giãn cách tối thiểu — quét theo thứ tự thời gian, phiên nào rơi quá sát
+         phiên trước thì đẩy lùi. Cần vì các acc có chu kỳ KHÁC nhau vẫn sẽ trôi
+         vào trùng nhau sau vài vòng (vd 150' và 120' gặp nhau ở 12:00).
+    """
+    start = _parse_hhmm(start_str)
+    end   = _parse_hhmm(end_str)
+    if end <= start:
+        end += 24 * 60
+
+    rows = []
+    n = max(1, len(accs))
+    for i, a in enumerate(accs):
+        interval = normalize_interval(a.get("interval"))
+        # Lệch pha: acc thứ i bắt đầu trễ hơn một nhịp chia đều trong chu kỳ.
+        t = start + round(i * interval / n)
+        while t <= end:
+            rows.append({"ten_acc": a["ten"], "_t": t})
+            t += interval
+
+    # Giãn cách: đẩy lùi phiên bị sát nhau (bỏ nếu đẩy quá khung giờ).
+    rows.sort(key=lambda r: r["_t"])
+    spaced, last = [], None
+    for r in rows:
+        t = r["_t"] if last is None else max(r["_t"], last + min_gap)
+        if t > end:
+            continue
+        r["_t"] = t
+        r["gio_dang"] = _min_to_hhmm(t)
+        spaced.append(r)
+        last = t
+    rows = spaced
+
+    out = []
+    for k, r in enumerate(rows, 1):
+        out.append({
+            "loai":       "nuoi",
+            "stt":        k,
+            "ma_content": "",
+            "ten_acc":    r["ten_acc"],
+            "ten_page":   "",
+            "gio_dang":   r["gio_dang"],
+            "ma_nhom":    "",
+            "tu_khoa":    "",
+            "mode":       "Nuoi",
+            "trang_thai": "Chờ",
+            "hoat_dong":  "nuoi_nick",
+        })
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════
