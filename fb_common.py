@@ -30,19 +30,13 @@ UA = (
 
 def browser_launch_kwargs(headless: bool) -> dict:
     """
-    Tham số khởi chạy Chromium dùng chung cho mọi poster + nuôi nick.
+    Tham số khởi chạy Chromium cho phiên nuôi nick — GIỮ GIỐNG HỆT cấu hình
+    của poster (via_poster / page_via_poster) để hành vi đồng nhất một chỗ.
 
-    Vì sao có các cờ này (chống 'Page crashed' / 'Target crashed' khi headless):
-      --disable-gpu               : trên Windows, headless bật GPU hay làm renderer
-                                    sập với trang nặng như Facebook — nguyên nhân
-                                    chính khiến đăng được khi hiện cửa sổ nhưng
-                                    sập khi headless.
-      --disable-dev-shm-usage     : tránh sập do bộ nhớ chia sẻ hạn chế.
-      --disable-software-rasterizer, --disable-gpu-compositing : cùng nhóm ổn định
-                                    hoá đồ hoạ khi không có màn hình thật.
-      --window-size=1920,1080     : headless KHÔNG áp dụng '--start-maximized' (cửa
-                                    sổ về 800×600) → đặt kích thước tường minh để
-                                    bề mặt render đủ lớn, khớp với no_viewport.
+    Chỉ thêm đúng MỘT cờ so với bản gốc: --disable-gpu. Nó ép Chromium vẽ bằng
+    phần mềm (SwiftShader) → sửa lỗi renderer sập khi headless trên Windows.
+    TUYỆT ĐỐI KHÔNG kèm --disable-software-rasterizer: cờ đó tắt luôn phần vẽ
+    dự phòng, khiến không còn gì để render → sập nặng hơn (lỗi cũ đã gây ra).
     """
     return dict(
         headless=headless,
@@ -51,14 +45,12 @@ def browser_launch_kwargs(headless: bool) -> dict:
             "--disable-blink-features=AutomationControlled",
             "--no-sandbox",
             "--disable-infobars",
+            "--start-maximized",
             "--disable-notifications",
             "--disable-gpu",
-            "--disable-gpu-compositing",
-            "--disable-software-rasterizer",
-            "--disable-dev-shm-usage",
-            "--window-size=1920,1080",
         ],
         user_agent=UA,
+        viewport={"width": 1920, "height": 1080},
         no_viewport=True,
     )
 

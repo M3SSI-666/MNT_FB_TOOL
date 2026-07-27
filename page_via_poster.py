@@ -373,6 +373,10 @@ async def _run_page_via(
                 "--disable-infobars",
                 "--start-maximized",
                 "--disable-notifications",
+                # Ép Chromium vẽ bằng phần mềm → sửa headless sập renderer trên
+                # Windows. KHÔNG thêm --disable-software-rasterizer (sẽ mất luôn
+                # phần vẽ dự phòng → sập nặng hơn).
+                "--disable-gpu",
             ],
             user_agent=_UA,
             viewport={"width": 1920, "height": 1080},
@@ -748,6 +752,10 @@ async def _run_page_wall(
                 "--disable-infobars",
                 "--start-maximized",
                 "--disable-notifications",
+                # Ép Chromium vẽ bằng phần mềm → sửa headless sập renderer trên
+                # Windows. KHÔNG thêm --disable-software-rasterizer (sẽ mất luôn
+                # phần vẽ dự phòng → sập nặng hơn).
+                "--disable-gpu",
             ],
             user_agent=_UA,
             viewport={"width": 1920, "height": 1080},
