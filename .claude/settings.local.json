@@ -90,7 +90,8 @@
       "Bash(sed -i 's/const CENTER_KEYS=\\\\[\"loai_dang\",\"thoi_gian_nghi\",\"link_profile\",\"refresh\",\"trang_thai\"\\\\];/const CENTER_KEYS=[\"loai_dang\",\"thoi_gian_nghi\",\"link_profile\",\"refresh\",\"trang_thai\",\"nuoi_interval\"];/' static/js/app.js)",
       "Bash(sed -i 's/const runners=\\\\[\"homestay\",\"thue\",\"ban\",\"page\"\\\\];/const runners=[\"homestay\",\"thue\",\"ban\",\"page\",\"nuoi\"];/' static/js/app.js)",
       "Bash(python -m py_compile server.py db.py scheduler.py nuoi_nick.py config.py)",
-      "Bash(python -m py_compile nuoi_nick.py server.py db.py scheduler.py config.py)"
+      "Bash(python -m py_compile nuoi_nick.py server.py db.py scheduler.py config.py)",
+      "Bash(python -m py_compile db.py scheduler.py server.py cookie_exporter.py)"
     ]
   }
 }

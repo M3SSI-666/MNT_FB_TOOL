@@ -1037,9 +1037,8 @@ def api_join_add():
     if not ten_acc or not ten_page:
         return jsonify({"ok": False, "error": "Thiếu Acc hoặc Page"})
     try:
-        from db import _conn, get_page_by_name
-        page_info = get_page_by_name(ten_page)
-        page_uid  = page_info.get("page_uid","") if page_info else ""
+        from db import _conn, get_account_by_name, resolve_page_uid
+        page_uid = resolve_page_uid(get_account_by_name(ten_acc, ten_page), ten_page)
         with _conn() as con:
             cur = con.execute(
                 "INSERT INTO join_schedules (ten_acc,ten_page,page_uid,gio_chay,created_at) VALUES (?,?,?,?,datetime('now','localtime'))",
@@ -1064,7 +1063,7 @@ def api_join_gen_quick():
         accs    = get_accounts(trang_thai="Active")
         created = 0
         skipped = 0
-        from db import _conn, get_page_by_name
+        from db import _conn, resolve_page_uid
         with _conn() as con:
             for acc in accs:
                 ten_acc  = acc["ten_acc"]
@@ -1079,8 +1078,7 @@ def api_join_gen_quick():
                 if existing:
                     skipped += 1
                     continue
-                page_info = get_page_by_name(ten_page)
-                page_uid  = page_info.get("page_uid", "") if page_info else ""
+                page_uid = resolve_page_uid(acc, ten_page)
                 con.execute(
                     "INSERT INTO join_schedules (ten_acc,ten_page,page_uid,gio_chay,trang_thai,created_at) "
                     "VALUES (?,?,?,?,?,datetime('now','localtime'))",

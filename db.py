@@ -43,6 +43,7 @@ def init_db():
             email_sdt       TEXT DEFAULT '',
             password        TEXT DEFAULT '',
             ten_page        TEXT DEFAULT '',
+            page_uid        TEXT DEFAULT '',        -- UID page ĐĂNG THẬT (ten_page chỉ để gợi nhớ)
             c_user          TEXT DEFAULT '',
             xs              TEXT DEFAULT '',
             refresh         TEXT DEFAULT '',        -- Yes / Done / ''
@@ -148,6 +149,7 @@ def init_db():
             if col not in existing:
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
 
+        _add_col("accounts",  "page_uid",      "page_uid TEXT DEFAULT ''")
         _add_col("accounts",  "nuoi_nick",     "nuoi_nick INTEGER DEFAULT 0")
         _add_col("accounts",  "nuoi_interval", "nuoi_interval INTEGER DEFAULT 150")
         _add_col("schedules", "hoat_dong",     "hoat_dong TEXT DEFAULT 'dang_bai'")
@@ -254,7 +256,7 @@ def delete_account(acc_id: int):
 def update_account_field(acc_id: int, field: str, value: str):
     safe = {
         "ten_acc","loai_dang","thoi_gian_nghi","link_profile","email_sdt",
-        "password","ten_page","c_user","xs","refresh","trang_thai",
+        "password","ten_page","page_uid","c_user","xs","refresh","trang_thai",
         "email_khoiphuc","pass_khoiphuc","twofa","ghi_chu",
         "nuoi_nick","nuoi_interval"
     }
@@ -281,11 +283,41 @@ def reorder_pages(ordered_ids: list[int]):
 
 
 def get_page_by_name(ten_page: str) -> dict | None:
+    """
+    Tra page theo TÊN — chỉ dùng làm dự phòng cho dữ liệu cũ.
+    Không đáng tin: tên có thể trùng nhau (lấy đại dòng đầu) và so khớp phân
+    biệt hoa/thường. Nên dùng get_page_by_uid / resolve_page_uid.
+    """
     with _conn() as con:
         r = con.execute(
             "SELECT * FROM pages WHERE ten_page = ? LIMIT 1", (ten_page,)
         ).fetchone()
         return dict(r) if r else None
+
+
+def get_page_by_uid(page_uid: str) -> dict | None:
+    if not (page_uid or "").strip():
+        return None
+    with _conn() as con:
+        r = con.execute(
+            "SELECT * FROM pages WHERE page_uid = ? LIMIT 1", (str(page_uid).strip(),)
+        ).fetchone()
+        return dict(r) if r else None
+
+
+def resolve_page_uid(acc: dict = None, ten_page: str = "") -> str:
+    """
+    Trả về UID page sẽ ĐĂNG THẬT.
+
+    Ưu tiên UID gán thẳng cho tài khoản (accounts.page_uid) — đây là nguồn duy
+    nhất chính xác khi có nhiều page trùng tên. Chỉ khi acc chưa gán UID mới
+    lần theo tên (dữ liệu cũ), và cách đó có thể chọn nhầm page.
+    """
+    uid = ((acc or {}).get("page_uid") or "").strip()
+    if uid:
+        return uid
+    p = get_page_by_name((ten_page or "").strip())
+    return (p or {}).get("page_uid", "") or ""
 
 
 def upsert_page(data: dict) -> int:

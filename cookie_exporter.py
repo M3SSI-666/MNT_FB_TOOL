@@ -103,7 +103,7 @@ def export_all_accounts(target_acc: str = None) -> int:
     os.makedirs(COOKIES_DIR, exist_ok=True)
 
     try:
-        from db import get_accounts, get_page_by_name
+        from db import get_accounts, resolve_page_uid
         accs = get_accounts(trang_thai="Active")
         if target_acc:
             accs = [a for a in accs if a["ten_acc"] == target_acc]
@@ -118,13 +118,9 @@ def export_all_accounts(target_acc: str = None) -> int:
             ten = acc["ten_acc"]
             safe = _safe_filename(ten)
 
-            # Lấy Page info
-            page_uid  = ""
+            # Lấy Page info — UID gán cho acc quyết định, tên chỉ là dự phòng.
             page_name = acc.get("ten_page", "")
-            if page_name:
-                page = get_page_by_name(page_name)
-                if page:
-                    page_uid = page.get("page_uid", "")
+            page_uid  = resolve_page_uid(acc, page_name)
 
             cookie_data = {
                 "c_user":      c_user,
