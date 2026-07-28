@@ -769,6 +769,17 @@ def api_schedule_gen(loai):
                     "to":   schedule[-1]["gio_dang"]})
 
 
+@app.route("/api/nuoi/msg-mau")
+def api_nuoi_msg_mau():
+    """Thư viện câu nhắn mẫu (nuoi_msg_mau.txt) để nạp vào ô Thư viện câu."""
+    f = BASE_DIR / "nuoi_msg_mau.txt"
+    if not f.exists():
+        return jsonify({"ok": False, "error": "Không tìm thấy nuoi_msg_mau.txt"})
+    lines = [ln.strip() for ln in f.read_text(encoding="utf-8").splitlines()]
+    lines = [ln for ln in lines if ln and not ln.startswith("#")]
+    return jsonify({"ok": True, "total": len(lines), "text": "\n".join(lines)})
+
+
 @app.route("/api/schedule/nuoi/gen", methods=["POST"])
 def api_schedule_nuoi_gen():
     """

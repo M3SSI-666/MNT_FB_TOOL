@@ -171,6 +171,18 @@ check("xin 0 câu -> rỗng",                nuoi_nick.pick_messages(_pool, 0, _
 check("mọi câu đều lấy từ thư viện",
       set(nuoi_nick.pick_messages(_pool, 10, _r0.Random(7))) <= set(_pool))
 
+# Thư viện câu mẫu đi kèm
+_mau_res = _client_mau = None
+import server as _srv
+_mau_res = _srv.app.test_client().get("/api/nuoi/msg-mau").get_json()
+_mau_lines = (_mau_res.get("text") or "").split("\n")
+check("thư viện mẫu đọc được",         _mau_res.get("ok") is True)
+check("có ~500 câu mẫu",               _mau_res.get("total", 0) >= 500)
+check("mẫu không lẫn dòng ghi chú",    not any(l.startswith("#") for l in _mau_lines))
+check("mẫu không có dòng rỗng",        all(l.strip() for l in _mau_lines))
+check("mẫu không trùng câu",           len(_mau_lines) == len(set(_mau_lines)))
+check("câu mẫu đều ngắn gọn",          all(len(l) <= 60 for l in _mau_lines))
+
 # select_session_activities: chỉ lấy hành động đang bật, luôn ≥1, chỉ tên hợp lệ
 import random as _rnd
 _ALL_ON = {"nuoi_enable_feed":1,"nuoi_enable_story":1,"nuoi_enable_accept":1,

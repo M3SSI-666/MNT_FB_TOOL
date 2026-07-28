@@ -77,6 +77,10 @@ Nút **⚙️ Cài đặt nuôi** ở tab *Lịch Nuôi nick*: bật/tắt từn
 vào ô *Link nhóm chat*, rồi nhập **thư viện câu** (mỗi dòng 1 câu). Mỗi phiên bốc
 2–3 câu ngẫu nhiên, gõ từng ký tự có độ trễ, không lặp hai câu giống nhau liền kề.
 
+Có sẵn **500 câu mẫu** (công việc / công nghệ / nấu ăn / sức khỏe / đời sống) trong
+[nuoi_msg_mau.txt](nuoi_msg_mau.txt) — bấm **📥 Nạp 500 câu mẫu** để dùng ngay, hoặc
+**➕ Thêm vào** để nối vào thư viện đang có. Sửa file đó là đổi được bộ mẫu.
+
 > **Gửi lời mời kết bạn mặc định TẮT** — đây là hành động dễ khóa nick nhất.
 > Có nút bật trong cài đặt nhưng nên để nguyên.
 

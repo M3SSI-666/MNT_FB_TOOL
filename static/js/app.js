@@ -1408,8 +1408,17 @@ async function openNuoiSettings(){
         ${row("Số tin nhắn mỗi phiên",
               `${num("nuoi_msg_min",2)} — ${num("nuoi_msg_max",3)}`)}
         <div class="field-group" style="margin-top:10px">
-            <label>Thư viện câu — <span style="font-weight:400;color:var(--text-muted)">mỗi dòng 1 câu, bốc ngẫu nhiên</span></label>
-            <textarea id="ns_nuoi_msg_pool" rows="8"
+            <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span>Thư viện câu — <span style="font-weight:400;color:var(--text-muted)">mỗi dòng 1 câu, bốc ngẫu nhiên</span></span>
+                <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
+                    <span id="ns_pool_count" style="font-size:11px;color:var(--text-muted)"></span>
+                    <button type="button" class="btn btn-ghost" style="padding:3px 8px;font-size:11px"
+                            onclick="loadMsgMau(false)">📥 Nạp 500 câu mẫu</button>
+                    <button type="button" class="btn btn-ghost" style="padding:3px 8px;font-size:11px"
+                            onclick="loadMsgMau(true)">➕ Thêm vào</button>
+                </span>
+            </label>
+            <textarea id="ns_nuoi_msg_pool" rows="8" oninput="_updatePoolCount()"
                 style="width:100%;font-family:inherit;font-size:13px;padding:8px;background:var(--bg-input,var(--bg-hover));color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm)"
                 placeholder="Hôm nay trời đẹp nhỉ&#10;Mọi người ăn trưa chưa&#10;Cuối tuần này đi đâu chơi không">${_escapeHtml(String(v("nuoi_msg_pool","")))}</textarea>
         </div>
@@ -1418,6 +1427,33 @@ async function openNuoiSettings(){
         <button onclick="closeModal()" class="btn btn-ghost">Huỷ</button>
         <button onclick="saveNuoiSettings()" class="btn btn-primary">💾 Lưu</button>
       </div>`);
+    _updatePoolCount();
+}
+
+// Nạp thư viện câu mẫu. append=false: thay hết | true: nối thêm (bỏ câu trùng).
+async function loadMsgMau(append){
+    const ta=document.getElementById("ns_nuoi_msg_pool"); if(!ta) return;
+    try{
+        const r=await API.nuoiMsgMau();
+        if(!r.ok){ Toast.error(r.error); return; }
+        const mau=(r.text||"").split("\n").map(s=>s.trim()).filter(Boolean);
+        let out=mau;
+        if(append){
+            const cu=ta.value.split("\n").map(s=>s.trim()).filter(Boolean);
+            out=[...cu, ...mau.filter(m=>!cu.includes(m))];
+        }
+        ta.value=out.join("\n");
+        _updatePoolCount();
+        Toast.success(append?`Đã thêm — tổng ${out.length} câu`:`Đã nạp ${out.length} câu`);
+    }catch(e){ Toast.error(e.message); }
+}
+
+function _updatePoolCount(){
+    const ta=document.getElementById("ns_nuoi_msg_pool");
+    const el=document.getElementById("ns_pool_count");
+    if(!ta||!el) return;
+    const n=ta.value.split("\n").filter(s=>s.trim()).length;
+    el.textContent=n?`${n} câu`:"";
 }
 
 async function saveNuoiSettings(){
