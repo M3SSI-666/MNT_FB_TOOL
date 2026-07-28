@@ -48,14 +48,74 @@ def save_image(file_bytes: bytes, filename: str, loai: str = "uploads") -> str:
     return url
 
 
-def delete_image(url_path: str):
+def delete_image(url_path: str) -> bool:
     """Xóa ảnh theo URL path (bắt đầu bằng /data/media/...)."""
     if not url_path or not url_path.startswith("/"):
-        return
+        return False
     abs_path = MEDIA_DIR.parent / url_path.lstrip("/")
-    if abs_path.exists():
-        abs_path.unlink()
-        logger.info(f"  🗑️  Deleted image: {url_path}")
+    try:
+        if abs_path.exists():
+            abs_path.unlink()
+            logger.info(f"  🗑️  Đã xóa ảnh: {url_path}")
+            return True
+    except OSError as e:
+        logger.warning(f"  ⚠️  Không xóa được {url_path}: {e}")
+    return False
+
+
+def xoa_anh_khong_dung(ung_vien: set) -> int:
+    """
+    Xóa các ảnh trong `ung_vien` mà KHÔNG còn content nào trỏ tới.
+
+    Phải kiểm tra lại toàn bộ content vì một ảnh có thể được nhiều content dùng
+    chung — xóa content này không có nghĩa ảnh đó thành rác.
+    """
+    if not ung_vien:
+        return 0
+    from db import get_all_content_image_urls
+    con_dung = get_all_content_image_urls()
+    return sum(1 for u in ung_vien if u not in con_dung and delete_image(u))
+
+
+def quet_anh_mo_coi(xoa: bool = False, bo_qua_moi_giay: int = 3600) -> dict:
+    """
+    Quét thư mục content, tìm ảnh không content nào trỏ tới.
+
+    `bo_qua_moi_giay`: bỏ qua file vừa tạo gần đây (mặc định 1 giờ) — ảnh được
+    lưu lên đĩa NGAY khi chọn file, trước lúc bấm Lưu content, nên quét ngay có
+    thể xóa nhầm ảnh người dùng đang upload dở.
+    """
+    import time as _t
+    from db import get_all_content_image_urls
+    con_dung = {os.path.basename(u) for u in get_all_content_image_urls()}
+    bay_gio  = _t.time()
+
+    mo_coi, tong_byte, da_xoa = [], 0, 0
+    for thu_muc in CONTENT_MEDIA_DIRS.values():
+        p = Path(thu_muc)
+        if not p.exists():
+            continue
+        for f in p.iterdir():
+            if not f.is_file() or f.suffix.lower() not in ALLOWED_EXTS:
+                continue
+            if f.name in con_dung:
+                continue
+            if bay_gio - f.stat().st_mtime < bo_qua_moi_giay:
+                continue                      # mới upload, có thể chưa kịp lưu
+            mo_coi.append(f.name)
+            tong_byte += f.stat().st_size
+            if xoa:
+                try:
+                    f.unlink()
+                    da_xoa += 1
+                except OSError as e:
+                    logger.warning(f"  ⚠️  Không xóa được {f.name}: {e}")
+
+    if xoa:
+        logger.info(f"  🧹 Dọn ảnh mồ côi: xóa {da_xoa} file, "
+                    f"giải phóng {tong_byte/1024/1024:.1f} MB")
+    return {"so_file": len(mo_coi), "dung_luong_mb": round(tong_byte / 1024 / 1024, 1),
+            "da_xoa": da_xoa}
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -350,6 +350,36 @@ def delete_content(content_id: int):
         con.execute("DELETE FROM content WHERE id=?", (content_id,))
 
 
+def _tach_urls(*chuoi) -> set:
+    """'a.jpg, b.jpg' → {'a.jpg', 'b.jpg'} (bỏ khoảng trắng, bỏ rỗng)."""
+    ra = set()
+    for s in chuoi:
+        for u in (s or "").split(","):
+            u = u.strip()
+            if u:
+                ra.add(u)
+    return ra
+
+
+def get_content_image_urls(content_id: int) -> set:
+    """Ảnh mà MỘT dòng content đang trỏ tới."""
+    with _conn() as con:
+        r = con.execute(
+            "SELECT link_anh_hook, link_anh FROM content WHERE id=?", (content_id,)
+        ).fetchone()
+    return _tach_urls(r["link_anh_hook"], r["link_anh"]) if r else set()
+
+
+def get_all_content_image_urls() -> set:
+    """Mọi ảnh còn được BẤT KỲ content nào trỏ tới — dùng để biết ảnh nào mồ côi."""
+    with _conn() as con:
+        rows = con.execute("SELECT link_anh_hook, link_anh FROM content").fetchall()
+    ra = set()
+    for r in rows:
+        ra |= _tach_urls(r["link_anh_hook"], r["link_anh"])
+    return ra
+
+
 # ═══════════════════════════════════════════════════════════════
 # UID Groups
 # ═══════════════════════════════════════════════════════════════

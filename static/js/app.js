@@ -1009,6 +1009,20 @@ function renderContentTabs(){
     }).join("");
 }
 
+// Dọn ảnh không content nào dùng tới — đếm trước, hỏi rồi mới xóa.
+async function donAnhMoCoi(){
+    try{
+        const r = await API.quetAnhMoCoi(false);
+        if(!r.ok){ Toast.error(r.error); return; }
+        if(!r.so_file){ Toast.success("Không có ảnh thừa nào"); return; }
+        if(!confirm(`Tìm thấy ${r.so_file} ảnh không content nào dùng tới `
+                   +`(${r.dung_luong_mb} MB).\n\nXóa hẳn khỏi ổ đĩa?`)) return;
+        const x = await API.quetAnhMoCoi(true);
+        if(x.ok) Toast.success(`Đã xóa ${x.da_xoa} ảnh — giải phóng ${x.dung_luong_mb} MB`);
+        else Toast.error(x.error);
+    }catch(e){ Toast.error(e.message); }
+}
+
 function openContentTab(loai){
     const keys = CONTENT_CATEGORIES.map(c=>c.key);
     const target = keys.includes(loai) ? loai

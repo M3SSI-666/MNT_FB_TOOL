@@ -93,6 +93,31 @@ check("parse UID số thuần",            _pfg("123456789") == "123456789")
 check("parse slug chữ",                _pfg("homestaytimescity") == "homestaytimescity")
 check("chuỗi rỗng -> rỗng",            _pfg("") == "")
 
+# ── ảnh content: xóa content/bỏ ảnh thì file cũng đi theo ──────────────────
+_u = db._tach_urls
+check("tách URL bỏ khoảng trắng",      _u(" a.jpg , b.jpg ") == {"a.jpg", "b.jpg"})
+check("tách URL bỏ chuỗi rỗng",        _u("", None, "a.jpg,,") == {"a.jpg"})
+check("tách URL gộp nhiều chuỗi",      _u("a.jpg", "b.jpg") == {"a.jpg", "b.jpg"})
+
+_c1 = db.upsert_content({"loai":"homestay","ma_content":"IMG1",
+                         "link_anh_hook":"/m/h.jpg","link_anh":"/m/x.jpg, /m/chung.jpg"})
+_c2 = db.upsert_content({"loai":"homestay","ma_content":"IMG2",
+                         "link_anh":"/m/y.jpg, /m/chung.jpg"})
+check("lấy đúng ảnh của 1 content",
+      db.get_content_image_urls(_c1) == {"/m/h.jpg", "/m/x.jpg", "/m/chung.jpg"})
+check("gom ảnh của MỌI content",
+      {"/m/h.jpg","/m/x.jpg","/m/y.jpg","/m/chung.jpg"} <= db.get_all_content_image_urls())
+check("content không tồn tại -> rỗng", db.get_content_image_urls(999999) == set())
+# Ảnh dùng chung: xóa 1 content thì ảnh chung PHẢI còn (content kia vẫn dùng)
+db.delete_content(_c1)
+check("xóa content: ảnh riêng hết dùng",
+      "/m/x.jpg" not in db.get_all_content_image_urls())
+check("xóa content: ảnh CHUNG vẫn còn dùng",
+      "/m/chung.jpg" in db.get_all_content_image_urls())
+db.delete_content(_c2)
+check("xóa nốt: ảnh chung mới hết dùng",
+      "/m/chung.jpg" not in db.get_all_content_image_urls())
+
 # ── nuôi nick: xếp phiên theo CHU KỲ (logic thuần) ─────────────────────────
 import nuoi_nick
 

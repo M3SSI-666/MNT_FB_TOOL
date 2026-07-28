@@ -37,6 +37,7 @@ const API = {
     saveContent:     (data)       => API.post("/api/content/save", data),
     updateContentField: (id, f, v) => API.post(`/api/content/${id}/field`, {field:f, value:v}),
     deleteContent:   (id)         => API.del(`/api/content/${id}`),
+    quetAnhMoCoi:    (xoa)        => API.post("/api/content/quet-anh-mo-coi", {xoa}),
 
     // UID Groups
     uidGroups:       ()           => API.get("/api/uid-groups"),

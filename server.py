@@ -526,8 +526,16 @@ def api_content(loai):
 def api_content_save():
     data = request.json or {}
     try:
+        # Ảnh bị bỏ khỏi content khi sửa thì xóa luôn file, khỏi tồn đọng.
+        from db import get_content_image_urls
+        from storage import xoa_anh_khong_dung
+        cu = get_content_image_urls(data["id"]) if data.get("id") else set()
+
         cid = upsert_content(data)
-        return jsonify({"ok": True, "id": cid})
+
+        bo_di = cu - get_content_image_urls(cid)
+        n = xoa_anh_khong_dung(bo_di) if bo_di else 0
+        return jsonify({"ok": True, "id": cid, "anh_da_xoa": n})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -551,8 +559,25 @@ def api_content_field(content_id):
 
 @app.route("/api/content/<int:content_id>", methods=["DELETE"])
 def api_content_delete(content_id):
+    # Lấy danh sách ảnh TRƯỚC khi xóa dòng, rồi dọn file — trước đây chỉ xóa
+    # dòng DB nên ảnh nằm lại trên đĩa mãi mãi.
+    from db import get_content_image_urls
+    from storage import xoa_anh_khong_dung
+    anh = get_content_image_urls(content_id)
     delete_content(content_id)
-    return jsonify({"ok": True})
+    n = xoa_anh_khong_dung(anh) if anh else 0
+    return jsonify({"ok": True, "anh_da_xoa": n})
+
+
+@app.route("/api/content/quet-anh-mo-coi", methods=["POST"])
+def api_quet_anh_mo_coi():
+    """Quét (và tuỳ chọn xóa) ảnh không content nào dùng tới."""
+    from storage import quet_anh_mo_coi
+    xoa = bool((request.json or {}).get("xoa"))
+    try:
+        return jsonify({"ok": True, **quet_anh_mo_coi(xoa=xoa)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 
 
 @app.route("/api/content/upload-image", methods=["POST"])
