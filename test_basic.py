@@ -125,6 +125,34 @@ check("slot còn lại vẫn đăng bài",     any(r["hoat_dong"]=="dang_bai" fo
 check("khoảng cách 2 phiên >= chu kỳ",
       all(b-a >= 150 for a,b in zip(a_warm_times, a_warm_times[1:])))
 
+# Nhiều acc cùng bật nuôi: các phiên phải TÁCH GIÃN, không chụm một cục.
+# (Lịch thật: 4 acc luân phiên mỗi 3 phút, 3 acc bật nuôi cùng chu kỳ 150.)
+_accs4 = ["A1","A2","A3","A4"]
+_sched4 = []
+_t = 5*60
+for _k in range(441):
+    _sched4.append({"ten_acc":_accs4[_k%4],
+                    "gio_dang":f"{(_t//60)%24:02d}:{_t%60:02d}","stt":_k+1})
+    _t += 3
+nuoi_nick.plan_warming_conversion(_sched4, {"A2":150,"A3":150,"A4":150})
+_wrows = [(r["gio_dang"], r["ten_acc"]) for r in _sched4 if r["hoat_dong"]=="nuoi_nick"]
+_wt = nuoi_nick._unwrap_times([g for g,_ in _wrows])
+_wgaps = [b-a for a,b in zip(_wt,_wt[1:])]
+check("nhiều acc: phiên nuôi không chụm",  min(_wgaps) >= nuoi_nick.MIN_GAP_MIN)
+check("nhiều acc: giãn cách đáng kể",      min(_wgaps) >= 30)
+check("3 acc đều có phiên nuôi",           len({a for _,a in _wrows}) == 3)
+# Mỗi acc vẫn tôn trọng chu kỳ riêng của nó
+for _a in ("A2","A3","A4"):
+    _at = nuoi_nick._unwrap_times([g for g,x in _wrows if x==_a])
+    if not all(b-a >= 150 for a,b in zip(_at,_at[1:])):
+        break
+else:
+    _a = None
+check("mỗi acc vẫn giữ đúng chu kỳ 150",   _a is None)
+# Acc không bật nuôi không bị đụng
+check("acc không bật nuôi vẫn đăng hết",
+      all(r["hoat_dong"]=="dang_bai" for r in _sched4 if r["ten_acc"]=="A1"))
+
 # Chu kỳ ngắn hơn -> nhiều phiên nuôi hơn
 s2 = _mkrows("C",24); nuoi_nick.plan_warming_conversion(s2, {"C":60})
 s3 = _mkrows("D",24); nuoi_nick.plan_warming_conversion(s3, {"D":240})

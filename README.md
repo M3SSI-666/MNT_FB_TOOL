@@ -61,8 +61,10 @@ Bật bằng cách tick cột **Nuôi** ở bảng Tài khoản. Cột **Chu k�
 | Có (Homestay/Thuê/Bán) | Đăng bài bình thường; cứ mỗi *chu kỳ*, **một slot đăng biến thành phiên nuôi** (badge 🌱). Không thêm slot mới nên lịch không dày lên, và một slot chỉ đăng **hoặc** nuôi → không đụng nhau. |
 | **Để trống** | **Chỉ nuôi, không đăng gì.** Vào tab **Lịch Nuôi nick** → *Gen lịch* để xếp phiên mỗi *chu kỳ* phút. Dùng cho nick yếu thời gian đầu; khi nick khỏe thì điền Loại đăng để chuyển sang vừa đăng vừa nuôi. |
 
-Các phiên nuôi được **giãn cách tối thiểu 10 phút** với nhau nên không có chuyện
-nhiều nick cùng mở trình duyệt một lúc. Tới giờ, phiên nuôi kéo dài 5–8 phút, làm
+Các phiên nuôi được **tách giãn tối đa**: mỗi nick lệch pha nhau (nick thứ k dời
+phiên đầu đi k/n chu kỳ) và mọi phiên cách nhau tối thiểu 10 phút. Nhờ vậy các
+slot 🌱 rải đều cả ngày thay vì dồn cục — ví dụ 3 nick chu kỳ 150 phút cho ra
+`05:03 · 06:06 · 06:57 · 07:39 · 08:42 …` (cách nhau 42–63 phút). Tới giờ, phiên nuôi kéo dài 5–8 phút, làm
 các hành động **bốc ngẫu nhiên tập con + xáo thứ tự**: lướt feed, xem story, like,
 xác nhận lời mời kết bạn.
 

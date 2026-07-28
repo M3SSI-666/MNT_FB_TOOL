@@ -84,6 +84,7 @@ def get_settings() -> dict:
 
 DEFAULT_INTERVAL_MIN = 150     # 2h30 — mỗi acc nuôi 1 lần mỗi chừng này phút
 MIN_INTERVAL_MIN     = 20      # chặn nhập quá dày (mở trình duyệt liên tục)
+MIN_GAP_MIN          = 10      # 2 phiên nuôi bất kỳ phải cách nhau ít nhất ngần này phút
 
 
 def _parse_hhmm(s: str) -> int:
@@ -119,7 +120,8 @@ def normalize_interval(value, default=DEFAULT_INTERVAL_MIN) -> int:
     return max(MIN_INTERVAL_MIN, v) if v > 0 else default
 
 
-def plan_warming_conversion(schedule: list, warm_accs: dict) -> int:
+def plan_warming_conversion(schedule: list, warm_accs: dict,
+                            min_gap: int = None) -> int:
     """
     Với acc BẬT nuôi: cứ mỗi `chu kỳ` phút thì MỘT slot đăng của acc đó bị đổi
     thành phiên nuôi (nuôi chen thẳng vào lịch đăng, không thêm slot mới nên
@@ -128,31 +130,50 @@ def plan_warming_conversion(schedule: list, warm_accs: dict) -> int:
     schedule  : list row đã gen, thứ tự theo thời gian; mỗi row có 'ten_acc','gio_dang'.
     warm_accs : {ten_acc: chu_kỳ_phút} — CHỈ chứa acc đang bật nuôi.
     Sửa `schedule` tại chỗ, trả về số slot đã chuyển.
+
+    Hai lớp TÁCH GIÃN các phiên nuôi ra khỏi nhau:
+      1. Lệch pha — acc thứ k dời phiên nuôi đầu tiên đi k/n chu kỳ. Không có
+         bước này thì các acc cùng chu kỳ, cùng bắt đầu một giờ sẽ nuôi dính
+         chùm nhau suốt ngày (05:03/05:06/05:09 → 07:39/07:42/07:45...).
+      2. Giãn cách tối thiểu toàn cục — slot nào quá sát một phiên nuôi đã đặt
+         (của bất kỳ acc nào) thì bỏ, lùi sang slot kế tiếp của chính acc đó.
+         Cần vì các acc chu kỳ khác nhau vẫn trôi vào gần nhau sau vài vòng.
     """
+    if min_gap is None:
+        min_gap = MIN_GAP_MIN
+
     by_acc = defaultdict(list)
     for i, row in enumerate(schedule):
         row.setdefault("hoat_dong", "dang_bai")
         by_acc[row["ten_acc"]].append(i)
 
-    converted = 0
-    for acc, idxs in by_acc.items():
-        if acc not in warm_accs:
-            continue
+    accs = [a for a in by_acc if a in warm_accs]
+    n    = max(1, len(accs))
+
+    converted   = 0
+    placed: list = []            # mốc phút của MỌI phiên nuôi đã đặt
+    for k, acc in enumerate(accs):
+        idxs     = by_acc[acc]
         interval = normalize_interval(warm_accs[acc])
         mins     = _unwrap_times([schedule[i]["gio_dang"] for i in idxs])
+        # Lớp 1 — lệch pha: acc thứ k chờ thêm k/n chu kỳ mới nuôi lần đầu.
+        first_at = mins[0] + round(k * interval / n)
         last     = None
         for pos, i in enumerate(idxs):
             t = mins[pos]
-            # Slot đầu tiên trong ngày cũng là phiên nuôi — "khởi động" nick
-            # trước khi bắt đầu đăng.
-            if last is None or (t - last) >= interval:
-                schedule[i]["hoat_dong"] = "nuoi_nick"
-                last = t
-                converted += 1
+            if last is None:
+                if t < first_at:
+                    continue
+            elif (t - last) < interval:
+                continue
+            # Lớp 2 — giãn cách toàn cục: sát quá thì thử slot sau của acc này.
+            if any(abs(t - u) < min_gap for u in placed):
+                continue
+            schedule[i]["hoat_dong"] = "nuoi_nick"
+            last = t
+            placed.append(t)
+            converted += 1
     return converted
-
-
-MIN_GAP_MIN = 10   # 2 phiên nuôi bất kỳ phải cách nhau ít nhất ngần này phút
 
 
 def build_warming_schedule(accs: list, start_str: str = "07:00",
