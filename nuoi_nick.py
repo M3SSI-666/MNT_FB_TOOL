@@ -348,6 +348,30 @@ async def _act_add_friends(page, ctx, st):
     logger.info(f"    ✅ Đã gửi {sent} lời mời kết bạn")
 
 
+class MessagingRestricted(Exception):
+    """FB chặn acc này gửi tin nhắn (đòi xác nhận danh tính) — bỏ nhắn, nuôi kiểu khác."""
+
+
+# Dấu hiệu FB chặn gửi tin nhắn. Khi thấy là DỪNG nhắn ngay: cố gửi tiếp lúc
+# đang bị hạn chế chỉ khiến nick bị soi nặng hơn.
+RESTRICT_MARKERS = (
+    "xác nhận danh tính",
+    "cách xác nhận",
+    "bị hạn chế do có hoạt động bất thường",
+    "hành động đã bị hạn chế",
+    "confirm your identity",
+    "you can't send messages",
+    "temporarily restricted",
+    "unusual activity",
+)
+
+
+def is_messaging_restricted(page_text: str) -> bool:
+    """Đọc text trang, nhận biết acc có đang bị chặn nhắn tin không."""
+    t = (page_text or "").lower()
+    return any(m in t for m in RESTRICT_MARKERS)
+
+
 def pick_messages(pool: list, n: int, rng=random) -> list:
     """
     Bốc n câu từ thư viện, KHÔNG lặp lại câu vừa nhắn liền trước (nhắn 2 câu
@@ -392,6 +416,14 @@ async def _act_message(page, ctx, st):
     await page.goto(group_url, wait_until="domcontentloaded", timeout=30000)
     await human_delay(2500, 4000)
 
+    # Acc đang bị hạn chế nhắn tin → bỏ hẳn, KHÔNG thử gửi.
+    try:
+        body_text = await page.inner_text("body")
+    except Exception:
+        body_text = ""
+    if is_messaging_restricted(body_text):
+        raise MessagingRestricted("FB đòi xác nhận danh tính mới cho nhắn tin")
+
     box = await _find_chat_box(page)
     if box is None:
         raise Exception("Không tìm thấy ô soạn tin nhắn (FB đổi giao diện?)")
@@ -413,6 +445,16 @@ async def _act_message(page, ctx, st):
         except Exception as e:
             logger.warning(f"    ⚠️  Nhắn tin dừng giữa chừng: {e}")
             break
+
+        # FB có thể chặn NGAY SAU vài tin đầu — kiểm lại để dừng đúng lúc.
+        try:
+            if is_messaging_restricted(await page.inner_text("body")):
+                raise MessagingRestricted(f"bị chặn sau khi gửi {sent} tin")
+        except MessagingRestricted:
+            raise
+        except Exception:
+            pass
+
     logger.info(f"    ✅ Nhắn tin xong — {sent}/{n_msg} tin")
 
 
@@ -475,7 +517,7 @@ async def _run_warming(acc_name: str, c_user: str, st: dict) -> bool:
             logger.info(f"  🎲 Hành động phiên này: {', '.join(chosen) or '(không có)'}")
 
             done = []
-            for name in chosen:
+            for idx, name in enumerate(chosen):
                 if time.monotonic() >= deadline:
                     logger.info("  ⏱️  Hết ngân sách phiên — dừng")
                     break
@@ -484,6 +526,23 @@ async def _run_warming(acc_name: str, c_user: str, st: dict) -> bool:
                     done.append(name)
                 except CookieDeadError:
                     raise
+                except MessagingRestricted as e:
+                    # Acc đang bị hạn chế nhắn tin → bỏ hẳn, quay về lướt
+                    # newsfeed / story cho phiên vẫn có ích.
+                    logger.warning(f"  🚫 [{acc_name}] Nhắn tin bị chặn: {e}")
+                    con_lai = set(chosen[idx + 1:])
+                    for fb, flag in (("feed", "nuoi_enable_feed"),
+                                     ("story", "nuoi_enable_story")):
+                        if fb in done or fb in con_lai or not st.get(flag):
+                            continue          # đã làm rồi / lát nữa cũng làm / đang tắt
+                        if time.monotonic() >= deadline:
+                            break
+                        try:
+                            logger.info(f"  ↩️  Bù lại bằng '{fb}'")
+                            await _ACTIVITY_FNS[fb](page, ctx, st)
+                            done.append(fb)
+                        except Exception as e2:
+                            logger.warning(f"  ⚠️  Bù '{fb}' lỗi: {e2}")
                 except Exception as e:
                     logger.warning(f"  ⚠️  Hành động '{name}' lỗi (bỏ qua): {e}")
                 await human_delay(1500, 3500)

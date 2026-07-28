@@ -199,6 +199,18 @@ check("xin 0 câu -> rỗng",                nuoi_nick.pick_messages(_pool, 0, _
 check("mọi câu đều lấy từ thư viện",
       set(nuoi_nick.pick_messages(_pool, 10, _r0.Random(7))) <= set(_pool))
 
+# Acc bị FB chặn nhắn tin -> nhận ra để bỏ qua, không cố gửi
+_restrict_real = ("Xác nhận danh tính để gửi tin nhắn "
+                  "Một số hành động đã bị hạn chế do có hoạt động bất thường. "
+                  "Tìm hiểu thêm Cách xác nhận")
+check("nhận ra chặn (text thật của FB)", nuoi_nick.is_messaging_restricted(_restrict_real) is True)
+check("nhận ra chặn tiếng Anh",
+      nuoi_nick.is_messaging_restricted("Confirm your identity to send messages") is True)
+check("chat bình thường KHÔNG bị nhầm",
+      nuoi_nick.is_messaging_restricted("hello các anh em hahaha i am back") is False)
+check("text rỗng -> không chặn",       nuoi_nick.is_messaging_restricted("") is False)
+check("None -> không chặn",            nuoi_nick.is_messaging_restricted(None) is False)
+
 # Thư viện câu mẫu đi kèm
 _mau_res = _client_mau = None
 import server as _srv

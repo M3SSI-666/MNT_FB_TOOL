@@ -83,6 +83,11 @@ Có sẵn **500 câu mẫu** (công việc / công nghệ / nấu ăn / sức kh
 [nuoi_msg_mau.txt](nuoi_msg_mau.txt) — bấm **📥 Nạp 500 câu mẫu** để dùng ngay, hoặc
 **➕ Thêm vào** để nối vào thư viện đang có. Sửa file đó là đổi được bộ mẫu.
 
+> **Acc bị hạn chế nhắn tin** (FB hiện *"Xác nhận danh tính để gửi tin nhắn"*) sẽ
+> được **bỏ qua tự động** — phiên nuôi quay lại lướt newsfeed / story thay thế.
+> Cố gửi tiếp lúc đang bị hạn chế chỉ khiến nick bị soi nặng hơn. Log ghi rõ nick
+> nào đang bị chặn để bạn biết mà xử lý.
+
 > **Gửi lời mời kết bạn mặc định TẮT** — đây là hành động dễ khóa nick nhất.
 > Có nút bật trong cài đặt nhưng nên để nguyên.
 
