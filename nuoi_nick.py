@@ -15,7 +15,7 @@ Hai phần tách bạch:
   1. Logic thuần (test được, không cần Playwright):
        - plan_warming_conversion()  : đổi slot đăng thành slot nuôi theo CHU KỲ
        - build_warming_schedule()   : lịch cho acc CHỈ NUÔI
-       - select_session_activities(): bốc TẬP CON hành động + xáo thứ tự
+       - select_session_activities(): mỗi phiên làm ĐỦ 4 việc, chỉ xáo thứ tự
   2. Bộ máy chạy phiên nuôi bằng Playwright (chỉ chạy thật với FB):
        - run_warming_session()      : điểm vào cho scheduler
        - _run_warming()             : orchestrator — chạy trong ngân sách 5–8
@@ -707,12 +707,12 @@ async def _act_message(page, ctx, st):
 # Chọn hành động cho phiên — logic thuần, test được
 # ═══════════════════════════════════════════════════════════════
 
-# (tên, xác suất được chọn mỗi phiên, cờ bật/tắt trong settings)
+# (tên hành động, cờ bật/tắt trong settings)
 _ACTIVITY_SPECS = [
-    ("story",   0.70, "nuoi_enable_story"),
-    ("feed",    0.90, "nuoi_enable_feed"),
-    ("like",    0.70, "nuoi_enable_like"),
-    ("message", 0.50, "nuoi_enable_message"),
+    ("story",   "nuoi_enable_story"),
+    ("feed",    "nuoi_enable_feed"),
+    ("like",    "nuoi_enable_like"),
+    ("message", "nuoi_enable_message"),
 ]
 _ACTIVITY_FNS = {
     "story":   _act_story,
@@ -724,14 +724,14 @@ _ACTIVITY_FNS = {
 
 def select_session_activities(st: dict, rng=random) -> list:
     """
-    Bốc TẬP CON hành động cho một phiên (không phiên nào giống phiên nào) rồi
-    XÁO thứ tự — để FB khó nhận ra khuôn. Chỉ lấy hành động đang bật trong
-    settings; đảm bảo tối thiểu 1 hành động nếu có cái nào bật.
+    Mỗi phiên làm ĐỦ mọi hành động đang bật, chỉ XÁO THỨ TỰ để không rập khuôn.
+
+    (Trước đây bốc ngẫu nhiên tập con nên chỉ 22% số phiên đủ 4 việc và hơn nửa
+    số phiên không nhắn tin — không đúng ý muốn mỗi phiên nuôi phải làm đủ.)
+    Tính ngẫu nhiên vẫn còn ở: thứ tự, thời lượng từng hành động, số câu nhắn,
+    và độ dài phiên.
     """
-    pool = [(name, prob) for name, prob, flag in _ACTIVITY_SPECS if st.get(flag)]
-    chosen = [name for name, prob in pool if rng.random() <= prob]
-    if not chosen and pool:
-        chosen = [rng.choice(pool)[0]]
+    chosen = [name for name, flag in _ACTIVITY_SPECS if st.get(flag)]
     rng.shuffle(chosen)
     return chosen
 
@@ -899,7 +899,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     st = get_settings()
-    bat = [ten for ten, _p, co in _ACTIVITY_SPECS if st.get(co)]
+    bat = [ten for ten, co in _ACTIVITY_SPECS if st.get(co)]
     print("=" * 58)
     print(f"🌱 CHẠY THỬ PHIÊN NUÔI — {acc_name}")
     if only:

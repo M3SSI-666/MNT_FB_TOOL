@@ -101,7 +101,8 @@
       "Bash(SCHEDULER_LOG_FILE=\"logs/test_hn_pin2.log\" python -X utf8 nuoi_nick.py \"Huỳnh Như\" --only message)",
       "Bash(SCHEDULER_LOG_FILE=\"logs/test_hn_pin3.log\" python -X utf8 nuoi_nick.py \"Huỳnh Như\" --only message)",
       "Bash(SCHEDULER_LOG_FILE=\"logs/test_hn_pin4.log\" python -X utf8 nuoi_nick.py \"Huỳnh Như\" --only message)",
-      "Bash(SCHEDULER_LOG_FILE=\"logs/test_hn_pin5.log\" python -X utf8 nuoi_nick.py \"Huỳnh Như\" --only message)"
+      "Bash(SCHEDULER_LOG_FILE=\"logs/test_hn_pin5.log\" python -X utf8 nuoi_nick.py \"Huỳnh Như\" --only message)",
+      "Bash(SCHEDULER_LOG_FILE=\"logs/test_duration.log\" python -X utf8 nuoi_nick.py \"Xuan Khoa\" --only feed)"
     ]
   }
 }

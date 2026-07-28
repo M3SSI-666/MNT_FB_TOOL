@@ -244,10 +244,12 @@ check("đã gỡ hẳn tính năng kết bạn",
               ("nuoi_enable_accept","nuoi_enable_addfriend","nuoi_friend_min")))
 _valid = set(nuoi_nick._ACTIVITY_FNS)
 _samples = [nuoi_nick.select_session_activities(_ALL_ON, _rnd.Random(i)) for i in range(200)]
-check("phiên nào cũng ≥1 hành động",   all(len(s) >= 1 for s in _samples))
+check("MỖI phiên làm ĐỦ 4 hành động",   all(set(s) == _valid for s in _samples))
 check("chỉ chứa tên hành động hợp lệ",  all(set(s) <= _valid for s in _samples))
 check("không lặp hành động trong phiên", all(len(s)==len(set(s)) for s in _samples))
-check("có sự đa dạng giữa các phiên",   len({tuple(s) for s in _samples}) > 5)
+# Đủ 4 nhưng THỨ TỰ phải xáo, không rập khuôn
+check("thứ tự đa dạng giữa các phiên",  len({tuple(s) for s in _samples}) > 10)
+check("không phải lúc nào cũng 1 thứ tự", _samples[0] != _samples[1] or _samples[0] != _samples[2])
 # Hành động bị tắt thì không bao giờ xuất hiện
 _only_feed = nuoi_nick.select_session_activities({"nuoi_enable_feed":1}, _rnd.Random(1))
 check("tắt hết trừ feed -> chỉ feed",  _only_feed == ["feed"])
