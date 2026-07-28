@@ -355,8 +355,62 @@ def has_pin_dialog(page_text: str) -> bool:
     return any(m in t for m in PIN_DIALOG_MARKERS)
 
 
+# Bấm bằng JS thay vì selector CSS: nút X của hộp thoại PIN nằm ngoài
+# div[role='dialog'] và không có aria-label ổn định, nên selector hay trượt.
+_JS_CLICK_CLOSE = """() => {
+    const visible = el => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+    };
+    // 1) Nút có nhãn Đóng / Close
+    for (const el of document.querySelectorAll('[aria-label]')) {
+        const l = (el.getAttribute('aria-label') || '').toLowerCase();
+        if ((l.includes('đóng') || l.includes('dong') || l.includes('close')) && visible(el)) {
+            el.click();
+            return 'aria:' + l;
+        }
+    }
+    // 2) Nút tròn chứa svg nằm ở góc trên–phải của hộp thoại
+    let best = null, bestTop = 1e9;
+    for (const el of document.querySelectorAll('div[role="button"], button')) {
+        if (!visible(el) || !el.querySelector('svg, i')) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width > 60 || r.height > 60) continue;          // nút nhỏ
+        if (r.top > window.innerHeight * 0.6) continue;        // nửa trên màn hình
+        if (r.left < window.innerWidth * 0.4) continue;        // lệch phải
+        if (r.top < bestTop) { bestTop = r.top; best = el; }
+    }
+    if (best) { best.click(); return 'svg-button'; }
+    return '';
+}"""
+
+_JS_CLICK_TEXT = """(needles) => {
+    const visible = el => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+    };
+    const nodes = document.querySelectorAll('div[role="button"], button, span, div');
+    for (const n of needles) {
+        for (const el of nodes) {
+            const t = (el.textContent || '').trim().toLowerCase();
+            // khớp sát để không bấm nhầm khối cha chứa cả trang
+            if (t === n || (t.includes(n) && t.length < n.length + 25)) {
+                if (!visible(el)) continue;
+                el.click();
+                return t.slice(0, 40);
+            }
+        }
+    }
+    return '';
+}"""
+
+
 async def _dismiss_pin_dialog(page) -> bool:
-    """Đóng hộp thoại đòi mã PIN. Trả về True nếu có gặp và đã xử lý."""
+    """
+    Đóng hộp thoại đòi mã PIN khôi phục chat.
+    Thao tác tay tương ứng: bấm X → "Không khôi phục tin nhắn".
+    Trả về True nếu có gặp hộp thoại (dù đóng được hay không).
+    """
     try:
         if not has_pin_dialog(await page.inner_text("body")):
             return False
@@ -365,41 +419,49 @@ async def _dismiss_pin_dialog(page) -> bool:
 
     logger.info("    🔑 Gặp hộp thoại mã PIN — chọn không khôi phục")
 
-    # Bước 1: bấm dấu X đóng hộp thoại PIN
-    for sel in ("div[role='dialog']:has-text('mã PIN') [aria-label='Đóng']",
-                "div[role='dialog']:has-text('mã PIN') [aria-label='Close']",
-                "div[role='dialog'] [aria-label='Đóng']",
-                "div[role='dialog'] [aria-label='Close']"):
+    async def _con_hien() -> bool:
         try:
-            btn = page.locator(sel).first
-            if await btn.count() and await btn.is_visible():
-                await btn.click()
-                await human_delay(900, 1600)
-                break
+            return has_pin_dialog(await page.inner_text("body"))
         except Exception:
-            continue
+            return False
 
-    # Bước 2: hộp xác nhận → "Không khôi phục tin nhắn"
-    for sel in ("div[role='button']:has-text('Không khôi phục tin nhắn')",
-                "div[role='button']:has-text('Không khôi phục')",
-                "div[role='button']:has-text(\"Don't restore\")",
-                "span:has-text('Không khôi phục tin nhắn')"):
+    # ── Bước 1: đóng hộp thoại PIN (X, hoặc Escape) ──
+    for lan in range(3):
         try:
-            btn = page.locator(sel).first
-            if await btn.count() and await btn.is_visible():
-                await btn.click()
-                await human_delay(900, 1600)
-                logger.info("    ✅ Đã bỏ qua khôi phục tin nhắn")
-                return True
-        except Exception:
-            continue
+            r = await page.evaluate(_JS_CLICK_CLOSE)
+            if r:
+                logger.info(f"    ✔️  Đã bấm nút đóng ({r})")
+        except Exception as e:
+            logger.warning(f"    ⚠️  Bấm nút đóng lỗi: {e}")
+        await human_delay(900, 1600)
 
-    # Không thấy nút xác nhận — có thể đóng luôn ở bước 1, thử Escape cho chắc.
-    try:
-        await page.keyboard.press("Escape")
-        await human_delay(500, 900)
-    except Exception:
-        pass
+        # Hộp xác nhận "Tiếp tục mà không khôi phục?" → chọn không khôi phục
+        try:
+            hit = await page.evaluate(_JS_CLICK_TEXT, [
+                "không khôi phục tin nhắn", "không khôi phục",
+                "don't restore messages", "don’t restore messages", "don't restore",
+            ])
+            if hit:
+                logger.info(f"    ✔️  Đã chọn '{hit}'")
+                await human_delay(900, 1600)
+        except Exception as e:
+            logger.warning(f"    ⚠️  Bấm 'không khôi phục' lỗi: {e}")
+
+        if not await _con_hien():
+            logger.info("    ✅ Đã bỏ qua khôi phục tin nhắn")
+            return True
+
+        # Chưa đóng được → thử Escape rồi lặp lại
+        try:
+            await page.keyboard.press("Escape")
+        except Exception:
+            pass
+        await human_delay(700, 1200)
+        if not await _con_hien():
+            logger.info("    ✅ Đã đóng hộp thoại PIN (Escape)")
+            return True
+
+    logger.warning("    ⚠️  Không đóng được hộp thoại mã PIN — bỏ qua nhắn tin phiên này")
     return True
 
 
@@ -435,6 +497,15 @@ async def _act_message(page, ctx, st):
     # Dẹp hộp thoại đòi mã PIN trước — nó che mất ô soạn tin.
     if await _dismiss_pin_dialog(page):
         await human_delay(1000, 2000)
+        # Vẫn còn che → bỏ nhắn phiên này, để orchestrator bù bằng feed/story/like
+        # thay vì đứng chờ ô soạn tin không bao giờ bấm được.
+        try:
+            if has_pin_dialog(await page.inner_text("body")):
+                raise MessagingRestricted("hộp thoại mã PIN chưa đóng được")
+        except MessagingRestricted:
+            raise
+        except Exception:
+            pass
 
     # Acc đang bị hạn chế nhắn tin → bỏ hẳn, KHÔNG thử gửi.
     try:
