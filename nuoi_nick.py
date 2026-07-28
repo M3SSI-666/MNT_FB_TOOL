@@ -240,12 +240,12 @@ def build_warming_schedule(accs: list, start_str: str = "07:00",
 # Playwright — mở context (giống poster, tái dùng cookie/profile)
 # ═══════════════════════════════════════════════════════════════
 
-async def _open_context(p, acc_name: str, c_user: str):
+async def _open_context(p, acc_name: str, c_user: str, headless: bool = None):
     profile_dir = find_profile_dir(acc_name, c_user)
     logger.info(f"  🗂️  Profile: {profile_dir}")
     ctx = await p.chromium.launch_persistent_context(
         user_data_dir=profile_dir,
-        **browser_launch_kwargs(HEADLESS),
+        **browser_launch_kwargs(HEADLESS if headless is None else headless),
     )
     page = ctx.pages[0] if ctx.pages else await ctx.new_page()
 
@@ -502,11 +502,12 @@ def select_session_activities(st: dict, rng=random) -> list:
 # Orchestrator — chạy các hành động đã chọn trong ngân sách 5–8'
 # ═══════════════════════════════════════════════════════════════
 
-async def _run_warming(acc_name: str, c_user: str, st: dict) -> bool:
+async def _run_warming(acc_name: str, c_user: str, st: dict,
+                       headless: bool = None) -> bool:
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
-        ctx, page = await _open_context(p, acc_name, c_user)
+        ctx, page = await _open_context(p, acc_name, c_user, headless)
         try:
             budget   = random.randint(int(st["nuoi_session_min_sec"]),
                                       int(st["nuoi_session_max_sec"]))
@@ -553,7 +554,64 @@ async def _run_warming(acc_name: str, c_user: str, st: dict) -> bool:
             await ctx.close()
 
 
-def run_warming_session(acc_name: str, c_user: str = "") -> bool:
+def run_warming_session(acc_name: str, c_user: str = "", headless: bool = None) -> bool:
     """Điểm vào cho scheduler. Trả về True nếu phiên chạy (kể cả vài hành động
-    lỗi lẻ); raise CookieDeadError nếu cookie hỏng để scheduler đánh dấu acc."""
-    return asyncio.run(_run_warming(acc_name, c_user, get_settings()))
+    lỗi lẻ); raise CookieDeadError nếu cookie hỏng để scheduler đánh dấu acc.
+    headless=None → theo cấu hình chung; đặt False để xem tận mắt lúc test."""
+    return asyncio.run(_run_warming(acc_name, c_user, get_settings(), headless))
+
+
+# ═══════════════════════════════════════════════════════════════
+# Chạy thử 1 phiên nuôi (xem tận mắt) — không đụng lịch, không đăng gì
+#   python nuoi_nick.py "Tên acc"              → hiện cửa sổ Chrome
+#   python nuoi_nick.py "Tên acc" --headless   → chạy ẩn
+# ═══════════════════════════════════════════════════════════════
+
+if __name__ == "__main__":
+    import sys
+
+    argv = [a for a in sys.argv[1:] if a != "--headless"]
+    want_headless = "--headless" in sys.argv
+
+    if not argv:
+        from db import get_accounts
+        print("Cách dùng:  python nuoi_nick.py \"Tên acc\" [--headless]\n")
+        print("Các acc đang bật nuôi:")
+        found = False
+        for a in get_accounts():
+            if int(a.get("nuoi_nick", 0) or 0) == 1:
+                found = True
+                loai = (a.get("loai_dang") or "").strip() or "(trống → chỉ nuôi)"
+                print(f"   • {a['ten_acc']:24} loại đăng: {loai}")
+        if not found:
+            print("   (chưa có acc nào tick Nuôi ở bảng Tài khoản)")
+        sys.exit(1)
+
+    acc_name = argv[0]
+    from db import get_account_by_name
+    acc = get_account_by_name(acc_name)
+    if not acc:
+        print(f"❌ Không tìm thấy acc '{acc_name}' (kiểm tra Trạng thái = Active)")
+        sys.exit(1)
+
+    st = get_settings()
+    bat = [ten for ten, _p, co in _ACTIVITY_SPECS if st.get(co)]
+    print("=" * 58)
+    print(f"🌱 CHẠY THỬ PHIÊN NUÔI — {acc_name}")
+    print(f"   Hành động đang BẬT : {', '.join(bat) or '(không có)'}")
+    print(f"   Độ dài phiên       : {st['nuoi_session_min_sec']}–{st['nuoi_session_max_sec']}s")
+    print(f"   Chrome             : {'ẩn' if want_headless else 'HIỆN cửa sổ'}")
+    if st.get("nuoi_enable_message"):
+        n_cau = len([l for l in (st.get('nuoi_msg_pool') or '').splitlines() if l.strip()])
+        print(f"   Nhắn tin           : {n_cau} câu | nhóm: {st.get('nuoi_msg_group_url') or '(chưa đặt)'}")
+    print("=" * 58)
+
+    try:
+        run_warming_session(acc_name, acc.get("c_user", ""), headless=want_headless)
+        print("\n✅ Phiên thử xong — xem log phía trên để biết đã làm gì.")
+    except CookieDeadError:
+        print(f"\n❌ Cookie của '{acc_name}' đã hết hạn — cần lấy lại xs.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Phiên thử lỗi: {e}")
+        sys.exit(1)
