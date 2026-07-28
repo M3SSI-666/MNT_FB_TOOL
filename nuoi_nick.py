@@ -339,6 +339,70 @@ def pick_messages(pool: list, n: int, rng=random) -> list:
     return out
 
 
+# Messenger hay chặn đường bằng hộp thoại "Nhập mã PIN để khôi phục đoạn chat".
+# Không cần lịch sử chat để nhắn, nên bỏ qua: bấm X → "Không khôi phục tin nhắn".
+PIN_DIALOG_MARKERS = (
+    "nhập mã pin",
+    "khôi phục đoạn chat",
+    "khôi phục lịch sử chat",
+    "enter your pin",
+    "restore your chat",
+)
+
+
+def has_pin_dialog(page_text: str) -> bool:
+    t = (page_text or "").lower()
+    return any(m in t for m in PIN_DIALOG_MARKERS)
+
+
+async def _dismiss_pin_dialog(page) -> bool:
+    """Đóng hộp thoại đòi mã PIN. Trả về True nếu có gặp và đã xử lý."""
+    try:
+        if not has_pin_dialog(await page.inner_text("body")):
+            return False
+    except Exception:
+        return False
+
+    logger.info("    🔑 Gặp hộp thoại mã PIN — chọn không khôi phục")
+
+    # Bước 1: bấm dấu X đóng hộp thoại PIN
+    for sel in ("div[role='dialog']:has-text('mã PIN') [aria-label='Đóng']",
+                "div[role='dialog']:has-text('mã PIN') [aria-label='Close']",
+                "div[role='dialog'] [aria-label='Đóng']",
+                "div[role='dialog'] [aria-label='Close']"):
+        try:
+            btn = page.locator(sel).first
+            if await btn.count() and await btn.is_visible():
+                await btn.click()
+                await human_delay(900, 1600)
+                break
+        except Exception:
+            continue
+
+    # Bước 2: hộp xác nhận → "Không khôi phục tin nhắn"
+    for sel in ("div[role='button']:has-text('Không khôi phục tin nhắn')",
+                "div[role='button']:has-text('Không khôi phục')",
+                "div[role='button']:has-text(\"Don't restore\")",
+                "span:has-text('Không khôi phục tin nhắn')"):
+        try:
+            btn = page.locator(sel).first
+            if await btn.count() and await btn.is_visible():
+                await btn.click()
+                await human_delay(900, 1600)
+                logger.info("    ✅ Đã bỏ qua khôi phục tin nhắn")
+                return True
+        except Exception:
+            continue
+
+    # Không thấy nút xác nhận — có thể đóng luôn ở bước 1, thử Escape cho chắc.
+    try:
+        await page.keyboard.press("Escape")
+        await human_delay(500, 900)
+    except Exception:
+        pass
+    return True
+
+
 async def _find_chat_box(page):
     """Tìm ô soạn tin của Messenger — thử vài selector vì giao diện hay đổi."""
     selectors = [
@@ -367,6 +431,10 @@ async def _act_message(page, ctx, st):
 
     await page.goto(group_url, wait_until="domcontentloaded", timeout=30000)
     await human_delay(2500, 4000)
+
+    # Dẹp hộp thoại đòi mã PIN trước — nó che mất ô soạn tin.
+    if await _dismiss_pin_dialog(page):
+        await human_delay(1000, 2000)
 
     # Acc đang bị hạn chế nhắn tin → bỏ hẳn, KHÔNG thử gửi.
     try:

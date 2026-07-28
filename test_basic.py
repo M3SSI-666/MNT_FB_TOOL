@@ -211,6 +211,16 @@ check("chat bình thường KHÔNG bị nhầm",
 check("text rỗng -> không chặn",       nuoi_nick.is_messaging_restricted("") is False)
 check("None -> không chặn",            nuoi_nick.is_messaging_restricted(None) is False)
 
+# Messenger đòi mã PIN khôi phục chat -> nhận ra để bấm bỏ qua
+_pin_real = ("Nhập mã PIN để khôi phục đoạn chat của bạn "
+             "Một số tin nhắn còn thiếu. Hãy nhập mã PIN để khôi phục lịch sử chat của bạn.")
+check("nhận ra hộp thoại PIN (text thật)", nuoi_nick.has_pin_dialog(_pin_real) is True)
+check("nhận ra PIN tiếng Anh",
+      nuoi_nick.has_pin_dialog("Enter your PIN to restore your chat") is True)
+check("chat thường KHÔNG bị nhầm là PIN",
+      nuoi_nick.has_pin_dialog("hôm nay trời đẹp nhỉ mọi người ăn cơm chưa") is False)
+check("PIN: text rỗng -> False",       nuoi_nick.has_pin_dialog("") is False)
+
 # Thư viện câu mẫu đi kèm
 _mau_res = _client_mau = None
 import server as _srv
