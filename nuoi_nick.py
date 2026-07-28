@@ -3,23 +3,26 @@
 nuoi_nick.py — Tính năng NUÔI NICK
 ================================================================================
 Mục tiêu: cho các nick được tick chọn "khỏe dần theo thời gian" bằng cách xen
-các phiên hoạt động giống người (lướt feed, xem story, like, kết bạn, nhắn tin)
-vào lịch, THAY CHO một số slot đăng bài — nick càng non thì càng nhiều slot bị
-chuyển thành nuôi (đăng ít, nuôi nhiều), càng già thì càng ít.
+các phiên hoạt động giống người vào lịch, THAY CHO một số slot đăng bài.
+
+BỐN hành động nuôi (bật/tắt riêng từng cái trong Cài đặt nuôi):
+   story   — xem story
+   feed    — lướt newsfeed (không like)
+   like    — like dạo (số like theo cấu hình)
+   message — nhắn tin vào nhóm chat nội bộ
 
 Hai phần tách bạch:
   1. Logic thuần (test được, không cần Playwright):
-       - warm_ratio()               : tỷ lệ slot chuyển thành nuôi theo tuổi nick
-       - account_age_days()         : tính tuổi nick
-       - plan_warming_conversion()  : đánh dấu slot nào thành 'nuoi_nick'
+       - plan_warming_conversion()  : đổi slot đăng thành slot nuôi theo CHU KỲ
+       - build_warming_schedule()   : lịch cho acc CHỈ NUÔI
+       - select_session_activities(): bốc TẬP CON hành động + xáo thứ tự
   2. Bộ máy chạy phiên nuôi bằng Playwright (chỉ chạy thật với FB):
        - run_warming_session()      : điểm vào cho scheduler
-       - _run_warming()             : orchestrator — bốc TẬP CON hành động, XÁO
-                                      thứ tự, chạy trong ngân sách 5–8 phút, mỗi
-                                      hành động bọc try/except riêng.
+       - _run_warming()             : orchestrator — chạy trong ngân sách 5–8
+                                      phút, mỗi hành động bọc try/except riêng.
 
-LƯU Ý: các selector kết bạn / nhắn tin là best-effort, CẦN chạy thử non-headless
-lần đầu để chỉnh. Nhắn tin mặc định TẮT cho tới khi có thư viện câu (content pool).
+LƯU Ý: selector nhắn tin là best-effort, CẦN chạy thử non-headless lần đầu.
+Acc bị FB hạn chế nhắn tin sẽ tự bị bỏ qua, quay về lướt feed/story/like.
 ================================================================================
 """
 
@@ -43,20 +46,15 @@ DEFAULTS = {
     "nuoi_session_min_sec": 300,   # phiên nuôi ngắn nhất (5 phút)
     "nuoi_session_max_sec": 480,   # phiên nuôi dài nhất (8 phút)
     "nuoi_like_count":      1,      # số like mỗi phiên (mặc định 1)
-    "nuoi_friend_min":      5,      # gửi lời mời kết bạn: tối thiểu
-    "nuoi_friend_max":      10,     # gửi lời mời kết bạn: tối đa
-    "nuoi_friend_gap_sec":  30,     # giãn cách giữa mỗi lời mời (chống bot)
     "nuoi_msg_min":         2,      # số tin nhắn mỗi phiên: tối thiểu
     "nuoi_msg_max":         3,      # số tin nhắn mỗi phiên: tối đa
-    "nuoi_msg_group_url":   "",     # link nhóm chat nội bộ (build sau)
-    "nuoi_msg_pool":        "",     # thư viện câu, mỗi dòng 1 câu (build sau)
-    # Bật/tắt từng hành động — để tách rủi ro, cái nào hỏng tắt riêng cái đó
-    "nuoi_enable_feed":     1,
-    "nuoi_enable_story":    1,
-    "nuoi_enable_accept":   1,      # xác nhận lời mời đến (bị động, an toàn)
-    "nuoi_enable_addfriend":0,      # chủ động gửi lời mời — MẶC ĐỊNH TẮT (rủi ro
-                                    #   khóa nick cao nhất); tự bật khi đã test kỹ
-    "nuoi_enable_message":  0,      # TẮT tới khi có content pool
+    "nuoi_msg_group_url":   "",     # link nhóm chat nội bộ
+    "nuoi_msg_pool":        "",     # thư viện câu, mỗi dòng 1 câu
+    # Bật/tắt từng hành động — cái nào hỏng thì tắt riêng cái đó
+    "nuoi_enable_story":    1,      # xem story
+    "nuoi_enable_feed":     1,      # lướt newsfeed (không like)
+    "nuoi_enable_like":     1,      # like dạo
+    "nuoi_enable_message":  1,      # nhắn tin nhóm nội bộ
 }
 
 
@@ -281,11 +279,18 @@ async def _open_context(p, acc_name: str, c_user: str, headless: bool = None):
 # ═══════════════════════════════════════════════════════════════
 
 async def _act_feed(page, ctx, st):
-    """Lướt newsfeed + like theo số lượng cấu hình."""
+    """Lướt newsfeed — chỉ đọc, KHÔNG like (like là hành động riêng)."""
     await page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=30000)
     await human_delay(1500, 2500)
-    await browse_and_like(page, duration_sec=random.randint(30, 60),
-                          max_likes=int(st.get("nuoi_like_count", 1)))
+    await browse_and_like(page, duration_sec=random.randint(30, 60), max_likes=0)
+
+
+async def _act_like(page, ctx, st):
+    """Like dạo — lướt feed và thả like theo số lượng cấu hình."""
+    await page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=30000)
+    await human_delay(1500, 2500)
+    await browse_and_like(page, duration_sec=random.randint(40, 70),
+                          max_likes=max(1, int(st.get("nuoi_like_count", 1))))
 
 
 async def _act_story(page, ctx, st):
@@ -293,59 +298,6 @@ async def _act_story(page, ctx, st):
     await page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=30000)
     await human_delay(1500, 2500)
     await view_stories(page, duration_sec=random.randint(10, 20))
-
-
-async def _act_accept_friends(page, ctx, st):
-    """Xác nhận mọi lời mời kết bạn đến — bị động, an toàn."""
-    await page.goto("https://www.facebook.com/friends/requests/",
-                    wait_until="domcontentloaded", timeout=30000)
-    await human_delay(2000, 3500)
-    accepted = 0
-    for _ in range(15):   # trần vòng lặp, tránh kẹt
-        btn = page.locator(
-            "div[role='button']:has-text('Xác nhận'), div[role='button']:has-text('Confirm')"
-        ).first
-        try:
-            if await btn.count() == 0 or not await btn.is_visible():
-                break
-            await btn.click()
-            accepted += 1
-            await human_delay(1200, 2500)
-        except Exception:
-            break
-    logger.info(f"    🤝 Xác nhận {accepted} lời mời kết bạn")
-
-
-async def _act_add_friends(page, ctx, st):
-    """Chủ động gửi lời mời kết bạn, RẢI CHẬM (giãn cách chống bot)."""
-    n_target = random.randint(int(st.get("nuoi_friend_min", 5)),
-                              int(st.get("nuoi_friend_max", 10)))
-    gap      = int(st.get("nuoi_friend_gap_sec", 30))
-    await page.goto("https://www.facebook.com/friends/suggestions",
-                    wait_until="domcontentloaded", timeout=30000)
-    await human_delay(2500, 4000)
-    sent = 0
-    for _ in range(n_target * 3):   # thử nhiều hơn vì có nút click hụt
-        if sent >= n_target:
-            break
-        btn = page.locator(
-            "div[aria-label='Thêm bạn bè'], div[aria-label='Add friend']"
-        ).first
-        try:
-            if await btn.count() == 0 or not await btn.is_visible():
-                await page.mouse.wheel(0, random.randint(500, 900))
-                await human_delay(1500, 3000)
-                continue
-            await btn.scroll_into_view_if_needed()
-            await btn.click()
-            sent += 1
-            logger.info(f"    ➕ Gửi lời mời #{sent}/{n_target}")
-            # Rải chậm: đây là hành động dễ bị chặn nhất, cố ý giãn rộng.
-            await asyncio.sleep(max(5, jitter_sec(gap)))
-        except Exception:
-            await page.mouse.wheel(0, random.randint(400, 800))
-            await human_delay(1500, 3000)
-    logger.info(f"    ✅ Đã gửi {sent} lời mời kết bạn")
 
 
 class MessagingRestricted(Exception):
@@ -458,28 +410,21 @@ async def _act_message(page, ctx, st):
     logger.info(f"    ✅ Nhắn tin xong — {sent}/{n_msg} tin")
 
 
-def jitter_sec(base: int) -> float:
-    """Giãn ngẫu nhiên quanh base ±40% (dùng cho khoảng chờ giữa lời mời)."""
-    return base * random.uniform(0.6, 1.4)
-
-
 # ═══════════════════════════════════════════════════════════════
 # Chọn hành động cho phiên — logic thuần, test được
 # ═══════════════════════════════════════════════════════════════
 
 # (tên, xác suất được chọn mỗi phiên, cờ bật/tắt trong settings)
 _ACTIVITY_SPECS = [
-    ("feed",    0.90, "nuoi_enable_feed"),
     ("story",   0.70, "nuoi_enable_story"),
-    ("accept",  0.80, "nuoi_enable_accept"),
-    ("friend",  0.50, "nuoi_enable_addfriend"),
+    ("feed",    0.90, "nuoi_enable_feed"),
+    ("like",    0.70, "nuoi_enable_like"),
     ("message", 0.50, "nuoi_enable_message"),
 ]
 _ACTIVITY_FNS = {
-    "feed":    _act_feed,
     "story":   _act_story,
-    "accept":  _act_accept_friends,
-    "friend":  _act_add_friends,
+    "feed":    _act_feed,
+    "like":    _act_like,
     "message": _act_message,
 }
 
@@ -532,8 +477,9 @@ async def _run_warming(acc_name: str, c_user: str, st: dict,
                     # newsfeed / story cho phiên vẫn có ích.
                     logger.warning(f"  🚫 [{acc_name}] Nhắn tin bị chặn: {e}")
                     con_lai = set(chosen[idx + 1:])
-                    for fb, flag in (("feed", "nuoi_enable_feed"),
-                                     ("story", "nuoi_enable_story")):
+                    for fb, flag in (("feed",  "nuoi_enable_feed"),
+                                     ("story", "nuoi_enable_story"),
+                                     ("like",  "nuoi_enable_like")):
                         if fb in done or fb in con_lai or not st.get(flag):
                             continue          # đã làm rồi / lát nữa cũng làm / đang tắt
                         if time.monotonic() >= deadline:
@@ -563,19 +509,41 @@ def run_warming_session(acc_name: str, c_user: str = "", headless: bool = None) 
 
 # ═══════════════════════════════════════════════════════════════
 # Chạy thử 1 phiên nuôi (xem tận mắt) — không đụng lịch, không đăng gì
-#   python nuoi_nick.py "Tên acc"              → hiện cửa sổ Chrome
-#   python nuoi_nick.py "Tên acc" --headless   → chạy ẩn
+#   python nuoi_nick.py "Tên acc"                   → hiện cửa sổ Chrome
+#   python nuoi_nick.py "Tên acc" --headless        → chạy ẩn
+#   python nuoi_nick.py "Tên acc" --only message    → ép chạy đúng hành động đó
 # ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     import sys
 
-    argv = [a for a in sys.argv[1:] if a != "--headless"]
-    want_headless = "--headless" in sys.argv
+    raw = sys.argv[1:]
+    want_headless = "--headless" in raw
+
+    # --only story,message : bỏ bốc ngẫu nhiên, ép chạy đúng các hành động này
+    # (để test có chủ đích thay vì chạy lại nhiều lần chờ bốc trúng).
+    only = []
+    if "--only" in raw:
+        i = raw.index("--only")
+        if i + 1 < len(raw):
+            only = [x.strip() for x in raw[i + 1].split(",") if x.strip()]
+        raw = raw[:i] + raw[i + 2:]
+
+    argv = [a for a in raw if a != "--headless"]
+
+    if only:
+        _xau = [x for x in only if x not in _ACTIVITY_FNS]
+        if _xau:
+            print(f"❌ Hành động không hợp lệ: {', '.join(_xau)}")
+            print(f"   Hợp lệ: {', '.join(_ACTIVITY_FNS)}")
+            sys.exit(1)
+        select_session_activities = lambda st, rng=random: list(only)
 
     if not argv:
         from db import get_accounts
-        print("Cách dùng:  python nuoi_nick.py \"Tên acc\" [--headless]\n")
+        print("Cách dùng:  python nuoi_nick.py \"Tên acc\" [--headless] [--only story,message]\n")
+        print(f"  --only : ép chạy đúng hành động chỉ định ({', '.join(_ACTIVITY_FNS)})")
+        print("           bỏ bốc ngẫu nhiên — dùng khi muốn test 1 thứ cụ thể.\n")
         print("Các acc đang bật nuôi:")
         found = False
         for a in get_accounts():
@@ -598,6 +566,8 @@ if __name__ == "__main__":
     bat = [ten for ten, _p, co in _ACTIVITY_SPECS if st.get(co)]
     print("=" * 58)
     print(f"🌱 CHẠY THỬ PHIÊN NUÔI — {acc_name}")
+    if only:
+        print(f"   ÉP chạy            : {', '.join(only)}")
     print(f"   Hành động đang BẬT : {', '.join(bat) or '(không có)'}")
     print(f"   Độ dài phiên       : {st['nuoi_session_min_sec']}–{st['nuoi_session_max_sec']}s")
     print(f"   Chrome             : {'ẩn' if want_headless else 'HIỆN cửa sổ'}")

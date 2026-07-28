@@ -225,8 +225,13 @@ check("câu mẫu đều ngắn gọn",          all(len(l) <= 60 for l in _mau_
 
 # select_session_activities: chỉ lấy hành động đang bật, luôn ≥1, chỉ tên hợp lệ
 import random as _rnd
-_ALL_ON = {"nuoi_enable_feed":1,"nuoi_enable_story":1,"nuoi_enable_accept":1,
-           "nuoi_enable_addfriend":1,"nuoi_enable_message":1}
+_ALL_ON = {"nuoi_enable_story":1,"nuoi_enable_feed":1,
+           "nuoi_enable_like":1,"nuoi_enable_message":1}
+# Nuôi nick CHỈ có 4 hành động: story, feed, like, message.
+check("đúng 4 hành động nuôi",         set(nuoi_nick._ACTIVITY_FNS) == {"story","feed","like","message"})
+check("đã gỡ hẳn tính năng kết bạn",
+      not any(k in nuoi_nick.DEFAULTS for k in
+              ("nuoi_enable_accept","nuoi_enable_addfriend","nuoi_friend_min")))
 _valid = set(nuoi_nick._ACTIVITY_FNS)
 _samples = [nuoi_nick.select_session_activities(_ALL_ON, _rnd.Random(i)) for i in range(200)]
 check("phiên nào cũng ≥1 hành động",   all(len(s) >= 1 for s in _samples))

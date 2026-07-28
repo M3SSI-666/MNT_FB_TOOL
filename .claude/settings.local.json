@@ -93,7 +93,9 @@
       "Bash(python -m py_compile nuoi_nick.py server.py db.py scheduler.py config.py)",
       "Bash(git check-ignore *)",
       "Bash(python -m py_compile server.py)",
-      "Bash(python -X utf8 nuoi_nick.py)"
+      "Bash(python -X utf8 nuoi_nick.py)",
+      "Bash(SCHEDULER_LOG_FILE=\"logs/test_tmk.log\" python -X utf8 nuoi_nick.py \"Trần Minh Khánh\")",
+      "Bash(SCHEDULER_LOG_FILE=\"logs/test_xk2.log\" python -X utf8 nuoi_nick.py \"Xuan Khoa\" --only message)"
     ]
   }
 }

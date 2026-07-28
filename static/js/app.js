@@ -1386,12 +1386,10 @@ async function openNuoiSettings(){
     openModal("⚙️ Cài đặt nuôi nick", `
       <div style="max-height:65vh;overflow:auto;padding-right:6px">
         <div style="font-size:12px;font-weight:700;color:var(--accent);margin:4px 0 6px">HÀNH ĐỘNG MỖI PHIÊN</div>
-        ${row("📜 Lướt newsfeed + like", sw("nuoi_enable_feed",1))}
-        ${row("📖 Xem story",            sw("nuoi_enable_story",1))}
-        ${row("🤝 Xác nhận lời mời kết bạn", sw("nuoi_enable_accept",1), "Bị động — an toàn")}
-        ${row("💬 Nhắn tin nhóm nội bộ", sw("nuoi_enable_message",0), "Cần điền link nhóm + thư viện câu bên dưới")}
-        ${row("➕ Chủ động gửi lời mời kết bạn", sw("nuoi_enable_addfriend",0),
-              "<span style='color:var(--warning)'>Rủi ro khóa nick cao nhất — nên để tắt</span>")}
+        ${row("📖 Lướt story",           sw("nuoi_enable_story",1))}
+        ${row("📜 Lướt newsfeed",        sw("nuoi_enable_feed",1), "Chỉ đọc, không like")}
+        ${row("👍 Like dạo",             sw("nuoi_enable_like",1))}
+        ${row("💬 Nhắn tin nhóm",        sw("nuoi_enable_message",1), "Cần link nhóm + thư viện câu bên dưới")}
 
         <div style="font-size:12px;font-weight:700;color:var(--accent);margin:16px 0 6px">THÔNG SỐ</div>
         ${row("Số like mỗi phiên",       num("nuoi_like_count",1))}
@@ -1461,11 +1459,10 @@ async function saveNuoiSettings(){
     const gi=(id,dv)=>{ const n=parseInt(g(id)?.value); return isNaN(n)?dv:n; };
     const gc=id=>g(id)?.checked?1:0;
     const data={
-        nuoi_enable_feed:      gc("nuoi_enable_feed"),
         nuoi_enable_story:     gc("nuoi_enable_story"),
-        nuoi_enable_accept:    gc("nuoi_enable_accept"),
+        nuoi_enable_feed:      gc("nuoi_enable_feed"),
+        nuoi_enable_like:      gc("nuoi_enable_like"),
         nuoi_enable_message:   gc("nuoi_enable_message"),
-        nuoi_enable_addfriend: gc("nuoi_enable_addfriend"),
         nuoi_like_count:       gi("nuoi_like_count",1),
         nuoi_session_min_sec:  gi("nuoi_session_min_sec",300),
         nuoi_session_max_sec:  gi("nuoi_session_max_sec",480),
