@@ -96,7 +96,8 @@
       "Bash(python -X utf8 nuoi_nick.py)",
       "Bash(SCHEDULER_LOG_FILE=\"logs/test_tmk.log\" python -X utf8 nuoi_nick.py \"Trần Minh Khánh\")",
       "Bash(SCHEDULER_LOG_FILE=\"logs/test_xk2.log\" python -X utf8 nuoi_nick.py \"Xuan Khoa\" --only message)",
-      "Bash(SCHEDULER_LOG_FILE=\"logs/test_tmk_full.log\" python -X utf8 nuoi_nick.py \"Trần Minh Khánh\" --only story,feed,message,like)"
+      "Bash(SCHEDULER_LOG_FILE=\"logs/test_tmk_full.log\" python -X utf8 nuoi_nick.py \"Trần Minh Khánh\" --only story,feed,message,like)",
+      "Bash(SCHEDULER_LOG_FILE=\"logs/test_hn_pin.log\" python -X utf8 nuoi_nick.py \"Huỳnh Như\" --only message)"
     ]
   }
 }

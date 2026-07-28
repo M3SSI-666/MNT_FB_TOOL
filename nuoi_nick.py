@@ -384,24 +384,42 @@ _JS_CLICK_CLOSE = """() => {
     return '';
 }"""
 
+# Bấm nút theo TEXT. Phải khớp chính xác và ưu tiên phần tử bấm được thật sự:
+# khối div cha bọc cả 2 nút có textContent = "Không khôi phục tin nhắnHủy" nên
+# kiểu khớp "chứa chuỗi" sẽ bấm trúng khối cha → không có tác dụng gì.
 _JS_CLICK_TEXT = """(needles) => {
     const visible = el => {
         const r = el.getBoundingClientRect();
         return r.width > 0 && r.height > 0;
     };
-    const nodes = document.querySelectorAll('div[role="button"], button, span, div');
+    const norm = s => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+    // Nút THẬT không chứa nút khác bên trong — loại khối cha bọc nhiều nút.
+    const btns = [...document.querySelectorAll('[role="button"], button')]
+        .filter(el => visible(el) && !el.querySelector('[role="button"], button'));
+
     for (const n of needles) {
-        for (const el of nodes) {
-            const t = (el.textContent || '').trim().toLowerCase();
-            // khớp sát để không bấm nhầm khối cha chứa cả trang
-            if (t === n || (t.includes(n) && t.length < n.length + 25)) {
-                if (!visible(el)) continue;
-                el.click();
-                return t.slice(0, 40);
-            }
+        // 1) Nút khớp CHÍNH XÁC
+        let hit = btns.find(el => norm(el.textContent) === n);
+        // 2) Nút bắt đầu bằng chuỗi cần tìm, không dài hơn mấy (tránh khối cha)
+        if (!hit) hit = btns.find(el => {
+            const t = norm(el.textContent);
+            return t.startsWith(n) && t.length <= n.length + 8;
+        });
+        // 3) Text nằm trong span/div → leo lên nút bấm được gần nhất
+        if (!hit) {
+            const el = [...document.querySelectorAll('span, div')]
+                .find(e => visible(e) && norm(e.textContent) === n);
+            if (el) hit = el.closest('[role="button"], button') || el;
         }
+        if (hit) { hit.click(); return norm(hit.textContent).slice(0, 40); }
     }
     return '';
+}"""
+
+# Chờ hộp xác nhận hiện ra rồi mới bấm (nó xuất hiện sau khi bấm X).
+_JS_HAS_TEXT = """(needles) => {
+    const t = (document.body.innerText || '').toLowerCase();
+    return needles.some(n => t.includes(n));
 }"""
 
 
@@ -435,12 +453,16 @@ async def _dismiss_pin_dialog(page) -> bool:
             logger.warning(f"    ⚠️  Bấm nút đóng lỗi: {e}")
         await human_delay(900, 1600)
 
-        # Hộp xác nhận "Tiếp tục mà không khôi phục?" → chọn không khôi phục
+        # Hộp xác nhận "Tiếp tục mà không khôi phục?" → chọn không khôi phục.
+        # Nó hiện ra SAU khi bấm X nên phải chờ, đừng bấm ngay.
+        nhan = ["không khôi phục tin nhắn", "không khôi phục",
+                "don't restore messages", "don’t restore messages", "don't restore"]
         try:
-            hit = await page.evaluate(_JS_CLICK_TEXT, [
-                "không khôi phục tin nhắn", "không khôi phục",
-                "don't restore messages", "don’t restore messages", "don't restore",
-            ])
+            for _ in range(10):          # chờ tối đa ~5s
+                if await page.evaluate(_JS_HAS_TEXT, nhan):
+                    break
+                await asyncio.sleep(0.5)
+            hit = await page.evaluate(_JS_CLICK_TEXT, nhan)
             if hit:
                 logger.info(f"    ✔️  Đã chọn '{hit}'")
                 await human_delay(900, 1600)
