@@ -327,31 +327,72 @@ async def _act_add_friends(page, ctx, st):
     logger.info(f"    ✅ Đã gửi {sent} lời mời kết bạn")
 
 
+def pick_messages(pool: list, n: int, rng=random) -> list:
+    """
+    Bốc n câu từ thư viện, KHÔNG lặp lại câu vừa nhắn liền trước (nhắn 2 câu
+    giống hệt nhau liên tiếp trông rất máy). Thư viện ít câu hơn n thì cho phép
+    dùng lại, miễn không dính hai câu kề nhau.
+    """
+    out = []
+    for _ in range(max(0, n)):
+        cands = [m for m in pool if not out or m != out[-1]] or list(pool)
+        if not cands:
+            break
+        out.append(rng.choice(cands))
+    return out
+
+
+async def _find_chat_box(page):
+    """Tìm ô soạn tin của Messenger — thử vài selector vì giao diện hay đổi."""
+    selectors = [
+        "div[role='textbox'][contenteditable='true']",
+        "div[aria-label='Tin nhắn'][contenteditable='true']",
+        "div[aria-label='Message'][contenteditable='true']",
+        "p[contenteditable='true']",
+    ]
+    for sel in selectors:
+        try:
+            box = page.locator(sel).last
+            if await box.count() and await box.is_visible():
+                return box
+        except Exception:
+            continue
+    return None
+
+
 async def _act_message(page, ctx, st):
-    """Vào nhóm chat nội bộ, nhắn 2–3 câu bốc từ thư viện. TẮT tới khi có pool."""
+    """Vào nhóm chat nội bộ, nhắn vài câu bốc từ thư viện."""
     group_url = (st.get("nuoi_msg_group_url", "") or "").strip()
     pool = [ln.strip() for ln in (st.get("nuoi_msg_pool", "") or "").splitlines() if ln.strip()]
     if not group_url or not pool:
-        logger.info("    ⏭️  Nhắn tin: chưa có nhóm/thư viện câu — bỏ qua")
+        logger.info("    ⏭️  Nhắn tin: chưa có link nhóm / thư viện câu — bỏ qua")
         return
+
     await page.goto(group_url, wait_until="domcontentloaded", timeout=30000)
     await human_delay(2500, 4000)
+
+    box = await _find_chat_box(page)
+    if box is None:
+        raise Exception("Không tìm thấy ô soạn tin nhắn (FB đổi giao diện?)")
+
     n_msg = random.randint(int(st.get("nuoi_msg_min", 2)), int(st.get("nuoi_msg_max", 3)))
-    box = page.locator("div[role='textbox'][contenteditable='true']").first
-    sent = 0
-    for _ in range(n_msg):
-        msg = random.choice(pool)
+    sent  = 0
+    for msg in pick_messages(pool, n_msg):
         try:
             await box.click()
             await human_delay(500, 1200)
+            # Gõ từng ký tự có độ trễ — giống người gõ hơn là dán cả câu.
             await box.type(msg, delay=random.randint(40, 110))
             await human_delay(400, 900)
             await page.keyboard.press("Enter")
             sent += 1
-            await human_delay(2000, 4500)
-        except Exception:
+            logger.info(f"    💬 Đã nhắn: {msg[:40]}")
+            # Nghỉ giữa 2 tin như người đang trò chuyện.
+            await human_delay(2500, 6000)
+        except Exception as e:
+            logger.warning(f"    ⚠️  Nhắn tin dừng giữa chừng: {e}")
             break
-    logger.info(f"    💬 Đã nhắn {sent} tin")
+    logger.info(f"    ✅ Nhắn tin xong — {sent}/{n_msg} tin")
 
 
 def jitter_sec(base: int) -> float:

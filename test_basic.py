@@ -154,6 +154,23 @@ check("mọi phiên cách nhau >= min gap",
 check("lịch nuôi nằm trong khung giờ",
       all(7*60 <= t <= 23*60 for t in mt))
 
+# pick_messages: bốc câu nhắn, không lặp 2 câu giống nhau liền nhau
+import random as _r0
+_pool = ["câu A", "câu B", "câu C"]
+for _seed in range(50):
+    _msgs = nuoi_nick.pick_messages(_pool, 3, _r0.Random(_seed))
+    if len(_msgs) != 3 or any(a == b for a, b in zip(_msgs, _msgs[1:])):
+        break
+else:
+    _msgs = None
+check("bốc đủ số câu, không lặp liền kề", _msgs is None)
+check("thư viện 1 câu vẫn chạy được",
+      nuoi_nick.pick_messages(["chỉ 1 câu"], 3, _r0.Random(1)) == ["chỉ 1 câu"]*3)
+check("thư viện rỗng -> không câu nào",   nuoi_nick.pick_messages([], 3, _r0.Random(1)) == [])
+check("xin 0 câu -> rỗng",                nuoi_nick.pick_messages(_pool, 0, _r0.Random(1)) == [])
+check("mọi câu đều lấy từ thư viện",
+      set(nuoi_nick.pick_messages(_pool, 10, _r0.Random(7))) <= set(_pool))
+
 # select_session_activities: chỉ lấy hành động đang bật, luôn ≥1, chỉ tên hợp lệ
 import random as _rnd
 _ALL_ON = {"nuoi_enable_feed":1,"nuoi_enable_story":1,"nuoi_enable_accept":1,

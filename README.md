@@ -69,6 +69,17 @@ xác nhận lời mời kết bạn.
 > Nick "chỉ nuôi" chạy bằng **runner Nuôi nick** riêng — nhớ bật nó ở tab
 > **Hành động** (giống các runner khác).
 
+### Cài đặt nuôi
+Nút **⚙️ Cài đặt nuôi** ở tab *Lịch Nuôi nick*: bật/tắt từng hành động, số like,
+độ dài phiên, và phần **nhắn tin nhóm**.
+
+**Nhắn tin nhóm nội bộ** — tạo 1–2 nhóm chat chứa các nick cần nuôi, dán link nhóm
+vào ô *Link nhóm chat*, rồi nhập **thư viện câu** (mỗi dòng 1 câu). Mỗi phiên bốc
+2–3 câu ngẫu nhiên, gõ từng ký tự có độ trễ, không lặp hai câu giống nhau liền kề.
+
+> **Gửi lời mời kết bạn mặc định TẮT** — đây là hành động dễ khóa nick nhất.
+> Có nút bật trong cài đặt nhưng nên để nguyên.
+
 > **Mặc định an toàn:** phần *gửi* lời mời kết bạn và *nhắn tin* **TẮT sẵn**
 > (`nuoi_enable_addfriend`, `nuoi_enable_message` trong bảng `settings`). Gửi kết
 > bạn hàng loạt là hành động dễ khóa nick nhất — chỉ bật khi đã chạy thử

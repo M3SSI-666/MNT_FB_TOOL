@@ -1344,6 +1344,7 @@ function renderSchedulePage(loai){
     el.innerHTML=`
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
             <button class="btn btn-primary" onclick="openGenSchedule('${loai}')">▶ Gen lịch</button>
+            ${loai==="nuoi"?`<button class="btn btn-ghost" onclick="openNuoiSettings()">⚙️ Cài đặt nuôi</button>`:""}
             <button class="btn btn-ghost"   onclick="resetSchedule('${loai}')">🔄 Reset → Chờ</button>
             <button class="btn btn-danger"  onclick="stopSchedule('${loai}')">⏹ Dừng → X</button>
             <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
@@ -1363,6 +1364,96 @@ function renderSchedulePage(loai){
             </tr></thead>
             <tbody id="${loai}-table"><tr><td colspan="7" class="loading"><span class="spin">↻</span></td></tr></tbody>
         </table></div></div>`;
+}
+
+// ── Cài đặt nuôi nick ─────────────────────────────────────────
+async function openNuoiSettings(){
+    let s={};
+    try{ s=(await API.settings()).data||{}; }catch(e){}
+    const v=(k,dv)=>{ const x=s[k]; return (x===undefined||x==="")?dv:x; };
+    const chk=(k,dv)=>String(v(k,dv))==="1"?"checked":"";
+    const row=(label,inner,hint="")=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+            <div style="flex:1">
+                <div style="font-size:13px">${label}</div>
+                ${hint?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${hint}</div>`:""}
+            </div>
+            <div>${inner}</div>
+        </div>`;
+    const num=(k,dv,w=70)=>`<input id="ns_${k}" type="number" value="${_escapeHtml(String(v(k,dv)))}" style="width:${w}px;text-align:center">`;
+    const sw =(k,dv)=>`<input id="ns_${k}" type="checkbox" ${chk(k,dv)} style="width:18px;height:18px;cursor:pointer">`;
+
+    openModal("⚙️ Cài đặt nuôi nick", `
+      <div style="max-height:65vh;overflow:auto;padding-right:6px">
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin:4px 0 6px">HÀNH ĐỘNG MỖI PHIÊN</div>
+        ${row("📜 Lướt newsfeed + like", sw("nuoi_enable_feed",1))}
+        ${row("📖 Xem story",            sw("nuoi_enable_story",1))}
+        ${row("🤝 Xác nhận lời mời kết bạn", sw("nuoi_enable_accept",1), "Bị động — an toàn")}
+        ${row("💬 Nhắn tin nhóm nội bộ", sw("nuoi_enable_message",0), "Cần điền link nhóm + thư viện câu bên dưới")}
+        ${row("➕ Chủ động gửi lời mời kết bạn", sw("nuoi_enable_addfriend",0),
+              "<span style='color:var(--warning)'>Rủi ro khóa nick cao nhất — nên để tắt</span>")}
+
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin:16px 0 6px">THÔNG SỐ</div>
+        ${row("Số like mỗi phiên",       num("nuoi_like_count",1))}
+        ${row("Độ dài phiên (giây)",
+              `${num("nuoi_session_min_sec",300)} — ${num("nuoi_session_max_sec",480)}`,
+              "Mặc định 300–480s (5–8 phút)")}
+
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin:16px 0 6px">💬 NHẮN TIN NHÓM</div>
+        <div class="field-group" style="margin-bottom:10px">
+            <label>Link nhóm chat nội bộ</label>
+            <input id="ns_nuoi_msg_group_url" value="${_escapeHtml(String(v("nuoi_msg_group_url","")))}"
+                   placeholder="https://www.facebook.com/messages/t/1234567890">
+        </div>
+        ${row("Số tin nhắn mỗi phiên",
+              `${num("nuoi_msg_min",2)} — ${num("nuoi_msg_max",3)}`)}
+        <div class="field-group" style="margin-top:10px">
+            <label>Thư viện câu — <span style="font-weight:400;color:var(--text-muted)">mỗi dòng 1 câu, bốc ngẫu nhiên</span></label>
+            <textarea id="ns_nuoi_msg_pool" rows="8"
+                style="width:100%;font-family:inherit;font-size:13px;padding:8px;background:var(--bg-input,var(--bg-hover));color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm)"
+                placeholder="Hôm nay trời đẹp nhỉ&#10;Mọi người ăn trưa chưa&#10;Cuối tuần này đi đâu chơi không">${_escapeHtml(String(v("nuoi_msg_pool","")))}</textarea>
+        </div>
+      </div>
+      <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px">
+        <button onclick="closeModal()" class="btn btn-ghost">Huỷ</button>
+        <button onclick="saveNuoiSettings()" class="btn btn-primary">💾 Lưu</button>
+      </div>`);
+}
+
+async function saveNuoiSettings(){
+    const g =id=>document.getElementById(`ns_${id}`);
+    const gi=(id,dv)=>{ const n=parseInt(g(id)?.value); return isNaN(n)?dv:n; };
+    const gc=id=>g(id)?.checked?1:0;
+    const data={
+        nuoi_enable_feed:      gc("nuoi_enable_feed"),
+        nuoi_enable_story:     gc("nuoi_enable_story"),
+        nuoi_enable_accept:    gc("nuoi_enable_accept"),
+        nuoi_enable_message:   gc("nuoi_enable_message"),
+        nuoi_enable_addfriend: gc("nuoi_enable_addfriend"),
+        nuoi_like_count:       gi("nuoi_like_count",1),
+        nuoi_session_min_sec:  gi("nuoi_session_min_sec",300),
+        nuoi_session_max_sec:  gi("nuoi_session_max_sec",480),
+        nuoi_msg_min:          gi("nuoi_msg_min",2),
+        nuoi_msg_max:          gi("nuoi_msg_max",3),
+        nuoi_msg_group_url:    (g("nuoi_msg_group_url")?.value||"").trim(),
+        nuoi_msg_pool:         g("nuoi_msg_pool")?.value||"",
+    };
+    if(data.nuoi_session_min_sec > data.nuoi_session_max_sec){
+        Toast.error("Độ dài phiên: giá trị đầu phải nhỏ hơn giá trị sau"); return;
+    }
+    if(data.nuoi_msg_min > data.nuoi_msg_max){
+        Toast.error("Số tin nhắn: giá trị đầu phải nhỏ hơn giá trị sau"); return;
+    }
+    // Bật nhắn tin mà chưa có nhóm/câu thì phiên nuôi sẽ tự bỏ qua — báo trước.
+    const nPool=(data.nuoi_msg_pool||"").split("\n").filter(s=>s.trim()).length;
+    if(data.nuoi_enable_message && (!data.nuoi_msg_group_url || !nPool)){
+        Toast.error("Bật nhắn tin thì phải có cả link nhóm và ít nhất 1 câu"); return;
+    }
+    try{
+        const r=await API.saveSettings(data);
+        if(r.ok){ Toast.success(`Đã lưu${data.nuoi_enable_message?` · ${nPool} câu`:""}`); closeModal(); }
+        else Toast.error(r.error);
+    }catch(e){ Toast.error(e.message); }
 }
 
 async function loadSchedule(loai){
