@@ -357,37 +357,72 @@ def has_pin_dialog(page_text: str) -> bool:
 
 # Bấm bằng JS thay vì selector CSS: nút X của hộp thoại PIN nằm ngoài
 # div[role='dialog'] và không có aria-label ổn định, nên selector hay trượt.
-_JS_CLICK_CLOSE = """() => {
+# Chỉ tính hộp thoại ĐANG HIỆN THẬT, không dựa vào body.innerText: sau khi đóng,
+# chữ "khôi phục đoạn chat" vẫn còn sót trong DOM ẩn → dò bằng text toàn trang bị
+# báo nhầm là chưa đóng, khiến vòng lặp bấm bừa sang nút khác. Đã gặp thật.
+_JS_PIN_VISIBLE = """(marks) => {
+    const visible = el => {
+        const r = el.getBoundingClientRect();
+        if (r.width < 50 || r.height < 50) return false;
+        const s = getComputedStyle(el);
+        return s.display !== 'none' && s.visibility !== 'hidden' && s.opacity !== '0';
+    };
+    for (const d of document.querySelectorAll('[role="dialog"]')) {
+        if (!visible(d)) continue;
+        const t = (d.innerText || '').toLowerCase();
+        if (marks.some(m => t.includes(m))) return true;
+    }
+    return false;
+}"""
+
+# Nút X của hộp thoại PIN — CHỈ tìm trong phạm vi hộp thoại đó, không quét cả
+# trang (quét cả trang từng bấm nhầm nút lạ ở góc phải).
+_JS_FIND_CLOSE = """(marks) => {
     const visible = el => {
         const r = el.getBoundingClientRect();
         return r.width > 0 && r.height > 0;
     };
-    // 1) Nút có nhãn Đóng / Close
-    for (const el of document.querySelectorAll('[aria-label]')) {
+    let dlg = null;
+    for (const d of document.querySelectorAll('[role="dialog"]')) {
+        const r = d.getBoundingClientRect();
+        if (r.width < 50 || r.height < 50) continue;
+        const t = (d.innerText || '').toLowerCase();
+        if (marks.some(m => t.includes(m))) { dlg = d; break; }
+    }
+    if (!dlg) return null;
+    const goc = dlg.getBoundingClientRect();
+
+    // Nút Đóng bên trong hộp thoại
+    for (const el of dlg.querySelectorAll('[aria-label]')) {
         const l = (el.getAttribute('aria-label') || '').toLowerCase();
-        if ((l.includes('đóng') || l.includes('dong') || l.includes('close')) && visible(el)) {
-            el.click();
-            return 'aria:' + l;
+        if ((l.includes('đóng') || l.includes('close')) && visible(el)) {
+            const r = el.getBoundingClientRect();
+            return {x: r.x + r.width/2, y: r.y + r.height/2, t: 'aria:' + l};
         }
     }
-    // 2) Nút tròn chứa svg nằm ở góc trên–phải của hộp thoại
-    let best = null, bestTop = 1e9;
-    for (const el of document.querySelectorAll('div[role="button"], button')) {
+    // Nút X thường nằm NGOÀI hộp thoại, ngay góc trên–phải của nó
+    let best = null, bestD = 1e9;
+    for (const el of document.querySelectorAll('[role="button"], button')) {
         if (!visible(el) || !el.querySelector('svg, i')) continue;
         const r = el.getBoundingClientRect();
-        if (r.width > 60 || r.height > 60) continue;          // nút nhỏ
-        if (r.top > window.innerHeight * 0.6) continue;        // nửa trên màn hình
-        if (r.left < window.innerWidth * 0.4) continue;        // lệch phải
-        if (r.top < bestTop) { bestTop = r.top; best = el; }
+        if (r.width > 60 || r.height > 60) continue;
+        const d = Math.hypot(r.x - goc.right, r.y - goc.top);
+        if (d < 120 && d < bestD) { bestD = d; best = el; }
     }
-    if (best) { best.click(); return 'svg-button'; }
-    return '';
+    if (best) {
+        const r = best.getBoundingClientRect();
+        return {x: r.x + r.width/2, y: r.y + r.height/2, t: 'svg-button'};
+    }
+    return null;
 }"""
 
-# Bấm nút theo TEXT. Phải khớp chính xác và ưu tiên phần tử bấm được thật sự:
-# khối div cha bọc cả 2 nút có textContent = "Không khôi phục tin nhắnHủy" nên
-# kiểu khớp "chứa chuỗi" sẽ bấm trúng khối cha → không có tác dụng gì.
-_JS_CLICK_TEXT = """(needles) => {
+# TÌM nút theo TEXT và trả về TOẠ ĐỘ tâm nút (không tự bấm).
+# Hai bài học từ chạy thật:
+#  - Khối div cha bọc cả 2 nút có textContent "Không khôi phục tin nhắnHủy",
+#    nên khớp kiểu "chứa chuỗi" sẽ trúng khối cha → vô tác dụng.
+#  - element.click() của JS KHÔNG kích hoạt nút Messenger (FB bắt pointerdown/
+#    pointerup, không phải sự kiện click tổng hợp) → phải click chuột thật.
+_JS_FIND_TEXT = """(needles) => {
     const visible = el => {
         const r = el.getBoundingClientRect();
         return r.width > 0 && r.height > 0;
@@ -411,9 +446,13 @@ _JS_CLICK_TEXT = """(needles) => {
                 .find(e => visible(e) && norm(e.textContent) === n);
             if (el) hit = el.closest('[role="button"], button') || el;
         }
-        if (hit) { hit.click(); return norm(hit.textContent).slice(0, 40); }
+        if (hit) {
+            const r = hit.getBoundingClientRect();
+            return {x: r.x + r.width / 2, y: r.y + r.height / 2,
+                    t: norm(hit.textContent).slice(0, 40)};
+        }
     }
-    return '';
+    return null;
 }"""
 
 # Chờ hộp xác nhận hiện ra rồi mới bấm (nó xuất hiện sau khi bấm X).
@@ -423,32 +462,98 @@ _JS_HAS_TEXT = """(needles) => {
 }"""
 
 
+# Kiểm phần tử NẰM NGAY DƯỚI toạ độ có đúng nút cần bấm không.
+# Hộp thoại Messenger trượt vào có animation: đo toạ độ xong, tới lúc bấm thì nó
+# đã dịch chỗ → click rơi sang nút bên cạnh ("Hủy"). Đã gặp thật.
+_JS_CHECK_POINT = """([x, y, mong]) => {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return '';
+    const btn = el.closest('[role="button"], button') || el;
+    return (btn.textContent || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+}"""
+
+
+async def _click_real(page, box, mong: str = "") -> bool:
+    """
+    Click CHUỘT THẬT vào tâm phần tử (chuỗi pointermove/down/up đầy đủ).
+    Bắt buộc dùng cách này với nút của Messenger: element.click() trong JS chỉ
+    phát sự kiện 'click' tổng hợp, còn FB lắng nghe pointerdown/pointerup nên
+    không phản ứng.
+
+    `mong`: text mong đợi — nếu phần tử dưới toạ độ không khớp thì KHÔNG bấm,
+    tránh bấm nhầm nút bên cạnh khi hộp thoại vừa dịch chỗ.
+    """
+    if not box:
+        return False
+    try:
+        await page.mouse.move(box["x"], box["y"])
+        await asyncio.sleep(random.uniform(0.1, 0.25))
+        if mong:
+            duoi = await page.evaluate(_JS_CHECK_POINT, [box["x"], box["y"], mong])
+            if mong not in (duoi or ""):
+                logger.warning(f"    ⚠️  Toạ độ trượt (dưới con trỏ là '{duoi[:30]}') — không bấm")
+                return False
+        await page.mouse.click(box["x"], box["y"])
+        return True
+    except Exception as e:
+        logger.warning(f"    ⚠️  Click chuột lỗi: {e}")
+        return False
+
+
+async def _click_nut_theo_text(page, texts: list) -> str:
+    """
+    Bấm nút theo text. Ưu tiên locator của Playwright vì nó TỰ CHỜ nút đứng yên
+    (hết animation) rồi mới bấm vào tâm — đúng cách chống lỗi click trượt sang
+    nút bên cạnh. Không được thì mới rơi về tìm toạ độ bằng JS (có kiểm chứng).
+    """
+    for t in texts:
+        for lam in (
+            lambda: page.get_by_role("button", name=t, exact=True),
+            lambda: page.get_by_role("button", name=t, exact=False),
+            lambda: page.get_by_text(t, exact=True),
+        ):
+            try:
+                loc = lam()
+                if await loc.count():
+                    await loc.first.click(timeout=4000)
+                    return t
+            except Exception:
+                continue
+
+    # Dự phòng: tìm toạ độ bằng JS rồi click chuột thật, có xác minh điểm bấm.
+    try:
+        box = await page.evaluate(_JS_FIND_TEXT, texts)
+        if box and await _click_real(page, box, mong=box["t"][:20]):
+            return box["t"]
+    except Exception:
+        pass
+    return ""
+
+
 async def _dismiss_pin_dialog(page) -> bool:
     """
     Đóng hộp thoại đòi mã PIN khôi phục chat.
     Thao tác tay tương ứng: bấm X → "Không khôi phục tin nhắn".
     Trả về True nếu có gặp hộp thoại (dù đóng được hay không).
     """
-    try:
-        if not has_pin_dialog(await page.inner_text("body")):
+    async def _con_hien() -> bool:
+        """Hộp thoại PIN CÒN HIỆN THẬT không (không tính DOM ẩn)."""
+        try:
+            return bool(await page.evaluate(_JS_PIN_VISIBLE, list(PIN_DIALOG_MARKERS)))
+        except Exception:
             return False
-    except Exception:
+
+    if not await _con_hien():
         return False
 
     logger.info("    🔑 Gặp hộp thoại mã PIN — chọn không khôi phục")
 
-    async def _con_hien() -> bool:
-        try:
-            return has_pin_dialog(await page.inner_text("body"))
-        except Exception:
-            return False
-
     # ── Bước 1: đóng hộp thoại PIN (X, hoặc Escape) ──
     for lan in range(3):
         try:
-            r = await page.evaluate(_JS_CLICK_CLOSE)
-            if r:
-                logger.info(f"    ✔️  Đã bấm nút đóng ({r})")
+            box = await page.evaluate(_JS_FIND_CLOSE, list(PIN_DIALOG_MARKERS))
+            if box and await _click_real(page, box):
+                logger.info(f"    ✔️  Đã bấm nút đóng ({box['t']})")
         except Exception as e:
             logger.warning(f"    ⚠️  Bấm nút đóng lỗi: {e}")
         await human_delay(900, 1600)
@@ -462,7 +567,9 @@ async def _dismiss_pin_dialog(page) -> bool:
                 if await page.evaluate(_JS_HAS_TEXT, nhan):
                     break
                 await asyncio.sleep(0.5)
-            hit = await page.evaluate(_JS_CLICK_TEXT, nhan)
+            # Chờ thêm cho hộp thoại trượt xong rồi mới bấm.
+            await asyncio.sleep(1.0)
+            hit = await _click_nut_theo_text(page, nhan)
             if hit:
                 logger.info(f"    ✔️  Đã chọn '{hit}'")
                 await human_delay(900, 1600)
@@ -488,20 +595,46 @@ async def _dismiss_pin_dialog(page) -> bool:
 
 
 async def _find_chat_box(page):
-    """Tìm ô soạn tin của Messenger — thử vài selector vì giao diện hay đổi."""
-    selectors = [
-        "div[role='textbox'][contenteditable='true']",
-        "div[aria-label='Tin nhắn'][contenteditable='true']",
-        "div[aria-label='Message'][contenteditable='true']",
-        "p[contenteditable='true']",
+    """
+    Tìm ô soạn tin của Messenger.
+
+    Ưu tiên ô có nhãn rõ ràng ("Tin nhắn"/"Message"/"Aa") vì trang Messenger có
+    NHIỀU ô nhập (ô tìm kiếm, ô bình luận…) — lấy bừa dễ gõ nhầm chỗ. Chỉ khi
+    không thấy nhãn nào mới rơi về ô contenteditable nằm THẤP NHẤT màn hình
+    (khung soạn tin luôn ở đáy cửa sổ chat).
+    """
+    co_nhan = [
+        "div[role='textbox'][aria-label*='Tin nhắn']",
+        "div[role='textbox'][aria-label*='Message']",
+        "div[role='textbox'][aria-label*='Aa']",
+        "div[contenteditable='true'][aria-label*='Tin nhắn']",
+        "div[contenteditable='true'][aria-label*='Message']",
     ]
-    for sel in selectors:
+    for sel in co_nhan:
         try:
-            box = page.locator(sel).last
+            box = page.locator(sel).first
             if await box.count() and await box.is_visible():
+                logger.info(f"    ✔️  Thấy ô soạn tin ({sel.split('[')[-1][:28]})")
                 return box
         except Exception:
             continue
+
+    # Không có nhãn → chọn ô contenteditable nằm thấp nhất (khung chat ở đáy)
+    try:
+        n = await page.locator("div[role='textbox'][contenteditable='true']").count()
+        thap_nhat, y_max = None, -1
+        for i in range(n):
+            b = page.locator("div[role='textbox'][contenteditable='true']").nth(i)
+            if not await b.is_visible():
+                continue
+            hop = await b.bounding_box()
+            if hop and hop["y"] > y_max:
+                y_max, thap_nhat = hop["y"], b
+        if thap_nhat is not None:
+            logger.info("    ✔️  Thấy ô soạn tin (ô thấp nhất trang)")
+            return thap_nhat
+    except Exception:
+        pass
     return None
 
 
@@ -522,12 +655,11 @@ async def _act_message(page, ctx, st):
         # Vẫn còn che → bỏ nhắn phiên này, để orchestrator bù bằng feed/story/like
         # thay vì đứng chờ ô soạn tin không bao giờ bấm được.
         try:
-            if has_pin_dialog(await page.inner_text("body")):
-                raise MessagingRestricted("hộp thoại mã PIN chưa đóng được")
-        except MessagingRestricted:
-            raise
+            con = bool(await page.evaluate(_JS_PIN_VISIBLE, list(PIN_DIALOG_MARKERS)))
         except Exception:
-            pass
+            con = False
+        if con:
+            raise MessagingRestricted("hộp thoại mã PIN chưa đóng được")
 
     # Acc đang bị hạn chế nhắn tin → bỏ hẳn, KHÔNG thử gửi.
     try:
