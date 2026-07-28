@@ -45,9 +45,13 @@ def setup_logger(name: str = "mnt_fb") -> logging.Logger:
         ch.setFormatter(fmt)
         logger.addHandler(ch)
 
-    # File
+    # File — XOAY VÒNG để log không phình vô hạn.
+    # 4 runner ghi mức DEBUG suốt ngày đêm: từng để autopost_homestay.log lên
+    # tới 24MB. Giữ 3MB × 3 file (bản mới nhất + 2 bản cũ) là đủ để soi lỗi.
     os.makedirs(LOG_DIR, exist_ok=True)
-    fh = logging.FileHandler(_EFFECTIVE_LOG_FILE, encoding="utf-8")
+    from logging.handlers import RotatingFileHandler
+    fh = RotatingFileHandler(_EFFECTIVE_LOG_FILE, maxBytes=3 * 1024 * 1024,
+                             backupCount=2, encoding="utf-8")
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(fmt)
     logger.addHandler(fh)

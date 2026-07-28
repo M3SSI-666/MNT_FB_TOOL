@@ -11,6 +11,8 @@ profiles/
 
 # ── Runtime / rác ───────────────────────────────────────────────
 logs/*.log
+# bản xoay vòng: autopost.log.1, autopost.log.2 ...
+logs/*.log.*
 .runner_*.pid
 debug_*.png
 *.png
