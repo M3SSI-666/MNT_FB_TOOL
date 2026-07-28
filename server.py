@@ -201,6 +201,46 @@ def _pid_alive(pid: int) -> bool:
         return False
 
 
+def _find_python_pids(*needles) -> list:
+    """
+    Tìm PID tiến trình python có dòng lệnh chứa TẤT CẢ chuỗi trong `needles`.
+
+    Dùng PowerShell/CIM thay cho `wmic`: Microsoft đang gỡ dần wmic khỏi Windows
+    11. Mất nó thì không diệt được scheduler mồ côi, dẫn tới hai runner cùng chạy
+    trên một profile Chrome — đúng thứ làm hỏng phiên đăng nhập.
+    """
+    if sys.platform != "win32":
+        return []
+    dk = " -and ".join(f"$_.CommandLine -like '*{n}*'" for n in needles)
+    ps = ("Get-CimInstance Win32_Process "
+          "-Filter \"Name='python.exe' OR Name='pythonw.exe'\" | "
+          f"Where-Object {{ {dk} }} | ForEach-Object {{ $_.ProcessId }}")
+    try:
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+            capture_output=True, text=True, timeout=15,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+        return [int(x) for x in r.stdout.split() if x.strip().isdigit()]
+    except Exception as e:
+        logger.warning(f"Không dò được PID python: {e}")
+        return []
+
+
+def _kill_pids(pids) -> list:
+    """taskkill /F /T từng PID, trả về danh sách đã diệt."""
+    da_diet = []
+    for pid in pids:
+        try:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+                           capture_output=True,
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+            da_diet.append(int(pid))
+        except Exception:
+            pass
+    return da_diet
+
+
 def _runner_running(loai):
     pid = _runner_pid(loai)
     if not pid:
@@ -228,40 +268,15 @@ def _kill_all_runners():
                 pass
             pf.unlink(missing_ok=True)
 
-    # Bước 2: fallback — dùng wmic tìm mọi python process đang chạy scheduler.py
-    if sys.platform == "win32":
-        try:
-            r = subprocess.run(
-                ["wmic", "process", "where",
-                 "(name='python.exe' or name='pythonw.exe') and CommandLine like '%scheduler.py%'",
-                 "get", "ProcessId", "/format:value"],
-                capture_output=True, text=True, timeout=8
-            )
-            for line in r.stdout.splitlines():
-                line = line.strip()
-                if line.lower().startswith("processid="):
-                    pid_str = line.split("=", 1)[1].strip()
-                    if pid_str.isdigit() and pid_str != "0":
-                        subprocess.run(["taskkill", "/F", "/T", "/PID", pid_str],
-                                       capture_output=True)
-                        logger.info(f"  Killed orphan scheduler PID {pid_str}")
-        except Exception as e:
-            logger.warning(f"wmic kill fallback lỗi: {e}")
+    # Bước 2: quét mọi scheduler.py mồ côi (không còn pid file)
+    for pid in _kill_pids(_find_python_pids("scheduler.py")):
+        logger.info(f"  Đã diệt scheduler mồ côi PID {pid}")
 
 
 def _kill_join_workers():
     """Kill mọi tiến trình join_groups_worker.py đang chạy."""
-    if sys.platform != "win32":
-        return
-    try:
-        subprocess.run(
-            ["wmic", "process", "where",
-             "(name='python.exe' or name='pythonw.exe') and CommandLine like '%join_groups_worker%'",
-             "delete"],
-            capture_output=True, timeout=8
-        )
-    except Exception as e:
-        logger.warning(f"kill join worker lỗi: {e}")
+    for pid in _kill_pids(_find_python_pids("join_groups_worker")):
+        logger.info(f"  Đã diệt join worker PID {pid}")
 
 
 def _shutdown_all():
@@ -320,7 +335,9 @@ def run_start(loai):
                 "SCHEDULER_LOG_FILE":    cfg["log"],
                 "SCHEDULER_START_DELAY": str(delay),
                 "HEADLESS":              "true" if headless else "false"}
-    proc  = subprocess.Popen([sys.executable, "-X", "utf8", "scheduler.py"],
+    # Truyền `loai` cả qua dòng lệnh (không chỉ biến môi trường) để lúc cần còn
+    # nhận ra runner nào là của loại nào mà diệt đúng cái mồ côi.
+    proc  = subprocess.Popen([sys.executable, "-X", "utf8", "scheduler.py", loai],
                              cwd=str(BASE_DIR), creationflags=flags, env=env)
     (BASE_DIR / cfg["pid_file"]).write_text(str(proc.pid))
     return jsonify({"ok": True, "pid": proc.pid})
@@ -344,26 +361,13 @@ def run_stop(loai):
             pass
         (BASE_DIR / RUNNER_CFG[loai]["pid_file"]).unlink(missing_ok=True)
 
-    # Fallback: kill orphan theo loai env var
-    if sys.platform == "win32":
-        try:
-            loai_val = RUNNER_LOAI_MAP[loai]
-            r = subprocess.run(
-                ["wmic", "process", "where",
-                 f"(name='python.exe' or name='pythonw.exe') and CommandLine like '%scheduler.py%' and CommandLine like '%{loai_val}%'",
-                 "get", "ProcessId", "/format:value"],
-                capture_output=True, text=True, timeout=6
-            )
-            for line in r.stdout.splitlines():
-                line = line.strip()
-                if line.lower().startswith("processid="):
-                    pid_str = line.split("=", 1)[1].strip()
-                    if pid_str.isdigit() and pid_str != "0":
-                        subprocess.run(["taskkill", "/F", "/T", "/PID", pid_str], capture_output=True)
-                        killed.append(int(pid_str))
-        except Exception:
-            pass
-
+    # Quét orphan CÙNG LOẠI (pid file mất/cũ). Nhận ra nhau nhờ `loai` nằm trên
+    # dòng lệnh — trước đây lọc theo loai nhưng loai chỉ có trong biến môi
+    # trường nên bộ lọc không bao giờ khớp, phần này coi như vô tác dụng.
+    # Khớp cụm LIỀN "scheduler.py <loai>" đúng như lúc khởi chạy, thay vì hai
+    # chuỗi rời — rời rạc thì một tiến trình python bất kỳ nhắc tới cả hai chữ
+    # cũng bị tính là runner.
+    killed += _kill_pids(_find_python_pids(f"scheduler.py {RUNNER_LOAI_MAP[loai]}"))
     return jsonify({"ok": True, "killed": killed})
 
 

@@ -103,7 +103,10 @@
       "Bash(SCHEDULER_LOG_FILE=\"logs/test_hn_pin4.log\" python -X utf8 nuoi_nick.py \"Huỳnh Như\" --only message)",
       "Bash(SCHEDULER_LOG_FILE=\"logs/test_hn_pin5.log\" python -X utf8 nuoi_nick.py \"Huỳnh Như\" --only message)",
       "Bash(SCHEDULER_LOG_FILE=\"logs/test_duration.log\" python -X utf8 nuoi_nick.py \"Xuan Khoa\" --only feed)",
-      "Bash(SCHEDULER_LOG_FILE=\"logs/test_headless.log\" python -X utf8 nuoi_nick.py \"The Anh Nguyen\" --headless --only message)"
+      "Bash(SCHEDULER_LOG_FILE=\"logs/test_headless.log\" python -X utf8 nuoi_nick.py \"The Anh Nguyen\" --headless --only message)",
+      "Bash(schtasks /Query /TN \"MNT_AutoPost\")",
+      "Bash(python -X utf8 -c \"import time;time.sleep\\(25\\)\" scheduler.py homestay)",
+      "Bash(rm -f \"C:/Users/Duong/AppData/Local/Temp/claude/C--Users-Duong-Desktop-MNT-FB-dist/8b7d3622-b020-47e9-aa77-50b2e8cf6d7f/scratchpad/kt.py\" \"C:/Users/Duong/AppData/Local/Temp/claude/C--Users-Duong-Desktop-MNT-FB-dist/8b7d3622-b020-47e9-aa77-50b2e8cf6d7f/scratchpad/kill_test.bat\")"
     ]
   }
 }

@@ -25,9 +25,13 @@ from utils import logger, jitter, CookieDeadError, classify_error
 from config import CHECK_EVERY_SEC, WINDOW_MINUTES, MAX_WORKERS
 
 # ── Cấu hình ─────────────────────────────────────────────────
+# Ưu tiên biến môi trường; server còn truyền thêm qua dòng lệnh để bên ngoài
+# nhìn vào tiến trình là biết nó chạy loại nào (phục vụ việc diệt runner mồ côi).
 LOAI = os.environ.get("SCHEDULER_LOAI", "").strip()
+if not LOAI and len(sys.argv) > 1:
+    LOAI = sys.argv[1].strip()
 if not LOAI:
-    logger.error("❌ Thiếu SCHEDULER_LOAI env var")
+    logger.error("❌ Thiếu SCHEDULER_LOAI (env var hoặc tham số dòng lệnh)")
     sys.exit(1)
 
 LOAI_SHEET_MAP = {
