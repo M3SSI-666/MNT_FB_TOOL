@@ -603,12 +603,16 @@ async def _find_chat_box(page):
     không thấy nhãn nào mới rơi về ô contenteditable nằm THẤP NHẤT màn hình
     (khung soạn tin luôn ở đáy cửa sổ chat).
     """
+    # Nhãn thật của ô soạn tin Messenger (lấy từ log chạy thật):
+    #   aria-placeholder="Aa"  aria-label="Viết cho <tên nhóm>"
+    # Không phải "Tin nhắn"/"Message" như tài liệu hay ghi.
     co_nhan = [
+        "div[role='textbox'][aria-placeholder='Aa']",
+        "div[role='textbox'][aria-label^='Viết cho']",
+        "div[role='textbox'][aria-label^='Write to']",
         "div[role='textbox'][aria-label*='Tin nhắn']",
         "div[role='textbox'][aria-label*='Message']",
-        "div[role='textbox'][aria-label*='Aa']",
-        "div[contenteditable='true'][aria-label*='Tin nhắn']",
-        "div[contenteditable='true'][aria-label*='Message']",
+        "div[contenteditable='true'][aria-placeholder='Aa']",
     ]
     for sel in co_nhan:
         try:
@@ -636,6 +640,37 @@ async def _find_chat_box(page):
     except Exception:
         pass
     return None
+
+
+async def _focus_chat_box(page, box) -> bool:
+    """
+    Đưa con trỏ vào ô soạn tin.
+
+    Không dùng click() mặc định (chờ 30s): đã gặp lớp phủ '__fb-dark-mode' chặn
+    con trỏ khiến click hết giờ rồi bỏ cả 3 tin. Thứ tự thử:
+      1. Escape dẹp hộp thoại/lớp phủ còn sót.
+      2. click ngắn hạn (5s).
+      3. focus() — không cần vượt qua lớp phủ vì không dùng con trỏ.
+    """
+    try:
+        await page.keyboard.press("Escape")
+        await asyncio.sleep(0.4)
+    except Exception:
+        pass
+
+    try:
+        await box.click(timeout=5000)
+        return True
+    except Exception:
+        logger.info("    ↩️  Click ô soạn tin bị chặn — chuyển sang focus()")
+
+    try:
+        await box.focus()
+        await asyncio.sleep(0.3)
+        return True
+    except Exception as e:
+        logger.warning(f"    ⚠️  focus() ô soạn tin lỗi: {e}")
+        return False
 
 
 async def _act_message(page, ctx, st):
@@ -677,10 +712,14 @@ async def _act_message(page, ctx, st):
     sent  = 0
     for msg in pick_messages(pool, n_msg):
         try:
-            await box.click()
+            if not await _focus_chat_box(page, box):
+                logger.warning("    ⚠️  Không đưa được con trỏ vào ô soạn tin")
+                break
             await human_delay(500, 1200)
             # Gõ từng ký tự có độ trễ — giống người gõ hơn là dán cả câu.
-            await box.type(msg, delay=random.randint(40, 110))
+            # Gõ qua bàn phím (ô đã được focus) thay vì box.type(): box.type()
+            # tự click lại nên vẫn dính lớp phủ chặn con trỏ.
+            await page.keyboard.type(msg, delay=random.randint(40, 110))
             await human_delay(400, 900)
             await page.keyboard.press("Enter")
             sent += 1
