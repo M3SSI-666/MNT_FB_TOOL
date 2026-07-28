@@ -740,6 +740,43 @@ def select_session_activities(st: dict, rng=random) -> list:
 # Orchestrator — chạy các hành động đã chọn trong ngân sách 5–8'
 # ═══════════════════════════════════════════════════════════════
 
+async def _lap_day_ngan_sach(page, ctx, st, deadline):
+    """
+    Lướt newsfeed thêm cho HẾT độ dài phiên đã đặt trong Cài đặt nuôi.
+
+    Không có bước này thì phiên nào cũng kết thúc sau ~3 phút dù đặt 5–8 phút,
+    vì tổng thời gian 4 hành động chỉ chừng đó. Người thật lướt liên tục vài
+    phút chứ không làm xong việc rồi thoát ngay, và mọi phiên đều dài y hệt
+    nhau tự nó cũng là một khuôn dễ nhận.
+    """
+    con_lai = deadline - time.monotonic()
+    if con_lai < 20:
+        return
+    logger.info(f"  ⏳ Còn {int(con_lai)}s — lướt thêm cho đủ độ dài phiên")
+
+    try:
+        await page.goto("https://www.facebook.com/",
+                        wait_until="domcontentloaded", timeout=30000)
+        await human_delay(1500, 2500)
+    except Exception as e:
+        logger.warning(f"  ⚠️  Không mở được newsfeed để lướt thêm: {e}")
+        return
+
+    while True:
+        con_lai = deadline - time.monotonic()
+        if con_lai < 15:
+            break
+        # Lướt từng đợt ngắn ngẫu nhiên, không like thêm (số like đã dùng hết
+        # theo cấu hình ở hành động 'like').
+        doan = int(min(con_lai, random.randint(30, 70)))
+        try:
+            await browse_and_like(page, duration_sec=doan, max_likes=0)
+        except Exception as e:
+            logger.warning(f"  ⚠️  Lướt thêm dừng: {e}")
+            return
+        await human_delay(1500, 4000)
+
+
 async def _run_warming(acc_name: str, c_user: str, st: dict,
                        headless: bool = None) -> bool:
     from playwright.async_api import async_playwright
@@ -787,7 +824,13 @@ async def _run_warming(acc_name: str, c_user: str, st: dict,
                     logger.warning(f"  ⚠️  Hành động '{name}' lỗi (bỏ qua): {e}")
                 await human_delay(1500, 3500)
 
-            logger.info(f"  ✅ Phiên nuôi xong — đã làm: {', '.join(done) or '(không có)'}")
+            # Làm xong việc mà chưa hết giờ thì lướt tiếp cho ĐỦ độ dài phiên
+            # đã đặt trong Cài đặt nuôi.
+            await _lap_day_ngan_sach(page, ctx, st, deadline)
+
+            phut = (time.monotonic() - (deadline - budget)) / 60
+            logger.info(f"  ✅ Phiên nuôi xong sau {phut:.1f} phút "
+                        f"— đã làm: {', '.join(done) or '(không có)'}")
             return True
         finally:
             await ctx.close()
