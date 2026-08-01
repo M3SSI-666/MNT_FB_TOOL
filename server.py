@@ -7,13 +7,10 @@ import os
 import sys
 import json
 import time
-import secrets
 import subprocess
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from flask import (Flask, jsonify, render_template, request, send_from_directory,
-                   session, redirect, url_for)
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Flask, jsonify, render_template, request, send_from_directory
 
 BASE_DIR = Path(__file__).parent
 sys.path.insert(0, str(BASE_DIR))
@@ -50,81 +47,10 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 # Tự nạp lại template khi sửa index.html — khỏi phải restart server
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
-# ── Đăng nhập / bảo vệ truy cập từ xa ──────────────────────────
-# Secret key cho session — lưu 1 lần để session không mất khi restart.
-_secret = get_setting("app_secret_key", "")
-if not _secret:
-    _secret = secrets.token_hex(32)
-    set_setting("app_secret_key", _secret)
-app.secret_key = _secret
-app.permanent_session_lifetime = timedelta(days=30)
-
-
-def _is_local() -> bool:
-    """Request đến từ chính máy này (cửa sổ app / localhost) → tin cậy, khỏi login."""
-    ra = request.remote_addr or ""
-    return ra in ("127.0.0.1", "::1", "localhost") or ra.startswith("127.")
-
-
-def _password_set() -> bool:
-    return bool(os.environ.get("MNT_PASSWORD") or get_setting("app_password_hash", ""))
-
-
-def _password_ok(submitted: str) -> bool:
-    """Ưu tiên biến môi trường MNT_PASSWORD; nếu không có thì dùng hash trong DB."""
-    envp = os.environ.get("MNT_PASSWORD")
-    if envp:
-        return submitted == envp
-    h = get_setting("app_password_hash", "")
-    return bool(h) and check_password_hash(h, submitted)
-
-
-@app.before_request
-def _auth_guard():
-    p = request.path
-    # Cho qua: file tĩnh, trang login, và máy local (ngồi trực tiếp máy công ty)
-    if p.startswith("/static/") or p == "/login" or p == "/favicon.ico":
-        return
-    if _is_local() or session.get("auth"):
-        return
-    # Truy cập từ xa chưa đăng nhập
-    if p.startswith("/api/") or p.startswith("/media/") or p.startswith("/data/"):
-        return jsonify({"ok": False, "error": "unauthorized"}), 401
-    return redirect(url_for("login"))
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if _is_local() or session.get("auth"):
-        return redirect(url_for("index"))
-    error = ""
-    if request.method == "POST":
-        if _password_ok(request.form.get("password", "")):
-            session.permanent = True
-            session["auth"] = True
-            return redirect(url_for("index"))
-        error = "Sai mật khẩu"
-    elif not _password_set():
-        error = "Chưa đặt mật khẩu — hãy đặt trên máy công ty (tab Hành động) trước."
-    return render_template("login.html", error=error)
-
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
-
-
-@app.route("/api/app/set-password", methods=["POST"])
-def api_set_password():
-    """Đặt/đổi mật khẩu truy cập từ xa. Chỉ cho phép từ máy local hoặc đã đăng nhập."""
-    if not (_is_local() or session.get("auth")):
-        return jsonify({"ok": False, "error": "unauthorized"}), 401
-    pw = (request.json or {}).get("password", "")
-    if len(pw) < 4:
-        return jsonify({"ok": False, "error": "Mật khẩu tối thiểu 4 ký tự"})
-    set_setting("app_password_hash", generate_password_hash(pw))
-    return jsonify({"ok": True})
+# ── CHỈ CHẠY TẠI MÁY ─────────────────────────────────────────────
+# Đã bỏ hẳn điều khiển từ xa (Tailscale) cùng toàn bộ lớp đăng nhập/mật khẩu.
+# Server lắng nghe 127.0.0.1 (xem _serve) nên chỉ máy này gọi được — không còn
+# máy nào trong mạng LAN chạm tới cổng 8080, và cũng không cần lớp xác thực nào.
 
 # Boot ID đổi mỗi lần server khởi động — client dùng để phát hiện restart và tự reload.
 APP_BOOT_ID = str(time.time())
@@ -398,13 +324,11 @@ def api_accounts():
 
 @app.route("/api/accounts/<int:acc_id>/secrets")
 def api_account_secrets(acc_id):
-    """Trả về credential thật của 1 tài khoản — CHỈ cho máy local.
+    """Trả về credential thật của 1 tài khoản (để sửa trên bảng Tài khoản).
 
-    Phiên đăng nhập từ xa cố tình không được phép, vì mật khẩu Facebook và mã
-    2FA không nên đi qua mạng chỉ để hiển thị trên bảng điều khiển.
+    Không cần chặn theo IP nữa: server chỉ lắng nghe 127.0.0.1 nên mọi request
+    đều từ chính máy này.
     """
-    if not _is_local():
-        return jsonify({"ok": False, "error": "Chỉ xem được trên máy tại chỗ"}), 403
     from db import get_account_by_id
     row = get_account_by_id(acc_id)
     if not row:
@@ -458,15 +382,10 @@ def _reveal_in_explorer(path: Path):
 
 @app.route("/api/accounts/export-excel")
 def api_accounts_export_excel():
-    """Xuất toàn bộ bảng Tài khoản ra .xlsx, lưu vào Downloads của MÁY CHẠY APP.
-
-    Trả về đường dẫn đã lưu chứ không trả file. Gọi từ xa qua Tailscale vẫn ghi
-    file trên máy chủ, không tải về được máy đang bấm.
+    """Xuất toàn bộ bảng Tài khoản ra .xlsx, lưu vào Downloads.
 
     CẢNH BÁO: cố ý KHÔNG che credential — file chứa mật khẩu, cookie xs và mã
-    2FA của mọi tài khoản. Route vẫn nằm sau _auth_guard nên từ xa phải đăng
-    nhập, nhưng khác /secrets ở chỗ không giới hạn riêng máy tại chỗ.
-    Muốn siết lại: thêm `if not _is_local(): return ..., 403` ở đầu hàm.
+    2FA của mọi tài khoản. Giữ file này cẩn thận.
     """
     from openpyxl import Workbook
     from openpyxl.styles import Font
@@ -507,8 +426,7 @@ def api_accounts_export_excel():
     path = _export_dir() / name
     wb.save(str(path))
 
-    if _is_local():
-        _reveal_in_explorer(path)
+    _reveal_in_explorer(path)
     return jsonify({"ok": True, "path": str(path)})
 
 
@@ -1349,7 +1267,9 @@ def _wait_server_ready(port: int, timeout: float = 15.0):
 
 
 def _serve():
-    app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False, threaded=True)
+    # 127.0.0.1 — CHỈ máy này truy cập được. Trước đây bind 0.0.0.0 để điều
+    # khiển từ xa, kéo theo việc mọi máy trong mạng LAN cũng chạm được cổng 8080.
+    app.run(host="127.0.0.1", port=PORT, debug=False, use_reloader=False, threaded=True)
 
 
 if __name__ == "__main__":

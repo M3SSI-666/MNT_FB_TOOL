@@ -462,16 +462,6 @@ async function runnerStop(loai){
     try{ await API.runStop(loai); Toast.success(`⏹ Đã dừng ${loai}`); await loadRunnerStatus(); }
     catch(e){ Toast.error(e.message); }
 }
-async function saveRemotePassword(){
-    const el=document.getElementById("remote-pw");
-    const pw=(el?.value||"").trim();
-    if(pw.length<4){ Toast.error("Mật khẩu tối thiểu 4 ký tự"); return; }
-    try{
-        const r=await API.setPassword(pw);
-        if(r.ok){ Toast.success("🔑 Đã lưu mật khẩu truy cập từ xa"); el.value=""; }
-        else Toast.error(r.error);
-    }catch(e){ Toast.error(e.message); }
-}
 async function shutdownApp(){
     if(!confirm("Tắt toàn bộ phần mềm (server + runner đăng nền)?\n\nMuốn bật lại: khởi động lại máy công ty (app tự chạy) hoặc chạy RUN_APP.")) return;
     try{

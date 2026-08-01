@@ -8,7 +8,7 @@ chcp 65001 >nul
 ::  Dung file nay THAY CHO viec giai nen ZIP. No se:
 ::    1. Cai git neu chua co
 ::    2. Tai (git clone) toan bo code ve thu muc MNT_FB_TOOL
-::    3. Chay INSTALL.bat de cai Python packages + Chromium + Tailscale
+::    3. Chay INSTALL.bat de cai Python packages + Chromium
 ::  Sau nay muon cap nhat: chi bam UPDATE.bat.
 :: ============================================================
 
@@ -77,7 +77,7 @@ if exist "MNT_FB_TOOL\.git" (
 )
 echo.
 
-:: --- [3] Chay INSTALL.bat (Python packages + Chromium + Tailscale) ---
+:: --- [3] Chay INSTALL.bat (Python packages + Chromium) ---
 echo [3/3] Dang cai dat moi truong (co the mat vai phut)...
 cd /d "%~dp0MNT_FB_TOOL"
 if exist "INSTALL.bat" (

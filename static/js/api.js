@@ -76,5 +76,4 @@ const API = {
 
     // App
     appShutdown:     ()           => API.post("/api/app/shutdown", {}),
-    setPassword:     (pw)         => API.post("/api/app/set-password", {password:pw}),
 };

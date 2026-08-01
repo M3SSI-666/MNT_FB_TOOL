@@ -1,7 +1,7 @@
 # MNT FB AutoPost
 
 Công cụ tự động đăng bài Facebook (nhóm + tường Page) bằng Playwright, có bảng
-điều khiển web chạy trong cửa sổ app desktop, và điều khiển được từ xa qua Tailscale.
+điều khiển web chạy trong cửa sổ app desktop.
 
 ## Yêu cầu
 - Windows 10/11
@@ -9,13 +9,10 @@ Công cụ tự động đăng bài Facebook (nhóm + tường Page) bằng Play
 
 ## Cài đặt (máy mới)
 Chạy **`INSTALL.bat`** — tự cài:
-1. Python packages (`flask`, `playwright`)
+1. Python packages (`flask`, `playwright`, `openpyxl`…)
 2. Chromium cho Playwright
-3. Tailscale (để điều khiển từ xa)
 
-Sau đó (làm tay 1 lần):
-- Mở **Tailscale** → đăng nhập Google (cùng tài khoản với các máy/điện thoại khác).
-- Chạy `RUN_APP.bat` → vào tab **Hành động** → đặt **mật khẩu truy cập từ xa**.
+Xong thì chạy `RUN_APP.bat`.
 
 ## Chạy
 | File | Công dụng |
@@ -28,13 +25,9 @@ Sau đó (làm tay 1 lần):
 
 Bảng điều khiển: `http://localhost:8080`
 
-## Điều khiển từ xa (Tailscale)
-1. Máy đích: cài Tailscale + đăng nhập, app đang chạy, **không để máy ngủ**.
-2. Máy/điện thoại điều khiển: cài Tailscale, đăng nhập **cùng tài khoản**.
-3. Mở trình duyệt → `http://<ten-hoac-ip-may-dich>:8080` → nhập mật khẩu.
-
-> Máy tại chỗ (cửa sổ app / localhost) không cần mật khẩu; chỉ truy cập từ xa
-> mới yêu cầu đăng nhập. **Không bật "exit node"** trên máy đăng bài để giữ IP.
+> **Chỉ chạy tại máy.** Server lắng nghe `127.0.0.1` nên không máy nào khác —
+> kể cả trong cùng mạng LAN — chạm được cổng 8080. Vì vậy cũng không cần mật
+> khẩu hay đăng nhập.
 
 ## Cấu trúc
 | File | Vai trò |

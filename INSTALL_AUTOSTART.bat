@@ -15,7 +15,7 @@ if errorlevel 1 (
 
 echo.
 echo [OK] Da dang ky. Tu lan mo may sau, phan mem se tu chay nen.
-echo      - Dieu khien tu xa: http://[ten-may]:8080 (qua Tailscale)
+echo      - Bang dieu khien: http://localhost:8080
 echo      - Go bo tu dong chay: chay UNINSTALL_AUTOSTART.bat
 echo.
 echo  Muon chay ngay bay gio ma khong can khoi dong lai:

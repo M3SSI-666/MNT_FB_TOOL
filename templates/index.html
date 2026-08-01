@@ -218,20 +218,6 @@
 
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px" id="runner-grid"></div>
 
-                <!-- Mật khẩu truy cập từ xa -->
-                <div style="margin-top:28px;padding:16px 18px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);max-width:520px">
-                    <div style="font-size:13px;font-weight:700;margin-bottom:4px">🔑 Mật khẩu truy cập từ xa</div>
-                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">
-                        Đặt/đổi mật khẩu để đăng nhập khi vào bảng điều khiển từ máy khác (qua Tailscale).
-                        Máy tại chỗ (cửa sổ app) không cần mật khẩu.
-                    </div>
-                    <div style="display:flex;gap:8px">
-                        <input type="password" id="remote-pw" placeholder="Mật khẩu mới (≥ 4 ký tự)"
-                            style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:13px">
-                        <button class="btn btn-primary" onclick="saveRemotePassword()">Lưu mật khẩu</button>
-                    </div>
-                </div>
-
                 <!-- Tắt phần mềm -->
                 <div style="margin-top:28px;padding:16px 18px;background:var(--bg-card);border:1px solid var(--danger);border-radius:var(--radius);max-width:520px">
                     <div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:4px">🔴 Tắt phần mềm</div>
