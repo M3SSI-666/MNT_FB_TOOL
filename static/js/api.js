@@ -38,11 +38,13 @@ const API = {
     updateContentField: (id, f, v) => API.post(`/api/content/${id}/field`, {field:f, value:v}),
     deleteContent:   (id)         => API.del(`/api/content/${id}`),
     quetAnhMoCoi:    (xoa)        => API.post("/api/content/quet-anh-mo-coi", {xoa}),
+    reorderContent:  (ids)        => API.post("/api/content/reorder", ids),
 
     // UID Groups
     uidGroups:       ()           => API.get("/api/uid-groups"),
     saveUidGroup:    (data)       => API.post("/api/uid-groups/save", data),
     deleteUidGroup:  (id)         => API.del(`/api/uid-groups/${id}`),
+    reorderUidGroups:(ids)        => API.post("/api/uid-groups/reorder", ids),
 
     // Schedule
     schedule:        (loai)       => API.get(`/api/schedule/${loai}`),

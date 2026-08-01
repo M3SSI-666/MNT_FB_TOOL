@@ -65,6 +65,45 @@ got = [p["id"] for p in db.get_pages()]
 check("reorder_pages lưu đúng thứ tự", got == list(reversed(ids)))
 check("get_pages sắp theo order_idx",  got == list(reversed(ids)))
 
+# ── db: reorder content (order_idx có phạm vi từng loai) ───────────────────
+_r1, _r2, _r3 = [db.upsert_content({"loai": "homestay", "ma_content": f"R{i}"}) for i in (1, 2, 3)]
+_t1, _t2      = [db.upsert_content({"loai": "thue",     "ma_content": f"T{i}"}) for i in (1, 2)]
+check("content mới xếp CUỐI danh sách",
+      [c["id"] for c in db.get_content("homestay")][-3:] == [_r1, _r2, _r3])
+db.reorder_content([_r3, _r1, _r2])
+check("reorder_content lưu đúng thứ tự",
+      [c["id"] for c in db.get_content("homestay")][-3:] == [_r3, _r1, _r2])
+check("reorder_content không ảnh hưởng loai khác",
+      [c["id"] for c in db.get_content("thue")][-2:] == [_t1, _t2])
+check("thứ tự mới vẫn đúng khi lọc su_dung",
+      [c["id"] for c in db.get_content("homestay", su_dung="Có")][-3:] == [_r3, _r1, _r2])
+# Thêm dòng SAU khi đã kéo-thả thì vẫn phải xuống cuối, không chen lên đầu
+_r4 = db.upsert_content({"loai": "homestay", "ma_content": "R4"})
+check("content mới vẫn xuống cuối sau reorder",
+      [c["id"] for c in db.get_content("homestay")][-4:] == [_r3, _r1, _r2, _r4])
+
+# ── db: reorder uid_groups (chỉ nhóm trống, TIME1-7 phải nguyên vẹn) ──────
+_g1 = db.upsert_uid_group({"ma_nhom": "",      "uid": "1110000", "ten_nhom": "G1"})
+_g2 = db.upsert_uid_group({"ma_nhom": "",      "uid": "2220000", "ten_nhom": "G2"})
+_gt = db.upsert_uid_group({"ma_nhom": "TIME1", "uid": "9990000"})
+db.reorder_uid_groups([_g2, _g1])
+_all = db.get_all_uid_groups()
+check("reorder_uid_groups đổi thứ tự nhóm trống",
+      [g["id"] for g in _all if g["ma_nhom"] == ""][-2:] == [_g2, _g1])
+check("get_all_uid_groups vẫn gom theo ma_nhom",
+      [g["ma_nhom"] for g in _all] == sorted(g["ma_nhom"] for g in _all))
+check("nhóm TIME1 không bị ảnh hưởng",
+      [g["id"] for g in db.get_uid_groups_by_code("TIME1")] == [_gt])
+
+# ── db: migration idempotent — gọi lại init_db không được mất thứ tự ──────
+# Đây là assert duy nhất thật sự chạy qua nhánh guard của _add_col, tức chỗ mà
+# migration sai sẽ chỉ hại DB cũ của người dùng, không bao giờ hại máy cài mới.
+db.init_db()
+check("init_db chạy lại: thứ tự content còn nguyên",
+      [c["id"] for c in db.get_content("homestay")][-4:] == [_r3, _r1, _r2, _r4])
+check("init_db chạy lại: thứ tự uid nhóm còn nguyên",
+      [g["id"] for g in db.get_all_uid_groups() if g["ma_nhom"] == ""][-2:] == [_g2, _g1])
+
 # ── db: busy_timeout được bật (tránh 'database is locked') ─────────────────
 with db._conn() as _c:
     _bt = _c.execute("PRAGMA busy_timeout").fetchone()[0]

@@ -17,6 +17,9 @@ logs/*.log.*
 debug_*.png
 *.png
 
+# ── Tài liệu nội bộ (chỉ dành cho người phát hành, không đẩy lên repo) ──
+HUONG_DAN_UPDATE.md
+
 # ── Python ──────────────────────────────────────────────────────
 __pycache__/
 *.pyc
@@ -28,3 +31,7 @@ venv/
 !cookies/.gitkeep
 !logs/.gitkeep
 !profiles/.gitkeep
+
+# Windows reserved device name (khong phai file that, git 2.51 vap khi quet)
+nul
+backup/

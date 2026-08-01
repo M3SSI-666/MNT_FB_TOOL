@@ -78,7 +78,8 @@ def init_db():
             link_anh        TEXT DEFAULT '',        -- comma-separated URLs
             su_dung         TEXT DEFAULT 'Có',      -- Có / Không
             ghi_chu         TEXT DEFAULT '',
-            created_at      TEXT DEFAULT (datetime('now','localtime'))
+            created_at      TEXT DEFAULT (datetime('now','localtime')),
+            order_idx       INTEGER DEFAULT 0        -- thứ tự hiển thị (kéo-thả)
         );
 
         -- ── UID / Nhóm ───────────────────────────────────────────────────
@@ -89,7 +90,8 @@ def init_db():
             ten_nhom        TEXT DEFAULT '',
             link_url        TEXT DEFAULT '',
             thanh_vien      TEXT DEFAULT '',
-            ghi_chu         TEXT DEFAULT ''
+            ghi_chu         TEXT DEFAULT '',
+            order_idx       INTEGER DEFAULT 0        -- thứ tự hiển thị (kéo-thả)
         );
 
         -- ── Lịch tham gia nhóm ───────────────────────────────────────────
@@ -151,6 +153,13 @@ def init_db():
         _add_col("accounts",  "nuoi_nick",     "nuoi_nick INTEGER DEFAULT 0")
         _add_col("accounts",  "nuoi_interval", "nuoi_interval INTEGER DEFAULT 150")
         _add_col("schedules", "hoat_dong",     "hoat_dong TEXT DEFAULT 'dang_bai'")
+
+        # ── Migration: order_idx cho content / uid_groups (kéo-thả đổi thứ tự) ──
+        # Không cần backfill như pages ở trên: ADD COLUMN với DEFAULT là hằng số
+        # khác NULL thì SQLite ghi luôn 0 cho mọi dòng cũ, nên khoá sắp xếp đầu
+        # là hằng số và thứ tự thu về đúng tiêu chí cũ (id).
+        _add_col("content",    "order_idx", "order_idx INTEGER DEFAULT 0")
+        _add_col("uid_groups", "order_idx", "order_idx INTEGER DEFAULT 0")
     print(f"✅ DB initialized: {DB_PATH}")
 
 
@@ -318,8 +327,21 @@ def get_content(loai: str, su_dung: str = None) -> list[dict]:
         args = [loai]
         if su_dung:
             sql += " AND su_dung=?"; args.append(su_dung)
-        sql += " ORDER BY id"
+        sql += " ORDER BY order_idx, id"
         return [dict(r) for r in con.execute(sql, args).fetchall()]
+
+
+def reorder_content(ordered_ids: list[int]):
+    """Cập nhật thứ tự hiển thị của content (kéo-thả).
+
+    order_idx chỉ có nghĩa TRONG CÙNG một `loai` vì get_content() lọc loai
+    trước khi sắp xếp → index trùng nhau giữa các loai là vô hại.
+    Tab Content hiển thị MỌI dòng của loai (không lọc su_dung) nên payload
+    luôn đầy đủ; nếu sau này thêm filter vào tab thì phải xem lại chỗ này.
+    """
+    with _conn() as con:
+        for idx, cid in enumerate(ordered_ids):
+            con.execute("UPDATE content SET order_idx=? WHERE id=?", (idx, cid))
 
 
 def get_content_by_code(ma_content: str) -> dict | None:
@@ -338,6 +360,15 @@ def upsert_content(data: dict) -> int:
             sets = ", ".join(f"{c}=?" for c in cols)
             con.execute(f"UPDATE content SET {sets} WHERE id=?", values + [data["id"]])
             return data["id"]
+        # Dòng mới phải xuống CUỐI danh sách của loai đó. Form lưu content không
+        # gửi order_idx, để mặc định 0 thì nó nhảy lên ĐẦU bảng và làm lệch thứ
+        # tự luân phiên content khi Gen lịch.
+        if "order_idx" not in cols:
+            nxt = con.execute(
+                "SELECT COALESCE(MAX(order_idx), -1) + 1 FROM content WHERE loai=?",
+                (data.get("loai", ""),)
+            ).fetchone()[0]
+            cols.append("order_idx"); values.append(nxt)
         cur = con.execute(
             f"INSERT INTO content ({', '.join(cols)}) VALUES ({', '.join(['?']*len(cols))})",
             values
@@ -393,9 +424,22 @@ def get_uid_groups_by_code(ma_nhom: str) -> list[dict]:
 
 def get_all_uid_groups() -> list[dict]:
     with _conn() as con:
+        # ma_nhom đứng TRƯỚC order_idx để nhóm TIME1-7 vẫn gom đúng như cũ.
         return [dict(r) for r in con.execute(
-            "SELECT * FROM uid_groups ORDER BY ma_nhom, id"
+            "SELECT * FROM uid_groups ORDER BY ma_nhom, order_idx, id"
         ).fetchall()]
+
+
+def reorder_uid_groups(ordered_ids: list[int]):
+    """Cập nhật thứ tự hiển thị của UID nhóm (kéo-thả).
+
+    Tab UID chỉ hiện các dòng ma_nhom='' (loadUidGroups lọc ở client) nên
+    payload chỉ gồm id của nhóm trống; các dòng TIME1-7 giữ order_idx=0 và
+    thứ tự của chúng không bị ảnh hưởng.
+    """
+    with _conn() as con:
+        for idx, gid in enumerate(ordered_ids):
+            con.execute("UPDATE uid_groups SET order_idx=? WHERE id=?", (idx, gid))
 
 
 def upsert_uid_group(data: dict) -> int:
@@ -406,6 +450,13 @@ def upsert_uid_group(data: dict) -> int:
             sets = ", ".join(f"{c}=?" for c in cols)
             con.execute(f"UPDATE uid_groups SET {sets} WHERE id=?", values + [data["id"]])
             return data["id"]
+        # Dòng mới xuống CUỐI nhóm của nó — xem chú thích ở upsert_content.
+        if "order_idx" not in cols:
+            nxt = con.execute(
+                "SELECT COALESCE(MAX(order_idx), -1) + 1 FROM uid_groups WHERE ma_nhom=?",
+                (data.get("ma_nhom", ""),)
+            ).fetchone()[0]
+            cols.append("order_idx"); values.append(nxt)
         cur = con.execute(
             f"INSERT INTO uid_groups ({', '.join(cols)}) VALUES ({', '.join(['?']*len(cols))})",
             values

@@ -505,6 +505,17 @@ const ACC_FIELDS = [
 ];
 let _accData=[];
 
+// Server ghi file xuống đĩa rồi trả về đường dẫn — KHÔNG dùng <a download> vì
+// app chạy trong cửa sổ pywebview, ở đó trình duyệt nhúng nuốt luôn lệnh tải
+// file: code JS chạy hết và báo thành công nhưng không có file nào được lưu.
+async function exportAccountsExcel(){
+    try{
+        const res=await API.get("/api/accounts/export-excel");
+        if(!res.ok) throw new Error(res.error||"không rõ lỗi");
+        Toast.show("Đã lưu: "+res.path, "success", 10000);
+    }catch(e){ Toast.error("Lỗi xuất Excel: "+e.message); }
+}
+
 async function loadAccounts(){
     const tbody=document.getElementById("acc-table");
     const thead=document.getElementById("acc-thead");
@@ -561,6 +572,7 @@ function renderAccTable(data){
                     ondragover="accDragOver(event)"
                     ondrop="accDrop(event,${r.id})"
                     ondragleave="accDragLeave(event)"
+                    ondragend="accDragEnd(event)"
                     style="cursor:default">
             <td style="text-align:center;color:var(--text-muted);cursor:grab;font-size:16px;padding:4px 6px"
                 title="Kéo để di chuyển hàng">☰</td>
@@ -671,13 +683,21 @@ async function deleteAcc(id){
     catch(e){ Toast.error(e.message); }
 }
 
-// ── Accounts — Drag & Drop reorder ───────────────────────────
+// ── Drag & Drop reorder — dùng chung cho mọi bảng ─────────────
 let _dragId = null;
 
 function accDragStart(e, id) {
     _dragId = id;
     e.dataTransfer.effectAllowed = "move";
-    e.currentTarget.style.opacity = "0.5";
+    // Bảng Tài khoản/Page: draggable nằm trên <tr> nên currentTarget CHÍNH LÀ tr
+    // (closest khớp chính nó) → không đổi hành vi.
+    // Bảng Content/UID: draggable nằm trên ô ☰ để không chặn bôi đen text.
+    const tr = e.currentTarget.closest("tr") || e.currentTarget;
+    if (e.currentTarget !== tr) {
+        // Kéo từ ô ☰ thì ảnh kéo phải là CẢ HÀNG, không phải mỗi ô đó
+        try { e.dataTransfer.setDragImage(tr, 12, 12); } catch(_) {}
+    }
+    tr.style.opacity = "0.5";
 }
 
 function accDragOver(e) {
@@ -690,33 +710,42 @@ function accDragLeave(e) {
     e.currentTarget.style.background = "";
 }
 
-async function accDrop(e, targetId) {
+// Thả ra ngoài bảng thì trước đây hàng bị kẹt mờ 0.5 tới lần render sau.
+function accDragEnd(e) {
+    (e.currentTarget.closest("tr") || e.currentTarget).style.opacity = "";
+    _dragId = null;
+}
+
+async function _rowDrop(e, targetId, tbodyId, saveFn) {
     e.preventDefault();
     e.currentTarget.style.background = "";
-    if (_dragId === null || _dragId === targetId) { _dragId=null; return; }
+    if (_dragId === null || _dragId === targetId) { _dragId = null; return; }
 
-    // Reorder: lấy danh sách id hiện tại, swap vị trí
-    const rows  = [...document.querySelectorAll("#acc-table tr[data-id]")];
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) { _dragId = null; return; }
+    const rows  = [...tbody.querySelectorAll("tr[data-id]")];
     const ids   = rows.map(r => parseInt(r.dataset.id));
     const fromI = ids.indexOf(_dragId);
     const toI   = ids.indexOf(targetId);
-    if (fromI < 0 || toI < 0) { _dragId=null; return; }
+    if (fromI < 0 || toI < 0) { _dragId = null; return; }
 
+    const moved = _dragId; _dragId = null;
     ids.splice(fromI, 1);
-    ids.splice(toI, 0, _dragId);
-    _dragId = null;
+    ids.splice(toI, 0, moved);
 
     // Cập nhật UI ngay lập tức
-    const tbody = document.getElementById("acc-table");
-    const rowMap = Object.fromEntries(rows.map(r=>[parseInt(r.dataset.id), r]));
+    const rowMap = Object.fromEntries(rows.map(r => [parseInt(r.dataset.id), r]));
     ids.forEach(id => tbody.appendChild(rowMap[id]));
     rows.forEach(r => r.style.opacity = "");
 
     // Lưu vào DB
-    try {
-        await API.reorderAccounts(ids);
-    } catch(err) { Toast.error(err.message); }
+    try { await saveFn(ids); } catch(err) { Toast.error(err.message); }
 }
+
+async function accDrop(e, t)     { return _rowDrop(e, t, "acc-table",     API.reorderAccounts); }
+async function pageDrop(e, t)    { return _rowDrop(e, t, "pages-table",   API.reorderPages); }
+async function contentDrop(e, t) { return _rowDrop(e, t, "content-table", API.reorderContent); }
+async function uidDrop(e, t)     { return _rowDrop(e, t, "uid-table",     API.reorderUidGroups); }
 
 // ── Accounts — Insert row ─────────────────────────────────────
 async function insertAccRow(refId, position) {
@@ -766,6 +795,7 @@ async function loadPages(){
                 ondragover="accDragOver(event)"
                 ondrop="pageDrop(event,${p.id})"
                 ondragleave="accDragLeave(event)"
+                ondragend="accDragEnd(event)"
                 style="cursor:default">
             <td style="text-align:center;color:var(--text-muted);cursor:grab;font-size:16px;padding:4px 6px"
                 title="Kéo để di chuyển hàng">☰</td>
@@ -787,33 +817,6 @@ async function loadPages(){
             </td>
         </tr>`).join("");
     }catch(e){ tbody.innerHTML=`<tr><td colspan="8" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
-}
-
-async function pageDrop(e, targetId) {
-    e.preventDefault();
-    e.currentTarget.style.background = "";
-    if (_dragId === null || _dragId === targetId) { _dragId=null; return; }
-
-    const rows  = [...document.querySelectorAll("#pages-table tr[data-id]")];
-    const ids   = rows.map(r => parseInt(r.dataset.id));
-    const fromI = ids.indexOf(_dragId);
-    const toI   = ids.indexOf(targetId);
-    if (fromI < 0 || toI < 0) { _dragId=null; return; }
-
-    ids.splice(fromI, 1);
-    ids.splice(toI, 0, _dragId);
-    _dragId = null;
-
-    // Cập nhật UI ngay
-    const tbody = document.getElementById("pages-table");
-    const rowMap = Object.fromEntries(rows.map(r=>[parseInt(r.dataset.id), r]));
-    ids.forEach(id => tbody.appendChild(rowMap[id]));
-    rows.forEach(r => r.style.opacity = "");
-
-    // Lưu vào DB
-    try {
-        await API.reorderPages(ids);
-    } catch(err) { Toast.error(err.message); }
 }
 
 function pageLoaiCell(loai){
@@ -1035,7 +1038,7 @@ async function loadContent(loai){
     renderContentTabs();
     document.querySelectorAll(".content-tab").forEach(b=>b.classList.toggle("active",b.dataset.loai===loai));
     const tbody=document.getElementById("content-table"); if(!tbody) return;
-    tbody.innerHTML=`<tr><td colspan="7" class="loading"><span class="spin">↻</span></td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr>`;
     try{
         const res=await API.content(loai);
         const total=res.data.length, active=res.data.filter(r=>r.su_dung==="Có").length;
@@ -1043,7 +1046,7 @@ async function loadContent(loai){
         if(box) box.innerHTML=[{l:"Tổng",v:total},{l:"Đang dùng",v:active,c:"var(--success)"},{l:"Tạm dừng",v:total-active}]
             .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px;${s.c?"color:"+s.c:""}">${s.v}</div></div>`).join("");
 
-        if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="7" class="empty">Chưa có content</td></tr>`; return; }
+        if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="8" class="empty">Chưa có content</td></tr>`; return; }
 
         // Helper: inline-editable cell
         const ec=(r,field,style)=>{
@@ -1061,7 +1064,15 @@ async function loadContent(loai){
             const encImgs=encodeURIComponent(JSON.stringify(imgs));
             const suDung=r.su_dung==="Có";
 
-            return `<tr style="vertical-align:top">
+            // draggable đặt trên ô ☰, KHÔNG đặt trên <tr>: nếu <tr> draggable thì
+            // không bôi đen được text trong ô Nội dung (kéo chuột biến thành kéo hàng).
+            return `<tr data-id="${r.id}" style="vertical-align:top"
+                ondragover="accDragOver(event)"
+                ondrop="contentDrop(event,${r.id})"
+                ondragleave="accDragLeave(event)">
+                <td draggable="true" ondragstart="accDragStart(event,${r.id})" ondragend="accDragEnd(event)"
+                    style="text-align:center;color:var(--text-muted);cursor:grab;font-size:16px;padding:8px 6px;user-select:none"
+                    title="Kéo để đổi thứ tự — thứ tự này quyết định content nào vào giờ nào khi Gen lịch">☰</td>
                 ${ec(r,"ma_content","font-weight:600;text-align:center;white-space:nowrap;font-size:13px")}
 
                 <!-- Nội dung: inline edit bằng textarea -->
@@ -1105,7 +1116,7 @@ async function loadContent(loai){
                 </td>
             </tr>`;
         }).join("");
-    }catch(e){ tbody.innerHTML=`<tr><td colspan="7" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
+    }catch(e){ tbody.innerHTML=`<tr><td colspan="8" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
 }
 
 // Inline edit Nội dung bằng textarea (giữ xuống dòng)
@@ -1298,7 +1309,13 @@ async function loadUidGroups(){
             const linkCell = g.link_url && g.link_url.startsWith("http")
                 ? `<a href="${g.link_url}" target="_blank" style="font-family:var(--font-mono);font-size:11px;color:var(--accent)">${g.uid} 🔗</a>`
                 : `<span style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary)">${g.uid}</span>`;
-            return `<tr>
+            return `<tr data-id="${g.id}"
+                ondragover="accDragOver(event)"
+                ondrop="uidDrop(event,${g.id})"
+                ondragleave="accDragLeave(event)">
+                <td draggable="true" ondragstart="accDragStart(event,${g.id})" ondragend="accDragEnd(event)"
+                    style="text-align:center;color:var(--text-muted);cursor:grab;font-size:16px;padding:4px 6px;user-select:none"
+                    title="Kéo để di chuyển hàng">☰</td>
                 <td style="text-align:center">${linkCell}</td>
                 <td style="font-size:12px">${g.ten_nhom||"-"}</td>
                 <td style="text-align:center">${tv}</td>

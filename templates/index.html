@@ -67,6 +67,7 @@
                 <div id="acc-summary" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"></div>
                 <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
                     <button class="btn btn-primary" onclick="openAccForm()">+ Thêm tài khoản</button>
+                    <button class="btn btn-ghost" onclick="exportAccountsExcel()">Xuất Excel</button>
                     <span id="acc-count" style="font-size:12px;color:var(--text-muted);margin-left:auto"></span>
                 </div>
                 <div class="card">
@@ -113,13 +114,14 @@
                     <div class="table-wrap">
                         <table>
                             <thead><tr>
+                                <th style="width:32px"></th>
                                 <th>Mã content</th><th>Nội dung</th>
                                 <th style="text-align:center">Ảnh Hook</th>
                                 <th style="text-align:center">Ảnh</th>
                                 <th style="text-align:center">Sử dụng</th>
                                 <th>Ghi chú</th><th style="width:90px">Chỉnh sửa</th>
                             </tr></thead>
-                            <tbody id="content-table"><tr><td colspan="7" class="loading"><span class="spin">↻</span></td></tr></tbody>
+                            <tbody id="content-table"><tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -135,6 +137,7 @@
                     <div class="table-wrap">
                         <table>
                             <thead><tr>
+                                <th style="width:32px"></th>
                                 <th style="text-align:center">UID / Link</th>
                                 <th>Tên nhóm</th>
                                 <th style="text-align:center">Thành viên</th>

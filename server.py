@@ -9,7 +9,7 @@ import json
 import time
 import secrets
 import subprocess
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from flask import (Flask, jsonify, render_template, request, send_from_directory,
                    session, redirect, url_for)
@@ -28,9 +28,10 @@ from db import (
     # pages
     get_pages, get_page_by_name, upsert_page, delete_page, reorder_pages,
     # content
-    get_content, get_content_by_code, upsert_content, delete_content,
+    get_content, get_content_by_code, upsert_content, delete_content, reorder_content,
     # uid groups
     get_uid_groups_by_code, get_all_uid_groups, upsert_uid_group, delete_uid_group,
+    reorder_uid_groups,
     # schedules
     get_schedules, update_schedule_status, bulk_set_schedule_status,
     replace_schedules, update_schedule_field,
@@ -411,6 +412,106 @@ def api_account_secrets(acc_id):
     return jsonify({"ok": True, "data": {f: row.get(f, "") for f in SECRET_ACCOUNT_FIELDS}})
 
 
+# Cột và nhãn khớp đúng bảng trên giao diện (ACC_FIELDS trong static/js/app.js).
+EXPORT_ACCOUNT_COLUMNS = [
+    ("ten_acc",        "Tên acc"),
+    ("loai_dang",      "Loại đăng"),
+    ("thoi_gian_nghi", "Nghỉ (p)"),
+    ("link_profile",   "Link profile"),
+    ("email_sdt",      "Email/SDT"),
+    ("password",       "Password"),
+    ("ten_page",       "Tên Page"),
+    ("c_user",         "c_user"),
+    ("xs",             "xs"),
+    ("refresh",        "Refresh"),
+    ("trang_thai",     "Trạng thái"),
+    ("nuoi_nick",      "Nuôi"),
+    ("nuoi_interval",  "Chu kỳ (p)"),
+    ("email_khoiphuc", "Email KP"),
+    ("pass_khoiphuc",  "Pass KP"),
+    ("twofa",          "2FA"),
+    ("ghi_chu",        "Ghi chú"),
+]
+
+# Excel tự nhận diện kiểu dữ liệu: c_user (15 chữ số) sẽ thành 1.00047E+14 và
+# mất số gốc, thời gian nghỉ thành số nguyên. Ép các cột này về dạng Text.
+EXPORT_TEXT_COLUMNS = {"password", "c_user", "xs", "twofa",
+                       "thoi_gian_nghi", "nuoi_interval"}
+
+
+def _export_dir() -> Path:
+    """Thư mục lưu file xuất — Downloads của người dùng, không có thì cạnh app."""
+    d = Path.home() / "Downloads"
+    return d if d.is_dir() else BASE_DIR
+
+
+def _reveal_in_explorer(path: Path):
+    """Mở Explorer và chọn sẵn file vừa lưu (chỉ Windows, lỗi thì bỏ qua)."""
+    if sys.platform != "win32":
+        return
+    try:
+        # explorer trả exit code 1 kể cả khi thành công → không dùng check=True
+        subprocess.Popen(f'explorer /select,"{path}"')
+    except Exception as e:
+        logger.warning(f"Không mở được Explorer: {e}")
+
+
+@app.route("/api/accounts/export-excel")
+def api_accounts_export_excel():
+    """Xuất toàn bộ bảng Tài khoản ra .xlsx, lưu vào Downloads của MÁY CHẠY APP.
+
+    Trả về đường dẫn đã lưu chứ không trả file. Gọi từ xa qua Tailscale vẫn ghi
+    file trên máy chủ, không tải về được máy đang bấm.
+
+    CẢNH BÁO: cố ý KHÔNG che credential — file chứa mật khẩu, cookie xs và mã
+    2FA của mọi tài khoản. Route vẫn nằm sau _auth_guard nên từ xa phải đăng
+    nhập, nhưng khác /secrets ở chỗ không giới hạn riêng máy tại chỗ.
+    Muốn siết lại: thêm `if not _is_local(): return ..., 403` ở đầu hàm.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Tài khoản"
+    ws.append([label for _, label in EXPORT_ACCOUNT_COLUMNS])
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+
+    widths = [len(label) for _, label in EXPORT_ACCOUNT_COLUMNS]
+    for row in get_accounts():
+        values = []
+        for key, _ in EXPORT_ACCOUNT_COLUMNS:
+            v = row.get(key, "")
+            if key == "nuoi_nick":
+                v = "x" if v else ""
+            values.append("" if v is None else str(v))
+        ws.append(values)
+        for i, v in enumerate(values):
+            widths[i] = max(widths[i], len(v))
+
+    for i, (key, _) in enumerate(EXPORT_ACCOUNT_COLUMNS, start=1):
+        letter = ws.cell(row=1, column=i).column_letter
+        # +2 cho khoảng thở, trần 50 để link_profile/ghi_chu không kéo dài cả màn
+        ws.column_dimensions[letter].width = min(widths[i - 1] + 2, 50)
+        if key in EXPORT_TEXT_COLUMNS:
+            for r in range(2, ws.max_row + 1):
+                ws.cell(row=r, column=i).number_format = "@"
+
+    ws.freeze_panes = "A2"
+
+    # Ghi thẳng xuống đĩa thay vì trả blob cho trình duyệt tải: app chạy trong
+    # cửa sổ pywebview/WebView2, ở đó thẻ <a download> bị bỏ qua âm thầm nên
+    # người dùng thấy báo thành công mà không có file nào.
+    name = f"tai_khoan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    path = _export_dir() / name
+    wb.save(str(path))
+
+    if _is_local():
+        _reveal_in_explorer(path)
+    return jsonify({"ok": True, "path": str(path)})
+
+
 @app.route("/api/accounts/save", methods=["POST"])
 def api_accounts_save():
     data = request.json or {}
@@ -573,6 +674,16 @@ def api_content_delete(content_id):
     return jsonify({"ok": True, "anh_da_xoa": n})
 
 
+@app.route("/api/content/reorder", methods=["POST"])
+def api_content_reorder():
+    ordered_ids = request.json or []
+    try:
+        reorder_content([int(i) for i in ordered_ids])
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @app.route("/api/content/quet-anh-mo-coi", methods=["POST"])
 def api_quet_anh_mo_coi():
     """Quét (và tuỳ chọn xóa) ảnh không content nào dùng tới."""
@@ -628,6 +739,16 @@ def api_uid_groups_save():
     try:
         gid = upsert_uid_group(data)
         return jsonify({"ok": True, "id": gid})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/uid-groups/reorder", methods=["POST"])
+def api_uid_groups_reorder():
+    ordered_ids = request.json or []
+    try:
+        reorder_uid_groups([int(i) for i in ordered_ids])
+        return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 

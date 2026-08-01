@@ -107,7 +107,10 @@
       "Bash(schtasks /Query /TN \"MNT_AutoPost\")",
       "Bash(python -X utf8 -c \"import time;time.sleep\\(25\\)\" scheduler.py homestay)",
       "Bash(rm -f \"C:/Users/Duong/AppData/Local/Temp/claude/C--Users-Duong-Desktop-MNT-FB-dist/8b7d3622-b020-47e9-aa77-50b2e8cf6d7f/scratchpad/kt.py\" \"C:/Users/Duong/AppData/Local/Temp/claude/C--Users-Duong-Desktop-MNT-FB-dist/8b7d3622-b020-47e9-aa77-50b2e8cf6d7f/scratchpad/kill_test.bat\")",
-      "Read(//c/Users/Duong/Desktop/**)"
+      "Read(//c/Users/Duong/Desktop/**)",
+      "Bash(python -c \"import openpyxl; print\\('✓ openpyxl', openpyxl.__version__\\)\")",
+      "Bash(python -X utf8 -c \"import openpyxl; print\\('openpyxl OK', openpyxl.__version__\\)\")",
+      "Bash(cp data/app.db \"backup/app.db.sau-nangcap-$\\(date +%Y%m%d_%H%M\\)\")"
     ]
   }
 }
