@@ -14,7 +14,7 @@ chcp 65001 >nul
 
 :: >>> NGUOI CUNG CAP PHAN MEM: dien link repo GitHub cua ban vao day <<<
 ::     (repo PUBLIC nen client khong can dang nhap gi)
-set "REPO_URL=https://github.com/TAI-KHOAN/MNT_FB_TOOL.git"
+set "REPO_URL=https://github.com/M3SSI-666/MNT_FB_TOOL.git"
 
 echo ============================================================
 echo  MNT FB AutoPost - Cai dat lan dau
