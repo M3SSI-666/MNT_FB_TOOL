@@ -69,6 +69,70 @@ def find_profile_dir(acc_name: str, c_user: str = "") -> str:
     return path
 
 
+# Thư mục cache của Chrome — xoá được mà KHÔNG mất đăng nhập.
+# Phiên đăng nhập nằm ở Default/Network/Cookies, trạng thái ứng dụng nằm ở
+# Local Storage / IndexedDB — không thư mục nào trong danh sách này đụng tới.
+# (Đã kiểm chứng thực tế: xoá 5,1GB cache, mọi phiên sau đó vẫn login bình thường.)
+CACHE_DIRS = (
+    "Cache", "Code Cache", "GPUCache", "ShaderCache", "GrShaderCache",
+    "GraphiteDawnCache", "DawnWebGPUCache", "DawnGraphiteCache",
+    "Service Worker/CacheStorage", "Service Worker/ScriptCache",
+)
+
+
+def _dung_luong_mb(p: str) -> float:
+    tong = 0
+    for goc, _thu_muc, files in os.walk(p):
+        for f in files:
+            try:
+                tong += os.path.getsize(os.path.join(goc, f))
+            except OSError:
+                pass
+    return tong / 1024 / 1024
+
+
+def don_cache_profile(profile_dir: str, nguong_mb: float = 200) -> float:
+    """
+    Xoá cache trình duyệt của MỘT profile. Trả về số MB đã giải phóng.
+
+    CHỈ gọi khi profile đó KHÔNG có Chrome nào đang mở (ngay sau ctx.close()),
+    vì xoá lúc trình duyệt đang chạy có thể làm hỏng profile.
+
+    `nguong_mb`: dưới mức này thì bỏ qua, khỏi tốn I/O mỗi phiên. Cache mọc
+    vài trăm MB mỗi ngày nên để 200MB là dọn thưa mà vẫn không phình.
+    """
+    import shutil
+    if not profile_dir or not os.path.isdir(profile_dir):
+        return 0.0
+
+    ung_vien = []
+    for goc in (profile_dir, os.path.join(profile_dir, "Default")):
+        for ten in CACHE_DIRS:
+            d = os.path.join(goc, *ten.split("/"))
+            if os.path.isdir(d):
+                ung_vien.append(d)
+    if not ung_vien:
+        return 0.0
+
+    tong = sum(_dung_luong_mb(d) for d in ung_vien)
+    if tong < nguong_mb:
+        return 0.0
+
+    da_xoa = 0.0
+    for d in ung_vien:
+        mb = _dung_luong_mb(d)
+        try:
+            shutil.rmtree(d, ignore_errors=True)
+            da_xoa += mb
+        except OSError:
+            pass          # file bị khoá → bỏ qua, lần sau dọn tiếp
+
+    if da_xoa >= 1:
+        logger.info(f"  🧹 Dọn cache '{os.path.basename(profile_dir)}': "
+                    f"giải phóng {da_xoa:.0f} MB")
+    return da_xoa
+
+
 async def human_delay(min_ms: int = 800, max_ms: int = 2000):
     await asyncio.sleep(random.randint(min_ms, max_ms) / 1000)
 

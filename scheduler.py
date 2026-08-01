@@ -225,6 +225,25 @@ def _attempt_post(item: dict) -> str:
     raise Exception(f"Mode '{mode}' không được hỗ trợ (chỉ còn Hybrid/Via — Playwright)")
 
 
+def _don_cache_sau_phien(acc_name: str):
+    """
+    Dọn cache trình duyệt của acc NGAY SAU khi phiên vừa đóng.
+
+    Đúng thời điểm này là an toàn nhất: trình duyệt của acc đó chắc chắn đã
+    thoát, mà các acc khác dùng profile riêng nên không đụng nhau. Cache mọc
+    vài GB mỗi ngày nếu không dọn (đo thực tế: 143MB -> 8,3GB sau vài giờ).
+    Không dọn nổi (file còn khoá) cũng không sao — lần chạy sau dọn tiếp.
+    """
+    if not acc_name:
+        return
+    try:
+        from fb_common import find_profile_dir, don_cache_profile
+        a = get_account_by_name(acc_name)
+        don_cache_profile(find_profile_dir(acc_name, (a or {}).get("c_user", "")))
+    except Exception as e:
+        logger.warning(f"  ⚠️  Dọn cache '{acc_name}' lỗi (bỏ qua): {e}")
+
+
 def _mark_cookie_dead(acc_name: str):
     """Đánh dấu account để dễ thấy trong tab Tài khoản."""
     try:
@@ -354,6 +373,7 @@ def main():
         try:
             _run_one(item)
         finally:
+            _don_cache_sau_phien(item.get("ten_acc", ""))
             with lock:
                 running.discard(key)
             semaphore.release()

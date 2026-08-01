@@ -978,6 +978,10 @@ if __name__ == "__main__":
 
     try:
         run_warming_session(acc_name, acc.get("c_user", ""), headless=want_headless)
+        # Dọn cache y như scheduler làm sau mỗi phiên, để chạy thử cũng không
+        # để lại vài trăm MB rác.
+        from fb_common import don_cache_profile
+        don_cache_profile(find_profile_dir(acc_name, acc.get("c_user", "")))
         print("\n✅ Phiên thử xong — xem log phía trên để biết đã làm gì.")
     except CookieDeadError:
         print(f"\n❌ Cookie của '{acc_name}' đã hết hạn — cần lấy lại xs.")
