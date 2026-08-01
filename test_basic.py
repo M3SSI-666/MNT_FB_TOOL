@@ -157,6 +157,32 @@ db.delete_content(_c2)
 check("xóa nốt: ảnh chung mới hết dùng",
       "/m/chung.jpg" not in db.get_all_content_image_urls())
 
+# ── dọn cache: nhận diện profile ĐANG MỞ để không xoá nhầm ────────────────
+import os as _os
+from fb_common import loc_profile_tu_cmdline as _lp
+
+_goc = _os.path.abspath("profiles")
+def _co(ten):   # profile của dự án có nằm trong kết quả không
+    return _os.path.normcase(_os.path.join(_goc, ten)) in _kq
+
+# Dấu tiếng Việt PHẢI khớp — lỗi giải mã cp1252 từng biến "Huỳnh_Như" thành
+# "Hu?nh_Nh?" khiến bộ quét tưởng profile đang chạy là rảnh và xoá cache của nó.
+_kq = _lp(f'chrome.exe --user-data-dir="{_goc}\\Huỳnh_Như_100076368049295" --x', _goc)
+check("nhận đúng profile có dấu tiếng Việt", _co("Huỳnh_Như_100076368049295"))
+
+_kq = _lp(f'chrome --user-data-dir={_goc}\\Xuan_Khoa_123 --flag', _goc)
+check("nhận đường dẫn không có ngoặc kép",  _co("Xuan_Khoa_123"))
+
+# Ứng dụng khác cũng dùng --user-data-dir -> phải bỏ qua
+_kq = _lp(r'zalo.exe --user-data-dir="C:\Users\X\AppData\zalodata"', _goc)
+check("bỏ qua profile ngoài dự án",         _kq == set())
+
+_kq = _lp(f'a --user-data-dir="{_goc}\\P1" b --user-data-dir="{_goc}\\P2"', _goc)
+check("nhận nhiều profile cùng lúc",        _co("P1") and _co("P2") and len(_kq) == 2)
+
+check("chuỗi rỗng -> không có gì",          _lp("", _goc) == set())
+check("không có user-data-dir -> rỗng",     _lp("chrome.exe --headless", _goc) == set())
+
 # ── nuôi nick: xếp phiên theo CHU KỲ (logic thuần) ─────────────────────────
 import nuoi_nick
 

@@ -398,6 +398,15 @@ def main():
                     n = reset_schedules_to_wait(LOAI)
                     logger.info(f"🌅 Reset ngày mới — {LOAI}: {n} dòng về Chờ")
 
+                # Quét dọn cache: bắt cả profile của acc đã ngừng dùng — loại
+                # mà việc dọn-sau-mỗi-phiên không bao giờ chạm tới. Chạy lúc
+                # khởi động và mỗi đầu ngày; profile đang mở được bỏ qua.
+                try:
+                    from fb_common import don_cache_tat_ca
+                    don_cache_tat_ca()
+                except Exception as e:
+                    logger.warning(f"⚠️  Quét dọn cache lỗi (bỏ qua): {e}")
+
             # Refresh cookie mỗi 10 phút
             if time.time() - last_refresh_check >= 600:
                 _check_refresh()

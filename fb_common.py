@@ -133,6 +133,92 @@ def don_cache_profile(profile_dir: str, nguong_mb: float = 200) -> float:
     return da_xoa
 
 
+def _thu_muc_profiles() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
+
+
+def loc_profile_tu_cmdline(text: str, goc_profiles: str) -> set:
+    """
+    Rút các --user-data-dir trong text, CHỈ giữ đường dẫn nằm trong thư mục
+    profiles/ của dự án.
+
+    Máy còn nhiều ứng dụng khác cũng chạy Chromium kèm --user-data-dir (Zalo,
+    Edge WebView, trình duyệt cá nhân) — tính cả vào thì số liệu sai lệch.
+    """
+    import re
+    goc = os.path.normcase(os.path.abspath(goc_profiles))
+    ra = set()
+    for m in re.finditer(r'--user-data-dir=(?:"([^"]+)"|(\S+))', text or ""):
+        d = (m.group(1) or m.group(2) or "").strip().strip('"')
+        if not d:
+            continue
+        try:
+            full = os.path.normcase(os.path.abspath(d))
+        except Exception:
+            continue
+        if full.startswith(goc):
+            ra.add(full)
+    return ra
+
+
+def _profile_dang_mo() -> set:
+    """
+    Tập thư mục profile ĐANG được trình duyệt mở, đọc từ --user-data-dir trên
+    dòng lệnh. Chromium không để lại file khoá nào trong profile nên đây là
+    cách nhận biết đáng tin duy nhất.
+    """
+    import sys, subprocess, re
+    if sys.platform != "win32":
+        return set()
+    # PHẢI ép UTF-8 cả hai đầu: mặc định subprocess giải mã theo bảng mã hệ
+    # thống (cp1252) làm hỏng dấu tiếng Việt trong đường dẫn — "Huỳnh_Như" ra
+    # "Hu?nh_Nh?" nên so khớp trượt, và bộ quét sẽ dọn nhầm profile ĐANG CHẠY.
+    ps = ("[Console]::OutputEncoding=[Text.Encoding]::UTF8; "
+          "Get-CimInstance Win32_Process | "
+          "Where-Object { $_.CommandLine -like '*--user-data-dir=*' } | "
+          "ForEach-Object { $_.CommandLine }")
+    try:
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+            capture_output=True, timeout=25,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+        r_stdout = (r.stdout or b"").decode("utf-8", errors="replace")
+    except Exception as e:
+        logger.warning(f"  ⚠️  Không dò được profile đang mở: {e}")
+        return set()
+
+    return loc_profile_tu_cmdline(r_stdout, _thu_muc_profiles())
+
+
+def don_cache_tat_ca(nguong_mb: float = 200) -> float:
+    """
+    Quét MỌI profile, dọn cache những cái KHÔNG có trình duyệt nào đang mở.
+
+    Cần thêm bước này bên cạnh việc dọn sau mỗi phiên: profile của acc đã ngừng
+    dùng (không đăng, không nuôi) thì chẳng phiên nào chạm tới, cache cũ nằm lại
+    mãi. Bỏ qua profile đang mở để không làm hỏng phiên đang chạy.
+    """
+    goc = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
+    if not os.path.isdir(goc):
+        return 0.0
+
+    dang_mo = _profile_dang_mo()
+    tong = 0.0
+    for ten in sorted(os.listdir(goc)):
+        p = os.path.join(goc, ten)
+        if not os.path.isdir(p):
+            continue
+        if os.path.normcase(os.path.abspath(p)) in dang_mo:
+            continue                      # đang mở → tuyệt đối không đụng
+        tong += don_cache_profile(p, nguong_mb)
+
+    if tong >= 1:
+        logger.info(f"🧹 Quét dọn cache: giải phóng {tong:.0f} MB "
+                    f"(bỏ qua {len(dang_mo)} profile đang mở)")
+    return tong
+
+
 async def human_delay(min_ms: int = 800, max_ms: int = 2000):
     await asyncio.sleep(random.randint(min_ms, max_ms) / 1000)
 
