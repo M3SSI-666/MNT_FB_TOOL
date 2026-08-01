@@ -35,3 +35,6 @@ venv/
 # Windows reserved device name (khong phai file that, git 2.51 vap khi quet)
 nul
 backup/
+
+# Cài đặt cục bộ của Claude Code — không đẩy lên repo
+.claude/
