@@ -1,0 +1,513 @@
+# Thư viện câu nhắn mẫu cho tính năng nuôi nick.
+# Mỗi dòng 1 câu. Dòng bắt đầu bằng # là ghi chú, sẽ bị bỏ qua.
+# Chủ đề: công việc, công nghệ, nấu ăn, sức khỏe, đời sống.
+
+# ── Công việc ────────────────────────────────────────────────
+Sáng nay họp sớm quá
+Deadline dí sát nút rồi
+Tuần này việc nhiều ghê
+Mai phải nộp báo cáo rồi
+Sếp vừa giao thêm việc
+Làm xong việc này là nghỉ
+Hôm nay tăng ca chắc luôn
+Mệt mà vẫn phải cố
+Chiều có cuộc họp nữa
+Cuối tháng lại chạy số
+Task này khó phết
+Đang chờ phản hồi của khách
+Mai đi làm sớm hơn chút
+Cuối tuần này phải làm bù
+Việc dồn quá không kịp thở
+Vừa xong một việc lớn
+Hôm nay làm được nhiều đấy
+Nghỉ trưa tí cho tỉnh táo
+Sáng mai có lịch gặp đối tác
+Báo cáo tuần xong chưa mọi người
+Đang soạn email cho khách
+Họp online mà mạng lag
+Deadline lùi lại rồi may quá
+Đợt này công việc ổn định hơn
+Vừa nhận thêm dự án mới
+Làm freelance cũng vất vả
+Đang cân nhắc đổi việc
+Lương tháng này về chưa
+Công ty sắp có đợt tuyển mới
+Đồng nghiệp mới dễ thương phết
+Sáng nay kẹt xe đi làm trễ
+Đi làm về mệt rã rời
+Thứ hai đầu tuần uể oải
+Sắp tới ngày nghỉ rồi
+Nghỉ lễ được mấy ngày nhỉ
+Chuẩn bị xin nghỉ phép
+Làm việc ở nhà tiện hơn
+Văn phòng mới thoáng ghê
+Máy tính công ty chậm quá
+Hôm nay không có việc gì gấp
+Việc nhẹ lương cao khó tìm lắm
+Đang học thêm kỹ năng mới
+Kinh nghiệm mới là quan trọng
+Sắp có đợt đánh giá cuối năm
+Thưởng Tết năm nay chắc ổn
+Đang làm hồ sơ ứng tuyển
+Phỏng vấn xong thấy hồi hộp
+Vừa được nhận vào chỗ mới
+Thử việc hai tháng cũng nhanh
+Công việc này hợp với mình
+Chốt đơn được kha khá
+Khách hôm nay khó tính quá
+Tư vấn cả buổi mới xong
+Đơn hàng tháng này tăng
+Hàng về trễ mấy hôm
+Kho còn ít hàng thôi
+Giao hàng nhanh khách mới hài lòng
+Bán online cũng cạnh tranh
+Chạy quảng cáo tốn kém phết
+Doanh số tuần này khá hơn
+Lấy sỉ chỗ nào rẻ nhỉ
+Vốn ít thì làm nhỏ trước
+Kinh doanh phải kiên trì
+Mở quán cần nhiều thứ lắm
+Mặt bằng bây giờ đắt quá
+Thuê nhà chỗ nào rẻ không
+Chi phí tháng này hơi nhiều
+Tiết kiệm được chút nào hay chút đó
+Chi tiêu cần có kế hoạch
+Ghi chép thu chi cho dễ nhớ
+Cuối tháng lại hết tiền
+Đầu tư gì cũng phải tìm hiểu kỹ
+Gửi tiết kiệm cho an toàn
+Đang tính mua thêm đồ dùng
+Sắm đồ văn phòng cho tiện
+Bàn ghế mới ngồi êm hơn
+Ghế công thái học đáng tiền phết
+Đèn bàn sáng dễ làm việc
+Sắp xếp bàn làm việc gọn lại
+Danh sách việc cần làm dài quá
+Chia nhỏ việc ra cho dễ
+Làm từng chút một cũng xong
+Tập trung được 2 tiếng là tốt
+Ngủ đủ mới làm việc hiệu quả
+Sáng dậy sớm làm việc năng suất
+Uống cà phê cho tỉnh
+Nghỉ giải lao 5 phút
+Đứng dậy đi lại cho đỡ mỏi
+Ngồi lâu mỏi lưng quá
+Cuối ngày mắt mỏi ghê
+Việc hôm nay chớ để ngày mai
+Tuần sau nhẹ nhàng hơn chắc
+Kế hoạch tháng tới xong rồi
+Đặt mục tiêu nhỏ dễ đạt hơn
+Làm được đến đâu hay đến đó
+Cố thêm chút nữa thôi
+Sắp xong rồi cố lên
+Hôm nay coi như tạm ổn
+Nghỉ ngơi rồi mai làm tiếp
+Chúc mọi người làm việc vui
+
+# ── Công nghệ ────────────────────────────────────────────────
+Điện thoại mình hết pin nhanh quá
+Sạc pin mãi không đầy
+Máy nóng lên khi chơi game
+Bộ nhớ đầy phải xóa bớt ảnh
+Cập nhật phần mềm mới rồi
+Bản cập nhật này mượt hơn
+Máy chạy chậm cần dọn dẹp
+Khởi động lại là hết lỗi
+Mạng nhà mình hôm nay yếu
+Wifi chập chờn khó chịu
+Đổi mật khẩu wifi cho an toàn
+Mạng cáp quang nhanh hơn hẳn
+Xem video mà cứ bị giật
+Tải file lâu quá
+Dung lượng 4G hết nhanh thật
+Đăng ký gói mạng nào rẻ nhỉ
+Điện thoại mới ra mắt rồi
+Máy này camera chụp đẹp
+Chụp đêm rõ ghê
+Chỉnh ảnh bằng app cho nhanh
+Video quay bằng điện thoại cũng nét
+Màn hình lớn xem phim đã
+Tai nghe không dây tiện thật
+Loa bluetooth nghe hay phết
+Đồng hồ thông minh đo bước chân
+Sạc dự phòng nên mang theo
+Cáp sạc hỏng suốt
+Ốp lưng bảo vệ máy tốt hơn
+Dán màn hình cho đỡ xước
+Máy tính mình cài lại win rồi
+Laptop mở nhiều tab là lag
+Ram ít nên hơi chậm
+Ổ cứng SSD nhanh hơn nhiều
+Bàn phím cơ gõ sướng tay
+Chuột không dây tiện hơn
+Màn hình phụ làm việc hiệu quả
+Máy in hết mực rồi
+Quét tài liệu bằng điện thoại được
+Lưu file trên đám mây cho chắc
+Sao lưu dữ liệu thường xuyên nhé
+Mất dữ liệu là mệt lắm
+Đặt mật khẩu mạnh vào
+Bật xác thực hai lớp cho an toàn
+Cẩn thận link lạ nhé mọi người
+Tin nhắn lừa đảo nhiều quá
+Đừng bấm vào link không rõ nguồn
+Bảo mật tài khoản quan trọng lắm
+Nhớ đăng xuất khi dùng máy lạ
+Phần mềm diệt virus cần thiết không
+Máy dính virus là phiền
+Xóa app không dùng cho nhẹ máy
+App này dùng cũng tiện
+Ứng dụng ghi chú hữu ích phết
+Lịch nhắc việc rất tiện
+Dùng app học tiếng Anh mỗi ngày
+Nghe podcast lúc rảnh
+Đọc sách trên điện thoại cũng ổn
+Xem phim online tiện thật
+Nhạc trực tuyến nghe thoải mái
+Chơi game giải trí chút thôi
+Game này đồ họa đẹp
+Máy yếu chơi game nặng không nổi
+Trí tuệ nhân tạo giờ phổ biến ghê
+AI viết văn cũng hay phết
+Công nghệ phát triển nhanh thật
+Robot làm được nhiều việc rồi
+Xe điện ngày càng nhiều
+Trạm sạc còn ít quá
+Nhà thông minh tiện lợi thật
+Đèn cảm ứng hay phết
+Camera an ninh nên lắp
+Khóa cửa thông minh tiện
+Máy hút bụi robot đỡ việc nhà
+Thanh toán online nhanh gọn
+Quét mã QR tiện thật
+Ví điện tử dùng quen rồi
+Chuyển khoản nhanh trong vài giây
+Mua hàng online cẩn thận nhé
+Đọc kỹ đánh giá trước khi mua
+Săn sale cũng vui
+Giao hàng nhanh hơn trước nhiều
+Học lập trình khó không nhỉ
+Code mãi không chạy
+Sửa lỗi cả buổi mới xong
+Google phát là ra
+Tìm thông tin trên mạng dễ hơn xưa
+Học online tiện mà cần tự giác
+Xem hướng dẫn trên mạng làm theo
+Nhiều video hướng dẫn hay lắm
+Kênh này chia sẻ hữu ích
+Mạng xã hội tốn thời gian ghê
+Lướt điện thoại nhiều hại mắt
+Nên hạn chế dùng điện thoại buổi tối
+Chế độ ban đêm đỡ chói mắt
+Tắt thông báo cho đỡ phiền
+Để điện thoại xa lúc ngủ
+Công nghệ tiện nhưng đừng lạm dụng
+Cân bằng là tốt nhất
+Ai rành công nghệ chỉ mình với
+Mai mình hỏi thêm nhé
+
+# ── Nấu ăn ───────────────────────────────────────────────────
+Trưa nay ăn gì mọi người
+Đói bụng quá
+Nấu cơm chưa mọi người
+Hôm nay mình nấu canh chua
+Canh chua cá lóc ngon lắm
+Thịt kho tàu ăn với cơm nóng
+Sườn xào chua ngọt dễ làm
+Gà rang gừng thơm ghê
+Cá kho tộ đậm đà
+Tôm rim mặn ngọt hao cơm
+Trứng chiên đơn giản mà ngon
+Rau luộc chấm nước mắm là đủ
+Canh rau ngót mát ruột
+Súp bí đỏ ngọt tự nhiên
+Cháo hành giải cảm tốt
+Bún bò sáng nay ngon
+Phở nóng ăn buổi sáng hợp
+Hủ tiếu ăn cũng ngon
+Mì tôm ăn nhanh nhưng đừng nhiều
+Bánh mì ốp la sáng tiện
+Xôi buổi sáng chắc bụng
+Bánh cuốn nóng ăn ngon
+Bún chả thơm phức
+Nem rán giòn tan
+Chả giò cuốn sẵn để tủ đông
+Gỏi cuốn thanh mát
+Salad trộn ăn nhẹ
+Rau trộn dầu giấm ngon
+Nộm đu đủ giòn giòn
+Dưa góp ăn kèm đỡ ngán
+Cà muối ăn với cơm hợp ghê
+Kim chi tự làm cũng dễ
+Nước mắm pha chuẩn là ngon
+Nêm nếm vừa miệng là được
+Cho ít muối thôi cho khỏe
+Hạn chế đường lại nhé
+Dầu ăn dùng vừa phải
+Chiên ngập dầu nhiều mỡ quá
+Hấp và luộc lành hơn chiên
+Nồi chiên không dầu tiện phết
+Nồi cơm điện nấu được nhiều món
+Lò vi sóng hâm nhanh
+Nồi áp suất ninh xương nhanh lắm
+Ninh xương lấy nước dùng ngọt
+Nước dùng trong mới ngon
+Rửa rau kỹ vào nhé
+Ngâm rau nước muối loãng
+Thịt tươi nấu mới ngon
+Chọn cá tươi mắt phải trong
+Mua rau ở chợ sáng tươi hơn
+Đi chợ sớm rau rẻ
+Siêu thị cuối tuần đông ghê
+Mua nhiều để tủ lạnh dùng dần
+Đồ đông lạnh rã đông từ từ
+Đừng để thức ăn ngoài lâu
+Hâm lại kỹ trước khi ăn
+Cơm nguội để lâu không tốt
+Bảo quản thực phẩm đúng cách nhé
+Tủ lạnh cần dọn thường xuyên
+Sắp xếp tủ lạnh gọn cho dễ tìm
+Nấu vừa đủ ăn thôi
+Tránh lãng phí thức ăn
+Nấu ăn ở nhà tiết kiệm hơn
+Ăn ngoài nhiều tốn kém
+Tự nấu biết rõ nguyên liệu
+Cuối tuần nấu món mới thử
+Học nấu ăn qua video dễ lắm
+Công thức này đơn giản mà ngon
+Làm bánh cũng thú vị
+Bánh flan mềm mịn ngon
+Chè đậu xanh mát
+Sữa chua tự làm ngon hơn
+Sinh tố bơ béo ngậy
+Nước ép cam nhiều vitamin
+Trà đá giải khát ngày nóng
+Cà phê sáng tỉnh táo
+Trà nóng buổi chiều dễ chịu
+Nước lọc vẫn tốt nhất
+Uống đủ nước mỗi ngày nhé
+Ăn sáng đầy đủ mới có sức
+Bỏ bữa sáng không tốt đâu
+Ăn tối sớm dễ tiêu
+Không nên ăn khuya nhiều
+Nhai kỹ cho dễ tiêu hóa
+Ăn chậm thôi đừng vội
+Ăn nhiều rau xanh vào
+Trái cây tráng miệng tốt
+Chuối tiện mang theo
+Táo ăn cả vỏ nhiều chất xơ
+Ổi nhiều vitamin C
+Cam quýt mùa này ngọt
+Dưa hấu mát ngày hè
+Xoài chín thơm ghê
+Bơ dầm sữa ngon
+Hạt điều ăn vặt lành
+Đậu phộng rang giòn
+Ngũ cốc ăn sáng tiện
+Yến mạch nấu cháo cũng được
+Cả nhà ăn ngon miệng nhé
+
+# ── Sức khỏe ─────────────────────────────────────────────────
+Hôm nay tập thể dục chưa
+Sáng dậy tập vài động tác cho khỏe
+Đi bộ 30 phút mỗi ngày tốt lắm
+Chạy bộ buổi sáng khỏe người
+Đạp xe cũng vui
+Tập gym đều đặn mới hiệu quả
+Yoga giúp thư giãn
+Giãn cơ trước khi tập nhé
+Khởi động kỹ tránh chấn thương
+Tập vừa sức thôi đừng quá
+Nghỉ ngơi cũng quan trọng như tập
+Cơ bắp cần thời gian phục hồi
+Đau cơ sau tập là bình thường
+Uống nước khi tập nhé
+Tập xong thấy khỏe hẳn
+Leo cầu thang thay thang máy
+Ít ngồi lâu một chỗ
+Ngồi lâu hại lưng lắm
+Ngồi thẳng lưng vào
+Kê màn hình ngang tầm mắt
+Mỏi vai gáy thì xoay nhẹ
+Massage vai cho dễ chịu
+Chườm ấm giảm đau mỏi
+Ngủ đủ 7 tiếng mỗi đêm
+Thiếu ngủ mệt cả ngày
+Ngủ sớm dậy sớm khỏe hơn
+Trước khi ngủ đừng xem điện thoại
+Phòng tối ngủ ngon hơn
+Ngủ trưa 20 phút là đủ
+Ngủ trưa nhiều lại mệt
+Dậy sớm quen là thấy khỏe
+Uống nước ấm buổi sáng tốt
+Uống đủ 2 lít nước mỗi ngày
+Nhịn tiểu không tốt đâu
+Ăn đúng giờ dạ dày mới khỏe
+Đừng để bụng đói lâu
+Ăn ít mà chia nhiều bữa
+Hạn chế đồ chiên rán
+Bớt đồ ngọt lại nhé
+Ăn mặn nhiều hại thận
+Nhiều rau xanh cho dễ tiêu
+Chất xơ tốt cho đường ruột
+Sữa chua tốt cho tiêu hóa
+Bổ sung vitamin từ trái cây
+Phơi nắng sớm bổ sung vitamin D
+Nắng gắt thì tránh ra
+Đội mũ khi ra nắng
+Bôi kem chống nắng nhé
+Uống nước nhiều ngày nắng nóng
+Trời nóng dễ mất nước
+Trời lạnh nhớ giữ ấm
+Giữ ấm cổ và chân
+Mặc ấm khi ra ngoài sớm
+Giao mùa dễ cảm lắm
+Cảm cúm nhớ nghỉ ngơi
+Sốt cao thì đi khám nhé
+Đừng tự ý uống thuốc
+Uống thuốc theo đơn bác sĩ
+Kháng sinh không dùng bừa
+Khám sức khỏe định kỳ nhé
+Xét nghiệm máu mỗi năm một lần
+Đo huyết áp thường xuyên
+Huyết áp cao cần theo dõi
+Đường huyết cũng nên kiểm tra
+Khám răng 6 tháng một lần
+Đánh răng hai lần mỗi ngày
+Dùng chỉ nha khoa cho sạch
+Súc miệng nước muối tốt
+Rửa tay trước khi ăn
+Rửa tay bằng xà phòng kỹ vào
+Đeo khẩu trang chỗ đông người
+Giữ vệ sinh nhà cửa
+Phòng thoáng khí dễ chịu hơn
+Mở cửa sổ cho thoáng
+Trồng cây xanh trong nhà mát
+Không khí trong lành tốt cho phổi
+Bỏ thuốc lá tốt cho sức khỏe
+Hạn chế rượu bia nhé
+Uống nhiều bia hại gan
+Gan cần được nghỉ ngơi
+Ăn nhạt tốt cho tim mạch
+Tim mạch cần vận động đều
+Kiểm soát cân nặng hợp lý
+Giảm cân từ từ mới bền
+Ăn kiêng cực đoan không tốt
+Cân nặng ổn định là tốt
+Đo cân mỗi tuần một lần
+Sức khỏe tinh thần cũng quan trọng
+Căng thẳng nhiều hại lắm
+Thư giãn chút cho thoải mái
+Hít thở sâu giảm căng thẳng
+Thiền vài phút cũng tốt
+Nghe nhạc nhẹ thư giãn
+Đi dạo cho đầu óc thoải mái
+Nói chuyện với bạn bè đỡ stress
+Cười nhiều cho khỏe
+Suy nghĩ tích cực lên
+Đừng lo lắng quá nhiều
+Mọi người giữ gìn sức khỏe nhé
+Chúc cả nhà nhiều sức khỏe
+
+# ── Đời sống ─────────────────────────────────────────────────
+Hôm nay trời đẹp nhỉ
+Sáng nay mát mẻ dễ chịu
+Trời nắng quá đi
+Nóng muốn xỉu luôn
+Mưa suốt mấy hôm nay
+Mưa to quá đi lại khó
+Nhớ mang áo mưa nhé
+Đường ngập nước rồi
+Gió mát ghê
+Trời se lạnh rồi đấy
+Sắp vào mùa đông rồi
+Mùa này hay mưa
+Thời tiết thất thường ghê
+Cuối tuần mọi người làm gì
+Cuối tuần ở nhà nghỉ ngơi
+Đi chơi đâu cuối tuần nhỉ
+Rảnh thì đi cà phê
+Quán này không gian đẹp
+Cà phê ở đây ngon
+Đi ăn gì tối nay
+Tối nay ra ngoài ăn không
+Lâu rồi không gặp mọi người
+Hẹn hôm nào gặp nhé
+Nhớ mọi người ghê
+Dạo này bận quá
+Mọi người khỏe không
+Dạo này thế nào rồi
+Có gì mới không mọi người
+Chúc mọi người ngày mới vui
+Chào buổi sáng cả nhà
+Chúc ngủ ngon nhé
+Ngày mới nhiều năng lượng nhé
+Cuối tuần vui vẻ nhé
+Chúc mọi người cuối tuần thư giãn
+Đi du lịch ở đâu đẹp nhỉ
+Biển mùa này đẹp lắm
+Đà Lạt mát mẻ dễ chịu
+Miền Tây yên bình
+Núi non không khí trong lành
+Đi phượt cũng thú vị
+Chuẩn bị đồ đi chơi
+Đặt vé sớm cho rẻ
+Khách sạn đặt trước cho chắc
+Đi chơi nhớ mang thuốc
+Chụp ảnh kỷ niệm nhé
+Ảnh này đẹp ghê
+Cảnh đẹp quá
+Hoàng hôn đẹp thật
+Bình minh trên biển đẹp lắm
+Nhà mình mới trồng cây
+Cây ra hoa rồi
+Chăm cây cũng vui
+Tưới cây mỗi sáng
+Cây xanh làm nhà mát hơn
+Dọn nhà cuối tuần
+Nhà cửa gọn gàng dễ chịu
+Sắp xếp lại đồ đạc
+Bỏ bớt đồ không dùng
+Giặt đồ phơi nắng thơm
+Ủi đồ cho phẳng
+Thay ga giường mới
+Lau nhà cho sạch
+Nuôi mèo vui lắm
+Chó nhà mình ngoan ghê
+Thú cưng cũng cần chăm kỹ
+Cho thú cưng đi khám định kỳ
+Xem phim gì hay không mọi người
+Phim này hay lắm
+Xem đến tập mấy rồi
+Phim hài xem cho vui
+Nhạc này nghe hay
+Bài hát này quen quen
+Đọc sách gì hay giới thiệu với
+Sách này đáng đọc
+Đọc sách trước khi ngủ dễ ngủ
+Học thêm cái gì đó cho vui
+Học tiếng Anh mỗi ngày chút
+Luyện nghe cũng cần thời gian
+Kiên trì là sẽ được
+Từ từ rồi cũng quen
+Mọi việc rồi sẽ ổn thôi
+Cố lên nhé mọi người
+Hôm nay vui vẻ nhé
+Đừng buồn chuyện nhỏ
+Ngày mai lại là ngày mới
+Nghỉ ngơi cho lại sức
+Giữ tinh thần thoải mái
+Sống chậm lại chút
+Trân trọng những điều nhỏ
+Gia đình là quan trọng nhất
+Gọi điện về nhà thường xuyên nhé
+Ba mẹ luôn mong tin
+Về thăm nhà cuối tuần
+Ăn cơm nhà vẫn ngon nhất
+Sum họp gia đình vui
+Chúc mọi người mọi điều tốt lành
+Hẹn gặp lại nhé
+Thôi mình đi làm đây
+Mai nói chuyện tiếp nhé
+Chiều nay rảnh không mọi người
+Nay được nghỉ sớm ghê

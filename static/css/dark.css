@@ -1,0 +1,41 @@
+/* dark.css — CSS Variables dark theme (1Man.io style) */
+
+:root {
+    --bg-primary:     #0f172a;
+    --bg-secondary:   #1e293b;
+    --bg-card:        #1e293b;
+    --bg-hover:       #273549;
+    --bg-active:      #2d3f57;
+    --bg-input:       #0f172a;
+
+    --text-primary:   #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted:     #64748b;
+
+    --border:         #334155;
+    --border-light:   #1e293b;
+
+    --accent:         #6366f1;
+    --accent-hover:   #4f46e5;
+    --accent-light:   rgba(99, 102, 241, 0.15);
+
+    --success:        #22c55e;
+    --success-light:  rgba(34, 197, 94, 0.15);
+    --danger:         #ef4444;
+    --danger-light:   rgba(239, 68, 68, 0.15);
+    --warning:        #f59e0b;
+    --warning-light:  rgba(245, 158, 11, 0.15);
+
+    --sidebar-width:  220px;
+    --header-height:  56px;
+    --radius:         8px;
+    --radius-sm:      5px;
+
+    --shadow:         0 1px 3px rgba(0,0,0,0.4);
+    --shadow-md:      0 4px 12px rgba(0,0,0,0.5);
+
+    --font-mono:      'Cascadia Code', 'Consolas', monospace;
+    --font-sans:      -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+    --transition:     150ms ease;
+}

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>MNT FB AutoPost</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <style>
+        .nav-section { font-size:10px; color:var(--text-muted); text-transform:uppercase;
+                       letter-spacing:.06em; padding:12px 16px 4px; }
+    </style>
+</head>
+<body>
+<div id="app">
+
+    <!-- ── Sidebar ─────────────────────────────────────────── -->
+    <aside id="sidebar">
+        <div class="sidebar-logo">
+            <div class="logo-icon">📘</div>
+            <div>
+                <div class="logo-text">MNT AutoPost</div>
+                <div class="logo-sub">Times City</div>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <div class="nav-section">Quản lý</div>
+            <div class="nav-item active" data-page="accounts"><span class="nav-icon">👥</span> Tài khoản</div>
+            <div class="nav-item" data-page="pages"><span class="nav-icon">📄</span> Page</div>
+            <div class="nav-item" data-page="content"><span class="nav-icon">✍️</span> Content</div>
+            <div class="nav-item" data-page="uid-groups"><span class="nav-icon">🔗</span> UID Nhóm</div>
+
+            <div class="nav-section">Lịch đăng</div>
+            <div class="nav-item" data-page="lich-homestay"><span class="nav-icon">🏠</span> Lịch Homestay</div>
+            <div class="nav-item" data-page="lich-thue"><span class="nav-icon">🏡</span> Lịch Thuê</div>
+            <div class="nav-item" data-page="lich-ban"><span class="nav-icon">💰</span> Lịch Bán</div>
+            <div class="nav-item" data-page="lich-page"><span class="nav-icon">📄</span> Lịch Đăng Page</div>
+            <div class="nav-item" data-page="lich-nuoi"><span class="nav-icon">🌱</span> Lịch Nuôi nick</div>
+
+            <div class="nav-section">Vận hành</div>
+            <div class="nav-item" data-page="tham-gia-nhom">
+                <span class="nav-icon">🔗</span> Tham gia nhóm
+            </div>
+            <div class="nav-item" data-page="hanh-dong"><span class="nav-icon">⚡</span> Hành động</div>
+            <div class="nav-item" data-page="logs"><span class="nav-icon">📋</span> Logs</div>
+        </nav>
+
+        <!-- Runner status -->
+        <div style="padding:10px 12px;border-top:1px solid var(--border)">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em">Runner status</div>
+            <div id="sidebar-runner-status"></div>
+        </div>
+    </aside>
+
+    <!-- ── Main ────────────────────────────────────────────── -->
+    <div id="main">
+        <header id="header">
+            <span class="header-title" id="header-title">Tài khoản</span>
+            <div class="header-actions">
+                <button class="btn btn-ghost" onclick="hardRefresh()">🔄 Refresh</button>
+            </div>
+        </header>
+
+        <div id="content">
+
+            <!-- ══ Tài khoản ════════════════════════════════ -->
+            <div class="page" id="page-accounts">
+                <div id="acc-summary" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"></div>
+                <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+                    <button class="btn btn-primary" onclick="openAccForm()">+ Thêm tài khoản</button>
+                    <button class="btn btn-ghost" onclick="exportAccountsExcel()">Xuất Excel</button>
+                    <span id="acc-count" style="font-size:12px;color:var(--text-muted);margin-left:auto"></span>
+                </div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead id="acc-thead"></thead>
+                            <tbody id="acc-table"><tr><td class="loading"><span class="spin">↻</span></td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══ Page ════════════════════════════════════ -->
+            <div class="page" id="page-pages" style="display:none">
+                <div style="display:flex;gap:8px;margin-bottom:12px">
+                    <button class="btn btn-primary" onclick="openPageForm()">+ Thêm Page</button>
+                </div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr>
+                                <th style="width:32px"></th>
+                                <th>Tên Page</th><th style="text-align:center">Page UID</th>
+                                <th style="text-align:center">Loại đăng</th>
+                                <th style="text-align:center">Bài tối đa</th><th style="text-align:center">Link</th><th>Ghi chú</th>
+                                <th style="width:44px"></th>
+                            </tr></thead>
+                            <tbody id="pages-table"><tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══ Content ══════════════════════════════════ -->
+            <div class="page" id="page-content" style="display:none">
+                <div style="display:flex;gap:4px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
+                    <div id="content-tabs" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"></div>
+                    <button class="btn btn-ghost" style="margin-left:auto;font-size:12px"
+                            onclick="donAnhMoCoi()" title="Xóa ảnh không content nào dùng tới">🧹 Dọn ảnh thừa</button>
+                    <button class="btn btn-primary" style="font-size:12px" onclick="openContentForm()">+ Thêm content</button>
+                </div>
+                <div id="content-summary" style="display:flex;gap:10px;margin-bottom:12px"></div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr>
+                                <th style="width:32px"></th>
+                                <th>Mã content</th><th>Nội dung</th>
+                                <th style="text-align:center">Ảnh Hook</th>
+                                <th style="text-align:center">Ảnh</th>
+                                <th style="text-align:center">Sử dụng</th>
+                                <th>Ghi chú</th><th style="width:90px">Chỉnh sửa</th>
+                            </tr></thead>
+                            <tbody id="content-table"><tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══ UID Nhóm ════════════════════════════════ -->
+            <div class="page" id="page-uid-groups" style="display:none">
+                <div style="display:flex;gap:8px;margin-bottom:12px">
+                    <button class="btn btn-primary" onclick="openUidGroupForm()">+ Thêm UID nhóm</button>
+                    <span style="font-size:12px;color:var(--text-muted);align-self:center" id="uid-count"></span>
+                </div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr>
+                                <th style="width:32px"></th>
+                                <th style="text-align:center">UID / Link</th>
+                                <th>Tên nhóm</th>
+                                <th style="text-align:center">Thành viên</th>
+                                <th style="width:60px"></th>
+                            </tr></thead>
+                            <tbody id="uid-table"><tr><td colspan="5" class="loading"><span class="spin">↻</span></td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══ Lịch (template dùng chung) ═══════════════ -->
+            <div class="page" id="page-lich-homestay" style="display:none" data-loai="homestay"></div>
+            <div class="page" id="page-lich-thue"     style="display:none" data-loai="thue"></div>
+            <div class="page" id="page-lich-ban"      style="display:none" data-loai="ban"></div>
+            <div class="page" id="page-lich-page"     style="display:none" data-loai="page"></div>
+            <div class="page" id="page-lich-nuoi"     style="display:none" data-loai="nuoi"></div>
+
+            <!-- ══ PAGE: THAM GIA NHÓM ══════════════════════ -->
+            <div class="page" id="page-tham-gia-nhom" style="display:none">
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+                    <button class="btn btn-primary" onclick="openQuickJoinSchedule()">⚡ Tạo lịch nhanh</button>
+                    <button class="btn btn-ghost" onclick="openAddJoinSchedule()">+ Thêm thủ công</button>
+                    <button class="btn btn-ghost" onclick="loadJoinSchedules()" title="Refresh">🔄</button>
+
+                    <!-- Toggle headless riêng cho join -->
+                    <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);margin-left:4px">
+                        <label class="toggle-switch" style="margin:0">
+                            <input type="checkbox" id="toggle-join-headless" onchange="updateJoinHeadlessLabel()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <div>
+                            <div style="font-size:12px;font-weight:600" id="join-headless-label">Ẩn Chrome</div>
+                        </div>
+                    </div>
+
+                    <span id="join-running-badge" style="display:none;font-size:12px;color:var(--warning);font-weight:600;padding:4px 10px;background:rgba(251,191,36,.1);border-radius:6px">⏳ Đang chạy...</span>
+                    <span style="font-size:12px;color:var(--text-muted);margin-left:auto" id="join-count"></span>
+                </div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr>
+                                <th>Tài khoản</th><th>Page</th>
+                                <th style="text-align:center">Giờ chạy</th>
+                                <th style="text-align:center">Tổng</th>
+                                <th style="text-align:center">Mới join</th>
+                                <th style="text-align:center">Đã join</th>
+                                <th style="text-align:center">Lỗi</th>
+                                <th>Trạng thái</th>
+                                <th style="width:100px;text-align:center">Run</th>
+                            </tr></thead>
+                            <tbody id="join-table">
+                                <tr><td colspan="9" class="loading"><span class="spin">↻</span></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══ Hành động ════════════════════════════════ -->
+            <div class="page" id="page-hanh-dong" style="display:none">
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">
+                    Mỗi nút Run khởi động scheduler riêng cho loại lịch đó.
+                </p>
+
+                <!-- Headless toggle -->
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:fit-content">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-headless" onchange="updateHeadlessLabel()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <div>
+                        <div style="font-size:13px;font-weight:600" id="headless-label">Ẩn Chrome (Headless)</div>
+                        <div style="font-size:11px;color:var(--text-muted)" id="headless-desc">Chrome chạy nền, không hiện cửa sổ</div>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px" id="runner-grid"></div>
+
+                <!-- Mật khẩu truy cập từ xa -->
+                <div style="margin-top:28px;padding:16px 18px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);max-width:520px">
+                    <div style="font-size:13px;font-weight:700;margin-bottom:4px">🔑 Mật khẩu truy cập từ xa</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">
+                        Đặt/đổi mật khẩu để đăng nhập khi vào bảng điều khiển từ máy khác (qua Tailscale).
+                        Máy tại chỗ (cửa sổ app) không cần mật khẩu.
+                    </div>
+                    <div style="display:flex;gap:8px">
+                        <input type="password" id="remote-pw" placeholder="Mật khẩu mới (≥ 4 ký tự)"
+                            style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:13px">
+                        <button class="btn btn-primary" onclick="saveRemotePassword()">Lưu mật khẩu</button>
+                    </div>
+                </div>
+
+                <!-- Tắt phần mềm -->
+                <div style="margin-top:28px;padding:16px 18px;background:var(--bg-card);border:1px solid var(--danger);border-radius:var(--radius);max-width:520px">
+                    <div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:4px">🔴 Tắt phần mềm</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">
+                        Dừng toàn bộ runner + tắt server để giải phóng tài nguyên máy.
+                        Bật lại: khởi động lại máy (app tự chạy) hoặc chạy RUN_APP.
+                    </div>
+                    <button class="btn btn-danger" onclick="shutdownApp()">Tắt phần mềm</button>
+                </div>
+            </div>
+
+            <!-- ══ Logs ══════════════════════════════════════ -->
+            <div class="page" id="page-logs" style="display:none">
+                <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+                    <select id="log-lines" class="btn btn-ghost" style="padding:6px 10px" onchange="loadLogs()">
+                        <option value="80" selected>80 dòng</option>
+                        <option value="150">150 dòng</option>
+                        <option value="300">300 dòng</option>
+                    </select>
+                    <button class="btn btn-ghost" onclick="loadLogs()">🔄</button>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto;gap:10px;height:calc(100vh - 170px);overflow-y:auto">
+                    <div class="card" style="display:flex;flex-direction:column;min-height:220px">
+                        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#34d399;flex-shrink:0">🏠 Homestay</div>
+                        <div class="log-box" id="log-homestay" style="flex:1;border:none;border-radius:0;margin:0"></div>
+                    </div>
+                    <div class="card" style="display:flex;flex-direction:column;min-height:220px">
+                        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#60a5fa;flex-shrink:0">🏡 Thuê</div>
+                        <div class="log-box" id="log-thue" style="flex:1;border:none;border-radius:0;margin:0"></div>
+                    </div>
+                    <div class="card" style="display:flex;flex-direction:column;min-height:220px">
+                        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#fbbf24;flex-shrink:0">💰 Bán</div>
+                        <div class="log-box" id="log-ban" style="flex:1;border:none;border-radius:0;margin:0"></div>
+                    </div>
+                    <div class="card" style="display:flex;flex-direction:column;min-height:220px">
+                        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#c084fc;flex-shrink:0">📄 Đăng Page</div>
+                        <div class="log-box" id="log-page" style="flex:1;border:none;border-radius:0;margin:0"></div>
+                    </div>
+                    <div class="card" style="display:flex;flex-direction:column;min-height:220px">
+                        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#6ee7b7;flex-shrink:0">🌱 Nuôi nick</div>
+                        <div class="log-box" id="log-nuoi" style="flex:1;border:none;border-radius:0;margin:0"></div>
+                    </div>
+                    <div class="card" style="display:flex;flex-direction:column;min-height:220px;grid-column:1/-1">
+                        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#fb923c;flex-shrink:0">🔗 Tham gia nhóm</div>
+                        <div class="log-box" id="log-join" style="flex:1;border:none;border-radius:0;margin:0"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /content -->
+    </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- Toast -->
+<div id="toast-container"></div>
+
+<!-- Modal overlay -->
+<div id="modal-overlay" onclick="closeModal()"
+    style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500"></div>
+<div id="modal-panel"
+    style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+           width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;
+           background:var(--bg-secondary);border:1px solid var(--border);
+           border-radius:var(--radius);z-index:501;box-shadow:var(--shadow-md)">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-size:15px;font-weight:700" id="modal-title">Form</span>
+        <button onclick="closeModal()" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div style="padding:20px" id="modal-body"></div>
+</div>
+
+<!-- Gen lịch panel -->
+<div id="gen-overlay" onclick="if(event.target===this)closeGen()"
+    style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500"></div>
+<div id="gen-panel"
+    style="display:none;position:fixed;top:0;right:0;width:820px;max-width:96vw;height:100vh;
+           background:var(--bg-secondary);border-left:1px solid var(--border);z-index:501;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <span style="font-size:15px;font-weight:700" id="gen-panel-title">Gen lịch</span>
+        <button onclick="closeGen()" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px" id="gen-panel-body"></div>
+    <div style="padding:16px 20px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+        <button onclick="closeGen()" class="btn btn-ghost" style="flex:1">Huỷ</button>
+        <button onclick="runGen()" class="btn btn-primary" style="flex:2" id="gen-run-btn">▶ Tạo lịch</button>
+    </div>
+</div>
+
+<!-- Content edit panel -->
+<div id="cedit-overlay" onclick="if(event.target===this)closeContentEdit()"
+    style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500"></div>
+<div id="cedit-panel"
+    style="display:none;position:fixed;top:0;right:0;width:680px;max-width:96vw;height:100vh;
+           background:var(--bg-secondary);border-left:1px solid var(--border);z-index:501;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <span style="font-size:15px;font-weight:700" id="cedit-title">Sửa content</span>
+        <button onclick="closeContentEdit()" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px" id="cedit-body"></div>
+    <div style="padding:16px 20px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+        <button onclick="closeContentEdit()" class="btn btn-ghost" style="flex:1">Huỷ</button>
+        <button onclick="saveContentEdit()" class="btn btn-primary" style="flex:2" id="cedit-save-btn">💾 Lưu</button>
+    </div>
+</div>
+
+<script src="/static/js/api.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

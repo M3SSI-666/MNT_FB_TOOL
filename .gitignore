@@ -1,0 +1,36 @@
+# ── Dữ liệu nhạy cảm (KHÔNG commit) ─────────────────────────────
+# LƯU Ý: git KHÔNG hỗ trợ comment ở cuối dòng — mọi ghi chú phải nằm
+# trên dòng riêng, nếu không pattern sẽ bị hỏng và file lọt vào commit.
+
+# SQLite (mật khẩu, cookie, 2FA) + media
+data/
+# cookie tài khoản Facebook
+cookies/*.json
+# profile trình duyệt (chứa session đăng nhập)
+profiles/
+
+# ── Runtime / rác ───────────────────────────────────────────────
+logs/*.log
+# bản xoay vòng: autopost.log.1, autopost.log.2 ...
+logs/*.log.*
+.runner_*.pid
+debug_*.png
+*.png
+
+# ── Tài liệu nội bộ (chỉ dành cho người phát hành, không đẩy lên repo) ──
+HUONG_DAN_UPDATE.md
+
+# ── Python ──────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# ── Giữ lại thư mục rỗng (placeholder) ──────────────────────────
+!cookies/.gitkeep
+!logs/.gitkeep
+!profiles/.gitkeep
+
+# Windows reserved device name (khong phai file that, git 2.51 vap khi quet)
+nul
