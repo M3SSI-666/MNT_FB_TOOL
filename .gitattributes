@@ -1,0 +1,23 @@
+# Git lưu LF trong repo (chuẩn), nhưng khi lấy ra máy Windows thì file .bat
+# BẮT BUỘC phải là CRLF: cmd.exe phân tích sai file .bat dùng LF — dòng "::"
+# bị hiểu thành lệnh, khối for/if nhiều dòng mất tác dụng.
+#
+# Ghi ở đây để MỌI máy clone đều nhận CRLF, không phụ thuộc core.autocrlf của
+# từng máy. Nếu chỉ trông vào core.autocrlf thì khách nào đặt false sẽ nhận
+# file .bat hỏng và SETUP.bat / UPDATE.bat chạy sai.
+*.bat   text eol=crlf
+
+# Mã nguồn: để git tự chuẩn hoá LF trong repo
+*.py    text
+*.js    text
+*.css   text
+*.html  text
+*.md    text
+*.txt   text
+
+# Nhị phân — tuyệt đối không đụng vào
+*.ico   binary
+*.png   binary
+*.jpg   binary
+*.zip   binary
+*.db    binary
