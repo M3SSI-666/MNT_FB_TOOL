@@ -37,7 +37,7 @@ echo [1/3] Dang chep ma nguon (bo qua du lieu nhay cam)...
 :: robocopy tra ma thoat 0-7 la BINH THUONG (>=8 moi la loi that su).
 robocopy "%CD%" "%STAGE%" /E ^
   /XD data cookies profiles logs __pycache__ .git .venv venv .claude .idea .vscode ^
-  /XF *.pyc *.pyo *.pid debug_*.png *.png *.zip app.db "%~nx0" ^
+  /XF *.pyc *.pyo *.pid debug_*.png *.png *.zip app.db nul HUONG_DAN_UPDATE.md "%~nx0" ^
   /NFL /NDL /NJH /NJS /NC /NS >nul
 if %ERRORLEVEL% GEQ 8 (
     echo [LOI] Chep file that bai ^(robocopy ma %ERRORLEVEL%^).
@@ -51,6 +51,11 @@ for %%D in (data cookies profiles logs) do (
     if not exist "%STAGE%\%%D" mkdir "%STAGE%\%%D"
     if not exist "%STAGE%\%%D\.gitkeep" type nul > "%STAGE%\%%D\.gitkeep"
 )
+
+:: Don sach thiet bi ao "nul" o goc staging neu robocopy lo tao.
+:: Phai dung duong dan UNC \\?\ vi "nul" la ten thiet bi reserved cua Windows,
+:: del thuong khong dung toi duoc.
+del "\\?\%STAGE%\nul" 2>nul
 
 echo [2/3] Kiem tra an toan ^(khong duoc lot mat khau/cookie^)...
 
@@ -71,8 +76,12 @@ if "!LEAK!"=="1" (
 
 echo [3/3] Dang nen thanh file .zip...
 if exist "%OUTZIP%" del /q "%OUTZIP%"
+:: Dung .NET ZipFile.CreateFromDirectory thay cho Compress-Archive:
+:: Compress-Archive liet ke tung muc trong staging va VAP thiet bi ao "nul"
+:: (Windows co ten thiet bi nul o moi thu muc). CreateFromDirectory nen ca
+:: cay thu muc theo he thong file that nen khong dinh nul, lai nhanh hon.
 powershell -NoProfile -Command ^
-  "Compress-Archive -Path '%STAGE%\*' -DestinationPath '%OUTZIP%' -Force"
+  "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('%STAGE%', '%OUTZIP%')"
 if errorlevel 1 (
     echo [LOI] Nen zip that bai.
     rmdir /s /q "%STAGE%" 2>nul
