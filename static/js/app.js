@@ -1430,9 +1430,13 @@ async function openNuoiSettings(){
 
         <div style="font-size:12px;font-weight:700;color:var(--accent);margin:16px 0 6px">💬 NHẮN TIN NHÓM</div>
         <div class="field-group" style="margin-bottom:10px">
-            <label>Link nhóm chat nội bộ</label>
-            <input id="ns_nuoi_msg_group_url" value="${_escapeHtml(String(v("nuoi_msg_group_url","")))}"
-                   placeholder="https://www.facebook.com/messages/t/1234567890">
+            <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span>Link nhóm chat nội bộ — <span style="font-weight:400;color:var(--text-muted)">mỗi dòng 1 nhóm, mỗi phiên vào ngẫu nhiên 1 nhóm</span></span>
+                <span id="ns_group_count" style="margin-left:auto;font-size:11px;color:var(--text-muted)"></span>
+            </label>
+            <textarea id="ns_nuoi_msg_group_url" rows="4" oninput="_updateGroupCount()"
+                style="width:100%;font-family:var(--font-mono);font-size:12px;padding:8px;background:var(--bg-input,var(--bg-hover));color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm)"
+                placeholder="https://www.facebook.com/messages/t/1234567890&#10;https://www.facebook.com/messages/t/9876543210">${_escapeHtml(String(v("nuoi_msg_group_url","")))}</textarea>
         </div>
         ${row("Số tin nhắn mỗi phiên",
               `${num("nuoi_msg_min",2)} — ${num("nuoi_msg_max",3)}`)}
@@ -1457,6 +1461,7 @@ async function openNuoiSettings(){
         <button onclick="saveNuoiSettings()" class="btn btn-primary">💾 Lưu</button>
       </div>`);
     _updatePoolCount();
+    _updateGroupCount();
 }
 
 // Nạp thư viện câu mẫu. append=false: thay hết | true: nối thêm (bỏ câu trùng).
@@ -1475,6 +1480,25 @@ async function loadMsgMau(append){
         _updatePoolCount();
         Toast.success(append?`Đã thêm — tổng ${out.length} câu`:`Đã nạp ${out.length} câu`);
     }catch(e){ Toast.error(e.message); }
+}
+
+// Đếm số nhóm chat hợp lệ (mỗi dòng 1 link) — khớp với parse_group_urls bên Python.
+function _dsNhomChat(){
+    const ta=document.getElementById("ns_nuoi_msg_group_url");
+    if(!ta) return [];
+    const ra=[];
+    for(const d of (ta.value||"").replace(/,/g,"\n").split("\n")){
+        const u=d.trim();
+        if(u.startsWith("http") && !ra.includes(u)) ra.push(u);
+    }
+    return ra;
+}
+
+function _updateGroupCount(){
+    const el=document.getElementById("ns_group_count");
+    if(!el) return;
+    const n=_dsNhomChat().length;
+    el.textContent = n ? `${n} nhóm` : "";
 }
 
 function _updatePoolCount(){
@@ -1499,9 +1523,11 @@ async function saveNuoiSettings(){
         nuoi_session_max_sec:  gi("nuoi_session_max_sec",480),
         nuoi_msg_min:          gi("nuoi_msg_min",2),
         nuoi_msg_max:          gi("nuoi_msg_max",3),
-        nuoi_msg_group_url:    (g("nuoi_msg_group_url")?.value||"").trim(),
+        // Lưu lại dạng đã chuẩn hoá: mỗi dòng 1 link, bỏ trùng
+        nuoi_msg_group_url:    _dsNhomChat().join("\n"),
         nuoi_msg_pool:         g("nuoi_msg_pool")?.value||"",
     };
+    const nNhom = _dsNhomChat().length;
     if(data.nuoi_session_min_sec > data.nuoi_session_max_sec){
         Toast.error("Độ dài phiên: giá trị đầu phải nhỏ hơn giá trị sau"); return;
     }
@@ -1510,12 +1536,12 @@ async function saveNuoiSettings(){
     }
     // Bật nhắn tin mà chưa có nhóm/câu thì phiên nuôi sẽ tự bỏ qua — báo trước.
     const nPool=(data.nuoi_msg_pool||"").split("\n").filter(s=>s.trim()).length;
-    if(data.nuoi_enable_message && (!data.nuoi_msg_group_url || !nPool)){
-        Toast.error("Bật nhắn tin thì phải có cả link nhóm và ít nhất 1 câu"); return;
+    if(data.nuoi_enable_message && (!nNhom || !nPool)){
+        Toast.error("Bật nhắn tin thì phải có ít nhất 1 link nhóm và 1 câu"); return;
     }
     try{
         const r=await API.saveSettings(data);
-        if(r.ok){ Toast.success(`Đã lưu${data.nuoi_enable_message?` · ${nPool} câu`:""}`); closeModal(); }
+        if(r.ok){ Toast.success(`Đã lưu${data.nuoi_enable_message?` · ${nNhom} nhóm · ${nPool} câu`:""}`); closeModal(); }
         else Toast.error(r.error);
     }catch(e){ Toast.error(e.message); }
 }

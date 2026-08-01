@@ -246,6 +246,22 @@ check("mọi phiên cách nhau >= min gap",
 check("lịch nuôi nằm trong khung giờ",
       all(7*60 <= t <= 23*60 for t in mt))
 
+# parse_group_urls: nhiều nhóm chat, mỗi phiên bốc ngẫu nhiên 1 nhóm
+_pg = nuoi_nick.parse_group_urls
+check("1 nhóm — tương thích cài đặt cũ",
+      _pg("https://www.facebook.com/messages/t/111") == ["https://www.facebook.com/messages/t/111"])
+check("nhiều nhóm, mỗi dòng 1",
+      _pg("https://a/1\nhttps://a/2\nhttps://a/3") == ["https://a/1","https://a/2","https://a/3"])
+check("bỏ dòng rỗng và khoảng trắng thừa",
+      _pg("  https://a/1  \n\n  https://a/2 ") == ["https://a/1","https://a/2"])
+check("chấp nhận phân cách dấu phẩy",
+      _pg("https://a/1, https://a/2") == ["https://a/1","https://a/2"])
+check("bỏ link trùng",              _pg("https://a/1\nhttps://a/1") == ["https://a/1"])
+check("bỏ dòng không phải link",    _pg("ghi chu\nhttps://a/1") == ["https://a/1"])
+check("rỗng -> danh sách rỗng",     _pg("") == [])
+check("giữ nguyên thứ tự nhập",
+      _pg("https://z/9\nhttps://a/1") == ["https://z/9","https://a/1"])
+
 # pick_messages: bốc câu nhắn, không lặp 2 câu giống nhau liền nhau
 import random as _r0
 _pool = ["câu A", "câu B", "câu C"]

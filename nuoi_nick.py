@@ -48,7 +48,7 @@ DEFAULTS = {
     "nuoi_like_count":      1,      # số like mỗi phiên (mặc định 1)
     "nuoi_msg_min":         2,      # số tin nhắn mỗi phiên: tối thiểu
     "nuoi_msg_max":         3,      # số tin nhắn mỗi phiên: tối đa
-    "nuoi_msg_group_url":   "",     # link nhóm chat nội bộ
+    "nuoi_msg_group_url":   "",     # link nhóm chat nội bộ — MỖI DÒNG 1 NHÓM
     "nuoi_msg_pool":        "",     # thư viện câu, mỗi dòng 1 câu
     # Bật/tắt từng hành động — cái nào hỏng thì tắt riêng cái đó
     "nuoi_enable_story":    1,      # xem story
@@ -322,6 +322,22 @@ def is_messaging_restricted(page_text: str) -> bool:
     """Đọc text trang, nhận biết acc có đang bị chặn nhắn tin không."""
     t = (page_text or "").lower()
     return any(m in t for m in RESTRICT_MARKERS)
+
+
+def parse_group_urls(raw: str) -> list:
+    """
+    Tách danh sách nhóm chat từ ô cài đặt: mỗi dòng 1 link (chấp nhận cả dấu
+    phẩy). Giữ nguyên thứ tự, bỏ trùng.
+
+    Nhiều nhóm để mỗi phiên bốc ngẫu nhiên một cái — nhắn mãi vào cùng một nhóm
+    theo đúng chu kỳ là khuôn hành vi dễ bị nhận ra.
+    """
+    ra = []
+    for dong in (raw or "").replace(",", "\n").splitlines():
+        u = dong.strip()
+        if u.startswith("http") and u not in ra:
+            ra.append(u)
+    return ra
 
 
 def pick_messages(pool: list, n: int, rng=random) -> list:
@@ -674,12 +690,18 @@ async def _focus_chat_box(page, box) -> bool:
 
 
 async def _act_message(page, ctx, st):
-    """Vào nhóm chat nội bộ, nhắn vài câu bốc từ thư viện."""
-    group_url = (st.get("nuoi_msg_group_url", "") or "").strip()
+    """Vào MỘT nhóm chat bốc ngẫu nhiên, nhắn vài câu lấy từ thư viện."""
+    nhom = parse_group_urls(st.get("nuoi_msg_group_url", ""))
     pool = [ln.strip() for ln in (st.get("nuoi_msg_pool", "") or "").splitlines() if ln.strip()]
-    if not group_url or not pool:
+    if not nhom or not pool:
         logger.info("    ⏭️  Nhắn tin: chưa có link nhóm / thư viện câu — bỏ qua")
         return
+
+    # Bốc ngẫu nhiên trong danh sách nhóm để không phiên nào cũng vào cùng chỗ.
+    group_url = random.choice(nhom)
+    if len(nhom) > 1:
+        logger.info(f"    🎯 Chọn nhóm {nhom.index(group_url)+1}/{len(nhom)}: "
+                    f"...{group_url[-24:]}")
 
     await page.goto(group_url, wait_until="domcontentloaded", timeout=30000)
     await human_delay(2500, 4000)
@@ -948,7 +970,10 @@ if __name__ == "__main__":
     print(f"   Chrome             : {'ẩn' if want_headless else 'HIỆN cửa sổ'}")
     if st.get("nuoi_enable_message"):
         n_cau = len([l for l in (st.get('nuoi_msg_pool') or '').splitlines() if l.strip()])
-        print(f"   Nhắn tin           : {n_cau} câu | nhóm: {st.get('nuoi_msg_group_url') or '(chưa đặt)'}")
+        _nhom = parse_group_urls(st.get("nuoi_msg_group_url", ""))
+        print(f"   Nhắn tin           : {n_cau} câu | "
+              f"{len(_nhom)} nhóm chat" if _nhom else
+              f"   Nhắn tin           : {n_cau} câu | nhóm: (chưa đặt)")
     print("=" * 58)
 
     try:
