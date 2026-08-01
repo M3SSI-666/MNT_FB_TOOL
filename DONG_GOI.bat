@@ -1,74 +1,106 @@
 @echo off
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
+chcp 65001 >nul
+
+:: ============================================================
+::  MNT FB AutoPost - Dong goi MA NGUON de gui may khac
+::  Tao file .zip CHI chua code, KHONG kem du lieu nhay cam:
+::    - data\        (mat khau, cookie, 2FA, media)
+::    - cookies\     (cookie Facebook)
+::    - profiles\    (session dang nhap trinh duyet)
+::    - logs\ __pycache__\ .pid .png ...
+::  May nhan: cai Python -> chay INSTALL.bat -> RUN_APP.bat
+:: ============================================================
 
 echo ============================================================
-echo  MNT FB AutoPost - Dong goi ban TRANG de gui nguoi khac
+echo  MNT FB AutoPost - Dong goi ma nguon
 echo ============================================================
 echo.
-echo  Ban dong goi se KHONG chua:
-echo    - Tai khoan, Page, Content, UID nhom (toan bo data\app.db)
-echo    - Lich dang, mat khau truy cap tu xa, secret key
-echo    - Cookie, profile trinh duyet, log, anh da upload
-echo  Nguoi nhan chay INSTALL.bat roi RUN_APP.bat la co phan mem trang,
-echo  tu nhap du lieu cua ho.
-echo.
 
-:: Moc thoi gian - dung PowerShell cho khoi phu thuoc dinh dang ngay cua may
-for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmm"') do set "STAMP=%%i"
+:: Ten goi kem ngay gio: MNT_FB_TOOL_YYYYMMDD_HHMM.zip
+for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmm"') do set STAMP=%%i
+set PKGNAME=MNT_FB_TOOL_%STAMP%
+set STAGE=%TEMP%\%PKGNAME%
+:: Ghi zip ra thu muc CHA cua du an (ngay ben canh thu muc MNT_FB_TOOL),
+:: khong dung %USERPROFILE%\Desktop vi may co the de Desktop trong OneDrive.
+for %%I in ("%CD%\..") do set PARENT=%%~fI
+set OUTZIP=%PARENT%\%PKGNAME%.zip
 
-set "PKGNAME=MNT_FB_blank_!STAMP!"
-set "STAGE=%TEMP%\MNT_FB_pkg\!PKGNAME!"
-set "OUTZIP=%~dp0..\!PKGNAME!.zip"
+:: Don staging cu neu co
+if exist "%STAGE%" rmdir /s /q "%STAGE%"
+mkdir "%STAGE%"
 
-:: Don staging cu (neu lan truoc bi ngat giua chung)
-if exist "%TEMP%\MNT_FB_pkg" rmdir /s /q "%TEMP%\MNT_FB_pkg"
-mkdir "!STAGE!"
+echo [1/3] Dang chep ma nguon (bo qua du lieu nhay cam)...
 
-echo [1/3] Sao chep ma nguon (loai tru du lieu nhay cam)...
-robocopy "%~dp0." "!STAGE!" /E ^
-  /XD "data" "cookies" "profiles" "__pycache__" ".git" ".venv" "venv" ".claude" ^
-  /XF "*.pid" "*.png" "*.pyc" "*.pyo" "*.log" "*.db" "*.db-wal" "*.db-shm" ^
-  /NFL /NDL /NJH /NJS /NP >nul
-:: robocopy tra ma 0-7 la thanh cong, tu 8 tro len moi la loi that
-if errorlevel 8 (
-    echo [LOI] Sao chep that bai!
+:: robocopy /MIR sao chep ca cay thu muc, /XD bo thu muc, /XF bo file.
+:: robocopy tra ma thoat 0-7 la BINH THUONG (>=8 moi la loi that su).
+robocopy "%CD%" "%STAGE%" /E ^
+  /XD data cookies profiles logs __pycache__ .git .venv venv .claude .idea .vscode ^
+  /XF *.pyc *.pyo *.pid debug_*.png *.png *.zip app.db nul HUONG_DAN_UPDATE.md "%~nx0" ^
+  /NFL /NDL /NJH /NJS /NC /NS >nul
+if %ERRORLEVEL% GEQ 8 (
+    echo [LOI] Chep file that bai ^(robocopy ma %ERRORLEVEL%^).
+    rmdir /s /q "%STAGE%" 2>nul
     pause
     exit /b 1
 )
 
-:: Tao lai cac thu muc rong (kem placeholder) de phan mem chay duoc ngay
-for %%D in (cookies profiles logs) do (
-    if not exist "!STAGE!\%%D" mkdir "!STAGE!\%%D"
-    if not exist "!STAGE!\%%D\.gitkeep" type nul > "!STAGE!\%%D\.gitkeep"
+:: Giu lai cac thu muc rong bat buoc de app chay duoc (co .gitkeep)
+for %%D in (data cookies profiles logs) do (
+    if not exist "%STAGE%\%%D" mkdir "%STAGE%\%%D"
+    if not exist "%STAGE%\%%D\.gitkeep" type nul > "%STAGE%\%%D\.gitkeep"
 )
 
-:: Khong gui kem chinh file dong goi nay cho nguoi nhan
-if exist "!STAGE!\DONG_GOI.bat" del /q "!STAGE!\DONG_GOI.bat"
+:: Don sach thiet bi ao "nul" o goc staging neu robocopy lo tao.
+:: Phai dung duong dan UNC \\?\ vi "nul" la ten thiet bi reserved cua Windows,
+:: del thuong khong dung toi duoc.
+del "\\?\%STAGE%\nul" 2>nul
 
-echo [2/3] Nen thanh file ZIP...
-if exist "!OUTZIP!" del /q "!OUTZIP!"
-powershell -NoProfile -Command "Compress-Archive -Path '!STAGE!' -DestinationPath '!OUTZIP!' -Force"
-if not exist "!OUTZIP!" (
-    echo [LOI] Nen ZIP that bai!
+echo [2/3] Kiem tra an toan ^(khong duoc lot mat khau/cookie^)...
+
+:: Chan tuyet doi: neu vi ly do gi con sot DB / cookie / profile thi DUNG lai.
+set LEAK=0
+if exist "%STAGE%\data\app.db"       set LEAK=1
+if exist "%STAGE%\cookies\*.json"    set LEAK=1
+if exist "%STAGE%\profiles\*"        (
+    dir /a /b "%STAGE%\profiles" 2>nul | findstr /v /x ".gitkeep" >nul && set LEAK=1
+)
+if "!LEAK!"=="1" (
+    echo [LOI] Phat hien du lieu nhay cam trong goi - DA HUY de an toan.
+    echo       Kiem tra lai .gitignore va thu lai.
+    rmdir /s /q "%STAGE%" 2>nul
     pause
     exit /b 1
 )
 
-echo [3/3] Don dep...
-rmdir /s /q "%TEMP%\MNT_FB_pkg"
+echo [3/3] Dang nen thanh file .zip...
+if exist "%OUTZIP%" del /q "%OUTZIP%"
+:: Dung .NET ZipFile.CreateFromDirectory thay cho Compress-Archive:
+:: Compress-Archive liet ke tung muc trong staging va VAP thiet bi ao "nul"
+:: (Windows co ten thiet bi nul o moi thu muc). CreateFromDirectory nen ca
+:: cay thu muc theo he thong file that nen khong dinh nul, lai nhanh hon.
+powershell -NoProfile -Command ^
+  "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('%STAGE%', '%OUTZIP%')"
+if errorlevel 1 (
+    echo [LOI] Nen zip that bai.
+    rmdir /s /q "%STAGE%" 2>nul
+    pause
+    exit /b 1
+)
+
+:: Don staging
+rmdir /s /q "%STAGE%" 2>nul
 
 echo.
 echo ============================================================
-echo  XONG! File dong goi da tao:
+echo  XONG! Da tao goi:
+echo    %OUTZIP%
 echo.
-echo    !PKGNAME!.zip
-echo    (nam o thu muc CHA cua thu muc phan mem)
-echo.
-echo  Gui file .zip nay cho nguoi khac. Ho giai nen roi:
-echo    1. Chay INSTALL.bat
-echo    2. Chay RUN_APP.bat
-echo    3. Tu nhap Tai khoan / Page / Content / UID nhom cua ho.
+echo  Gui file .zip nay sang may khac, roi o may do:
+echo    1. Giai nen ra 1 thu muc.
+echo    2. Cai Python 3.11+ ^(tick "Add Python to PATH"^).
+echo    3. Chay INSTALL.bat  -^> RUN_APP.bat
+echo    4. Nhap lai tai khoan / cookie o bang dieu khien.
 echo ============================================================
 pause
-endlocal
