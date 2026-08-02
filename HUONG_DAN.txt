@@ -1,0 +1,191 @@
+﻿===============================================================
+                  MNT FB AutoPost
+            HƯỚNG DẪN CÀI ĐẶT VÀ SỬ DỤNG
+===============================================================
+
+Tài liệu này dành cho người lần đầu dùng phần mềm.
+Cứ làm lần lượt từ trên xuống, không cần biết gì về lập trình.
+
+
+===============================================================
+PHẦN 1. MÁY CẦN GÌ
+===============================================================
+
+  - Windows 10 hoặc Windows 11 (64-bit)
+  - RAM tối thiểu 8 GB, nên có 16 GB
+  - Ổ SSD còn trống ít nhất 60 GB
+  - Mạng Internet ổn định
+
+  Máy càng nhiều RAM thì càng chạy được nhiều tài khoản cùng lúc.
+  Mỗi tài khoản đang đăng bài chiếm khoảng 2,5 GB RAM.
+
+
+===============================================================
+PHẦN 2. CÀI ĐẶT — LÀM 3 BƯỚC
+===============================================================
+
+--- BƯỚC 1: Cài Python (chỉ làm 1 lần) ---
+
+  1. Vào trang:  https://python.org/downloads
+  2. Bấm nút vàng "Download Python" để tải về.
+  3. Mở file vừa tải.
+  4. QUAN TRỌNG: ở màn hình đầu tiên, TÍCH VÀO Ô
+        [v] Add python.exe to PATH
+     Ô này nằm ở dưới cùng, rất dễ bỏ sót.
+     Không tích thì bước sau sẽ báo lỗi.
+  5. Bấm "Install Now" và chờ cài xong.
+
+  Lưu ý: ĐỪNG cài Python từ Microsoft Store — bản đó hay thiếu
+  thành phần và gây lỗi.
+
+
+--- BƯỚC 2: Giải nén phần mềm ---
+
+  1. Bạn nhận được 1 file .zip (ví dụ MNT_FB_TOOL_20260803.zip).
+  2. Chuột phải vào file đó -> "Extract All..." -> "Extract".
+  3. Nên để thư mục ở nơi gọn gàng, ví dụ:  C:\MNT_FB_TOOL
+     ĐỪNG để trong OneDrive hoặc Desktop đã đồng bộ OneDrive.
+
+
+--- BƯỚC 3: Cài môi trường ---
+
+  1. Mở thư mục vừa giải nén.
+  2. Bấm đúp file:   INSTALL.bat
+  3. Một cửa sổ đen hiện ra và chạy khoảng 5-10 phút.
+     Nó đang tải trình duyệt Chromium (khoảng 150 MB), hãy chờ.
+  4. Khi thấy dòng "Cai dat hoan tat!" là xong. Bấm phím bất kỳ
+     để đóng cửa sổ.
+
+  => CÀI ĐẶT XONG.
+
+
+===============================================================
+PHẦN 3. CHẠY PHẦN MỀM HẰNG NGÀY
+===============================================================
+
+  Bấm đúp file:   RUN_APP.bat
+
+  Cửa sổ phần mềm sẽ mở ra. Đây là file bạn dùng mỗi ngày.
+
+  - Muốn TẮT: bấm dấu X ở góc cửa sổ. Phần mềm sẽ tự dừng
+    sạch mọi tiến trình chạy nền.
+
+  Các file khác (chỉ dùng khi cần):
+
+    RESTART.bat            Tắt hết rồi mở lại. Dùng khi phần mềm
+                           bị treo hoặc chạy không đúng.
+
+    START_BACKGROUND.bat   Chạy ẩn, không hiện cửa sổ. Muốn xem
+                           bảng điều khiển thì mở trình duyệt vào
+                           địa chỉ:  http://localhost:8080
+
+    INSTALL_AUTOSTART.bat  Đăng ký tự chạy ẩn mỗi khi mở máy.
+    UNINSTALL_AUTOSTART.bat  Gỡ chế độ tự chạy đó.
+
+    UPDATE.bat             Cập nhật phiên bản mới (xem Phần 5).
+
+    _TIM_PYTHON.bat        File phụ trợ, ĐỪNG XOÁ. Các file trên
+                           cần nó để tìm Python trên máy.
+
+
+===============================================================
+PHẦN 4. LẦN ĐẦU DÙNG — NHẬP DỮ LIỆU
+===============================================================
+
+  Phần mềm giao tới là bản TRẮNG, chưa có dữ liệu gì.
+  Bạn tự nhập theo thứ tự sau:
+
+  1. Tab "Tài khoản"  — Thêm các nick Facebook.
+                        Cần: tên acc, c_user, xs (cookie), tên Page.
+
+  2. Tab "Page"       — Thêm các Page sẽ đăng bài.
+                        Đặt TÊN PAGE KHÁC NHAU, đừng trùng nhau.
+
+  3. Tab "Content"    — Thêm nội dung bài đăng và ảnh.
+
+  4. Tab "UID Nhóm"   — Thêm danh sách nhóm Facebook.
+
+  5. Tab "Lịch ..."   — Bấm "Gen lịch" để phần mềm tự xếp giờ đăng.
+
+  6. Tab "Hành động"  — Bấm "Run" ở loại lịch muốn chạy.
+
+  Về nuôi nick: ở tab "Tài khoản", tích ô "Nuôi" cho nick nào
+  muốn nuôi. Cột "Chu kỳ (p)" là bao lâu nuôi 1 lần (mặc định
+  150 phút). Nick nào để TRỐNG cột "Loại đăng" thì chỉ nuôi,
+  không đăng bài.
+
+
+===============================================================
+PHẦN 5. CẬP NHẬT PHIÊN BẢN MỚI
+===============================================================
+
+  * Nếu bạn cài từ file .zip:
+    KHÔNG tự cập nhật được. Bấm UPDATE.bat sẽ báo lỗi.
+    Muốn lên bản mới: xin file .zip mới, giải nén ra thư mục
+    khác, rồi chép 3 thư mục sau từ bản cũ sang bản mới:
+        data\      cookies\      profiles\
+    (Đây là toàn bộ dữ liệu của bạn.)
+
+  * Nếu bạn cài bằng SETUP.bat (cách khuyên dùng):
+    Chỉ cần bấm đúp UPDATE.bat. Dữ liệu giữ nguyên.
+
+  Cách cài bằng SETUP.bat để về sau cập nhật cho nhẹ:
+    1. Tạo 1 thư mục TRỐNG, ví dụ  C:\MNT
+    2. Chép RIÊNG file SETUP.bat vào đó (không chép gì khác).
+    3. Bấm đúp SETUP.bat — nó tự tải code và cài mọi thứ.
+
+
+===============================================================
+PHẦN 6. GẶP LỖI THÌ LÀM GÌ
+===============================================================
+
+--- "Windows cannot find 'pythonw'" ---
+  Máy chưa cài Python, hoặc cài mà quên tích "Add python.exe
+  to PATH".
+  => Cài lại Python theo BƯỚC 1, nhớ tích ô đó.
+     Cài xong chạy lại INSTALL.bat.
+
+--- "Chua cai Python!" khi bấm INSTALL.bat ---
+  Nguyên nhân giống trên. Xử lý giống trên.
+
+--- "destination path 'MNT_FB_TOOL' already exists" ---
+  Thư mục đó đã tồn tại từ lần cài trước bị lỗi.
+  => Xoá hoặc đổi tên thư mục MNT_FB_TOOL đó đi, rồi chạy lại.
+
+--- Bấm RUN_APP.bat mà không thấy gì ---
+  Có thể phần mềm đang chạy sẵn rồi.
+  => Bấm RESTART.bat để tắt hết và mở lại.
+
+--- Đăng bài báo "Cookie hết hạn" ---
+  Nick đó đã bị Facebook đăng xuất.
+  => Vào tab "Tài khoản", lấy lại giá trị xs mới cho nick đó.
+
+--- Đăng bài báo "Không thấy nút (FB đổi giao diện?)" ---
+  Facebook vừa đổi giao diện, phần mềm cần cập nhật.
+  => Liên hệ người cung cấp phần mềm.
+
+--- Máy chạy chậm, đơ ---
+  Đang chạy quá nhiều tài khoản cùng lúc so với RAM.
+  => Tắt bớt runner ở tab "Hành động", chỉ bật 1-2 loại.
+
+
+===============================================================
+PHẦN 7. NHỮNG ĐIỀU NÊN BIẾT
+===============================================================
+
+  - Máy phải BẬT và KHÔNG ĐỂ NGỦ thì phần mềm mới đăng đúng giờ.
+    Vào Settings > System > Power để tắt chế độ ngủ.
+
+  - Phần mềm chỉ chạy trên chính máy này. Không điều khiển được
+    từ máy khác hay điện thoại.
+
+  - Thư mục data\, cookies\, profiles\ chứa TOÀN BỘ dữ liệu và
+    mật khẩu của bạn. Đừng gửi cho ai, đừng đưa lên mạng.
+
+  - Nên sao lưu file  data\app.db  mỗi tuần một lần (chỉ cần
+    chép ra chỗ khác) để lỡ hỏng còn khôi phục được.
+
+  - Phần mềm tự dọn cache trình duyệt sau mỗi phiên nên ổ đĩa
+    không bị phình. Bạn không phải làm gì.
+
+===============================================================

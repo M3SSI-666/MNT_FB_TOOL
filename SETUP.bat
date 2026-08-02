@@ -65,6 +65,11 @@ cd /d "%~dp0"
 ::      Khong can clone gi ca - chay INSTALL.bat ngay tai cho.
 if exist "%~dp0server.py" (
     echo [2/3] Da co san ma nguon ngay tai thu muc nay - bo qua tai ve.
+    echo.
+    echo       [Luu y] Ban dang dung ban GIAI NEN tu file .zip.
+    echo               Ban nay KHONG tu cap nhat duoc ^(UPDATE.bat se bao loi^).
+    echo               Muon nhan ban moi tu dong: chep rieng SETUP.bat sang
+    echo               MOT THU MUC TRONG roi chay o do.
     set "DICH=%~dp0"
     goto :caidat
 )

@@ -13,7 +13,8 @@
 *.css   text
 *.html  text
 *.md    text
-*.txt   text
+# .txt để CRLF: hướng dẫn cho khách mở bằng Notepad, LF dễ dính lỗi hiển thị
+*.txt   text eol=crlf
 
 # Nhị phân — tuyệt đối không đụng vào
 *.ico   binary
