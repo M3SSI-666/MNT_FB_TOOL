@@ -7,4 +7,7 @@ cd /d "%~dp0"
 ::  Dung lai: bam "Tat phan mem" trong bang dieu khien.
 :: ============================================================
 
-start "" pythonw -X utf8 server.py --no-browser
+call "%~dp0_TIM_PYTHON.bat"
+if errorlevel 1 exit /b 1
+
+start "" %PYW% -X utf8 server.py --no-browser

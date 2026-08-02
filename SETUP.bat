@@ -60,30 +60,73 @@ echo.
 :: --- [2] Tai code ve (git clone) ---
 :: Clone vao thu muc con MNT_FB_TOOL ngay canh file SETUP.bat nay.
 cd /d "%~dp0"
+
+:: TH1: dang dung o BAN DA GIAI NEN san (canh SETUP.bat co luon server.py).
+::      Khong can clone gi ca - chay INSTALL.bat ngay tai cho.
+if exist "%~dp0server.py" (
+    echo [2/3] Da co san ma nguon ngay tai thu muc nay - bo qua tai ve.
+    set "DICH=%~dp0"
+    goto :caidat
+)
+
+:: TH2: da clone tu truoc (co .git) -> giu nguyen, khong dong vao.
 if exist "MNT_FB_TOOL\.git" (
-    echo [2/3] Da co san thu muc MNT_FB_TOOL - bo qua clone.
-    echo       Muon cap nhat, vao trong do bam UPDATE.bat.
-) else (
-    echo [2/3] Dang tai code ve...
-    git clone "%REPO_URL%" MNT_FB_TOOL
-    if errorlevel 1 (
-        echo [LOI] Tai code that bai. Kiem tra:
-        echo       - Ket noi mang
-        echo       - Link repo dung va dang o che do PUBLIC
+    echo [2/3] Da cai tu truoc o thu muc MNT_FB_TOOL - bo qua tai ve.
+    echo       Muon cap nhat len ban moi: vao trong do bam UPDATE.bat.
+    set "DICH=%~dp0MNT_FB_TOOL"
+    goto :caidat
+)
+
+:: TH3: thu muc MNT_FB_TOOL da ton tai nhung KHONG phai repo git.
+::      git clone se bao "already exists and is not an empty directory".
+::      Thuong do lan cai truoc bi ngat giua chung, hoac da giai nen zip vao day.
+if exist "MNT_FB_TOOL" (
+    dir /a /b "MNT_FB_TOOL" 2>nul | findstr "." >nul
+    if not errorlevel 1 (
+        if exist "MNT_FB_TOOL\server.py" (
+            echo [2/3] Thu muc MNT_FB_TOOL da co san ma nguon - bo qua tai ve.
+            set "DICH=%~dp0MNT_FB_TOOL"
+            goto :caidat
+        )
+        echo.
+        echo  [DUNG LAI] Da co thu muc "MNT_FB_TOOL" nhung khong phai ban cai hop le
+        echo             ^(khong co .git, cung khong co server.py^).
+        echo             Co the lan cai truoc bi ngat giua chung.
+        echo.
+        echo   Cach xu ly: DOI TEN hoac XOA thu muc MNT_FB_TOOL do di,
+        echo               roi chay lai SETUP.bat.
+        echo.
         pause
         exit /b 1
     )
-    echo [OK] Da tai xong.
+    rmdir "MNT_FB_TOOL" 2>nul
 )
+
+echo [2/3] Dang tai code ve...
+git clone "%REPO_URL%" MNT_FB_TOOL
+if errorlevel 1 (
+    echo [LOI] Tai code that bai. Kiem tra:
+    echo       - Ket noi mang
+    echo       - Link repo dung va dang o che do PUBLIC
+    pause
+    exit /b 1
+)
+echo [OK] Da tai xong.
+set "DICH=%~dp0MNT_FB_TOOL"
+
+:caidat
+:: %~dp0 luon ket thuc bang dau \, de nguyen thi cd /d "...\" hong va moi lenh
+:: sau do chay sai thu muc. Cat dau \ cuoi truoc khi dung.
+if "!DICH:~-1!"=="\" set "DICH=!DICH:~0,-1!"
 echo.
 
 :: --- [3] Chay INSTALL.bat (Python packages + Chromium) ---
 echo [3/3] Dang cai dat moi truong (co the mat vai phut)...
-cd /d "%~dp0MNT_FB_TOOL"
-if exist "INSTALL.bat" (
-    call INSTALL.bat
+cd /d "!DICH!"
+if exist "!DICH!\INSTALL.bat" (
+    call "!DICH!\INSTALL.bat"
 ) else (
-    echo [LOI] Khong tim thay INSTALL.bat trong code vua tai.
+    echo [LOI] Khong tim thay INSTALL.bat trong "!DICH!".
     pause
     exit /b 1
 )
@@ -91,8 +134,10 @@ if exist "INSTALL.bat" (
 echo.
 echo ============================================================
 echo  Cai dat hoan tat!
-echo  Tu nay:
-echo    - Chay app:      MNT_FB_TOOL\RUN_APP.bat
-echo    - Cap nhat moi:  MNT_FB_TOOL\UPDATE.bat
+echo  Tu nay, vao thu muc:
+echo    !DICH!
+echo  roi:
+echo    - Chay app     : RUN_APP.bat
+echo    - Cap nhat moi : UPDATE.bat
 echo ============================================================
 pause

@@ -24,5 +24,7 @@ echo  Khoi dong lai MNT FB AutoPost (cua so app)...
 cd /d "%~dp0"
 :: Mo lai cua so app (pywebview). Server cu da bi kill o tren nen cua so cu
 :: da dong; lenh nay mo cua so moi voi code moi.
-start "" pythonw -X utf8 server.py
+call "%~dp0_TIM_PYTHON.bat"
+if errorlevel 1 exit /b 1
+start "" %PYW% -X utf8 server.py
 exit

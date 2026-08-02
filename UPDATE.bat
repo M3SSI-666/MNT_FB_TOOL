@@ -98,7 +98,9 @@ echo.
 
 :: --- [5] Mo lai app ---
 echo [5/5] Dang mo lai app...
-start "" pythonw -X utf8 server.py
+call "%~dp0_TIM_PYTHON.bat"
+if errorlevel 1 exit /b 1
+start "" %PYW% -X utf8 server.py
 
 echo.
 echo ============================================================
