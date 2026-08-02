@@ -5,11 +5,21 @@ chcp 65001 >nul
 
 :: ============================================================
 ::  MNT FB AutoPost - Dong goi MA NGUON de gui may khac
-::  Tao file .zip CHI chua code, KHONG kem du lieu nhay cam:
+::
+::  KHONG kem du lieu nhay cam:
 ::    - data\        (mat khau, cookie, 2FA, media)
 ::    - cookies\     (cookie Facebook)
 ::    - profiles\    (session dang nhap trinh duyet)
 ::    - logs\ __pycache__\ .pid .png ...
+::
+::  KHONG kem cong cu QUAN TRI / PHAN PHOI (chi ban goc moi can):
+::    - PUSH.bat        day code len GitHub
+::    - DONG_GOI.bat    chinh file nay
+::    - test_basic.py   test cho nguoi phat trien
+::    - .gitignore .gitattributes .git\   cau hinh repo
+::
+::  Client chi con: RUN_APP / RESTART / INSTALL / UPDATE / SETUP
+::                  + AUTOSTART, du de cai va cap nhat.
 ::  May nhan: cai Python -> chay INSTALL.bat -> RUN_APP.bat
 :: ============================================================
 
@@ -36,8 +46,9 @@ echo [1/3] Dang chep ma nguon (bo qua du lieu nhay cam)...
 :: robocopy /MIR sao chep ca cay thu muc, /XD bo thu muc, /XF bo file.
 :: robocopy tra ma thoat 0-7 la BINH THUONG (>=8 moi la loi that su).
 robocopy "%CD%" "%STAGE%" /E ^
-  /XD data cookies profiles logs __pycache__ .git .venv venv .claude .idea .vscode ^
-  /XF *.pyc *.pyo *.pid debug_*.png *.png *.zip app.db nul HUONG_DAN_UPDATE.md "%~nx0" ^
+  /XD data cookies profiles logs backup __pycache__ .git .venv venv .claude .idea .vscode ^
+  /XF *.pyc *.pyo *.pid debug_*.png *.png *.zip app.db nul HUONG_DAN_UPDATE.md ^
+      PUSH.bat .gitignore .gitattributes test_basic.py "%~nx0" ^
   /NFL /NDL /NJH /NJS /NC /NS >nul
 if %ERRORLEVEL% GEQ 8 (
     echo [LOI] Chep file that bai ^(robocopy ma %ERRORLEVEL%^).
@@ -59,17 +70,30 @@ del "\\?\%STAGE%\nul" 2>nul
 
 echo [2/3] Kiem tra an toan ^(khong duoc lot mat khau/cookie^)...
 
-:: Chan tuyet doi: neu vi ly do gi con sot DB / cookie / profile thi DUNG lai.
+:: Chan tuyet doi. QUET TOAN BO cay thu muc chu KHONG chi vai vi tri co dinh:
+:: ban truoc chi soi data\app.db, cookies\*.json, profiles\* nen da de lot
+:: backup\app.db.* (ban sao DB day du mat khau/cookie/2FA) vao goi gui di.
+:: Bat ky file .db / .db-wal / .db-shm / cookie json nao cung phai chan.
 set LEAK=0
-if exist "%STAGE%\data\app.db"       set LEAK=1
-if exist "%STAGE%\cookies\*.json"    set LEAK=1
-if exist "%STAGE%\profiles\*"        (
-    dir /a /b "%STAGE%\profiles" 2>nul | findstr /v /x ".gitkeep" >nul && set LEAK=1
+set "LEAKFILE="
+for /f "delims=" %%F in ('powershell -NoProfile -Command "Get-ChildItem -LiteralPath '%STAGE%' -Recurse -File -Force -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.db','.sqlite','.sqlite3' -or $_.Name -like '*.db-*' -or $_.Name -like 'app.db*' -or ($_.Extension -eq '.json' -and $_.DirectoryName -like '*cookies*') } | ForEach-Object { $_.FullName }"') do (
+    set LEAK=1
+    set "LEAKFILE=%%F"
 )
+:: Profile trinh duyet: chi cho phep .gitkeep
+if exist "%STAGE%\profiles\*" (
+    for /f "delims=" %%P in ('dir /a /b "%STAGE%\profiles" 2^>nul') do (
+        if /i not "%%P"==".gitkeep" ( set LEAK=1 & set "LEAKFILE=profiles\%%P" )
+    )
+)
+
 if "!LEAK!"=="1" (
-    echo [LOI] Phat hien du lieu nhay cam trong goi - DA HUY de an toan.
-    echo       Kiem tra lai .gitignore va thu lai.
+    echo.
+    echo  [DUNG LAI] Phat hien du lieu nhay cam trong goi - DA HUY de an toan.
+    echo             File dau tien tim thay: !LEAKFILE!
+    echo             Them thu muc do vao danh sach /XD trong file nay roi thu lai.
     rmdir /s /q "%STAGE%" 2>nul
+    echo.
     pause
     exit /b 1
 )
