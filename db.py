@@ -60,6 +60,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS pages (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             ten_page        TEXT NOT NULL,
+            acc_quan_ly     TEXT DEFAULT '',        -- ghi chú acc quản lý page (không ảnh hưởng logic đăng)
             page_uid        TEXT DEFAULT '',
             link_page       TEXT DEFAULT '',
             loai_page       TEXT DEFAULT '',        -- Homestay / Thuê / Bán
@@ -160,6 +161,8 @@ def init_db():
         # là hằng số và thứ tự thu về đúng tiêu chí cũ (id).
         _add_col("content",    "order_idx", "order_idx INTEGER DEFAULT 0")
         _add_col("uid_groups", "order_idx", "order_idx INTEGER DEFAULT 0")
+        # Cột ghi chú "Acc quản lý" cho pages — chỉ để note, không dùng khi đăng bài.
+        _add_col("pages",      "acc_quan_ly", "acc_quan_ly TEXT DEFAULT ''")
     print(f"✅ DB initialized: {DB_PATH}")
 
 
@@ -273,6 +276,69 @@ def update_account_field(acc_id: int, field: str, value: str):
         con.execute(f"UPDATE accounts SET {field}=? WHERE id=?", (value, acc_id))
 
 
+# Cột số của accounts — ép về int khi nhập từ Excel (Excel hay để dạng float).
+_ACC_INT_COLS = {"thoi_gian_nghi", "nuoi_interval", "nuoi_nick"}
+
+
+def import_accounts(records: list[dict]) -> tuple[int, int]:
+    """Nhập hàng loạt tài khoản từ file Excel.
+
+    Chế độ "thêm & bỏ trùng": chỉ thêm acc chưa tồn tại. Trùng khi cùng
+    (ten_acc, ten_page). Trả (số đã thêm, số bỏ qua vì trùng).
+    Chỉ nhận các cột thuộc bảng accounts; cột lạ bị bỏ qua.
+    """
+    allowed = {
+        "ten_acc", "loai_dang", "thoi_gian_nghi", "link_profile", "email_sdt",
+        "password", "ten_page", "c_user", "xs", "refresh", "trang_thai",
+        "email_khoiphuc", "pass_khoiphuc", "twofa", "ghi_chu",
+        "nuoi_nick", "nuoi_interval",
+    }
+    added = skipped = 0
+    with _conn() as con:
+        seen = {
+            (r["ten_acc"] or "", r["ten_page"] or "")
+            for r in con.execute("SELECT ten_acc, ten_page FROM accounts").fetchall()
+        }
+        nxt = con.execute(
+            "SELECT COALESCE(MAX(order_idx), -1) + 1 FROM accounts"
+        ).fetchone()[0]
+
+        for rec in records:
+            ten = (rec.get("ten_acc") or "").strip()
+            if not ten:
+                skipped += 1
+                continue
+            page = (rec.get("ten_page") or "").strip()
+            if (ten, page) in seen:
+                skipped += 1
+                continue
+            seen.add((ten, page))
+
+            data = {}
+            for k, v in rec.items():
+                if k not in allowed:
+                    continue
+                v = "" if v is None else str(v).strip()
+                if k in _ACC_INT_COLS:
+                    try:
+                        v = int(float(v)) if v != "" else 0
+                    except (ValueError, TypeError):
+                        v = 0
+                data[k] = v
+            data["ten_acc"] = ten
+            data["order_idx"] = nxt
+
+            cols = list(data.keys())
+            con.execute(
+                f"INSERT INTO accounts ({', '.join(cols)}) "
+                f"VALUES ({', '.join(['?'] * len(cols))})",
+                [data[c] for c in cols],
+            )
+            nxt += 1
+            added += 1
+    return added, skipped
+
+
 # ═══════════════════════════════════════════════════════════════
 # Pages
 # ═══════════════════════════════════════════════════════════════
@@ -315,6 +381,68 @@ def upsert_page(data: dict) -> int:
 def delete_page(page_id: int):
     with _conn() as con:
         con.execute("DELETE FROM pages WHERE id=?", (page_id,))
+
+
+def import_pages(records: list[dict]) -> tuple[int, int]:
+    """Nhập hàng loạt Page từ file Excel.
+
+    Chế độ "thêm & bỏ trùng": chỉ thêm Page chưa tồn tại. Trùng so theo page_uid;
+    Page nào (cả cũ lẫn trong file) không có uid thì so theo ten_page.
+    Trả (số đã thêm, số bỏ qua vì trùng).
+    """
+    cols = ("ten_page", "acc_quan_ly", "page_uid", "loai_page",
+            "bai_dang_toi_da", "link_page", "ghi_chu")
+    added = skipped = 0
+    with _conn() as con:
+        seen_uid = set()   # page_uid đã có (khác rỗng)
+        seen_ten = set()   # ten_page của các Page KHÔNG có uid
+        nxt = 0
+        for r in con.execute(
+            "SELECT ten_page, page_uid, order_idx FROM pages"
+        ).fetchall():
+            uid = (r["page_uid"] or "").strip()
+            if uid:
+                seen_uid.add(uid)
+            else:
+                seen_ten.add((r["ten_page"] or "").strip())
+            nxt = max(nxt, (r["order_idx"] or 0) + 1)
+
+        for rec in records:
+            ten = (rec.get("ten_page") or "").strip()
+            if not ten:
+                skipped += 1
+                continue
+            uid = (rec.get("page_uid") or "").strip()
+            # Trùng theo uid nếu có uid, ngược lại theo tên page.
+            if uid:
+                if uid in seen_uid:
+                    skipped += 1
+                    continue
+                seen_uid.add(uid)
+            else:
+                if ten in seen_ten:
+                    skipped += 1
+                    continue
+                seen_ten.add(ten)
+
+            # bai_dang_toi_da là cột số — ép về int, rác thì 0.
+            try:
+                bai = int(float(rec.get("bai_dang_toi_da") or 0))
+            except (ValueError, TypeError):
+                bai = 0
+            values = [
+                ten, rec.get("acc_quan_ly", "") or "", uid,
+                rec.get("loai_page", "") or "", bai,
+                rec.get("link_page", "") or "", rec.get("ghi_chu", "") or "",
+            ]
+            con.execute(
+                f"INSERT INTO pages ({', '.join(cols)}, order_idx) "
+                f"VALUES ({', '.join(['?'] * len(cols))}, ?)",
+                values + [nxt],
+            )
+            nxt += 1
+            added += 1
+    return added, skipped
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -467,6 +595,41 @@ def upsert_uid_group(data: dict) -> int:
 def delete_uid_group(gid: int):
     with _conn() as con:
         con.execute("DELETE FROM uid_groups WHERE id=?", (gid,))
+
+
+def import_uid_groups(records: list[dict]) -> tuple[int, int]:
+    """Nhập hàng loạt UID nhóm (sheet 'UID Nhóm', ma_nhom='') từ file Excel.
+
+    Chế độ "thêm & bỏ trùng": chỉ thêm UID chưa tồn tại trong sheet UID Nhóm.
+    Trùng so theo cột uid. Trả (số đã thêm, số bỏ qua vì trùng).
+    """
+    cols = ("uid", "ten_nhom", "link_url", "thanh_vien", "ghi_chu")
+    added = skipped = 0
+    with _conn() as con:
+        existing = {
+            r[0] for r in con.execute(
+                "SELECT uid FROM uid_groups WHERE ma_nhom=''"
+            ).fetchall()
+        }
+        # Dòng mới xuống cuối sheet — nối tiếp order_idx đang có.
+        nxt = con.execute(
+            "SELECT COALESCE(MAX(order_idx), -1) + 1 FROM uid_groups WHERE ma_nhom=''"
+        ).fetchone()[0]
+        for rec in records:
+            uid = (rec.get("uid") or "").strip()
+            if not uid or uid in existing:
+                skipped += 1
+                continue
+            existing.add(uid)
+            values = [rec.get(c, "") or "" for c in cols]
+            con.execute(
+                f"INSERT INTO uid_groups (ma_nhom, {', '.join(cols)}, order_idx) "
+                f"VALUES ('', {', '.join(['?'] * len(cols))}, ?)",
+                values + [nxt],
+            )
+            nxt += 1
+            added += 1
+    return added, skipped
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -31,6 +31,7 @@ const API = {
     updatePageField: (id, f, v)   => API.post(`/api/pages/${id}/field`, {field:f, value:v}),
     reorderPages:    (ids)        => API.post("/api/pages/reorder", ids),
     deletePage:      (id)         => API.del(`/api/pages/${id}`),
+    exportPages:     ()           => API.get("/api/pages/export-excel"),
 
     // Content
     content:         (loai)       => API.get(`/api/content/${loai}`),
@@ -45,6 +46,7 @@ const API = {
     saveUidGroup:    (data)       => API.post("/api/uid-groups/save", data),
     deleteUidGroup:  (id)         => API.del(`/api/uid-groups/${id}`),
     reorderUidGroups:(ids)        => API.post("/api/uid-groups/reorder", ids),
+    exportUidGroups: ()           => API.get("/api/uid-groups/export-excel"),
 
     // Schedule
     schedule:        (loai)       => API.get(`/api/schedule/${loai}`),

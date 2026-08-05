@@ -21,14 +21,14 @@ from db import (
     init_db,
     # accounts
     get_accounts, get_account_by_name, upsert_account, delete_account, update_account_field,
-    reorder_accounts, insert_account_at,
+    reorder_accounts, insert_account_at, import_accounts,
     # pages
-    get_pages, get_page_by_name, upsert_page, delete_page, reorder_pages,
+    get_pages, get_page_by_name, upsert_page, delete_page, reorder_pages, import_pages,
     # content
     get_content, get_content_by_code, upsert_content, delete_content, reorder_content,
     # uid groups
     get_uid_groups_by_code, get_all_uid_groups, upsert_uid_group, delete_uid_group,
-    reorder_uid_groups,
+    reorder_uid_groups, import_uid_groups,
     # schedules
     get_schedules, update_schedule_status, bulk_set_schedule_status,
     replace_schedules, update_schedule_field,
@@ -430,6 +430,64 @@ def api_accounts_export_excel():
     return jsonify({"ok": True, "path": str(path)})
 
 
+@app.route("/api/accounts/import-excel", methods=["POST"])
+def api_accounts_import_excel():
+    """Nhập tài khoản từ file .xlsx (khớp định dạng file Xuất Excel).
+
+    Chế độ "thêm & bỏ trùng": acc nào đã có (cùng Tên acc + Tên Page) thì bỏ qua,
+    chỉ thêm acc mới. Cột nhận diện theo header ở dòng 1, không phụ thuộc thứ tự.
+    """
+    from openpyxl import load_workbook
+
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"ok": False, "error": "Không có file"})
+
+    try:
+        wb = load_workbook(file, read_only=True, data_only=True)
+    except Exception:
+        return jsonify({"ok": False, "error": "File không phải Excel (.xlsx) hợp lệ"})
+    ws = wb.active
+
+    rows_iter = ws.iter_rows(values_only=True)
+    try:
+        header = next(rows_iter)
+    except StopIteration:
+        return jsonify({"ok": False, "error": "File rỗng"})
+
+    label_to_key = {label.strip().lower(): key for key, label in EXPORT_ACCOUNT_COLUMNS}
+    col_key = {}
+    for idx, h in enumerate(header):
+        if h is None:
+            continue
+        key = label_to_key.get(str(h).strip().lower())
+        if key:
+            col_key[idx] = key
+
+    if "ten_acc" not in col_key.values():
+        return jsonify({"ok": False, "error": "File thiếu cột Tên acc"})
+
+    records = []
+    for row in rows_iter:
+        rec = {}
+        for idx, key in col_key.items():
+            v = row[idx] if idx < len(row) else None
+            v = "" if v is None else str(v).strip()
+            # Cột "Nuôi" xuất ra là "x"/"" — đổi ngược về 1/0 cho DB.
+            if key == "nuoi_nick":
+                v = 1 if v.lower() == "x" else 0
+            rec[key] = v
+        if rec.get("ten_acc"):
+            records.append(rec)
+
+    try:
+        added, skipped = import_accounts(records)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+    return jsonify({"ok": True, "added": added, "skipped": skipped})
+
+
 @app.route("/api/accounts/save", methods=["POST"])
 def api_accounts_save():
     data = request.json or {}
@@ -517,7 +575,7 @@ def api_pages_field(page_id):
     body = request.json or {}
     field = body.get("field","")
     value = body.get("value","")
-    safe = {"ten_page","page_uid","link_page","loai_page","bai_dang_toi_da","ghi_chu"}
+    safe = {"ten_page","acc_quan_ly","page_uid","link_page","loai_page","bai_dang_toi_da","ghi_chu"}
     if field not in safe:
         return jsonify({"ok": False, "error": f"Field không hợp lệ: {field}"})
     try:
@@ -533,6 +591,117 @@ def api_pages_field(page_id):
 def api_pages_delete(page_id):
     delete_page(page_id)
     return jsonify({"ok": True})
+
+
+# Cột xuất/nhập Excel cho Page. Thứ tự này cũng là thứ tự cột trong file.
+# Cột đầu là key DB, cột sau là header người đọc.
+EXPORT_PAGE_COLUMNS = [
+    ("ten_page",        "Tên Page"),
+    ("acc_quan_ly",     "Acc quản lý"),
+    ("page_uid",        "Page UID"),
+    ("loai_page",       "Loại đăng"),
+    ("bai_dang_toi_da", "Bài tối đa"),
+    ("link_page",       "Link Page"),
+    ("ghi_chu",         "Ghi chú"),
+]
+
+
+@app.route("/api/pages/export-excel")
+def api_pages_export_excel():
+    """Xuất danh sách Page ra .xlsx, lưu vào Downloads."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    rows = get_pages()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Page"
+    ws.append([label for _, label in EXPORT_PAGE_COLUMNS])
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+
+    widths = [len(label) for _, label in EXPORT_PAGE_COLUMNS]
+    for row in rows:
+        values = []
+        for key, _ in EXPORT_PAGE_COLUMNS:
+            v = row.get(key, "")
+            values.append("" if v is None else str(v))
+        ws.append(values)
+        for i, v in enumerate(values):
+            widths[i] = max(widths[i], len(v))
+
+    for i, (key, _) in enumerate(EXPORT_PAGE_COLUMNS, start=1):
+        letter = ws.cell(row=1, column=i).column_letter
+        ws.column_dimensions[letter].width = min(widths[i - 1] + 2, 50)
+        # page_uid để dạng text tránh Excel biến số dài thành 1.23E+15.
+        if key == "page_uid":
+            for r in range(2, ws.max_row + 1):
+                ws.cell(row=r, column=i).number_format = "@"
+
+    ws.freeze_panes = "A2"
+
+    name = f"page_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    path = _export_dir() / name
+    wb.save(str(path))
+
+    _reveal_in_explorer(path)
+    return jsonify({"ok": True, "path": str(path), "count": len(rows)})
+
+
+@app.route("/api/pages/import-excel", methods=["POST"])
+def api_pages_import_excel():
+    """Nhập Page từ file .xlsx do đồng nghiệp gửi.
+
+    Chế độ "thêm & bỏ trùng": Page nào đã có thì bỏ qua, chỉ thêm Page mới.
+    Trùng so theo Page UID; Page thiếu UID thì so thêm theo Tên Page.
+    Cột nhận diện theo header ở dòng 1, không phụ thuộc thứ tự cột.
+    """
+    from openpyxl import load_workbook
+
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"ok": False, "error": "Không có file"})
+
+    try:
+        wb = load_workbook(file, read_only=True, data_only=True)
+    except Exception:
+        return jsonify({"ok": False, "error": "File không phải Excel (.xlsx) hợp lệ"})
+    ws = wb.active
+
+    rows_iter = ws.iter_rows(values_only=True)
+    try:
+        header = next(rows_iter)
+    except StopIteration:
+        return jsonify({"ok": False, "error": "File rỗng"})
+
+    label_to_key = {label.strip().lower(): key for key, label in EXPORT_PAGE_COLUMNS}
+    col_key = {}
+    for idx, h in enumerate(header):
+        if h is None:
+            continue
+        key = label_to_key.get(str(h).strip().lower())
+        if key:
+            col_key[idx] = key
+
+    if "ten_page" not in col_key.values():
+        return jsonify({"ok": False, "error": "File thiếu cột Tên Page"})
+
+    records = []
+    for row in rows_iter:
+        rec = {}
+        for idx, key in col_key.items():
+            v = row[idx] if idx < len(row) else None
+            rec[key] = "" if v is None else str(v).strip()
+        if rec.get("ten_page"):
+            records.append(rec)
+
+    try:
+        added, skipped = import_pages(records)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+    return jsonify({"ok": True, "added": added, "skipped": skipped})
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -675,6 +844,120 @@ def api_uid_groups_reorder():
 def api_uid_groups_delete(gid):
     delete_uid_group(gid)
     return jsonify({"ok": True})
+
+
+# Cột xuất/nhập Excel cho UID nhóm. Thứ tự này cũng là thứ tự cột trong file.
+# Cột đầu là header người đọc, key là tên cột DB tương ứng.
+EXPORT_UID_COLUMNS = [
+    ("uid",        "UID"),
+    ("ten_nhom",   "Tên nhóm"),
+    ("link_url",   "Link"),
+    ("thanh_vien", "Thành viên"),
+    ("ghi_chu",    "Ghi chú"),
+]
+
+
+@app.route("/api/uid-groups/export-excel")
+def api_uid_groups_export_excel():
+    """Xuất danh sách UID nhóm ra .xlsx, lưu vào Downloads.
+
+    Chỉ xuất nhóm từ sheet "UID Nhóm" (ma_nhom trống) — đúng những gì hiển thị
+    trên tab UID Nhóm. Các mã TIME1-7 dùng nội bộ nên không đưa vào file chia sẻ.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    rows = [g for g in get_all_uid_groups() if not g.get("ma_nhom")]
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "UID Nhóm"
+    ws.append([label for _, label in EXPORT_UID_COLUMNS])
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+
+    widths = [len(label) for _, label in EXPORT_UID_COLUMNS]
+    for row in rows:
+        values = []
+        for key, _ in EXPORT_UID_COLUMNS:
+            v = row.get(key, "")
+            values.append("" if v is None else str(v))
+        ws.append(values)
+        for i, v in enumerate(values):
+            widths[i] = max(widths[i], len(v))
+
+    for i, (key, _) in enumerate(EXPORT_UID_COLUMNS, start=1):
+        letter = ws.cell(row=1, column=i).column_letter
+        ws.column_dimensions[letter].width = min(widths[i - 1] + 2, 50)
+        # UID để dạng text tránh Excel biến số dài thành 1.23E+15.
+        if key == "uid":
+            for r in range(2, ws.max_row + 1):
+                ws.cell(row=r, column=i).number_format = "@"
+
+    ws.freeze_panes = "A2"
+
+    name = f"uid_nhom_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    path = _export_dir() / name
+    wb.save(str(path))
+
+    _reveal_in_explorer(path)
+    return jsonify({"ok": True, "path": str(path), "count": len(rows)})
+
+
+@app.route("/api/uid-groups/import-excel", methods=["POST"])
+def api_uid_groups_import_excel():
+    """Nhập UID nhóm từ file .xlsx do đồng nghiệp gửi.
+
+    Chế độ "thêm & bỏ trùng": UID nào đã có (so theo cột uid, sheet UID Nhóm)
+    thì bỏ qua, chỉ thêm UID mới. Không đụng tới dữ liệu cũ.
+    Cột nhận diện theo header ở dòng 1, không phụ thuộc thứ tự cột.
+    """
+    from openpyxl import load_workbook
+
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"ok": False, "error": "Không có file"})
+
+    try:
+        wb = load_workbook(file, read_only=True, data_only=True)
+    except Exception:
+        return jsonify({"ok": False, "error": "File không phải Excel (.xlsx) hợp lệ"})
+    ws = wb.active
+
+    rows_iter = ws.iter_rows(values_only=True)
+    try:
+        header = next(rows_iter)
+    except StopIteration:
+        return jsonify({"ok": False, "error": "File rỗng"})
+
+    # Map tên header (chuẩn hoá thường, bỏ khoảng trắng) -> chỉ số cột.
+    label_to_key = {label.strip().lower(): key for key, label in EXPORT_UID_COLUMNS}
+    col_key = {}
+    for idx, h in enumerate(header):
+        if h is None:
+            continue
+        key = label_to_key.get(str(h).strip().lower())
+        if key:
+            col_key[idx] = key
+
+    if "uid" not in col_key.values():
+        return jsonify({"ok": False, "error": "File thiếu cột UID"})
+
+    records = []
+    for row in rows_iter:
+        rec = {}
+        for idx, key in col_key.items():
+            v = row[idx] if idx < len(row) else None
+            rec[key] = "" if v is None else str(v).strip()
+        if rec.get("uid"):
+            records.append(rec)
+
+    try:
+        added, skipped = import_uid_groups(records)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+    return jsonify({"ok": True, "added": added, "skipped": skipped})
 
 
 # ═══════════════════════════════════════════════════════════════

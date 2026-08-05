@@ -67,7 +67,9 @@
                 <div id="acc-summary" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"></div>
                 <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
                     <button class="btn btn-primary" onclick="openAccForm()">+ Thêm tài khoản</button>
-                    <button class="btn btn-ghost" onclick="exportAccountsExcel()">Xuất Excel</button>
+                    <button class="btn btn-ghost" onclick="exportAccountsExcel()">📤 Xuất Excel</button>
+                    <button class="btn btn-ghost" onclick="document.getElementById('acc-import-file').click()">📥 Nhập Excel</button>
+                    <input type="file" id="acc-import-file" accept=".xlsx" style="display:none" onchange="importAccountsExcel(event)">
                     <span id="acc-count" style="font-size:12px;color:var(--text-muted);margin-left:auto"></span>
                 </div>
                 <div class="card">
@@ -82,20 +84,23 @@
 
             <!-- ══ Page ════════════════════════════════════ -->
             <div class="page" id="page-pages" style="display:none">
-                <div style="display:flex;gap:8px;margin-bottom:12px">
+                <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
                     <button class="btn btn-primary" onclick="openPageForm()">+ Thêm Page</button>
+                    <button class="btn btn-ghost" onclick="exportPagesExcel()">📤 Xuất Excel</button>
+                    <button class="btn btn-ghost" onclick="document.getElementById('page-import-file').click()">📥 Nhập Excel</button>
+                    <input type="file" id="page-import-file" accept=".xlsx" style="display:none" onchange="importPagesExcel(event)">
                 </div>
                 <div class="card">
                     <div class="table-wrap">
                         <table>
                             <thead><tr>
                                 <th style="width:32px"></th>
-                                <th>Tên Page</th><th style="text-align:center">Page UID</th>
+                                <th>Tên Page</th><th style="text-align:center">Acc quản lý</th><th style="text-align:center">Page UID</th>
                                 <th style="text-align:center">Loại đăng</th>
                                 <th style="text-align:center">Bài tối đa</th><th style="text-align:center">Link</th><th>Ghi chú</th>
                                 <th style="width:44px"></th>
                             </tr></thead>
-                            <tbody id="pages-table"><tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr></tbody>
+                            <tbody id="pages-table"><tr><td colspan="9" class="loading"><span class="spin">↻</span></td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -129,8 +134,11 @@
 
             <!-- ══ UID Nhóm ════════════════════════════════ -->
             <div class="page" id="page-uid-groups" style="display:none">
-                <div style="display:flex;gap:8px;margin-bottom:12px">
+                <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
                     <button class="btn btn-primary" onclick="openUidGroupForm()">+ Thêm UID nhóm</button>
+                    <button class="btn btn-ghost" onclick="exportUidGroupsExcel()">📤 Xuất Excel</button>
+                    <button class="btn btn-ghost" onclick="document.getElementById('uid-import-file').click()">📥 Nhập Excel</button>
+                    <input type="file" id="uid-import-file" accept=".xlsx" style="display:none" onchange="importUidGroupsExcel(event)">
                     <span style="font-size:12px;color:var(--text-muted);align-self:center" id="uid-count"></span>
                 </div>
                 <div class="card">

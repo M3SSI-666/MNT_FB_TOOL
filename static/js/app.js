@@ -506,6 +506,19 @@ async function exportAccountsExcel(){
     }catch(e){ Toast.error("Lỗi xuất Excel: "+e.message); }
 }
 
+async function importAccountsExcel(e){
+    const file=e.target.files[0]; if(!file) return;
+    e.target.value="";  // reset để chọn lại cùng file vẫn kích hoạt onchange
+    try{
+        const fd=new FormData(); fd.append("file",file);
+        const r=await fetch("/api/accounts/import-excel",{method:"POST",body:fd});
+        const res=await r.json();
+        if(!res.ok) throw new Error(res.error||"không rõ lỗi");
+        Toast.success(`Đã thêm ${res.added} tài khoản mới, bỏ qua ${res.skipped} trùng`);
+        loadAccounts();
+    }catch(err){ Toast.error("Lỗi nhập Excel: "+err.message); }
+}
+
 async function loadAccounts(){
     const tbody=document.getElementById("acc-table");
     const thead=document.getElementById("acc-thead");
@@ -749,7 +762,7 @@ async function insertAccRow(refId, position) {
 // ── Pages ─────────────────────────────────────────────────────
 async function loadPages(){
     const tbody=document.getElementById("pages-table"); if(!tbody) return;
-    tbody.innerHTML=`<tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="9" class="loading"><span class="spin">↻</span></td></tr>`;
     try{
         const res=await API.pages();
 
@@ -771,7 +784,7 @@ async function loadPages(){
             <div class="metric-value" style="font-size:20px${s.c?";color:"+s.c:""}">${s.v}</div>
         </div>`).join("");
 
-        if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="8" class="empty">Chưa có Page nào</td></tr>`; return; }
+        if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="9" class="empty">Chưa có Page nào</td></tr>`; return; }
 
         const ep=(p,field,style,mono)=>{
             const val=(p[field]||"").toString(); const esc=val.replace(/"/g,"&quot;");
@@ -790,6 +803,7 @@ async function loadPages(){
             <td style="text-align:center;color:var(--text-muted);cursor:grab;font-size:16px;padding:4px 6px"
                 title="Kéo để di chuyển hàng">☰</td>
             ${ep(p,"ten_page","font-weight:600;min-width:140px")}
+            ${ep(p,"acc_quan_ly","min-width:110px;text-align:center")}
             ${ep(p,"page_uid","min-width:120px;text-align:center",true)}
             <td class="editable" data-id="${p.id}" data-field="loai_page" data-val="${(p.loai_page||"").replace(/"/g,"&quot;")}"
                 onclick="startPageEdit(this)" style="font-size:12px;text-align:center">
@@ -806,7 +820,7 @@ async function loadPages(){
                     style="background:var(--danger-light);color:var(--danger);border:none;border-radius:5px;width:28px;height:28px;cursor:pointer;font-size:13px">🗑️</button>
             </td>
         </tr>`).join("");
-    }catch(e){ tbody.innerHTML=`<tr><td colspan="8" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
+    }catch(e){ tbody.innerHTML=`<tr><td colspan="9" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
 }
 
 function pageLoaiCell(loai){
@@ -860,7 +874,8 @@ function openPageForm(data={}){
     const f=(k,l)=>`<div class="field-group"><label>${l}</label><input id="pf_${k}" value="${(data[k]||"").toString().replace(/"/g,"&quot;")}"></div>`;
     openModal(data.id?"Sửa Page":"Thêm Page",`
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            ${f("ten_page","Tên Page")} ${f("page_uid","Page UID")}
+            ${f("ten_page","Tên Page")} ${f("acc_quan_ly","Acc quản lý")}
+            ${f("page_uid","Page UID")}
             <div class="field-group"><label>Loại đăng</label><select id="pf_loai_page">
                 ${["Homestay","Thuê","Bán"].map(o=>`<option value="${o}" ${data.loai_page===o?"selected":""}>${o}</option>`).join("")}
             </select></div>
@@ -879,7 +894,7 @@ async function savePageForm(){
     const g=id=>document.getElementById(id)?.value||"";
     const data={
         id: parseInt(g("pf_id"))||undefined,
-        ten_page: g("pf_ten_page"), page_uid: g("pf_page_uid"),
+        ten_page: g("pf_ten_page"), acc_quan_ly: g("pf_acc_quan_ly"), page_uid: g("pf_page_uid"),
         loai_page: g("pf_loai_page"),
         bai_dang_toi_da: parseInt(g("pf_bai_dang_toi_da"))||0,
         link_page: g("pf_link_page"), ghi_chu: g("pf_ghi_chu"),
@@ -893,6 +908,27 @@ async function deletePage(id){
     if(!confirm("Xóa Page này?")) return;
     try{ await API.deletePage(id); Toast.success("Đã xóa"); loadPages(); }
     catch(e){ Toast.error(e.message); }
+}
+
+async function exportPagesExcel(){
+    try{
+        const res=await API.exportPages();
+        if(!res.ok) throw new Error(res.error||"không rõ lỗi");
+        Toast.show(`Đã lưu ${res.count} Page: ${res.path}`, "success", 10000);
+    }catch(e){ Toast.error("Lỗi xuất Excel: "+e.message); }
+}
+
+async function importPagesExcel(e){
+    const file=e.target.files[0]; if(!file) return;
+    e.target.value="";  // reset để chọn lại cùng file vẫn kích hoạt onchange
+    try{
+        const fd=new FormData(); fd.append("file",file);
+        const r=await fetch("/api/pages/import-excel",{method:"POST",body:fd});
+        const res=await r.json();
+        if(!res.ok) throw new Error(res.error||"không rõ lỗi");
+        Toast.success(`Đã thêm ${res.added} Page mới, bỏ qua ${res.skipped} trùng`);
+        loadPages();
+    }catch(err){ Toast.error("Lỗi nhập Excel: "+err.message); }
 }
 
 // ── Dialog (thay prompt/confirm của trình duyệt bằng modal in-app) ──
@@ -1343,6 +1379,27 @@ async function deleteUidGroup(id){
     if(!confirm("Xóa UID nhóm này?")) return;
     try{ await API.deleteUidGroup(id); Toast.success("Đã xóa"); loadUidGroups(); }
     catch(e){ Toast.error(e.message); }
+}
+
+async function exportUidGroupsExcel(){
+    try{
+        const res=await API.exportUidGroups();
+        if(!res.ok) throw new Error(res.error||"không rõ lỗi");
+        Toast.show(`Đã lưu ${res.count} UID: ${res.path}`, "success", 10000);
+    }catch(e){ Toast.error("Lỗi xuất Excel: "+e.message); }
+}
+
+async function importUidGroupsExcel(e){
+    const file=e.target.files[0]; if(!file) return;
+    e.target.value="";  // reset để chọn lại cùng file vẫn kích hoạt onchange
+    try{
+        const fd=new FormData(); fd.append("file",file);
+        const r=await fetch("/api/uid-groups/import-excel",{method:"POST",body:fd});
+        const res=await r.json();
+        if(!res.ok) throw new Error(res.error||"không rõ lỗi");
+        Toast.success(`Đã thêm ${res.added} UID mới, bỏ qua ${res.skipped} trùng`);
+        loadUidGroups();
+    }catch(err){ Toast.error("Lỗi nhập Excel: "+err.message); }
 }
 
 // ── Schedule pages ────────────────────────────────────────────
