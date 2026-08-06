@@ -397,6 +397,8 @@ let _runnerStatus={};
 
 async function loadRunnerStatus(){
     try{
+        // Nạp cài đặt hiện/ẩn Chrome 1 lần đầu, để ô tick vẽ đúng trạng thái
+        if(!Object.keys(_hienChromeMap).length) await napHienChrome();
         const res=await API.runStatus();
         _runnerStatus=res;
         renderRunnerGrid();
@@ -415,11 +417,47 @@ function renderRunnerGrid(){
                 <span class="status-dot ${running?"running":"stopped"}" style="display:inline-block;margin-right:6px;vertical-align:middle"></span>
                 <span style="font-size:12px;color:${running?cfg.color:"var(--text-muted)"}">${running?"Đang chạy":"Đã dừng"}</span>
             </div>
+            <label style="display:flex;align-items:center;justify-content:center;gap:6px;
+                          font-size:11px;color:var(--text-muted);margin-bottom:10px;cursor:pointer"
+                   title="Hiện cửa sổ Chrome để xem tận mắt — dùng khi cần tìm lỗi">
+                <input type="checkbox" ${_hienChrome(loai)?"checked":""}
+                       onchange="datHienChrome('${loai}',this.checked)"
+                       style="width:14px;height:14px;cursor:pointer">
+                👁 Hiện Chrome
+            </label>
             ${running
                 ?`<button class="btn btn-danger" style="width:100%" onclick="runnerStop('${loai}')">⏹ Dừng</button>`
                 :`<button class="btn btn-primary" style="width:100%;background:${cfg.color}" onclick="runnerStart('${loai}')">▶ Run</button>`}
         </div>`;
     }).join("");
+}
+
+// Chế độ hiện/ẩn Chrome đặt RIÊNG cho từng loại runner, lưu vào settings nên
+// còn nguyên sau khi khởi động lại. Trước đây chỉ có 1 công tắc chung ở đầu
+// trang: muốn xem riêng Đăng Page phải gạt qua gạt lại, mà chạy rồi thì không
+// nhìn được loại nào đang ở chế độ gì.
+let _hienChromeMap = {};
+
+function _hienChrome(loai){ return _hienChromeMap[loai] === true; }
+
+async function datHienChrome(loai, hien){
+    _hienChromeMap[loai] = hien;
+    try{
+        await API.saveSettings({ [`hien_chrome_${loai}`]: hien ? 1 : 0 });
+        const cfg = RUNNER_LABELS[loai] || {};
+        Toast.success(`${cfg.title}: ${hien ? "sẽ HIỆN cửa sổ Chrome" : "chạy ẩn"}`
+                      + (_runnerStatus[loai]?.running ? " — cần Dừng rồi Run lại" : ""));
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function napHienChrome(){
+    try{
+        const s = (await API.settings()).data || {};
+        _hienChromeMap = {};
+        for(const loai of Object.keys(RUNNER_LABELS)){
+            _hienChromeMap[loai] = String(s[`hien_chrome_${loai}`] || "0") === "1";
+        }
+    }catch(e){}
 }
 
 function renderSidebarStatus(){
@@ -439,15 +477,16 @@ function isHeadless(){
 
 function updateHeadlessLabel(){
     const checked = document.getElementById("toggle-headless")?.checked;
-    document.getElementById("headless-label").textContent  = checked ? "Hiển thị Chrome" : "Ẩn Chrome (Headless)";
+    document.getElementById("headless-label").textContent  = checked ? "Hiển thị Chrome (mặc định chung)" : "Ẩn Chrome (mặc định chung)";
     document.getElementById("headless-desc").textContent   = checked
-        ? "Chrome hiển thị — dùng để kiểm tra & debug"
-        : "Chrome chạy nền, không hiện cửa sổ";
+        ? "Áp cho loại nào KHÔNG tự tick '👁 Hiện Chrome' ở thẻ bên dưới"
+        : "Áp cho loại nào KHÔNG tự tick '👁 Hiện Chrome' ở thẻ bên dưới";
     document.getElementById("headless-label").style.color  = checked ? "var(--warning)" : "";
 }
 
 async function runnerStart(loai){
-    const headless = isHeadless();
+    // Ưu tiên cài đặt RIÊNG của loại này; chưa đặt thì theo công tắc chung.
+    const headless = _hienChrome(loai) ? false : isHeadless();
     const mode = headless ? "" : " (Chrome hiển thị)";
     try{
         const r=await API.runStart(loai, headless);
