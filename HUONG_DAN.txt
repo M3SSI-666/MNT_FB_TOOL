@@ -109,6 +109,11 @@ PHẦN 4. LẦN ĐẦU DÙNG — NHẬP DỮ LIỆU
 
   6. Tab "Hành động"  — Bấm "Run" ở loại lịch muốn chạy.
 
+  Mẹo xem phần mềm đang làm gì: ở tab "Hành động", mỗi loại có ô tick
+  "Hiện Chrome". Tick vào rồi Dừng/Run lại loại đó thì cửa sổ Chrome
+  sẽ hiện ra cho bạn nhìn tận mắt — hữu ích khi cần tìm nguyên nhân
+  một loại nào đó đăng hỏng. Bỏ tick là chạy ẩn như bình thường.
+
   Về nuôi nick: ở tab "Tài khoản", tích ô "Nuôi" cho nick nào
   muốn nuôi. Cột "Chu kỳ (p)" là bao lâu nuôi 1 lần (mặc định
   150 phút). Nick nào để TRỐNG cột "Loại đăng" thì chỉ nuôi,
