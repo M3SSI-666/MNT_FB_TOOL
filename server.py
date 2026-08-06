@@ -302,6 +302,23 @@ def run_stop(loai):
 # API — Accounts
 # ═══════════════════════════════════════════════════════════════
 
+# Cột khai báo INTEGER trong DB. Sửa trực tiếp trên bảng gửi lên chuỗi JSON,
+# mà SQLite dùng kiểu động nên nhận chuỗi tuốt — ghi vào thì im lặng, tới lúc
+# đọc ra so sánh mới vỡ. Đã gặp thật: ô "Bài đăng tối đa" bị xoá trống thành ''
+# khiến gen lịch Page lỗi HTTP 500 ('' > 0 không so sánh được).
+COT_SO = {"bai_dang_toi_da", "thoi_gian_nghi", "nuoi_nick", "nuoi_interval", "order_idx"}
+
+
+def ep_kieu_so(field: str, value):
+    """Ép giá trị về int nếu `field` là cột số. Rỗng/rác -> 0."""
+    if field not in COT_SO:
+        return value
+    try:
+        return int(float(str(value).strip()))
+    except (TypeError, ValueError):
+        return 0
+
+
 # Các trường credential không bao giờ được trả về trong danh sách tài khoản.
 # Muốn xem giá trị thật phải gọi /api/accounts/<id>/secrets từ máy local.
 SECRET_ACCOUNT_FIELDS = ("password", "xs", "twofa", "pass_khoiphuc", "email_khoiphuc")
@@ -509,7 +526,8 @@ def api_accounts_field(acc_id):
     if body.get("field") in SECRET_ACCOUNT_FIELDS and body.get("value") == SECRET_MASK:
         return jsonify({"ok": True, "skipped": True})   # không đổi gì
     try:
-        update_account_field(acc_id, body["field"], body["value"])
+        update_account_field(acc_id, body["field"],
+                             ep_kieu_so(body["field"], body["value"]))
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -578,6 +596,7 @@ def api_pages_field(page_id):
     safe = {"ten_page","acc_quan_ly","page_uid","link_page","loai_page","bai_dang_toi_da","ghi_chu"}
     if field not in safe:
         return jsonify({"ok": False, "error": f"Field không hợp lệ: {field}"})
+    value = ep_kieu_so(field, value)
     try:
         from db import _conn
         with _conn() as con:
@@ -1174,7 +1193,12 @@ def api_schedule_page_gen():
 
     CONTENT_LOAI_MAP = {"Homestay": "homestay", "Thuê": "thue", "Bán": "ban"}
 
-    pages = [p for p in get_pages() if p.get("bai_dang_toi_da", 0) > 0]
+    # Ép int khi ĐỌC, không so sánh thẳng: dữ liệu cũ (hoặc nhập từ Excel) có
+    # thể còn lưu dạng chuỗi, '' > 0 sẽ ném TypeError -> HTTP 500.
+    def _so_bai(p):
+        return ep_kieu_so("bai_dang_toi_da", p.get("bai_dang_toi_da", 0))
+
+    pages = [p for p in get_pages() if _so_bai(p) > 0]
     if not pages:
         return jsonify({"ok": False, "error": "Không có Page nào có 'Bài đăng tối đa' > 0"})
 
@@ -1186,7 +1210,7 @@ def api_schedule_page_gen():
         codes = [r["ma_content"] for r in get_content(ct_loai, su_dung="Có")]
         if not codes:
             continue
-        n      = min(p["bai_dang_toi_da"], len(codes))
+        n      = min(_so_bai(p), len(codes))
         picked = _random.sample(codes, n)
         page_items.append({"ten_page": p["ten_page"], "picked": picked})
 

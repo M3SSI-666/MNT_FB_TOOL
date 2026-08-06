@@ -361,6 +361,23 @@ _only_feed = nuoi_nick.select_session_activities({"nuoi_enable_feed":1}, _rnd.Ra
 check("tắt hết trừ feed -> chỉ feed",  _only_feed == ["feed"])
 check("không bật gì -> rỗng",          nuoi_nick.select_session_activities({}, _rnd.Random(1)) == [])
 
+# ── cột số: sửa inline không được lưu thành chuỗi ─────────────────────────
+# Ô "Bài đăng tối đa" bị xoá trống thành '' đã làm gen lịch Page vỡ HTTP 500
+# vì '' > 0 ném TypeError. Khoá lại cả 2 đầu: ép khi ghi và ép khi đọc.
+import server as _sv
+_eks = _sv.ep_kieu_so
+check("ô số bỏ trống -> 0",          _eks("bai_dang_toi_da", "") == 0)
+check("ô số toàn khoảng trắng -> 0", _eks("bai_dang_toi_da", "   ") == 0)
+check("ô số chữ rác -> 0",           _eks("bai_dang_toi_da", "abc") == 0)
+check("ô số None -> 0",              _eks("bai_dang_toi_da", None) == 0)
+check("chuỗi số -> đúng số",         _eks("bai_dang_toi_da", "7") == 7)
+check("số thập phân -> cắt phần nguyên", _eks("nuoi_interval", "3.9") == 3)
+check("số nguyên giữ nguyên",        _eks("thoi_gian_nghi", 30) == 30)
+check("kết quả LUÔN là int",         all(isinstance(_eks("order_idx", v), int)
+                                         for v in ("", "x", None, "5", 5, 2.7)))
+check("cột CHỮ không bị đụng",       _eks("ten_page", "Homestay 5") == "Homestay 5")
+check("cột chữ rỗng giữ nguyên chuỗi", _eks("ghi_chu", "") == "")
+
 # ── server: KHÔNG rò rỉ credential qua /api/accounts ───────────────────────
 import server
 
