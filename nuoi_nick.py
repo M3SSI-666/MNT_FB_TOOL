@@ -35,7 +35,8 @@ from utils import logger, CookieDeadError
 from config import HEADLESS
 from cookie_exporter import load_cookie
 from fb_common import (browser_launch_kwargs, find_profile_dir, human_delay,
-                       jwait, view_stories, browse_and_like)
+                       jwait, view_stories, browse_and_like,
+                       dong_dialog_canh_bao)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -270,6 +271,10 @@ async def _open_context(p, acc_name: str, c_user: str, headless: bool = None):
     if "login" in page.url or "checkpoint" in page.url:
         await ctx.close()
         raise CookieDeadError(acc_name)
+
+    # Dọn dialog cảnh báo ngay đầu phiên: nó che newfeed nên mọi hành động nuôi
+    # (lướt, like, mở story, mở nhóm chat) đều click trúng nền mờ.
+    await dong_dialog_canh_bao(page)
     return ctx, page
 
 

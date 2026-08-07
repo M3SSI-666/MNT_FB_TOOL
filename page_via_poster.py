@@ -46,6 +46,7 @@ from cookie_exporter import load_cookie
 from storage import prepare_images_for_post as smart_download, cleanup_temp
 from config import HEADLESS
 from utils import logger, jitter_ms, CookieDeadError
+from fb_common import dong_dialog_canh_bao, cho_composer_dong
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -450,6 +451,10 @@ async def _run_page_via(
             await ctx.close()
             raise CookieDeadError(acc_name)
 
+        # Gạt dialog cảnh báo vi phạm sang một bên — nó nổi đè lên newfeed và
+        # nuốt mất cú click vào ô soạn bài.
+        await dong_dialog_canh_bao(page)
+
         # Mở composer
         logger.info(f"    📝 Mở composer...")
         opened = False
@@ -697,16 +702,11 @@ async def _run_page_via(
             await ctx.close()
             return False
 
-        # Chờ dialog đóng
-        try:
-            await page.wait_for_selector("div[role='dialog']", state="detached", timeout=30000)
+        # Chờ ô soạn bài đóng = Facebook đã nhận bài
+        if await cho_composer_dong(page):
             logger.info(f"  ✅ [{acc_name}] ĐĂNG THÀNH CÔNG!")
-        except PWTimeout:
-            await asyncio.sleep(9)
-            if not await page.query_selector("div[role='dialog']"):
-                logger.info(f"  ✅ [{acc_name}] ĐĂNG THÀNH CÔNG!")
-            else:
-                logger.warning(f"  ⚠️  Không chắc kết quả — kiểm tra thủ công trên Facebook")
+        else:
+            logger.warning(f"  ⚠️  Không chắc kết quả — kiểm tra thủ công trên Facebook")
 
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 7 — Scroll 15-30s + like tối đa 1 bài (đang là Page) rồi đóng Chrome
@@ -812,6 +812,9 @@ async def _run_page_wall(
             logger.error(f"  ❌ Bị redirect về login sau switch!")
             await ctx.close()
             raise CookieDeadError(acc_name)
+
+        # Gạt dialog cảnh báo vi phạm sang một bên trước khi click ô soạn bài
+        await dong_dialog_canh_bao(page)
 
         # ── BƯỚC 4 — Mở composer tường Page → paste → upload ──────────────────
         logger.info(f"  [4/5] 📝 Mở composer tường Page...")
@@ -960,18 +963,13 @@ async def _run_page_wall(
             except PWTimeout:
                 continue
 
-        # Chờ dialog đóng = đăng xong
-        try:
-            await page.wait_for_selector("div[role='dialog']", state="detached", timeout=30000)
+        # Chờ ô soạn bài đóng = đăng xong
+        if await cho_composer_dong(page):
             logger.info(f"  ✅ [{acc_name}] ĐĂNG TƯỜNG PAGE THÀNH CÔNG!")
-        except PWTimeout:
-            await asyncio.sleep(9)
-            if not await page.query_selector("div[role='dialog']"):
-                logger.info(f"  ✅ [{acc_name}] ĐĂNG TƯỜNG PAGE THÀNH CÔNG!")
-            else:
-                logger.warning(f"  ⚠️  Không chắc kết quả — kiểm tra thủ công trên Facebook")
-                await ctx.close()
-                return False
+        else:
+            logger.warning(f"  ⚠️  Không chắc kết quả — kiểm tra thủ công trên Facebook")
+            await ctx.close()
+            return False
 
         # Cooldown nhẹ rồi đóng — đang là Page, like tối đa 1 bài
         await _browse_and_like(page, duration_sec=random.randint(10, 20), max_likes=1)

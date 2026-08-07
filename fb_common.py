@@ -268,6 +268,93 @@ async def dismiss_anon_dialog(page, wait_ms: int = 0) -> bool:
     return False
 
 
+# Dialog "Sự việc" / "Trạng thái tài khoản" — Facebook bật lên khi vừa gỡ nội
+# dung của nick. Nó gây HAI hỏng hóc, không chỉ một:
+#   1. Nổi đè lên newfeed → click vào ô soạn bài trúng nền mờ → "Không mở được
+#      composer".
+#   2. Mang role=dialog → bước xác minh "chờ dialog đóng" sau khi bấm Đăng
+#      không bao giờ thấy nó biến mất → báo thất bại dù bài ĐÃ lên.
+# Đóng nó đi là an toàn: đây chỉ là thông báo, Facebook đã gỡ nội dung từ trước.
+CANH_BAO_MOC = (
+    "chúng tôi đã gỡ", "tiêu chuẩn cộng đồng", "trạng thái tài khoản",
+    "we removed", "community standards", "account status",
+)
+
+_NUT_DONG = ("[aria-label='Đóng']", "[aria-label='Close']")
+
+
+async def dong_dialog_canh_bao(page) -> str:
+    """
+    Đóng dialog cảnh báo vi phạm nếu đang mở. Trả về nội dung cảnh báo (rút
+    gọn) để bên gọi ghi log, "" nếu không có gì.
+
+    CHỈ đóng dialog khớp mốc cảnh báo. Ô soạn bài và hộp "Chuyển sang Trang"
+    cũng là role=dialog — đóng nhầm là hỏng luôn phiên đăng.
+    """
+    try:
+        dialogs = await page.query_selector_all("div[role='dialog']")
+    except Exception:
+        return ""
+
+    for dlg in dialogs:
+        try:
+            if not await dlg.is_visible():
+                continue
+            text = (await dlg.inner_text()) or ""
+        except Exception:
+            continue
+
+        if not any(m in text.lower() for m in CANH_BAO_MOC):
+            continue
+
+        for sel in _NUT_DONG:
+            try:
+                btn = await dlg.query_selector(sel)
+                if btn and await btn.is_visible():
+                    await btn.click()
+                    break
+            except Exception:
+                continue
+        else:
+            # Không thấy nút X — Escape cũng đóng được dialog của Facebook
+            try:
+                await page.keyboard.press("Escape")
+            except Exception:
+                pass
+
+        await asyncio.sleep(1.0)
+        gon = " ".join(text.split())[:110]
+        logger.warning(f"    ⚠️  FB cảnh báo nick này: {gon}")
+        return gon
+
+    return ""
+
+
+# Ô soạn bài là dialog DUY NHẤT chứa vùng nhập nội dung. Bám vào đặc điểm đó
+# để xác minh, thay vì "bất kỳ role=dialog nào" — vế sau dính cả dialog cảnh
+# báo, hộp quyền riêng tư, popup gợi ý, và báo thất bại oan cho bài đã đăng.
+COMPOSER_DIALOG = "div[role='dialog']:has(div[contenteditable='true'])"
+
+
+async def cho_composer_dong(page, timeout_ms: int = 30000) -> bool:
+    """Chờ ô soạn bài đóng — dấu hiệu Facebook đã nhận bài. True = đã đóng."""
+    from playwright.async_api import TimeoutError as PWTimeout
+    try:
+        await page.wait_for_selector(COMPOSER_DIALOG, state="hidden", timeout=timeout_ms)
+        return True
+    except PWTimeout:
+        pass
+    except Exception:
+        return False
+
+    # Hết giờ chưa chắc đã hỏng: mạng chậm hoặc ảnh nặng thì composer đóng muộn.
+    await asyncio.sleep(9)
+    try:
+        return await page.query_selector(COMPOSER_DIALOG) is None
+    except Exception:
+        return False
+
+
 async def clipboard_paste(page, ctx, text: str):
     """Ghi text vào clipboard rồi Ctrl+V."""
     try:

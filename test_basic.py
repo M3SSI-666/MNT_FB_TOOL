@@ -217,6 +217,83 @@ check("c_user lệch: DB giữ xs cũ",        _xs() == "xs_cu")
 check("c_user khớp -> trả xs mới",        _ce._sync_xs_to_db(_ar, {"xs": "xs_moi", "c_user": "111"}) == "xs_moi")
 check("c_user khớp -> DB đã lưu xs mới",  _xs() == "xs_moi")
 
+# ── dialog cảnh báo vi phạm: đóng ĐÚNG cái, không đụng ô soạn bài ─────────
+import asyncio as _aio
+import fb_common as _fc
+
+
+class _Nut:
+    def __init__(self, chu):  self.chu = chu
+    async def is_visible(self): return True
+    async def click(self):    self.chu.da_bam = True
+
+
+class _Dlg:
+    """Giả một div[role=dialog]."""
+    def __init__(self, text, co_nut_x=True, hien=True):
+        self._t, self._x, self._h = text, co_nut_x, hien
+        self.da_bam = False
+    async def is_visible(self):  return self._h
+    async def inner_text(self):  return self._t
+    async def query_selector(self, sel): return _Nut(self) if self._x else None
+
+
+class _Ban_phim:
+    def __init__(self): self.phim = []
+    async def press(self, k): self.phim.append(k)
+
+
+class _Trang:
+    def __init__(self, *dlgs):
+        self._d = list(dlgs); self.keyboard = _Ban_phim()
+    async def query_selector_all(self, sel): return self._d
+
+
+_CANH_BAO = "Sự việc\nChúng tôi đã gỡ một số nội dung hoặc tin nhắn\nSpam"
+_SOAN_BAI = "Tạo bài viết\nBạn đang nghĩ gì?\nẢnh/video"
+_CHUYEN   = "Bạn đang dùng Facebook với tư cách Trang\nDùng Trang"
+
+_d = _Dlg(_CANH_BAO)
+check("nhận ra dialog cảnh báo",        "Chúng tôi đã gỡ" in _aio.run(_fc.dong_dialog_canh_bao(_Trang(_d))))
+check("cảnh báo -> có bấm nút X",       _d.da_bam)
+
+# Ô soạn bài và hộp "Chuyển sang Trang" cũng là role=dialog. Đóng nhầm chúng
+# là hỏng luôn phiên đăng — đây là lý do phải khớp theo mốc chữ, không đóng bừa.
+_d = _Dlg(_SOAN_BAI)
+check("KHÔNG đụng ô soạn bài",          _aio.run(_fc.dong_dialog_canh_bao(_Trang(_d))) == "" and not _d.da_bam)
+_d = _Dlg(_CHUYEN)
+check("KHÔNG đụng hộp Chuyển sang Trang", _aio.run(_fc.dong_dialog_canh_bao(_Trang(_d))) == "" and not _d.da_bam)
+
+_c, _s = _Dlg(_CANH_BAO), _Dlg(_SOAN_BAI)
+check("lẫn lộn -> chỉ đóng cảnh báo",   _aio.run(_fc.dong_dialog_canh_bao(_Trang(_s, _c))) != "" and _c.da_bam and not _s.da_bam)
+
+check("bỏ qua dialog ẩn",               _aio.run(_fc.dong_dialog_canh_bao(_Trang(_Dlg(_CANH_BAO, hien=False)))) == "")
+check("không có dialog nào -> rỗng",    _aio.run(_fc.dong_dialog_canh_bao(_Trang())) == "")
+check("bản tiếng Anh cũng nhận",        _aio.run(_fc.dong_dialog_canh_bao(_Trang(_Dlg("We removed some content")))) != "")
+
+_t = _Trang(_Dlg(_CANH_BAO, co_nut_x=False))
+check("không thấy nút X -> bấm Escape", _aio.run(_fc.dong_dialog_canh_bao(_t)) != "" and _t.keyboard.phim == ["Escape"])
+
+
+# ── xác minh sau khi đăng: phải bám Ô SOẠN BÀI, không phải dialog bất kỳ ───
+_bat = {}
+
+
+class _TrangOK:
+    async def wait_for_selector(self, sel, state=None, timeout=None):
+        _bat["sel"], _bat["state"] = sel, state
+        return None
+    async def query_selector(self, sel): return None
+
+
+check("composer đóng -> báo thành công", _aio.run(_fc.cho_composer_dong(_TrangOK())) is True)
+
+# Bản cũ chờ "div[role='dialog']" biến mất. Dialog cảnh báo cũng là role=dialog
+# và không tự đóng -> hết 30s -> báo thất bại dù bài ĐÃ lên. Với luồng tường
+# Page nó còn return False, khiến lịch bị đánh ❌: 5 lượt đăng, 0 lượt xác nhận.
+check("bám ô soạn bài, không dialog bất kỳ", "contenteditable" in _bat.get("sel", ""))
+check("chờ tới khi ô soạn bài biến mất",     _bat.get("state") == "hidden")
+
 # ── nuôi nick: xếp phiên theo CHU KỲ (logic thuần) ─────────────────────────
 import nuoi_nick
 

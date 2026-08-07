@@ -32,6 +32,7 @@ import unicodedata
 from cookie_exporter import load_cookie
 from config import HEADLESS
 from utils import logger, jitter_ms, CookieDeadError
+from fb_common import dong_dialog_canh_bao, cho_composer_dong
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -330,6 +331,10 @@ async def _run_crosspost(
             await ctx.close()
             raise CookieDeadError(acc_name)
 
+        # Gạt dialog cảnh báo vi phạm sang một bên — nó nổi đè lên newfeed và
+        # nuốt mất cú click vào ô soạn bài.
+        await dong_dialog_canh_bao(page)
+
         # Mở composer
         logger.info(f"    📝 Mở composer...")
         opened = False
@@ -602,16 +607,11 @@ async def _run_crosspost(
             await ctx.close()
             return False
 
-        # Chờ dialog đóng
-        try:
-            await page.wait_for_selector("div[role='dialog']", state="detached", timeout=30000)
+        # Chờ ô soạn bài đóng = Facebook đã nhận bài
+        if await cho_composer_dong(page):
             logger.info(f"  ✅ [{acc_name}] ĐĂNG THÀNH CÔNG!")
-        except PWTimeout:
-            await asyncio.sleep(9)
-            if not await page.query_selector("div[role='dialog']"):
-                logger.info(f"  ✅ [{acc_name}] ĐĂNG THÀNH CÔNG!")
-            else:
-                logger.warning(f"  ⚠️  Không chắc kết quả — kiểm tra thủ công trên Facebook")
+        else:
+            logger.warning(f"  ⚠️  Không chắc kết quả — kiểm tra thủ công trên Facebook")
 
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 6 — Scroll 15-30s rồi đóng Chrome (không like — trang cá nhân)
