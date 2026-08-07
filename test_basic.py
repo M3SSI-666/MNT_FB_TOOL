@@ -183,6 +183,40 @@ check("nhận nhiều profile cùng lúc",        _co("P1") and _co("P2") and le
 check("chuỗi rỗng -> không có gì",          _lp("", _goc) == set())
 check("không có user-data-dir -> rỗng",     _lp("chrome.exe --headless", _goc) == set())
 
+# ── refresh cookie: tìm profile + ghi xs mới về DB ────────────────────────
+import cookie_exporter as _ce
+
+# Thư mục profile thật do poster tạo có dạng "{Tên}_{c_user}". Bản cũ chỉ so
+# tên trần nên khớp 0/15 acc — phần đọc cookie từ profile chết lặng nhiều
+# tháng mà không một dòng log nào báo.
+_pf_goc = Path(tempfile.mkdtemp(prefix="mnt_pf_"))
+_ce.PROFILES_DIR = str(_pf_goc)
+for _d in ("Tran_Minh_Khanh_100078745098439", "Huu_Chau"):
+    (_pf_goc / _d).mkdir()
+
+_f = lambda t, c="": _ce._find_profile_dir(t, c)
+check("tìm profile dạng {Tên}_{c_user}",
+      _os.path.basename(_f("Tran Minh Khanh", "100078745098439") or "")
+      == "Tran_Minh_Khanh_100078745098439")
+check("vẫn nhận profile đời cũ tên trần",   _os.path.basename(_f("Huu Chau") or "") == "Huu_Chau")
+check("sai c_user -> không vơ bừa profile", _f("Tran Minh Khanh", "999") is None)
+check("acc không có profile -> None",       _f("Khong Ton Tai", "123") is None)
+check("KHÔNG tự tạo thư mục khi tìm hụt",   not (_pf_goc / "Khong_Ton_Tai_123").exists())
+
+# _sync_xs_to_db: chỉ ghi đè xs khi chắc chắn đúng nick. Profile có thể đã được
+# đăng nhập sang nick khác — ghi bừa sẽ gán cookie nick này cho nick kia.
+_ar_id = db.upsert_account({"ten_acc": "Acc Refresh", "c_user": "111",
+                            "xs": "xs_cu", "trang_thai": "Active"})
+_ar = db.get_account_by_id(_ar_id)
+_xs = lambda: [a for a in db.get_accounts() if a["id"] == _ar["id"]][0]["xs"]
+
+check("profile không trả xs -> bỏ qua",   _ce._sync_xs_to_db(_ar, {}) == "")
+check("xs y hệt DB -> không ghi lại",     _ce._sync_xs_to_db(_ar, {"xs": "xs_cu", "c_user": "111"}) == "")
+check("c_user LỆCH -> từ chối ghi đè",    _ce._sync_xs_to_db(_ar, {"xs": "xs_moi", "c_user": "222"}) == "")
+check("c_user lệch: DB giữ xs cũ",        _xs() == "xs_cu")
+check("c_user khớp -> trả xs mới",        _ce._sync_xs_to_db(_ar, {"xs": "xs_moi", "c_user": "111"}) == "xs_moi")
+check("c_user khớp -> DB đã lưu xs mới",  _xs() == "xs_moi")
+
 # ── nuôi nick: xếp phiên theo CHU KỲ (logic thuần) ─────────────────────────
 import nuoi_nick
 
@@ -407,6 +441,14 @@ check("dấu che không ghi đè xs",       db.get_account_by_id(_acc_id)["xs"] 
 # Nhưng giá trị thật thì vẫn sửa được bình thường
 _client.post(f"/api/accounts/{_acc_id}/field", json={"field": "xs", "value": "xs-moi"})
 check("sửa xs bằng giá trị thật OK",   db.get_account_by_id(_acc_id)["xs"] == "xs-moi")
+
+# Nút "Refresh cookie ngay" — không acc nào để Yes thì phải im lặng trả rỗng,
+# tuyệt đối không mở trình duyệt. (Refresh của scheduler 10 phút mới quét và
+# chỉ chạy khi có runner bật; nút này là đường thoát khi runner đều tắt.)
+db.update_account_field(_ar["id"], "refresh", "Done")
+_res = _client.post("/api/accounts/refresh-now").get_json()
+check("endpoint refresh-now tồn tại",  _res.get("ok") is True)
+check("không có acc Yes -> rỗng",      _res.get("da_lam") == [] and _res.get("loi") == [])
 
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):

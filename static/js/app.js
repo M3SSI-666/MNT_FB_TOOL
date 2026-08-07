@@ -558,6 +558,26 @@ async function importAccountsExcel(e){
     }catch(err){ Toast.error("Lỗi nhập Excel: "+err.message); }
 }
 
+// Mỗi acc phải mở một Chrome ẩn để đọc cookie nên có thể mất vài chục giây.
+// Khoá nút trong lúc chạy, tránh người dùng bấm chồng làm mở nhiều Chrome
+// cùng trỏ vào một profile — thứ chắc chắn làm hỏng dữ liệu đăng nhập.
+async function refreshCookiesNow(){
+    const btn=document.getElementById("btn-refresh-cookie");
+    const cu=btn.textContent;
+    btn.disabled=true; btn.textContent="⏳ Đang refresh...";
+    try{
+        const r=await fetch("/api/accounts/refresh-now",{method:"POST"});
+        const res=await r.json();
+        if(!res.ok) throw new Error(res.error||"không rõ lỗi");
+        const n=(res.da_lam||[]).length, loi=(res.loi||[]).length;
+        if(!n && !loi) Toast.info("Không có acc nào để Refresh = Yes");
+        else if(loi)   Toast.error(`Xong ${n} acc, ${loi} acc lỗi — xem log`);
+        else           Toast.success(`Đã refresh cookie ${n} acc: ${res.da_lam.join(", ")}`);
+        loadAccounts();
+    }catch(err){ Toast.error("Lỗi refresh: "+err.message); }
+    finally{ btn.disabled=false; btn.textContent=cu; }
+}
+
 async function loadAccounts(){
     const tbody=document.getElementById("acc-table");
     const thead=document.getElementById("acc-thead");

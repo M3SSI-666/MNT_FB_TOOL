@@ -119,6 +119,22 @@ PHẦN 4. LẦN ĐẦU DÙNG — NHẬP DỮ LIỆU
   150 phút). Nick nào để TRỐNG cột "Loại đăng" thì chỉ nuôi,
   không đăng bài.
 
+  Về cột "Refresh" ở tab "Tài khoản": đổi sang "Yes" là bảo phần
+  mềm đi lấy cookie mới cho nick đó. Nó mở trình duyệt của chính
+  nick đó lên, đọc xs mới nhất rồi ghi đè vào ô xs — bạn không
+  phải tự vào Facebook copy tay nữa. Xong thì ô tự đổi thành
+  "Done".
+
+  Có 2 cách chạy:
+    - Bấm nút "🔄 Refresh cookie ngay" -> chạy liền, chờ vài giây.
+    - Hoặc cứ để đó: nếu đang có runner chạy, cứ 10 phút phần mềm
+      tự quét một lần.
+  Không có runner nào chạy mà cũng không bấm nút thì ô sẽ nằm ở
+  "Yes" mãi — đó là bình thường, không phải hỏng.
+
+  Lưu ý: nick nào đang đăng bài dở thì lần đó bị bỏ qua (không
+  mở 2 trình duyệt cùng lúc vào 1 nick được), bấm lại sau là được.
+
 
 ===============================================================
 PHẦN 5. CẬP NHẬT PHIÊN BẢN MỚI
@@ -163,7 +179,12 @@ PHẦN 6. GẶP LỖI THÌ LÀM GÌ
 
 --- Đăng bài báo "Cookie hết hạn" ---
   Nick đó đã bị Facebook đăng xuất.
-  => Vào tab "Tài khoản", lấy lại giá trị xs mới cho nick đó.
+  => Trước hết thử: vào tab "Tài khoản", đổi cột "Refresh" của
+     nick đó sang "Yes" rồi bấm "🔄 Refresh cookie ngay".
+     Nếu trình duyệt của nick đó vẫn còn đăng nhập thì phần mềm
+     tự lấy được xs mới, xong ngay.
+  => Vẫn báo hết hạn nghĩa là nick đã bị đăng xuất hẳn.
+     Lúc đó mới phải tự vào Facebook lấy xs mới dán vào.
 
 --- Đăng bài báo "Không thấy nút (FB đổi giao diện?)" ---
   Facebook vừa đổi giao diện, phần mềm cần cập nhật.

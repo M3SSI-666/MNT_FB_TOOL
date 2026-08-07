@@ -533,6 +533,23 @@ def api_accounts_field(acc_id):
         return jsonify({"ok": False, "error": str(e)})
 
 
+@app.route("/api/accounts/refresh-now", methods=["POST"])
+def api_accounts_refresh_now():
+    """
+    Làm mới cookie NGAY cho các acc đang để cột Refresh = Yes.
+
+    Vòng lặp scheduler cũng làm việc này, nhưng 10 phút mới quét một lần và chỉ
+    chạy bên trong runner đang bật — dừng hết runner thì cột Refresh nằm ở Yes
+    vĩnh viễn. Nút này gỡ cả hai ràng buộc.
+    """
+    try:
+        from cookie_exporter import refresh_pending_accounts
+        kq = refresh_pending_accounts()
+        return jsonify({"ok": True, **kq})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @app.route("/api/accounts/<int:acc_id>", methods=["DELETE"])
 def api_accounts_delete(acc_id):
     delete_account(acc_id)

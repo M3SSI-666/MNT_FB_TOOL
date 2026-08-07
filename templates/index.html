@@ -69,6 +69,8 @@
                     <button class="btn btn-primary" onclick="openAccForm()">+ Thêm tài khoản</button>
                     <button class="btn btn-ghost" onclick="exportAccountsExcel()">📤 Xuất Excel</button>
                     <button class="btn btn-ghost" onclick="document.getElementById('acc-import-file').click()">📥 Nhập Excel</button>
+                    <button class="btn btn-ghost" id="btn-refresh-cookie" onclick="refreshCookiesNow()"
+                            title="Chạy ngay cho các acc đang để Refresh = Yes, không cần chờ 10 phút">🔄 Refresh cookie ngay</button>
                     <input type="file" id="acc-import-file" accept=".xlsx" style="display:none" onchange="importAccountsExcel(event)">
                     <span id="acc-count" style="font-size:12px;color:var(--text-muted);margin-left:auto"></span>
                 </div>

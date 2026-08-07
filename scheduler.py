@@ -17,10 +17,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from db import (
     get_schedules, update_schedule_status,
     get_content_by_code, get_uid_groups_by_code,
-    get_account_by_name, get_page_by_name, get_accounts,
+    get_account_by_name, get_page_by_name,
     update_account_field,
 )
-from cookie_exporter import load_cookie, export_all_accounts
+from cookie_exporter import load_cookie
 from utils import logger, jitter, CookieDeadError, classify_error
 from config import CHECK_EVERY_SEC, WINDOW_MINUTES, MAX_WORKERS
 
@@ -343,17 +343,11 @@ def _run_one(item: dict):
 # ── Auto-refresh cookie ───────────────────────────────────────
 
 def _check_refresh():
+    # Logic nằm ở cookie_exporter để nút "Refresh ngay" trên giao diện chạy y
+    # hệt vòng lặp này — trước đây mỗi bên một bản dễ sửa lệch nhau.
     try:
-        accs = [a for a in get_accounts() if str(a.get("refresh","")).strip().lower() == "yes"]
-        for a in accs:
-            logger.info(f"🔄 Refresh cookie: '{a['ten_acc']}'...")
-            try:
-                export_all_accounts(target_acc=a["ten_acc"])
-                from db import update_account_field
-                update_account_field(a["id"], "refresh", "Done")
-                logger.info(f"✅ '{a['ten_acc']}': cookie refreshed")
-            except Exception as e:
-                logger.error(f"❌ '{a['ten_acc']}': lỗi refresh: {e}")
+        from cookie_exporter import refresh_pending_accounts
+        refresh_pending_accounts()
     except Exception as e:
         logger.error(f"❌ _check_refresh: {e}")
 

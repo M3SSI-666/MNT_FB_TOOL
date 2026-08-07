@@ -99,6 +99,11 @@ def export_all_accounts(target_acc: str = None) -> int:
     """
     Đọc từ SQLite → xuất cookie JSON cho từng acc Active.
     Dùng khi cần refresh cookie (cột Refresh = Yes).
+
+    Trước khi ghi file, thử đọc cookie SỐNG từ profile Chrome của acc: nếu
+    profile còn đăng nhập thì xs ở đó mới hơn xs trong DB (Facebook xoay xs
+    theo phiên), và ta ghi ngược giá trị mới vào DB. Nhờ vậy cột Refresh tự
+    gia hạn cookie thay vì chỉ chép lại đúng thứ người dùng đã nhập tay.
     """
     os.makedirs(COOKIES_DIR, exist_ok=True)
 
@@ -117,6 +122,10 @@ def export_all_accounts(target_acc: str = None) -> int:
 
             ten = acc["ten_acc"]
             safe = _safe_filename(ten)
+
+            # Cookie sống từ profile — có thì ưu tiên, không có thì dùng DB.
+            live = _read_cookies_from_profile(ten, c_user)
+            xs   = _sync_xs_to_db(acc, live) or xs
 
             # Lấy Page info
             page_uid  = ""
@@ -137,8 +146,8 @@ def export_all_accounts(target_acc: str = None) -> int:
             }
 
             # Thêm extra cookies từ profile nếu có
-            extras = _read_extra_cookies_from_profile(ten)
-            cookie_data.update(extras)
+            cookie_data.update({k: v for k, v in live.items()
+                                if k in EXTRA_COOKIES})
 
             path = os.path.join(COOKIES_DIR, f"{safe}.json")
             with open(path, "w", encoding="utf-8") as f:
@@ -155,20 +164,122 @@ def export_all_accounts(target_acc: str = None) -> int:
         return 0
 
 
-def _read_extra_cookies_from_profile(acc_name: str) -> dict:
-    """Đọc datr/sb/fr/wd từ Playwright profile nếu có."""
-    def _find_profile():
-        if not os.path.exists(PROFILES_DIR):
-            return None
-        safe = _safe_filename(acc_name)
-        for d in os.listdir(PROFILES_DIR):
-            if d.replace(" ","_").lower() == safe.lower():
-                return os.path.join(PROFILES_DIR, d)
+def refresh_pending_accounts() -> dict:
+    """
+    Làm mới cookie cho mọi acc đang để cột Refresh = Yes, rồi đánh dấu Done.
+
+    Dùng chung cho vòng lặp scheduler (quét mỗi 10 phút) và nút "Refresh ngay"
+    trên giao diện, để hai đường không bao giờ lệch hành vi.
+    """
+    from db import get_accounts, update_account_field
+
+    ket_qua = {"da_lam": [], "loi": []}
+    cho = [a for a in get_accounts()
+           if str(a.get("refresh", "")).strip().lower() == "yes"]
+
+    for a in cho:
+        ten = a["ten_acc"]
+        logger.info(f"🔄 Refresh cookie: '{ten}'...")
+        try:
+            export_all_accounts(target_acc=ten)
+            update_account_field(a["id"], "refresh", "Done")
+            logger.info(f"✅ '{ten}': cookie refreshed")
+            ket_qua["da_lam"].append(ten)
+        except Exception as e:
+            logger.error(f"❌ '{ten}': lỗi refresh: {e}")
+            ket_qua["loi"].append(f"{ten}: {e}")
+
+    return ket_qua
+
+
+# Cookie phụ giúp Facebook nhận ra "vẫn là máy cũ" — thiếu chúng thì phiên
+# dựng từ c_user+xs trông như đăng nhập từ thiết bị lạ, dễ bị hỏi xác minh.
+EXTRA_COOKIES = ("datr", "sb", "fr", "wd")
+WANTED_COOKIES = ("xs", "c_user") + EXTRA_COOKIES
+
+
+def _sync_xs_to_db(acc: dict, live: dict) -> str:
+    """
+    Ghi xs đọc được từ profile ngược vào DB. Trả về xs mới, hoặc "" nếu không
+    có gì để cập nhật.
+
+    Chỉ ghi khi c_user của profile TRÙNG c_user trong DB: profile có thể đã
+    được đăng nhập sang nick khác, ghi bừa sẽ gán nhầm cookie của nick này cho
+    nick kia — hỏng nặng hơn nhiều so với việc bỏ qua một lần refresh.
+    """
+    moi = (live.get("xs") or "").strip()
+    if not moi:
+        return ""
+
+    ten    = acc["ten_acc"]
+    db_cu  = (acc.get("c_user") or "").strip()
+    pf_cu  = (live.get("c_user") or "").strip()
+    if pf_cu and pf_cu != db_cu:
+        logger.warning(f"  ⚠️  '{ten}': profile đang là c_user {pf_cu} "
+                       f"(DB ghi {db_cu}) — không ghi đè xs")
+        return ""
+
+    if moi == (acc.get("xs") or "").strip():
+        return ""                       # không đổi, khỏi đụng DB
+
+    try:
+        from db import update_account_field
+        update_account_field(acc["id"], "xs", moi)
+        logger.info(f"  🔑 '{ten}': lấy được xs mới từ profile → đã lưu vào DB")
+        return moi
+    except Exception as e:
+        logger.error(f"  ❌ '{ten}': không lưu được xs mới: {e}")
+        return ""
+
+
+def _find_profile_dir(acc_name: str, c_user: str = "") -> str | None:
+    """
+    Tìm thư mục profile Chrome của acc — CHỈ ĐỌC, không tạo mới.
+
+    Poster đặt tên thư mục theo dạng "{Tên}_{c_user}" (fb_common.
+    find_profile_dir). Bản cũ ở file này chỉ so tên trần nên không bao giờ
+    khớp với profile thật, khiến toàn bộ phần đọc cookie từ profile chết lặng.
+    Vẫn nhận dạng "{Tên}" trần cho các profile đời đầu còn sót lại.
+    """
+    if not os.path.isdir(PROFILES_DIR):
         return None
 
-    profile_dir = _find_profile()
+    ten  = acc_name.replace(" ", "_")
+    uu_tien = [f"{ten}_{c_user}", ten] if c_user else [ten]
+
+    for folder in uu_tien:
+        path = os.path.join(PROFILES_DIR, folder)
+        if os.path.isdir(path):
+            return path
+
+    # Dự phòng: tên thư mục có thể lệch hoa/thường so với tên acc trong DB
+    muon = {f.lower() for f in uu_tien}
+    for d in os.listdir(PROFILES_DIR):
+        if d.lower() in muon:
+            return os.path.join(PROFILES_DIR, d)
+    return None
+
+
+def _read_cookies_from_profile(acc_name: str, c_user: str = "") -> dict:
+    """
+    Đọc cookie Facebook trực tiếp từ profile Chrome của acc.
+
+    Trả về {} khi không có profile, profile đang được dùng, hoặc đọc lỗi — gọi
+    hàm này không bao giờ làm gián đoạn luồng xuất cookie.
+    """
+    profile_dir = _find_profile_dir(acc_name, c_user)
     if not profile_dir:
         return {}
+
+    # Chromium KHÔNG khoá thư mục profile. Mở song song với một phiên đang chạy
+    # sẽ làm hỏng dữ liệu đăng nhập của phiên đó → bỏ qua, lần sau lấy tiếp.
+    try:
+        from fb_common import _profile_dang_mo
+        if os.path.normcase(os.path.abspath(profile_dir)) in _profile_dang_mo():
+            logger.info(f"  ⏭️  '{acc_name}': profile đang mở — bỏ qua đọc cookie")
+            return {}
+    except Exception:
+        pass
 
     try:
         import asyncio
@@ -176,17 +287,25 @@ def _read_extra_cookies_from_profile(acc_name: str) -> dict:
 
         async def _read():
             async with async_playwright() as p:
+                # --disable-gpu: ép vẽ bằng phần mềm, tránh renderer sập khi
+                # headless trên Windows (xem chú thích ở fb_common).
                 ctx = await p.chromium.launch_persistent_context(
                     user_data_dir=profile_dir, headless=True,
-                    args=["--disable-blink-features=AutomationControlled","--no-sandbox"],
+                    args=["--disable-blink-features=AutomationControlled",
+                          "--no-sandbox", "--disable-gpu"],
                 )
-                cookies = await ctx.cookies("https://www.facebook.com")
-                await ctx.close()
+                try:
+                    cookies = await ctx.cookies("https://www.facebook.com")
+                finally:
+                    await ctx.close()
             return {c["name"]: c["value"] for c in cookies
-                    if c["name"] in ("datr","sb","fr","wd")}
+                    if c["name"] in WANTED_COOKIES and c.get("value")}
 
-        return asyncio.run(_read())
-    except Exception:
+        # Chặn trên thời gian: refresh chạy trong vòng lặp scheduler, một
+        # profile hỏng treo vô hạn sẽ làm đứng luôn việc đăng bài.
+        return asyncio.run(asyncio.wait_for(_read(), timeout=60))
+    except Exception as e:
+        logger.warning(f"  ⚠️  '{acc_name}': không đọc được cookie từ profile: {e}")
         return {}
 
 
