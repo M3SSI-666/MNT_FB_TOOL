@@ -317,6 +317,12 @@ _t = _Trang(_Dlg(_CANH_BAO, co_nut_x=False, cung_dau=True))
 check("đóng hoài không được -> thử lại nhiều lần", _aio.run(_fc.dong_dialog_canh_bao(_t, so_lan=3)) != ""
       and len(_t.keyboard.phim) == 3)
 
+# Escape đóng dialog nhưng đóng CẢ story đang mở. Gọi từ trong trình xem story
+# thì phải tắt bước này, nếu không nick chỉ mở story rồi thoát ngay.
+_t = _Trang(_Dlg(_CANH_BAO, co_nut_x=False, cung_dau=True))
+check("cho_escape=False -> KHÔNG bấm Escape",
+      _aio.run(_fc.dong_dialog_canh_bao(_t, so_lan=2, cho_escape=False)) != "" and _t.keyboard.phim == [])
+
 
 # ── xác minh sau khi đăng: phải bám Ô SOẠN BÀI, không phải dialog bất kỳ ───
 _bat = {}

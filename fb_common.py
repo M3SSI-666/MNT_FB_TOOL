@@ -321,7 +321,7 @@ async def _nut_dong(dlg):
     return None
 
 
-async def _thu_dong(page, dlg, buoc: int) -> None:
+async def _thu_dong(page, dlg, buoc: int, cho_escape: bool = True) -> None:
     """
     Đóng dialog, LEO THANG theo từng lượt — cách sau xuyên được thứ mà cách
     trước thua:
@@ -362,13 +362,17 @@ async def _thu_dong(page, dlg, buoc: int) -> None:
         except Exception:
             pass
 
-    try:
-        await page.keyboard.press("Escape")
-    except Exception:
-        pass
+    # Escape đóng được dialog nhưng đóng CẢ thứ khác đang mở. Gọi giữa lúc
+    # trình xem story đang chạy thì nó tắt luôn story — nên bên gọi phải tắt
+    # bước này ở những chỗ có cửa sổ mình muốn giữ.
+    if cho_escape:
+        try:
+            await page.keyboard.press("Escape")
+        except Exception:
+            pass
 
 
-async def dong_dialog_canh_bao(page, so_lan: int = 3) -> str:
+async def dong_dialog_canh_bao(page, so_lan: int = 3, cho_escape: bool = True) -> str:
     """
     Đóng dialog cảnh báo vi phạm nếu đang mở. Trả về nội dung cảnh báo (rút
     gọn) để bên gọi ghi log, "" nếu không có gì.
@@ -393,7 +397,7 @@ async def dong_dialog_canh_bao(page, so_lan: int = 3) -> str:
             canh_bao = " ".join(text.split())[:110]
             logger.warning(f"    ⚠️  FB cảnh báo nick này: {canh_bao}")
 
-        await _thu_dong(page, dlg, buoc=lan)
+        await _thu_dong(page, dlg, buoc=lan, cho_escape=cho_escape)
         await asyncio.sleep(1.2)
 
     logger.error("    ❌ KHÔNG đóng được dialog cảnh báo — nó sẽ chặn thao tác kế tiếp")
@@ -457,6 +461,11 @@ async def view_stories(page, duration_sec: int = None):
     if duration_sec is None:
         duration_sec = random.randint(15, 20)
     logger.info(f"    📖 Xem story ~{duration_sec}s...")
+
+    # Dọn dialog cảnh báo TRƯỚC: nó đè lên newfeed nên cú bấm vào story trúng
+    # nền mờ, Playwright ném lỗi và cả bước xem story bị bỏ qua.
+    await dong_dialog_canh_bao(page)
+
     try:
         story_el = await page.evaluate_handle("""() => {
             for (const a of document.querySelectorAll('a[href]')) {
@@ -473,12 +482,21 @@ async def view_stories(page, duration_sec: int = None):
         story_elem = story_el.as_element()
         if story_elem:
             await story_elem.click()
+            # Facebook hay bật dialog cảnh báo NGAY khi vừa mở trình xem story
+            # và đè lên nó — dọn lần nữa, nếu không thì cả phần xem lẫn nút đóng
+            # đều bấm không trúng. cho_escape=False vì Escape lúc này sẽ tắt
+            # luôn story vừa mở.
+            await dong_dialog_canh_bao(page, cho_escape=False)
             await page.wait_for_timeout(duration_sec * 1000)
+            await dong_dialog_canh_bao(page, cho_escape=False)
             for csel in ["[aria-label='Đóng']", "[aria-label='Close']"]:
                 try:
                     btn = await page.wait_for_selector(csel, timeout=2000, state="visible")
                     if btn:
-                        await btn.click()
+                        # timeout=3000: không có nó thì cú bấm bị chặn sẽ đứng
+                        # hết 30s mặc định của Playwright rồi mới chịu thua —
+                        # đo được đúng 30s lãng phí khi dựng lại cảnh có lớp phủ.
+                        await btn.click(timeout=3000)
                         break
                 except PWTimeout:
                     continue
@@ -487,8 +505,10 @@ async def view_stories(page, duration_sec: int = None):
             logger.info(f"    ✅ Đã xem story")
         else:
             logger.info(f"    ⏭️  Không tìm thấy story — bỏ qua")
-    except Exception:
-        logger.info(f"    ⏭️  Story: bỏ qua")
+    except Exception as e:
+        # Kèm LÝ DO: bản cũ chỉ ghi "bỏ qua" nên khi dialog cảnh báo chặn mất cú
+        # bấm, log trông y hệt lúc nick đó đơn giản là không có story nào.
+        logger.info(f"    ⏭️  Story: bỏ qua ({type(e).__name__}: {str(e)[:80]})")
 
 
 async def browse_and_like(page, duration_sec: int, max_likes: int = 1):
@@ -502,6 +522,9 @@ async def browse_and_like(page, duration_sec: int, max_likes: int = 1):
         logger.info(f"    📜 Scroll + like {duration_sec}s (max {max_likes} like)...")
     else:
         logger.info(f"    📜 Scroll {duration_sec}s (không like)...")
+
+    # Dialog cảnh báo khoá cứng việc cuộn trang và nuốt mọi cú bấm like
+    await dong_dialog_canh_bao(page)
 
     while elapsed < duration_sec:
         px = random.randint(300, 600)

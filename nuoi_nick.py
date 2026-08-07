@@ -711,6 +711,9 @@ async def _act_message(page, ctx, st):
     await page.goto(group_url, wait_until="domcontentloaded", timeout=30000)
     await human_delay(2500, 4000)
 
+    # Dialog cảnh báo vi phạm cũng che ô soạn tin y như hộp PIN
+    await dong_dialog_canh_bao(page)
+
     # Dẹp hộp thoại đòi mã PIN trước — nó che mất ô soạn tin.
     if await _dismiss_pin_dialog(page):
         await human_delay(1000, 2000)
