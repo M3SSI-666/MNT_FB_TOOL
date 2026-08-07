@@ -223,19 +223,32 @@ import fb_common as _fc
 
 
 class _Nut:
-    def __init__(self, chu):  self.chu = chu
+    def __init__(self, chu, hong=False): self.chu, self.hong = chu, hong
     async def is_visible(self): return True
-    async def click(self):    self.chu.da_bam = True
+    async def bounding_box(self): return {"x": 10, "y": 10, "width": 20, "height": 20}
+    async def click(self, timeout=None):
+        if self.hong:
+            raise RuntimeError("bị lớp phủ chặn")   # Playwright ném khi click bị nuốt
+        self.chu.da_bam = True
+        self.chu.dong()
+    async def evaluate(self, js):
+        self.chu.da_js = True                       # JS click xuyên mọi lớp phủ
+        self.chu.dong()
 
 
 class _Dlg:
-    """Giả một div[role=dialog]."""
-    def __init__(self, text, co_nut_x=True, hien=True):
+    """Giả một div[role=dialog]. Đóng được thì tự ẩn đi như dialog thật."""
+    def __init__(self, text, co_nut_x=True, hien=True, nut_hong=False, cung_dau=False):
         self._t, self._x, self._h = text, co_nut_x, hien
-        self.da_bam = False
+        self._hong, self._cung = nut_hong, cung_dau
+        self.da_bam = self.da_js = False
+    def dong(self):
+        if not self._cung:          # cung_dau=True: mô phỏng dialog đóng mãi không chịu
+            self._h = False
     async def is_visible(self):  return self._h
     async def inner_text(self):  return self._t
-    async def query_selector(self, sel): return _Nut(self) if self._x else None
+    async def query_selector(self, sel):
+        return _Nut(self, self._hong) if self._x else None
 
 
 class _Ban_phim:
@@ -243,9 +256,18 @@ class _Ban_phim:
     async def press(self, k): self.phim.append(k)
 
 
+class _Chuot:
+    def __init__(self, dlg, nuot=False): self.dlg, self.diem, self.nuot = dlg, [], nuot
+    async def click(self, x, y):
+        self.diem.append((x, y))
+        if not self.nuot:           # nuot=True: lớp phủ hứng mất cú bắn chuột
+            self.dlg.dong()
+
+
 class _Trang:
-    def __init__(self, *dlgs):
+    def __init__(self, *dlgs, chuot_nuot=False):
         self._d = list(dlgs); self.keyboard = _Ban_phim()
+        self.mouse = _Chuot(dlgs[0], chuot_nuot) if dlgs else None
     async def query_selector_all(self, sel): return self._d
 
 
@@ -256,6 +278,7 @@ _CHUYEN   = "Bạn đang dùng Facebook với tư cách Trang\nDùng Trang"
 _d = _Dlg(_CANH_BAO)
 check("nhận ra dialog cảnh báo",        "Chúng tôi đã gỡ" in _aio.run(_fc.dong_dialog_canh_bao(_Trang(_d))))
 check("cảnh báo -> có bấm nút X",       _d.da_bam)
+check("bấm xong dialog biến mất",       not _aio.run(_d.is_visible()))
 
 # Ô soạn bài và hộp "Chuyển sang Trang" cũng là role=dialog. Đóng nhầm chúng
 # là hỏng luôn phiên đăng — đây là lý do phải khớp theo mốc chữ, không đóng bừa.
@@ -272,7 +295,27 @@ check("không có dialog nào -> rỗng",    _aio.run(_fc.dong_dialog_canh_bao(_
 check("bản tiếng Anh cũng nhận",        _aio.run(_fc.dong_dialog_canh_bao(_Trang(_Dlg("We removed some content")))) != "")
 
 _t = _Trang(_Dlg(_CANH_BAO, co_nut_x=False))
-check("không thấy nút X -> bấm Escape", _aio.run(_fc.dong_dialog_canh_bao(_t)) != "" and _t.keyboard.phim == ["Escape"])
+check("không thấy nút X -> bấm Escape", _aio.run(_fc.dong_dialog_canh_bao(_t)) != "" and "Escape" in _t.keyboard.phim)
+
+# Bản đầu bấm rồi đi luôn: cú bấm bị lớp phủ nuốt thì log vẫn báo êm trong khi
+# dialog còn nguyên trên màn hình. Giờ phải bắn chuột theo toạ độ để chữa.
+_d = _Dlg(_CANH_BAO, nut_hong=True)
+_t = _Trang(_d)
+check("click bị chặn -> bắn chuột toạ độ", _aio.run(_fc.dong_dialog_canh_bao(_t)) != "" and _t.mouse.diem == [(20, 20)])
+check("bắn chuột xong dialog biến mất",    not _aio.run(_d.is_visible()))
+
+# Lớp phủ nuốt CẢ cú bấm lẫn cú bắn chuột — chuột vẫn trúng thứ nằm trên cùng
+# tại điểm đó. Dựng lại đúng cảnh này trong Chromium thì hai cách đầu đều thua,
+# chỉ click bằng JS xuyên qua được.
+_d = _Dlg(_CANH_BAO, nut_hong=True)
+_t = _Trang(_d, chuot_nuot=True)
+check("lớp phủ nuốt hết -> cứu bằng JS click", _aio.run(_fc.dong_dialog_canh_bao(_t)) != "" and _d.da_js)
+check("JS click xong dialog biến mất",         not _aio.run(_d.is_visible()))
+
+# Đóng mãi không được thì PHẢI kêu lên, không được im lặng báo thành công.
+_t = _Trang(_Dlg(_CANH_BAO, co_nut_x=False, cung_dau=True))
+check("đóng hoài không được -> thử lại nhiều lần", _aio.run(_fc.dong_dialog_canh_bao(_t, so_lan=3)) != ""
+      and len(_t.keyboard.phim) == 3)
 
 
 # ── xác minh sau khi đăng: phải bám Ô SOẠN BÀI, không phải dialog bất kỳ ───

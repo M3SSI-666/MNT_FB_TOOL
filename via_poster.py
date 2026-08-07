@@ -338,23 +338,31 @@ async def _run_crosspost(
         # Mở composer
         logger.info(f"    📝 Mở composer...")
         opened = False
-        for sel in [
-            ':text("Bạn viết gì đi")', ':text("Write something")',
-            ':text("Bạn đang nghĩ gì?")',
-            "div[role='button']:has-text('Tạo bài viết')",
-            "[aria-label='Tạo bài viết']", "[aria-label='Create post']",
-        ]:
-            try:
-                el = await page.wait_for_selector(sel, timeout=5000, state="visible")
-                if el:
-                    await el.hover()
-                    await _human_delay(400, 700)
-                    await el.click()
-                    await _human_delay(2000, 3000)
-                    opened = True
-                    break
-            except PWTimeout:
-                continue
+        # Hai lượt: dialog cảnh báo thường bật lên MUỘN vài giây sau khi trang
+        # tải xong, nên lần dọn phía trên có thể diễn ra lúc nó chưa kịp hiện.
+        # Lượt đầu trượt thì dọn lại rồi thử tiếp — bám theo triệu chứng thay vì
+        # cầu may đúng thời điểm.
+        for _luot in range(2):
+            for sel in [
+                ':text("Bạn viết gì đi")', ':text("Write something")',
+                ':text("Bạn đang nghĩ gì?")',
+                "div[role='button']:has-text('Tạo bài viết')",
+                "[aria-label='Tạo bài viết']", "[aria-label='Create post']",
+            ]:
+                try:
+                    el = await page.wait_for_selector(sel, timeout=5000, state="visible")
+                    if el:
+                        await el.hover()
+                        await _human_delay(400, 700)
+                        await el.click()
+                        await _human_delay(2000, 3000)
+                        opened = True
+                        break
+                except PWTimeout:
+                    continue
+            # Không có dialog cảnh báo nào để dọn → trượt vì lý do khác, thử lại vô ích
+            if opened or _luot == 1 or not await dong_dialog_canh_bao(page):
+                break
         if not opened:
             logger.error(f"  ❌ Không mở được composer!")
             await ctx.close()

@@ -280,21 +280,22 @@ CANH_BAO_MOC = (
     "we removed", "community standards", "account status",
 )
 
-_NUT_DONG = ("[aria-label='Đóng']", "[aria-label='Close']")
+_NUT_DONG = (
+    "div[role='button'][aria-label='Đóng']",
+    "div[role='button'][aria-label='Close']",
+    "[aria-label='Đóng']", "[aria-label='Close']",
+    # Facebook đổi nhãn theo ngữ cảnh ("Đóng thông báo", "Close dialog"...)
+    "div[role='button'][aria-label*='óng']",
+    "div[role='button'][aria-label*='lose']",
+)
 
 
-async def dong_dialog_canh_bao(page) -> str:
-    """
-    Đóng dialog cảnh báo vi phạm nếu đang mở. Trả về nội dung cảnh báo (rút
-    gọn) để bên gọi ghi log, "" nếu không có gì.
-
-    CHỈ đóng dialog khớp mốc cảnh báo. Ô soạn bài và hộp "Chuyển sang Trang"
-    cũng là role=dialog — đóng nhầm là hỏng luôn phiên đăng.
-    """
+async def _tim_dialog_canh_bao(page):
+    """Trả về (element, text) của dialog cảnh báo đang hiện, hoặc (None, "")."""
     try:
         dialogs = await page.query_selector_all("div[role='dialog']")
     except Exception:
-        return ""
+        return None, ""
 
     for dlg in dialogs:
         try:
@@ -303,31 +304,100 @@ async def dong_dialog_canh_bao(page) -> str:
             text = (await dlg.inner_text()) or ""
         except Exception:
             continue
+        if any(m in text.lower() for m in CANH_BAO_MOC):
+            return dlg, text
+    return None, ""
 
-        if not any(m in text.lower() for m in CANH_BAO_MOC):
+
+async def _nut_dong(dlg):
+    """Nút X đang hiện trong dialog, None nếu dialog không có nút nào."""
+    for sel in _NUT_DONG:
+        try:
+            btn = await dlg.query_selector(sel)
+            if btn and await btn.is_visible():
+                return btn
+        except Exception:
             continue
+    return None
 
-        for sel in _NUT_DONG:
-            try:
-                btn = await dlg.query_selector(sel)
-                if btn and await btn.is_visible():
-                    await btn.click()
-                    break
-            except Exception:
-                continue
-        else:
-            # Không thấy nút X — Escape cũng đóng được dialog của Facebook
-            try:
-                await page.keyboard.press("Escape")
-            except Exception:
-                pass
 
-        await asyncio.sleep(1.0)
-        gon = " ".join(text.split())[:110]
-        logger.warning(f"    ⚠️  FB cảnh báo nick này: {gon}")
-        return gon
+async def _thu_dong(page, dlg, buoc: int) -> None:
+    """
+    Đóng dialog, LEO THANG theo từng lượt — cách sau xuyên được thứ mà cách
+    trước thua:
+      0   bấm nút X như người thật
+      1   bắn chuột thẳng vào tâm nút
+      2+  gọi click bằng JS, rồi Escape
 
-    return ""
+    Bắn chuột theo toạ độ KHÔNG cứu được lớp phủ: chuột vẫn trúng thứ nằm trên
+    cùng tại điểm đó, tức là chính lớp phủ. Đã dựng lại đúng cảnh này trong
+    Chromium và nó thua — nên mới cần bước JS phía sau.
+    """
+    btn = await _nut_dong(dlg)
+
+    if btn is not None and buoc == 0:
+        try:
+            # timeout ngắn: có lớp phủ chặn thì bỏ qua ngay để còn thử cách
+            # khác, thay vì đứng chờ hết 30s mặc định của Playwright.
+            await btn.click(timeout=4000)
+            return
+        except Exception:
+            pass
+
+    if btn is not None and buoc <= 1:
+        try:
+            box = await btn.bounding_box()
+            if box:
+                await page.mouse.click(box["x"] + box["width"] / 2,
+                                       box["y"] + box["height"] / 2)
+                return
+        except Exception:
+            pass
+
+    # Chốt hạ: click bằng JS bắn thẳng vào phần tử, KHÔNG dò xem cái gì đang
+    # nằm trên cùng — nên xuyên qua được lớp phủ.
+    if btn is not None:
+        try:
+            await btn.evaluate("el => el.click()")
+        except Exception:
+            pass
+
+    try:
+        await page.keyboard.press("Escape")
+    except Exception:
+        pass
+
+
+async def dong_dialog_canh_bao(page, so_lan: int = 3) -> str:
+    """
+    Đóng dialog cảnh báo vi phạm nếu đang mở. Trả về nội dung cảnh báo (rút
+    gọn) để bên gọi ghi log, "" nếu không có gì.
+
+    CHỈ đóng dialog khớp mốc cảnh báo. Ô soạn bài và hộp "Chuyển sang Trang"
+    cũng là role=dialog — đóng nhầm là hỏng luôn phiên đăng.
+
+    Bấm xong PHẢI kiểm tra lại. Bản đầu bấm rồi đi luôn nên khi cú bấm trượt
+    (lớp phủ chặn, nút chưa gắn xong) log vẫn báo êm trong khi dialog còn
+    nguyên trên màn hình — đúng thứ người dùng nhìn thấy.
+    """
+    canh_bao = ""
+
+    for lan in range(max(1, so_lan)):
+        dlg, text = await _tim_dialog_canh_bao(page)
+        if dlg is None:
+            if canh_bao:
+                logger.info("    ✔️  Đã đóng dialog cảnh báo")
+            return canh_bao
+
+        if not canh_bao:
+            canh_bao = " ".join(text.split())[:110]
+            logger.warning(f"    ⚠️  FB cảnh báo nick này: {canh_bao}")
+
+        await _thu_dong(page, dlg, buoc=lan)
+        await asyncio.sleep(1.2)
+
+    logger.error("    ❌ KHÔNG đóng được dialog cảnh báo — nó sẽ chặn thao tác kế tiếp")
+    return canh_bao
 
 
 # Ô soạn bài là dialog DUY NHẤT chứa vùng nhập nội dung. Bám vào đặc điểm đó
