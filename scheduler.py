@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import db
 from db import (
     get_schedules, update_schedule_status,
     get_content_by_code, get_uid_groups_by_code,
@@ -145,13 +146,7 @@ def _attempt_post(item: dict) -> str:
     if not ct:
         raise Exception(f"Không tìm thấy mã content '{ma_ct}'")
     content  = ct.get("noi_dung", "").strip()
-    hook_anh = ct.get("link_anh_hook", "").strip()
     link_anh = ct.get("link_anh", "").strip()
-
-    # Hook đứng đầu
-    if hook_anh:
-        others   = [u.strip() for u in link_anh.split(",") if u.strip() and u.strip() != hook_anh]
-        link_anh = ", ".join([hook_anh] + others)
 
     logger.info(f"📝 Content ({len(content)}c): {content[:60]}...")
 
@@ -195,6 +190,9 @@ def _attempt_post(item: dict) -> str:
             first_group_uid=first_uid, search_kw=tu_khoa,
             message=content, image_url=link_anh,
             c_user=c_user_v,
+            # Link bài vừa đăng được lưu vào danh sách comment của ĐÚNG loại
+            # lịch đang chạy — lưu nhầm thì acc homestay đi comment bài bán nhà.
+            loai_comment=LOAI,
         )
         if not count:
             raise Exception("Hybrid thất bại")
@@ -286,10 +284,92 @@ def _run_warming(item: dict):
         logger.error(f"❌ STT {stt} nuôi lỗi [{cat}]: {e}")
 
 
+def _run_commenting(item: dict):
+    """Slot đã bị chuyển thành phiên comment — đi comment thay vì đăng bài."""
+    sid      = item["id"]
+    stt      = item.get("stt", sid)
+    acc_name = item["ten_acc"]
+    ts       = datetime.now().strftime("%H:%M")
+
+    logger.info(f"\n{'='*55}")
+    logger.info(f"💬 [{LOAI}] STT {stt} | {acc_name} | COMMENT | {item['gio_dang']}")
+    logger.info(f"{'='*55}")
+    _update_status(sid, f"💬 Đang comment {ts}")
+
+    try:
+        from comment_bai import chay_phien_comment
+        acc_data = get_account_by_name(acc_name)
+        c_user_v = acc_data.get("c_user", "") if acc_data else ""
+        # Một phiên kéo dài 12–18 phút. Cập nhật đếm sau mỗi bài để nhìn bảng
+        # lịch là biết đang chạy tới đâu, thay vì đứng im ở "Đang comment".
+        def _bao(da_xong, tong):
+            _update_status(sid, f"💬 {da_xong}/{tong} · {ts}")
+
+        # Page được phân công cho slot này — phiên comment ghé qua đó ở bước
+        # khởi động, giống luồng đăng bài.
+        kq   = chay_phien_comment(acc_name=acc_name, loai=LOAI, c_user=c_user_v,
+                                  page_name=item.get("ten_page", ""),
+                                  tien_trinh=_bao)
+        done = datetime.now().strftime("%H:%M")
+        if kq.get("bo_qua"):
+            # Không có bài/câu để chạy KHÔNG phải lỗi acc — ghi rõ để khỏi đi
+            # soi cookie hay trình duyệt trong khi chỉ là chưa nhập danh sách.
+            _update_status(sid, f"💬 {done} bỏ qua: {kq['bo_qua']}")
+        else:
+            ok, tong = kq.get("da_comment", 0), kq.get("tong_bai", 0)
+            phu = ""
+            if kq.get("link_chet"):
+                phu += f" · {kq['link_chet']} chết"
+            if kq.get("loi"):
+                phu += f" · {kq['loi']} lỗi"
+            _update_status(sid, f"💬 {done} · {ok}/{tong} bài{phu}")
+        logger.info(f"✅ STT {stt} comment xong: {kq}")
+    except CookieDeadError:
+        ts2 = datetime.now().strftime("%H:%M")
+        _update_status(sid, f"❌ {ts2} Cookie hết hạn")
+        logger.error(f"❌ STT {stt}: Cookie hết hạn khi comment — acc '{acc_name}'")
+        _mark_cookie_dead(acc_name)
+    except Exception as e:
+        ts2 = datetime.now().strftime("%H:%M")
+        cat, label = classify_error(e)
+        # Bị chặn comment là tin quan trọng nhất của tính năng này — acc mất nốt
+        # đường cuối cùng. Ghi hẳn ra trạng thái chứ đừng gộp vào "lỗi chung".
+        if type(e).__name__ == "CommentRestricted":
+            _update_status(sid, f"❌ {ts2} BỊ CHẶN COMMENT")
+            logger.error(f"⛔ STT {stt}: acc '{acc_name}' bị chặn comment — {e}")
+        else:
+            _update_status(sid, f"❌ {ts2} Comment lỗi: {label}")
+            logger.error(f"❌ STT {stt} comment lỗi [{cat}]: {e}")
+
+
+def _bao_suc_khoe(stt, acc_name: str, hanh_dong: str, ly_do: str):
+    """In ra log quyết định của bộ theo dõi sức khoẻ acc."""
+    if hanh_dong == "tat":
+        logger.error(f"🚫 STT {stt}: ĐÃ TẮT acc '{acc_name}' — {ly_do}. "
+                     f"Bật lại ở tab Tài khoản (Trạng thái → Active).")
+    elif hanh_dong == "nghi":
+        logger.warning(f"😴 STT {stt}: cho acc '{acc_name}' nghỉ — {ly_do}")
+
+
 def _run_one(item: dict):
-    # Slot nuôi nick đi đường riêng, không dùng retry của đăng bài.
-    if (item.get("hoat_dong") or "dang_bai") == "nuoi_nick":
+    # Slot nuôi nick / comment đi đường riêng, không dùng retry của đăng bài.
+    hd = item.get("hoat_dong") or "dang_bai"
+
+    # Acc đang nghỉ hoặc đã bị tắt thì bỏ qua slot. Ghi trạng thái riêng chứ
+    # KHÔNG ghi "❌ lỗi": đếm nó là lỗi thì bộ theo dõi tự bơm phồng chính mình —
+    # acc nghỉ sinh ra thêm "lỗi", thêm lỗi lại kéo dài nghỉ.
+    ok_chay, vi_sao = db.acc_duoc_chay(item["ten_acc"], hd)
+    if not ok_chay:
+        _update_status(item["id"], f"😴 {vi_sao}")
+        logger.info(f"😴 STT {item.get('stt', item['id'])} bỏ qua — "
+                    f"acc '{item['ten_acc']}' {vi_sao}")
+        return
+
+    if hd == "nuoi_nick":
         _run_warming(item)
+        return
+    if hd == "comment":
+        _run_commenting(item)
         return
 
     sid      = item["id"]
@@ -310,6 +390,7 @@ def _run_one(item: dict):
             done   = datetime.now().strftime("%H:%M")
             _update_status(sid, f"✅ {done}{suffix}")
             logger.info(f"✅ STT {stt} hoàn thành{suffix}")
+            db.ghi_nhan_phien_dang(acc_name, True)
             return
 
         except CookieDeadError:
@@ -317,6 +398,8 @@ def _run_one(item: dict):
             _update_status(sid, f"❌ {ts2} Cookie hết hạn")
             logger.error(f"❌ STT {stt}: Cookie hết hạn — acc '{acc_name}' cần đăng nhập lại")
             _mark_cookie_dead(acc_name)
+            # Cookie chết đã có trạng thái riêng và cách xử lý riêng (đăng nhập
+            # lại), đừng tính vào sức khoẻ — nó không phải dấu hiệu bị FB chặn.
             return
 
         except Exception as e:
@@ -337,6 +420,7 @@ def _run_one(item: dict):
                 label = f"{label} (đã thử {MAX_ATTEMPTS} lần)"
             _update_status(sid, f"❌ {ts2} {label}")
             logger.error(f"❌ STT {stt} lỗi [{cat}]: {e}")
+            _bao_suc_khoe(stt, acc_name, *db.ghi_nhan_phien_dang(acc_name, False))
             return
 
 

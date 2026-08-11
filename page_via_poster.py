@@ -46,7 +46,8 @@ from cookie_exporter import load_cookie
 from storage import prepare_images_for_post as smart_download, cleanup_temp
 from config import HEADLESS
 from utils import logger, jitter_ms, CookieDeadError
-from fb_common import dong_dialog_canh_bao, cho_composer_dong
+from fb_common import (dong_dialog_canh_bao, cho_composer_dong,
+                       bat_dau_canh_dialog)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -72,6 +73,11 @@ def _find_profile_dir(acc_name: str, c_user: str = "") -> str:
     path       = os.path.join(root, folder)
     os.makedirs(path, exist_ok=True)
     return path
+
+
+# Trần số nhóm chọn được trong MỘT lần đăng chéo. Facebook tự chặn ở khoảng
+# này; click thêm không ăn và còn có thể làm tắt ô đã chọn.
+GIOI_HAN_NHOM_CHEO = 10
 
 
 async def _human_delay(min_ms: int = 800, max_ms: int = 2000):
@@ -164,6 +170,11 @@ async def _view_stories(page, duration_sec: int = None):
     if duration_sec is None:
         duration_sec = random.randint(15, 20)
     logger.info(f"    📖 Xem story ~{duration_sec}s...")
+
+    # Dọn dialog cảnh báo TRƯỚC: nó đè lên newfeed nên cú bấm vào story trúng
+    # nền mờ, Playwright ném lỗi và cả bước xem story bị bỏ qua.
+    await dong_dialog_canh_bao(page)
+
     try:
         story_el = await page.evaluate_handle("""() => {
             for (const a of document.querySelectorAll('a[href]')) {
@@ -180,12 +191,18 @@ async def _view_stories(page, duration_sec: int = None):
         story_elem = story_el.as_element()
         if story_elem:
             await story_elem.click()
+            # Facebook hay bật dialog cảnh báo NGAY khi vừa mở trình xem story
+            # và đè lên nó. cho_escape=False vì Escape lúc này sẽ tắt luôn story.
+            await dong_dialog_canh_bao(page, cho_escape=False)
             await page.wait_for_timeout(duration_sec * 1000)
+            await dong_dialog_canh_bao(page, cho_escape=False)
             for csel in ["[aria-label='Đóng']", "[aria-label='Close']"]:
                 try:
                     btn = await page.wait_for_selector(csel, timeout=2000, state="visible")
                     if btn:
-                        await btn.click()
+                        # timeout=3000: không có nó thì cú bấm bị chặn đứng hết 30s
+                        # mặc định của Playwright rồi mới chịu thua.
+                        await btn.click(timeout=3000)
                         break
                 except PWTimeout:
                     continue
@@ -194,8 +211,10 @@ async def _view_stories(page, duration_sec: int = None):
             logger.info(f"    ✅ Đã xem story")
         else:
             logger.info(f"    ⏭️  Không tìm thấy story — bỏ qua")
-    except Exception:
-        logger.info(f"    ⏭️  Story: bỏ qua")
+    except Exception as e:
+        # Kèm LÝ DO: bản cũ chỉ ghi "bỏ qua" nên lúc dialog cảnh báo chặn mất
+        # cú bấm, log trông y hệt khi nick đó không có story nào.
+        logger.info(f"    ⏭️  Story: bỏ qua ({type(e).__name__}: {str(e)[:80]})")
 
 
 async def _browse_and_like(page, duration_sec: int, max_likes: int = 1):
@@ -209,6 +228,9 @@ async def _browse_and_like(page, duration_sec: int, max_likes: int = 1):
         logger.info(f"    📜 Scroll + like {duration_sec}s (max {max_likes} like)...")
     else:
         logger.info(f"    📜 Scroll {duration_sec}s (không like)...")
+
+    # Dialog cảnh báo khoá cứng việc cuộn trang và nuốt mọi cú bấm like
+    await dong_dialog_canh_bao(page)
 
     while elapsed < duration_sec:
         px   = random.randint(300, 600)
@@ -350,6 +372,7 @@ async def _switch_to_page(page, ctx, page_uid: str) -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def _run_page_via(
+    loai_comment:    str,
     acc_name:        str,
     page_uid:        str,
     first_group_uid: str,
@@ -384,6 +407,9 @@ async def _run_page_via(
             no_viewport=True,
         )
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+        # Vòng canh nền: Facebook bật lại dialog cảnh báo bất cứ lúc nào, không
+        # riêng ở mấy điểm mình đoán trước. Tự huỷ khi đóng Chrome.
+        bat_dau_canh_dialog(page)
 
         # ── Inject cookies cá nhân ────────────────────────────────────────────
         cookie_data = load_cookie(acc_name, c_user)
@@ -610,55 +636,74 @@ async def _run_page_via(
             await _human_delay(2500, 3500)
 
 
-            # Tick từng nhóm: tìm checkbox trực tiếp rồi click row chứa nó
-            total_checked = 0
-            for scroll_round in range(8):
-                rows = await page.evaluate("""() => {
-                    const cbs = [
-                        ...document.querySelectorAll('[role="checkbox"][aria-checked="false"]'),
-                        ...Array.from(document.querySelectorAll('input[type="checkbox"]:not(:checked)'))
-                              .filter(i => !document.querySelector('[role="checkbox"][aria-checked="false"]')),
-                    ];
+            # ── Tick nhóm ─────────────────────────────────────────────────
+            # Click TỪNG Ô MỘT rồi đếm lại để xác minh, thay vì lấy toạ độ cả
+            # loạt rồi click hàng loạt.
+            #
+            # Bản cũ hỏng nặng với từ khoá rộng. Log thật của lịch Thuê (từ khoá
+            # "smart", khớp rất nhiều nhóm):
+            #     Round 1: tick 10 nhóm (tổng: 10)
+            #     Round 2..8: tick 2 nhóm mỗi round  (tổng: 24)
+            #     → Đã tick 8 nhóm          ← click 24 lần, thật ra chỉ 8 nhóm
+            # Hai lỗi cùng lúc:
+            #   1. Vòng lặp chỉ dừng khi tick HẾT nhóm khớp từ khoá. Từ khoá hẹp
+            #      ("Homestay Times City" → 9 nhóm) thì hết ngay; từ khoá rộng
+            #      thì không bao giờ hết nên chạy đủ 8 round.
+            #   2. Facebook giới hạn số nhóm đăng chéo một lần. Chạm trần rồi
+            #      click thêm không ăn, mà toạ độ lấy từ trước nên click trúng
+            #      hàng ĐÃ tick → toggle TẮT. Số nhóm tụt từ 10 xuống 8.
+            _JS_DEM_TICK = """() =>
+                document.querySelectorAll('[role="checkbox"][aria-checked="true"]').length
+                + document.querySelectorAll('input[type="checkbox"]:checked').length"""
 
-                    const result = [];
-                    const seen = new Set();
-                    for (const cb of cbs) {
-                        const row = cb.closest('li') || cb.parentElement;
-                        if (!row || seen.has(row)) continue;
-                        seen.add(row);
+            # Một ô CHƯA tick đang nằm trọn trong khung nhìn — lấy đúng một cái,
+            # click xong sẽ hỏi lại, nên danh sách có xô lệch cũng không sai.
+            _JS_O_CHUA_TICK = """() => {
+                const cbs = document.querySelectorAll(
+                    '[role="checkbox"][aria-checked="false"], input[type="checkbox"]:not(:checked)');
+                for (const cb of cbs) {
+                    const row = cb.closest('li') || cb.parentElement;
+                    if (!row) continue;
+                    const r = row.getBoundingClientRect();
+                    if (r.width <= 0 || r.height <= 0) continue;
+                    if (r.top < 0 || r.bottom > window.innerHeight) continue;
+                    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+                }
+                return null;
+            }"""
 
-                        const r = row.getBoundingClientRect();
-                        if (r.width <= 0 || r.height <= 0) continue;
-                        if (r.top < 0 || r.bottom > window.innerHeight) continue;
-
-                        result.push({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
-                    }
-                    return result;
-                }""")
-
-                if rows:
-                    for pos in rows:
-                        await page.mouse.click(pos["x"], pos["y"])
-                        await asyncio.sleep(0.35)
-                    total_checked += len(rows)
-                    logger.info(f"    ✓ Round {scroll_round+1}: tick {len(rows)} nhóm (tổng: {total_checked})")
-
-                await page.mouse.wheel(0, 400)
-                await asyncio.sleep(0.5)
-
-                remaining = await page.evaluate("""() =>
-                    document.querySelectorAll('[role="checkbox"][aria-checked="false"]').length
-                    || document.querySelectorAll('input[type="checkbox"]:not(:checked)').length
-                """)
-                if remaining == 0 and total_checked > 0:
+            da_tick   = await page.evaluate(_JS_DEM_TICK)
+            khong_len = 0          # số lần liên tiếp thao tác mà số tick không tăng
+            for _ in range(40):    # trần cứng, tránh treo nếu FB đổi giao diện
+                if da_tick >= GIOI_HAN_NHOM_CHEO:
+                    logger.info(f"    ⏹ Đạt trần {GIOI_HAN_NHOM_CHEO} nhóm — dừng tick")
                     break
 
-            # Đếm số nhóm thực tế đã được tick (không dùng total_checked vì có thể đếm lặp qua nhiều scroll round)
-            actual_checked = await page.evaluate("""() =>
-                document.querySelectorAll('[role="checkbox"][aria-checked="true"]').length
-                + document.querySelectorAll('input[type="checkbox"]:checked').length
-            """)
-            _groups_posted = min(actual_checked if actual_checked > 0 else total_checked, 10)
+                o = await page.evaluate(_JS_O_CHUA_TICK)
+                if o is None:                       # hết ô trong khung nhìn → cuộn
+                    await page.mouse.wheel(0, 400)
+                    await asyncio.sleep(0.5)
+                    khong_len += 1
+                    if khong_len >= 3:
+                        break
+                    continue
+
+                await page.mouse.click(o["x"], o["y"])
+                await asyncio.sleep(0.35)
+                moi = await page.evaluate(_JS_DEM_TICK)
+                if moi > da_tick:
+                    da_tick, khong_len = moi, 0
+                else:
+                    # Click không ăn: hoặc đã chạm trần của Facebook, hoặc vừa
+                    # bấm nhầm làm tắt một ô. Thử vài lần rồi dừng hẳn — bản cũ
+                    # cứ click tiếp và tự bỏ tick nhóm đã chọn.
+                    khong_len += 1
+                    if khong_len >= 3:
+                        logger.info(f"    ⏹ Click không làm tăng số nhóm "
+                                    f"({khong_len} lần) — dừng, giữ {da_tick} nhóm")
+                        break
+
+            _groups_posted = da_tick
             logger.info(f"    → Đã tick {_groups_posted} nhóm")
 
             # Click "Xong"
@@ -685,6 +730,17 @@ async def _run_page_via(
                 logger.error(f"  ❌ Không tìm thấy nút Xong!")
                 await ctx.close()
                 return False
+
+        # Bắt link bài vừa đăng từ phản hồi mạng. Gắn TRƯỚC khi bấm Đăng, vì
+        # phản hồi chứa ID bài về ngay sau cú bấm. Toàn bộ bọc try/except —
+        # đây là tính năng phụ, hỏng ở đây không được làm hỏng việc đăng.
+        _bat = None
+        try:
+            from thu_link import BoBatLink
+            _bat = BoBatLink(page)
+            _bat.bat_dau()
+        except Exception as e:
+            logger.warning(f"    ⚠️  Không gắn được bộ bắt link: {e}")
 
         # Click "Đăng"
         await _human_delay(2000, 3000)
@@ -715,6 +771,86 @@ async def _run_page_via(
             logger.info(f"  ✅ [{acc_name}] ĐĂNG THÀNH CÔNG!")
         else:
             logger.warning(f"  ⚠️  Không chắc kết quả — kiểm tra thủ công trên Facebook")
+
+        # ── Thu link bài vừa đăng ──────────────────────────────────────
+        # Nguồn CHÍNH là TRANG THÔNG BÁO: sau mỗi lần đăng chéo Facebook đẩy về
+        # một thông báo cho TỪNG nhóm ("Đã đăng chéo bài viết của bạn lên …"),
+        # và link thông báo chứa sẵn id bài — không phải bấm vào từng cái.
+        #
+        # Đo thật trên một đợt đăng chéo (Page Jenniee Homestay):
+        #     thông báo 60 phút : 18 link   ← dùng cái này
+        #     nhật ký Page      :  2 link
+        #     phản hồi mạng     :  1 link
+        # Nhật ký Page bị các lượt "thích bài viết" của chính phiên nuôi/comment
+        # lấp đầy nên gần như vô dụng; giữ lại chỉ để dự phòng.
+        _link_moi = []
+
+        # (a) Phản hồi mạng — nguồn DUY NHẤT có bài ở nhóm mở composer.
+        #     Facebook chỉ gửi thông báo "đã đăng chéo" cho các nhóm ĐƯỢC ĐĂNG
+        #     CHÉO TỚI; nhóm chứa bài gốc không có thông báo nào. Vì vậy đây
+        #     KHÔNG phải nguồn dự phòng mà là nguồn bổ sung bắt buộc — bỏ đi là
+        #     mất đúng một link mỗi lần đăng.
+        try:
+            if _bat is not None:
+                _kq = _bat.ket_qua()
+                _bat.dung()
+                _link_moi = list(_kq["links"])
+                logger.info(f"  🔗 [a] Phản hồi mạng (nhóm mở composer): "
+                            f"{len(_link_moi)} link")
+        except Exception as e:
+            logger.warning(f"  ⚠️  Thu link từ phản hồi lỗi: {e}")
+
+        # (b) Trang thông báo — các nhóm được đăng chéo tới.
+        try:
+            from thu_link import thu_tu_thong_bao, CHO_THONG_BAO_GIAY
+            logger.info(f"  ⏳ Chờ {CHO_THONG_BAO_GIAY}s cho thông báo đăng chéo về...")
+            await asyncio.sleep(CHO_THONG_BAO_GIAY)
+            # Cửa sổ lọc phải BÁM SÁT lần đăng này. Đã chờ 90s nên thông báo
+            # của chính nó chỉ 1–3 phút tuổi; 5 phút là dư biên.
+            #
+            # Để 60 phút thì vơ luôn thông báo của các lần đăng chéo TRƯỚC bằng
+            # cùng Page — và nếu lần trước thuộc loại lịch khác thì link bị lưu
+            # nhầm hạng mục. Đã xảy ra thật: 7 link nhóm Homestay lọt vào danh
+            # sách Thuê, khiến acc thuê đi comment vào bài homestay.
+            _ds = await thu_tu_thong_bao(page, toi_da_phut=5)
+            _them = [u for u, _ in _ds if u not in _link_moi]
+            _link_moi += _them
+            logger.info(f"  🔗 [b] Thông báo: {len(_ds)} link ({len(_them)} link mới)")
+        except Exception as e:
+            logger.warning(f"  ⚠️  Thu link từ thông báo lỗi: {e}")
+
+        # (c) Nhật ký Page — chỉ chạy khi hai nguồn trên hụt so với số nhóm đã
+        #     tick. Nhật ký bị các lượt like của phiên nuôi/comment lấp đầy nên
+        #     yếu, chạy vô điều kiện chỉ tốn thêm thời gian.
+        if _groups_posted and len(_link_moi) < _groups_posted:
+            try:
+                from thu_link import thu_tu_nhat_ky_page
+                _ds = await thu_tu_nhat_ky_page(page, page_uid)
+                _them = [u for u, _ in _ds if u not in _link_moi]
+                _link_moi += _them
+                logger.info(f"  🔗 [c] Nhật ký Page bù thêm: {len(_them)} link")
+            except Exception as e:
+                logger.warning(f"  ⚠️  Thu link từ nhật ký lỗi: {e}")
+
+        logger.info(f"  🔗 TỔNG: {len(_link_moi)} link / {_groups_posted or '?'} nhóm đã tick")
+        for _u in _link_moi[:15]:
+            logger.info(f"        {_u}")
+
+        # ── Lưu vào danh sách đi comment ───────────────────────────────
+        # Cửa sổ trượt: link mới đẩy link cũ ra, link bị đẩy ra bị xoá hẳn.
+        # `loai_comment` do người gọi truyền vào (lấy từ loại lịch đang chạy);
+        # thiếu thì bỏ qua chứ KHÔNG đoán, lưu nhầm loại thì acc homestay sẽ đi
+        # comment vào bài bán nhà.
+        if _link_moi and loai_comment:
+            try:
+                import db as _db
+                _n = _db.them_comment_posts(loai_comment, _link_moi, page=page_uid)
+                logger.info(f"  💾 Lưu vào danh sách comment '{loai_comment}': "
+                            f"+{_n} link mới (bỏ {len(_link_moi) - _n} link trùng), "
+                            f"tổng {len(_db.get_comment_posts(loai_comment))}/"
+                            f"{_db.GIOI_HAN_LINK}")
+            except Exception as e:
+                logger.warning(f"  ⚠️  Không lưu được link: {e}")
 
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 7 — Scroll 15-30s + like tối đa 1 bài (đang là Page) rồi đóng Chrome
@@ -770,6 +906,9 @@ async def _run_page_wall(
             no_viewport=True,
         )
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+        # Vòng canh nền: Facebook bật lại dialog cảnh báo bất cứ lúc nào, không
+        # riêng ở mấy điểm mình đoán trước. Tự huỷ khi đóng Chrome.
+        bat_dau_canh_dialog(page)
 
         # ── Inject cookies cá nhân ────────────────────────────────────────────
         cookie_data = load_cookie(acc_name, c_user)
@@ -1024,7 +1163,7 @@ def post_page_wall(
     if image_url:
         try:
             logger.info(f"  📥 Download ảnh...")
-            local_photos, temp_dir = smart_download(image_url)
+            local_photos, temp_dir = smart_download(image_url, seed_key=acc_name)
             logger.info(f"  → {len(local_photos)} ảnh đã tải")
         except Exception as e:
             logger.warning(f"  ⚠️  Không download được ảnh: {e}")
@@ -1058,6 +1197,7 @@ def post_page_via(
     message:         str,
     image_url:       str = "",
     c_user:          str = "",
+    loai_comment:    str = "",
 ) -> bool:
     """
     Hàm sync — gọi từ scheduler hoặc script độc lập.
@@ -1080,7 +1220,7 @@ def post_page_via(
     if image_url:
         try:
             logger.info(f"  📥 Download ảnh...")
-            local_photos, temp_dir = smart_download(image_url)
+            local_photos, temp_dir = smart_download(image_url, seed_key=acc_name)
             logger.info(f"  → {len(local_photos)} ảnh đã tải")
         except Exception as e:
             logger.warning(f"  ⚠️  Không download được ảnh: {e}")
@@ -1091,6 +1231,7 @@ def post_page_via(
 
     try:
         ok = asyncio.run(_run_page_via(
+            loai_comment=loai_comment,
             acc_name=acc_name,
             page_uid=page_uid,
             first_group_uid=first_group_uid,

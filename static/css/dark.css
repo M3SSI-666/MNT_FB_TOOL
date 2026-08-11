@@ -1,6 +1,12 @@
 /* dark.css — CSS Variables dark theme (1Man.io style) */
 
 :root {
+    /* Báo cho trình duyệt biết đây là giao diện tối, để nó vẽ các thành phần
+       gốc của hệ thống (danh sách xổ của <select>, thanh cuộn, ô ngày giờ)
+       theo tông tối. Thiếu dòng này thì danh sách <select> xổ ra nền TRẮNG
+       trong khi chữ vẫn màu sáng của theme → gần như không đọc được. */
+    color-scheme: dark;
+
     --bg-primary:     #0f172a;
     --bg-secondary:   #1e293b;
     --bg-card:        #1e293b;

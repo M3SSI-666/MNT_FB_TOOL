@@ -36,7 +36,7 @@ from config import HEADLESS
 from cookie_exporter import load_cookie
 from fb_common import (browser_launch_kwargs, find_profile_dir, human_delay,
                        jwait, view_stories, browse_and_like,
-                       dong_dialog_canh_bao)
+                       dong_dialog_canh_bao, bat_dau_canh_dialog)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -119,24 +119,35 @@ def normalize_interval(value, default=DEFAULT_INTERVAL_MIN) -> int:
     return max(MIN_INTERVAL_MIN, v) if v > 0 else default
 
 
-def plan_warming_conversion(schedule: list, warm_accs: dict,
-                            min_gap: int = None) -> int:
+def plan_slot_conversion(schedule: list, accs_interval: dict, hoat_dong: str,
+                         min_gap: int = None, da_dat: list = None) -> int:
     """
-    Với acc BẬT nuôi: cứ mỗi `chu kỳ` phút thì MỘT slot đăng của acc đó bị đổi
-    thành phiên nuôi (nuôi chen thẳng vào lịch đăng, không thêm slot mới nên
-    lịch không dày lên và một slot chỉ đăng HOẶC nuôi → không đụng nhau).
+    Đổi một số slot ĐĂNG BÀI thành slot `hoat_dong` khác (nuôi nick / comment).
 
-    schedule  : list row đã gen, thứ tự theo thời gian; mỗi row có 'ten_acc','gio_dang'.
-    warm_accs : {ten_acc: chu_kỳ_phút} — CHỈ chứa acc đang bật nuôi.
+    Với acc bật tính năng: cứ mỗi `chu kỳ` phút thì MỘT slot đăng của acc đó bị
+    đổi. Chen thẳng vào lịch đăng, không thêm slot mới nên lịch không dày lên,
+    và một slot chỉ làm MỘT việc → không đụng nhau.
+
+    schedule      : list row đã gen, thứ tự theo thời gian; mỗi row có 'ten_acc','gio_dang'.
+    accs_interval : {ten_acc: chu_kỳ_phút} — CHỈ chứa acc đang bật tính năng.
+    hoat_dong     : giá trị ghi vào cột, vd 'nuoi_nick' hoặc 'comment'.
+    da_dat        : mốc phút của các phiên ĐÃ đặt ở lượt gọi trước (nuôi chạy
+                    trước, comment chạy sau) — truyền vào để hai loại phiên
+                    không rơi sát nhau. Hàm ghi thêm mốc mới vào chính list này.
+
     Sửa `schedule` tại chỗ, trả về số slot đã chuyển.
 
-    Hai lớp TÁCH GIÃN các phiên nuôi ra khỏi nhau:
-      1. Lệch pha — acc thứ k dời phiên nuôi đầu tiên đi k/n chu kỳ. Không có
-         bước này thì các acc cùng chu kỳ, cùng bắt đầu một giờ sẽ nuôi dính
-         chùm nhau suốt ngày (05:03/05:06/05:09 → 07:39/07:42/07:45...).
-      2. Giãn cách tối thiểu toàn cục — slot nào quá sát một phiên nuôi đã đặt
-         (của bất kỳ acc nào) thì bỏ, lùi sang slot kế tiếp của chính acc đó.
-         Cần vì các acc chu kỳ khác nhau vẫn trôi vào gần nhau sau vài vòng.
+    Chỉ chuyển slot đang là 'dang_bai': gọi lần hai cho comment không được cướp
+    slot mà nuôi nick đã chiếm ở lần gọi đầu.
+
+    Hai lớp TÁCH GIÃN các phiên ra khỏi nhau:
+      1. Lệch pha — acc thứ k dời phiên đầu tiên đi k/n chu kỳ. Không có bước
+         này thì các acc cùng chu kỳ, cùng bắt đầu một giờ sẽ dính chùm nhau
+         suốt ngày (05:03/05:06/05:09 → 07:39/07:42/07:45...).
+      2. Giãn cách tối thiểu toàn cục — slot nào quá sát một phiên đã đặt (của
+         bất kỳ acc nào, kể cả loại phiên khác) thì bỏ, lùi sang slot kế tiếp
+         của chính acc đó. Cần vì các acc chu kỳ khác nhau vẫn trôi vào gần
+         nhau sau vài vòng.
     """
     if min_gap is None:
         min_gap = MIN_GAP_MIN
@@ -146,16 +157,16 @@ def plan_warming_conversion(schedule: list, warm_accs: dict,
         row.setdefault("hoat_dong", "dang_bai")
         by_acc[row["ten_acc"]].append(i)
 
-    accs = [a for a in by_acc if a in warm_accs]
+    accs = [a for a in by_acc if a in accs_interval]
     n    = max(1, len(accs))
 
-    converted   = 0
-    placed: list = []            # mốc phút của MỌI phiên nuôi đã đặt
+    converted = 0
+    placed    = da_dat if da_dat is not None else []   # mốc phút MỌI phiên đã đặt
     for k, acc in enumerate(accs):
         idxs     = by_acc[acc]
-        interval = normalize_interval(warm_accs[acc])
+        interval = normalize_interval(accs_interval[acc])
         mins     = _unwrap_times([schedule[i]["gio_dang"] for i in idxs])
-        # Lớp 1 — lệch pha: acc thứ k chờ thêm k/n chu kỳ mới nuôi lần đầu.
+        # Lớp 1 — lệch pha: acc thứ k chờ thêm k/n chu kỳ mới vào phiên đầu.
         first_at = mins[0] + round(k * interval / n)
         last     = None
         for pos, i in enumerate(idxs):
@@ -168,11 +179,19 @@ def plan_warming_conversion(schedule: list, warm_accs: dict,
             # Lớp 2 — giãn cách toàn cục: sát quá thì thử slot sau của acc này.
             if any(abs(t - u) < min_gap for u in placed):
                 continue
-            schedule[i]["hoat_dong"] = "nuoi_nick"
+            if schedule[i].get("hoat_dong", "dang_bai") != "dang_bai":
+                continue                       # slot đã bị loại phiên khác chiếm
+            schedule[i]["hoat_dong"] = hoat_dong
             last = t
             placed.append(t)
             converted += 1
     return converted
+
+
+def plan_warming_conversion(schedule: list, warm_accs: dict,
+                            min_gap: int = None, da_dat: list = None) -> int:
+    """Chuyển slot đăng thành slot NUÔI NICK. Vỏ mỏng của plan_slot_conversion."""
+    return plan_slot_conversion(schedule, warm_accs, "nuoi_nick", min_gap, da_dat)
 
 
 def build_warming_schedule(accs: list, start_str: str = "07:00",
@@ -247,6 +266,9 @@ async def _open_context(p, acc_name: str, c_user: str, headless: bool = None):
         **browser_launch_kwargs(HEADLESS if headless is None else headless),
     )
     page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+    # Vong canh nen: Facebook bat lai dialog canh bao bat cu luc nao, khong
+    # rieng o may diem minh doan truoc. Tu huy khi dong Chrome.
+    bat_dau_canh_dialog(page)
 
     cookie_data = load_cookie(acc_name, c_user)
     if not cookie_data:

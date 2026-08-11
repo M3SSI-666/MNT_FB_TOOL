@@ -28,13 +28,13 @@ function closeModal() {
 
 // ── Lightbox ──────────────────────────────────────────────────
 let _lbImgs=[], _lbIdx=0;
-let _lbMeta = {name:"", isHook:false}; // meta cho tên file download
+let _lbMeta = {name:""};               // meta cho tên file download
 
 function openLightbox(imgs, meta={}) {
     _lbImgs = typeof imgs==="string" ? JSON.parse(imgs) : imgs;
     if(!_lbImgs.length) return;
     _lbIdx  = 0;
-    _lbMeta = {name: meta.name||"", isHook: !!meta.isHook};
+    _lbMeta = {name: meta.name||""};
     let lb=document.getElementById("lightbox");
     if(!lb){
         lb=document.createElement("div"); lb.id="lightbox";
@@ -74,10 +74,7 @@ function _lbFilename(url, idx){
     // Lấy extension từ URL
     const ext = (url.split("?")[0].split(".").pop().toLowerCase().match(/^(jpg|jpeg|png|webp|gif)$/) || ["jpg"])[0];
     const base = _lbMeta.name || "image";
-    if(_lbMeta.isHook && _lbImgs.length===1) return `${base}_hook.${ext}`;
-    if(_lbMeta.isHook && idx===0)            return `${base}_hook.${ext}`;
-    const num = _lbMeta.isHook ? idx : idx + 1; // hook chiếm slot 0 nếu mixed
-    return `${base}_${num}.${ext}`;
+    return `${base}_${idx + 1}.${ext}`;
 }
 
 function renderLb(){
@@ -123,6 +120,7 @@ const PAGE_TITLES = {
     "uid-groups":"UID Nhóm",
     "lich-homestay":"Lịch Homestay", "lich-thue":"Lịch Thuê",
     "lich-ban":"Lịch Bán", "lich-page":"Lịch Đăng Page", "lich-nuoi":"Lịch Nuôi nick",
+    "comment-posts":"Bài đi Comment",
     "tham-gia-nhom":"Tham gia nhóm", "hanh-dong":"Hành động", logs:"Logs",
 };
 
@@ -141,6 +139,7 @@ function loadPageData(page) {
     else if(page==="pages")      loadPages();
     else if(page==="content")    openContentTab(_currentContentLoai);
     else if(page==="uid-groups") loadUidGroups();
+    else if(page==="comment-posts") renderCommentPostsPage();
     else if(page==="tham-gia-nhom") loadJoinSchedules();
     else if(page==="hanh-dong")     loadRunnerStatus();
     else if(page==="logs")       { loadLogs(); _logInterval=setInterval(loadLogs,2000); }
@@ -534,6 +533,54 @@ const ACC_FIELDS = [
 ];
 let _accData=[];
 
+// ── Sức khoẻ acc (xem suc_khoe_acc.py) ────────────────────────────────
+const TRANG_THAI_HONG="Hỏng";
+const TRANG_THAI_OPTIONS=["Active","Tạm dừng","Cookie hết hạn",TRANG_THAI_HONG];
+
+function _dangNghi(r){
+    if(!r.nghi_den) return false;
+    const t=new Date(r.nghi_den);
+    return !isNaN(t) && t>new Date();
+}
+
+/** Nhãn hiển thị cho cột Trạng thái — gộp trang_thai (DB) với nghi_den (tạm). */
+function _trangThaiAcc(r){
+    const val=r.trang_thai||"";
+    const ls=r.lich_su_phien||"";
+    const hong=ls?`${(ls.match(/x/g)||[]).length}/${ls.length} phiên gần nhất hỏng`
+                 :"chưa có phiên nào";
+    if(val===TRANG_THAI_HONG)
+        return {nhan:"❌ Hỏng", mau:"var(--danger)", dam:true,
+                chiTiet:`Máy tự tắt. Sửa ô này về Active để bật lại.`};
+    if(val==="Cookie hết hạn")
+        return {nhan:val, mau:"var(--danger)", dam:false, chiTiet:"Cần đăng nhập lại"};
+    if(_dangNghi(r)){
+        const t=new Date(r.nghi_den);
+        const hh=String(t.getHours()).padStart(2,"0"), mm=String(t.getMinutes()).padStart(2,"0");
+        return {nhan:`😴 Nghỉ tới ${hh}:${mm}`, mau:"var(--warning)", dam:false,
+                chiTiet:`Lỗi liên tiếp nên tạm nghỉ, sau đó tự chạy lại. ${hong}`};
+    }
+    if(val==="Active")
+        return {nhan:val, mau:"var(--text-secondary)", dam:false, chiTiet:hong};
+    return {nhan:val||"-", mau:"var(--text-secondary)", dam:false, chiTiet:hong};
+}
+
+// Scheduler chạy ở tiến trình riêng nên không bắn toast thẳng lên được; nó ghi
+// cảnh báo vào DB, chỗ này nhặt về. Bám theo nhịp 10s của loadRunnerStatus thay
+// vì tự đặt timer riêng — một nhịp thăm dò là đủ cho cả hai việc.
+async function loadCanhBaoAcc(){
+    try{
+        const res=await API.canhBao();
+        if(!res.ok || !res.data?.length) return;
+        res.data.forEach(c=>Toast.show(_escapeHtml(c.noi_dung), c.muc==="error"?"error":"info",
+                                       c.muc==="error"?15000:8000));
+        await API.canhBaoXong();
+        // Cảnh báo vừa nổ nghĩa là trạng thái acc vừa đổi — vẽ lại bảng nếu
+        // người dùng đang mở đúng tab đó.
+        if(document.getElementById("acc-table")?.offsetParent) loadAccounts();
+    }catch(e){}
+}
+
 // Server ghi file xuống đĩa rồi trả về đường dẫn — KHÔNG dùng <a download> vì
 // app chạy trong cửa sổ pywebview, ở đó trình duyệt nhúng nuốt luôn lệnh tải
 // file: code JS chạy hết và báo thành công nhưng không có file nào được lưu.
@@ -591,11 +638,19 @@ async function loadAccounts(){
         const box=document.getElementById("acc-summary");
         if(box){
             const total=res.data.length, active=res.data.filter(r=>r.trang_thai==="Active").length;
-            const ban=res.data.filter(r=>(r.loai_dang||"").includes("Bán")).length;
-            const thue=res.data.filter(r=>(r.loai_dang||"").includes("Thuê")).length;
-            const hs=res.data.filter(r=>(r.loai_dang||"").includes("Homestay")).length;
-            box.innerHTML=[{l:"Tổng",v:total},{l:"Active",v:active},{l:"Bán",v:ban},{l:"Thuê",v:thue},{l:"Homestay",v:hs}]
-                .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1;min-width:80px"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px">${s.v}</div></div>`).join("");
+            // So khớp CHÍNH XÁC: "C_Thuê" chứa chuỗi con "Thuê" và "C_Bán" chứa
+            // "Bán", dùng includes() sẽ đếm nhầm acc chỉ comment vào nhóm đăng bài.
+            const dem=v=>res.data.filter(r=>(r.loai_dang||"").trim()===v).length;
+            const ban=dem("Bán"), thue=dem("Thuê"), hs=dem("Homestay");
+            const hong=res.data.filter(r=>r.trang_thai===TRANG_THAI_HONG).length;
+            const nghi=res.data.filter(r=>_dangNghi(r)).length;
+            const o=[{l:"Tổng",v:total},{l:"Active",v:active},{l:"Bán",v:ban},{l:"Thuê",v:thue},{l:"Homestay",v:hs}];
+            // Chỉ chiếm chỗ khi thực sự có acc hỏng/nghỉ — bình thường thanh này
+            // giữ nguyên như cũ, không đẻ thêm hai ô số 0 nhìn như báo động giả.
+            if(nghi) o.push({l:"Nghỉ tạm",v:nghi,c:"var(--warning)"});
+            if(hong) o.push({l:"⚠️ Hỏng",v:hong,c:"var(--danger)"});
+            box.innerHTML=o
+                .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1;min-width:80px"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px;${s.c?"color:"+s.c:""}">${s.v}</div></div>`).join("");
         }
         renderAccTable(res.data);
     }catch(e){ tbody.innerHTML=`<tr><td colspan="19" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
@@ -605,7 +660,7 @@ function renderAccTable(data){
     const tbody=document.getElementById("acc-table");
     const count=document.getElementById("acc-count");
     const filter=document.getElementById("acc-filter-loai")?.value||"";
-    const rows=data.filter(r=>!filter||((r.loai_dang||"").includes(filter)));
+    const rows=data.filter(r=>!filter||((r.loai_dang||"").trim()===filter));
     if(count) count.textContent=`${rows.length}/${data.length} tài khoản`;
     if(!rows.length){ tbody.innerHTML=`<tr><td colspan="19" class="empty">Không có tài khoản nào</td></tr>`; return; }
     tbody.innerHTML=rows.map(r=>{
@@ -622,11 +677,19 @@ function renderAccTable(data){
             const center=CENTER_KEYS.includes(f.key)?"text-align:center;":"";
             const style=`${center}font-size:${f.mono?"11px":"12px"};color:var(--text-secondary);${f.mono?"font-family:var(--font-mono);":""}max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
             if(f.key==="loai_dang"){
-                const color=val.includes("Bán")?"#fbbf24":val.includes("Thuê")?"#60a5fa":val.includes("Homestay")?"#34d399":"var(--text-secondary)";
-                return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}" style="${center}color:${color};font-weight:600;font-size:12px" onclick="startAccEdit(this)">${val||"-"}</td>`;
+                return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}" style="${center}color:${mauLoaiDang(val)};font-weight:600;font-size:12px" onclick="startAccEdit(this)">${val||"-"}</td>`;
             }
             if(f.key==="link_profile")
                 return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}" style="${center}" onclick="startAccEdit(this)">${val?`<a href="${val}" target="_blank" style="color:var(--accent);font-size:12px" onclick="event.stopPropagation()">🔗</a>`:"-"}</td>`;
+            if(f.key==="trang_thai"){
+                const t=_trangThaiAcc(r);
+                // data-val giữ giá trị THẬT trong DB, không phải nhãn hiển thị:
+                // ô này sửa được, mà "😴 Nghỉ tới 14:20" không phải giá trị hợp lệ
+                // để ghi ngược xuống cột trang_thai.
+                return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}"
+                    style="${center}font-size:12px;font-weight:${t.dam?"600":"400"};color:${t.mau}"
+                    title="${_escapeHtml(t.chiTiet)}" onclick="startAccEdit(this)">${t.nhan}</td>`;
+            }
             return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}" style="${style}" title="${esc}" onclick="startAccEdit(this)">${val||"-"}</td>`;
         }).join("");
         return `<tr draggable="true" data-id="${r.id}"
@@ -681,6 +744,53 @@ async function startAccEdit(td){
         }
     }
 
+    // Loại đăng là tập giá trị đóng — cho gõ tay thì sẽ có acc mang "C_home"
+    // hay "Homestay " thừa khoảng trắng, và Gen lịch bỏ sót acc đó mà không
+    // báo gì. Dùng dropdown để không thể nhập sai.
+    // Trạng thái cũng dùng dropdown như Loại đăng: đây là ô để bật lại acc bị
+    // máy tắt, gõ tay lệch một ký tự thì acc nằm ngoài mọi bộ lọc 'Active' mà
+    // nhìn vẫn như đã bật.
+    const CHON_SAN={loai_dang:LOAI_DANG_OPTIONS, trang_thai:TRANG_THAI_OPTIONS};
+    if(CHON_SAN[field]){
+        const sel=document.createElement("select");
+        sel.style.cssText="width:100%;font-size:12px";
+        const cur=val==="-"?"":val;
+        CHON_SAN[field].forEach(o=>{
+            const op=document.createElement("option");
+            op.value=o; op.textContent=o||"-";
+            if(o===cur) op.selected=true;
+            sel.appendChild(op);
+        });
+        td.innerHTML=""; td.appendChild(sel); sel.focus();
+        let xong=false;
+        const luu=async()=>{
+            if(xong) return; xong=true;
+            const nv=sel.value; td.classList.remove("editing");
+            td.dataset.val=nv;
+            if(field==="loai_dang"){ td.style.color=mauLoaiDang(nv); }
+            td.textContent=nv||"-";
+            if(nv===cur) return;
+            td.classList.add("saving");
+            try{
+                const r=await API.updateAccField(parseInt(id),field,nv);
+                td.classList.remove("saving");
+                if(r.ok){
+                    td.classList.add("saved"); setTimeout(()=>td.classList.remove("saved"),1200);
+                    // Bật về Active thì server xoá luôn lịch sử phiên và mốc
+                    // nghỉ — nạp lại để bảng khớp với DB thay vì hiện giá trị cũ.
+                    if(field==="trang_thai") loadAccounts();
+                }
+                else Toast.error(r.error);
+            }catch(e){ td.classList.remove("saving"); Toast.error(e.message); }
+        };
+        sel.addEventListener("change",luu);
+        sel.addEventListener("blur",luu);
+        sel.addEventListener("keydown",e=>{
+            if(e.key==="Escape"){ xong=true; td.classList.remove("editing"); td.textContent=cur||"-"; }
+        });
+        return;
+    }
+
     const inp=document.createElement("input"); inp.type="text"; inp.value=val==="-"?"":val;
     td.innerHTML=""; td.appendChild(inp); inp.focus(); inp.select();
     async function commit(){
@@ -700,17 +810,30 @@ async function startAccEdit(td){
     inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault();inp.blur();} if(e.key==="Escape"){inp.value=val;inp.blur();} });
 }
 
+// Loại đăng — tiền tố "C_" nghĩa là acc CHỈ ĐI COMMENT cho mảng đó, không
+// đăng bài. Dùng cho acc bị Facebook dỡ bài nhưng vẫn comment được.
+// Danh sách phải khớp LOAI_DANG_OPTIONS trong db.py.
+const LOAI_DANG_OPTIONS = ["","Homestay","Thuê","Bán","X_Home","X_Thuê","X_Bán","C_Home","C_Thuê","C_Bán"];
+function mauLoaiDang(v){
+    if(v==="Bán")   return "#fbbf24";
+    if(v==="Thuê")  return "#60a5fa";
+    if(v==="Homestay") return "#34d399";
+    if(String(v).startsWith("X_")) return "#f472b6";   // hồng = đăng + comment
+    if(String(v).startsWith("C_")) return "#c084fc";   // tím = chỉ comment
+    return "var(--text-secondary)";
+}
+
 function openAccForm(data={}){
     const f=(k,label,type="text")=>`<div class="field-group"><label>${label}</label><input type="${type}" id="af_${k}" value="${(data[k]||"").toString().replace(/"/g,"&quot;")}"></div>`;
     const fsel=(k,label,opts)=>`<div class="field-group"><label>${label}</label><select id="af_${k}">${opts.map(o=>`<option value="${o}" ${data[k]===o?"selected":""}>${o||"-"}</option>`).join("")}</select></div>`;
     openModal(data.id?"Sửa tài khoản":"Thêm tài khoản",`
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            ${f("ten_acc","Tên acc")} ${fsel("loai_dang","Loại đăng",["","Bán","Thuê","Homestay"])}
+            ${f("ten_acc","Tên acc")} ${fsel("loai_dang","Loại đăng",LOAI_DANG_OPTIONS)}
             ${f("thoi_gian_nghi","Nghỉ (phút)")} ${f("ten_page","Tên Page")}
             ${f("link_profile","Link profile")} ${f("email_sdt","Email/SDT")}
             ${f("password","Password")} ${f("c_user","c_user")}
             <div class="field-group" style="grid-column:1/-1"><label>xs</label><input id="af_xs" value="${(data.xs||"").toString().replace(/"/g,"&quot;")}"></div>
-            ${fsel("trang_thai","Trạng thái",["Active","Tạm dừng","Cookie hết hạn"])}
+            ${fsel("trang_thai","Trạng thái",TRANG_THAI_OPTIONS)}
             ${f("email_khoiphuc","Email khôi phục")} ${f("pass_khoiphuc","Pass khôi phục")}
             ${f("twofa","2FA")} ${f("ghi_chu","Ghi chú")}
         </div>
@@ -1123,7 +1246,7 @@ async function loadContent(loai){
     renderContentTabs();
     document.querySelectorAll(".content-tab").forEach(b=>b.classList.toggle("active",b.dataset.loai===loai));
     const tbody=document.getElementById("content-table"); if(!tbody) return;
-    tbody.innerHTML=`<tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="7" class="loading"><span class="spin">↻</span></td></tr>`;
     try{
         const res=await API.content(loai);
         const total=res.data.length, active=res.data.filter(r=>r.su_dung==="Có").length;
@@ -1131,7 +1254,7 @@ async function loadContent(loai){
         if(box) box.innerHTML=[{l:"Tổng",v:total},{l:"Đang dùng",v:active,c:"var(--success)"},{l:"Tạm dừng",v:total-active}]
             .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px;${s.c?"color:"+s.c:""}">${s.v}</div></div>`).join("");
 
-        if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="8" class="empty">Chưa có content</td></tr>`; return; }
+        if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="7" class="empty">Chưa có content</td></tr>`; return; }
 
         // Helper: inline-editable cell
         const ec=(r,field,style)=>{
@@ -1143,9 +1266,6 @@ async function loadContent(loai){
 
         tbody.innerHTML=res.data.map(r=>{
             const imgs=(r.link_anh||"").split(",").map(s=>s.trim()).filter(Boolean);
-            const hook=r.link_anh_hook||"";
-            const allImgs=hook?[hook,...imgs]:imgs;
-            const encAll=encodeURIComponent(JSON.stringify(allImgs));
             const encImgs=encodeURIComponent(JSON.stringify(imgs));
             const suDung=r.su_dung==="Có";
 
@@ -1165,22 +1285,13 @@ async function loadContent(loai){
                     style="font-size:12px;color:var(--text-secondary);max-width:360px;white-space:pre-wrap;word-break:break-word;padding:8px 10px"
                     onclick="startContentNdEdit(this)">${r.noi_dung||"-"}</td>
 
-                <!-- Ảnh Hook: click mở lightbox -->
-                <td style="text-align:center;padding:6px">
-                    ${hook
-                        ?`<img src="${hook}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:2px solid var(--warning);cursor:pointer"
-                            title="Ảnh Hook — click xem"
-                            onclick="openLightbox(['${hook}'],{name:'${r.ma_content}',isHook:true})">`
-                        :`<span style="color:var(--text-muted);font-size:11px">-</span>`}
-                </td>
-
-                <!-- Ảnh thường: click mở lightbox -->
+                <!-- Ảnh: click mở lightbox. Thứ tự hiển thị = thứ tự đăng lên FB. -->
                 <td style="padding:4px 6px;cursor:pointer" title="Click xem ảnh"
-                    onclick="openLightbox(JSON.parse(decodeURIComponent('${encImgs}')),{name:'${r.ma_content}',isHook:false})">
-                    <div style="display:flex;gap:2px;flex-wrap:wrap;max-width:100px">
+                    onclick="openLightbox(JSON.parse(decodeURIComponent('${encImgs}')),{name:'${r.ma_content}'})">
+                    <div style="display:flex;gap:2px;flex-wrap:wrap;max-width:140px">
                         ${imgs.length
-                            ?imgs.slice(0,3).map(u=>`<img src="${u}" style="width:34px;height:34px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">`).join("")
-                             +(imgs.length>3?`<div style="width:34px;height:34px;border-radius:4px;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--accent)">+${imgs.length-3}</div>`:"")
+                            ?imgs.slice(0,4).map(u=>`<img src="${u}" style="width:34px;height:34px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">`).join("")
+                             +(imgs.length>4?`<div style="width:34px;height:34px;border-radius:4px;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--accent)">+${imgs.length-4}</div>`:"")
                             :`<span style="font-size:11px;color:var(--text-muted)">-</span>`}
                     </div>
                 </td>
@@ -1201,7 +1312,7 @@ async function loadContent(loai){
                 </td>
             </tr>`;
         }).join("");
-    }catch(e){ tbody.innerHTML=`<tr><td colspan="8" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
+    }catch(e){ tbody.innerHTML=`<tr><td colspan="7" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
 }
 
 // Inline edit Nội dung bằng textarea (giữ xuống dòng)
@@ -1279,17 +1390,7 @@ function openContentEdit(data){
         </div>
         <div class="field-group"><label>Nội dung</label><textarea id="ce_nd" rows="8" style="width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;color:var(--text-primary);font-size:13px;line-height:1.6;resize:vertical;outline:none;font-family:inherit">${data.noi_dung||""}</textarea></div>
         <div class="field-group">
-            <label>Ảnh Hook</label>
-            <div id="ce_hook_thumb" style="display:flex;gap:8px;margin-bottom:8px">${data.link_anh_hook?`<div class="cedit-thumb" style="border:2px solid var(--warning)"><img src="${data.link_anh_hook}"><button class="remove-btn" onclick="_removeHook()">✕</button></div>`:""}</div>
-            <div class="upload-zone upload-zone--hook" onclick="document.getElementById('ce_hook_file').click()" ondragover="event.preventDefault()" ondrop="_dropHook(event)">
-                <div class="upload-zone__icon">📤</div>
-                <div class="upload-zone__text">Kéo thả hoặc <span>click để chọn</span></div>
-                <div class="upload-zone__sub">1 ảnh hook</div>
-                <input id="ce_hook_file" type="file" accept="image/*" style="display:none" onchange="_hookFile(event)">
-            </div>
-        </div>
-        <div class="field-group">
-            <label>Ảnh</label>
+            <label>Ảnh <span style="font-weight:400;color:var(--text-muted);font-size:11px">— đăng lên Facebook theo đúng thứ tự này, ảnh đầu tiên đứng đầu bài</span></label>
             <div id="ce_thumbs" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${(data.link_anh||"").split(",").filter(Boolean).map((u,i)=>`<div class="cedit-thumb"><img src="${u.trim()}"><button class="remove-btn" onclick="_removeImg(${i})">✕</button></div>`).join("")}</div>
             <div class="upload-zone" onclick="document.getElementById('ce_imgs_file').click()" ondragover="event.preventDefault()" ondrop="_dropImgs(event)">
                 <div class="upload-zone__icon">📤</div>
@@ -1303,7 +1404,6 @@ function openContentEdit(data){
     document.getElementById("cedit-panel").style.display="flex";
 
     // Track images in memory
-    window._ceHookUrl = data.link_anh_hook||"";
     window._ceImgUrls = (data.link_anh||"").split(",").map(s=>s.trim()).filter(Boolean);
 }
 
@@ -1312,7 +1412,6 @@ function closeContentEdit(){
     document.getElementById("cedit-panel").style.display="none";
 }
 
-function _removeHook(){ window._ceHookUrl=""; document.getElementById("ce_hook_thumb").innerHTML=""; }
 function _removeImg(i){ window._ceImgUrls.splice(i,1); _reRenderImgThumbs(); }
 function _reRenderImgThumbs(){
     document.getElementById("ce_thumbs").innerHTML=window._ceImgUrls.map((u,i)=>
@@ -1320,7 +1419,7 @@ function _reRenderImgThumbs(){
     ).join("");
 }
 
-async function _uploadImg(file, isHook=false){
+async function _uploadImg(file){
     const loai = _ceditData?.loai || _currentContentLoai;
     const fd=new FormData(); fd.append("image",file); fd.append("loai",loai);
     const r=await fetch("/api/content/upload-image",{method:"POST",body:fd});
@@ -1328,18 +1427,6 @@ async function _uploadImg(file, isHook=false){
     if(!data.ok) throw new Error(data.error);
     return data.url;
 }
-
-async function _hookFile(e){
-    const file=e.target.files[0]; if(!file) return;
-    try{
-        const url=await _uploadImg(file,true);
-        window._ceHookUrl=url;
-        document.getElementById("ce_hook_thumb").innerHTML=`<div class="cedit-thumb" style="border:2px solid var(--warning)"><img src="${url}"><button class="remove-btn" onclick="_removeHook()">✕</button></div>`;
-    }catch(err){ Toast.error(err.message); }
-    e.target.value="";
-}
-
-function _dropHook(e){ e.preventDefault(); const f=e.dataTransfer.files[0]; if(f)_uploadImg(f,true).then(u=>{window._ceHookUrl=u;document.getElementById("ce_hook_thumb").innerHTML=`<div class="cedit-thumb" style="border:2px solid var(--warning)"><img src="${u}"><button class="remove-btn" onclick="_removeHook()">✕</button></div>`;}).catch(err=>Toast.error(err.message)); }
 
 async function _imgsFile(e){
     for(const file of e.target.files){
@@ -1359,7 +1446,6 @@ async function saveContentEdit(){
         ma_content: document.getElementById("ce_ma")?.value||"",
         su_dung:    document.getElementById("ce_su")?.value||"Có",
         noi_dung:   document.getElementById("ce_nd")?.value||"",
-        link_anh_hook: window._ceHookUrl||"",
         link_anh:   (window._ceImgUrls||[]).join(", "),
         ghi_chu:    document.getElementById("ce_note")?.value||"",
     };
@@ -1503,6 +1589,342 @@ function renderSchedulePage(loai){
         </table></div></div>`;
 }
 
+// ── Bài đi Comment ────────────────────────────────────────────
+// Acc bị dỡ bài vẫn comment được; comment vào bài cũ làm bài nổi lên đầu nhóm.
+const CMT_LOAI = [["homestay","🏠 Homestay"],["thue","🏡 Thuê"],["ban","💰 Bán"]];
+let _cmtLoai = "homestay";
+
+function renderCommentPostsPage(){
+    const el=document.getElementById("page-comment-posts"); if(!el) return;
+    el.innerHTML=`
+        <div style="display:flex;gap:4px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
+            <div id="cmt-tabs" style="display:flex;gap:4px"></div>
+            <button class="btn btn-ghost" style="margin-left:auto;font-size:12px" onclick="openCommentSettings()">⚙️ Cài đặt comment</button>
+            <button class="btn btn-danger" style="font-size:12px" onclick="clearCommentPosts()">🗑 Xoá hết</button>
+            <button class="btn btn-primary" style="font-size:12px" onclick="openAddCommentPosts()">+ Dán danh sách link</button>
+        </div>
+        <div style="font-size:12px;line-height:1.7;color:var(--text-muted);margin-bottom:12px;padding:10px;background:var(--bg-hover);border-radius:var(--radius-sm)">
+            Link ở đây <b>tự điền</b> sau mỗi lần đăng chéo — không phải dán tay.
+            Đến phiên, acc mở vài bài và để lại một comment lấy từ thư viện câu → bài nổi lên đầu nhóm.<br>
+            Bật cho từng acc bằng cột <b>Loại đăng</b> ở bảng Tài khoản: <b>X_</b> = vừa đăng vừa comment,
+            <b>C_</b> = chỉ comment. Đổi xong nhớ <b>Gen lịch</b> lại.<br>
+            Mỗi phiên bốc <b>tối đa 1 link mỗi nhóm</b>, ưu tiên bài cũ nhất chưa comment.
+            Danh sách giữ <b>300 link mới nhất</b>, link cũ bị đẩy ra sẽ xoá hẳn. Link chết (bài đã bị xoá) phát hiện lúc comment là <b>tự xoá khỏi danh sách</b>.
+        </div>
+        <div id="cmt-tomtat"></div>
+        <div class="card"><div class="table-wrap"><table>
+            <thead><tr>
+                <th style="width:44px;text-align:center">#</th>
+                <th>Link bài viết</th>
+                <th style="width:150px;text-align:center">Page đã đăng</th>
+                <th style="width:150px">Ghi chú</th>
+                <th style="width:120px;text-align:center">Comment lần cuối</th>
+                <th style="width:60px;text-align:center">Số lần</th>
+                <th style="width:150px;text-align:center">Trạng thái</th>
+                <th style="width:44px"></th>
+            </tr></thead>
+            <tbody id="cmt-table"><tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr></tbody>
+        </table></div></div>`;
+    renderCmtTabs();
+    loadCommentPosts(_cmtLoai);
+}
+
+function renderCmtTabs(){
+    const box=document.getElementById("cmt-tabs"); if(!box) return;
+    box.innerHTML=CMT_LOAI.map(([k,ten])=>
+        `<button class="btn ${_cmtLoai===k?"btn-primary":"btn-ghost"}" style="font-size:12px"
+                 onclick="switchCmtLoai('${k}')">${ten}</button>`).join("");
+}
+
+function switchCmtLoai(loai){ _cmtLoai=loai; renderCmtTabs(); loadCommentPosts(loai); }
+
+async function loadCommentPosts(loai){
+    const tb=document.getElementById("cmt-table"); if(!tb) return;
+    try{
+        let rows=(await API.commentPosts(loai)).data||[];
+        // Mới nhất lên đầu — kho là cửa sổ trượt, link cũ sắp bị đẩy ra nên
+        // không đáng nằm chỗ dễ nhìn nhất.
+        rows = rows.slice().reverse();
+        _renderCmtTomTat(rows);
+        if(!rows.length){
+            tb.innerHTML=`<tr><td colspan="8" class="empty">Chưa có link nào cho loại này — bấm "+ Dán danh sách link"</td></tr>`;
+            return;
+        }
+        tb.innerHTML=rows.map((r,i)=>`
+            <tr>
+                <td style="text-align:center;color:var(--text-muted);font-size:12px">${i+1}</td>
+                <td style="font-size:12px;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                    <a href="${r.url}" target="_blank" style="color:var(--accent);text-decoration:none">${_escapeHtml(r.url)}</a>
+                </td>
+                <td style="text-align:center;font-size:12px;color:${r.page?"#f472b6":"var(--text-muted)"}"
+                    title="${r.page?("uid "+_escapeHtml(r.page)):"Link cũ chưa gắn Page — sẽ bị bỏ qua khi bật 'chỉ comment bài chính chủ'"}">
+                    ${r.page?_escapeHtml(r.ten_page||r.page):"—"}
+                </td>
+                <td class="editable" data-id="${r.id}" data-field="ghi_chu" data-val="${_escapeHtml(r.ghi_chu||"")}"
+                    style="font-size:12px;color:var(--text-muted)" onclick="startCmtFieldEdit(this)">${_escapeHtml(r.ghi_chu||"")||"-"}</td>
+                <td style="text-align:center;font-size:12px;color:var(--text-muted)">${r.lan_cuoi||"-"}</td>
+                <td style="text-align:center;font-size:12px">${r.so_lan||0}</td>
+                <td style="text-align:center;font-size:11px">${_escapeHtml(r.trang_thai||"")||"-"}</td>
+                <td style="text-align:center">
+                    <button title="Xoá" style="background:var(--danger-light);color:var(--danger);border:none;border-radius:6px;width:26px;height:26px;cursor:pointer"
+                            onclick="delCommentPost(${r.id})">✕</button>
+                </td>
+            </tr>`).join("");
+    }catch(e){ tb.innerHTML=`<tr><td colspan="8" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
+}
+
+// Bao nhiêu link đã gắn Page — link chưa gắn sẽ bị bỏ qua khi Page tìm bài
+// chính chủ, nên cần thấy ngay tỉ lệ.
+function _renderCmtTomTat(rows){
+    const box=document.getElementById("cmt-tomtat"); if(!box) return;
+    if(!rows.length){ box.innerHTML=""; return; }
+    const co=rows.filter(r=>r.page).length, chua=rows.length-co;
+    const theoPage={};
+    rows.filter(r=>r.page).forEach(r=>{ const k=r.ten_page||r.page; theoPage[k]=(theoPage[k]||0)+1; });
+    box.innerHTML=`
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:8px 12px;margin-bottom:10px;
+                    background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px">
+            <span><b>${rows.length}</b>/300 link</span>
+            <span style="color:#f472b6">đã gắn Page: <b>${co}</b></span>
+            ${chua?`<span style="color:var(--text-muted)">chưa gắn: <b>${chua}</b> (link cũ, sẽ bị đẩy ra dần)</span>`:""}
+            ${Object.entries(theoPage).map(([k,n])=>`<span style="color:var(--text-muted)">${_escapeHtml(k)}: ${n}</span>`).join("")}
+        </div>`;
+}
+
+function startCmtFieldEdit(td){
+    if(td.querySelector("input")) return;
+    const cu=td.dataset.val||"", id=td.dataset.id, field=td.dataset.field;
+    td.innerHTML=`<input value="${_escapeHtml(cu)}" style="width:100%;font-size:12px">`;
+    const inp=td.querySelector("input"); inp.focus(); inp.select();
+    const luu=async()=>{
+        const v=inp.value;
+        try{ await API.commentPostField(id,field,v); td.dataset.val=v; td.innerHTML=_escapeHtml(v)||"-"; }
+        catch(e){ Toast.error(e.message); td.innerHTML=_escapeHtml(cu)||"-"; }
+    };
+    inp.onblur=luu;
+    inp.onkeydown=e=>{ if(e.key==="Enter") inp.blur(); if(e.key==="Escape"){ inp.onblur=null; td.innerHTML=_escapeHtml(cu)||"-"; } };
+}
+
+function openAddCommentPosts(){
+    const ten=(CMT_LOAI.find(([k])=>k===_cmtLoai)||[])[1]||_cmtLoai;
+    openModal(`+ Dán danh sách link — ${ten}`, `
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
+            Mỗi dòng một link bài viết. Link đã có trong danh sách sẽ tự bỏ qua.
+        </div>
+        <textarea id="cmt_urls" rows="12" style="width:100%;font-family:var(--font-mono);font-size:12px;padding:8px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm)"
+            placeholder="https://www.facebook.com/groups/123456/posts/789/&#10;https://www.facebook.com/groups/123456/posts/790/"></textarea>
+        <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px">
+            <button onclick="closeModal()" class="btn btn-ghost">Huỷ</button>
+            <button onclick="saveAddCommentPosts()" class="btn btn-primary">💾 Thêm</button>
+        </div>`);
+}
+
+async function saveAddCommentPosts(){
+    const v=document.getElementById("cmt_urls")?.value||"";
+    try{
+        const r=await API.commentPostsAdd(_cmtLoai, v);
+        if(!r.ok){ Toast.error(r.error); return; }
+        Toast.success(`Đã thêm ${r.them} link${r.bo_trung?` · bỏ ${r.bo_trung} link trùng`:""}`);
+        closeModal(); loadCommentPosts(_cmtLoai);
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function delCommentPost(id){
+    try{ await API.commentPostDelete(id); loadCommentPosts(_cmtLoai); }
+    catch(e){ Toast.error(e.message); }
+}
+
+async function clearCommentPosts(){
+    const ten=(CMT_LOAI.find(([k])=>k===_cmtLoai)||[])[1]||_cmtLoai;
+    if(!confirm(`Xoá TOÀN BỘ link của ${ten}?`)) return;
+    try{
+        const r=await API.commentPostsClear(_cmtLoai);
+        Toast.success(`Đã xoá ${r.da_xoa} link`); loadCommentPosts(_cmtLoai);
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function openCommentSettings(){
+    let s={};
+    try{ s=(await API.settings()).data||{}; }catch(e){}
+    const v=(k,dv)=>{ const x=s[k]; return (x===undefined||x==="")?dv:x; };
+    const num=(k,dv,w=70)=>`<input id="cs_${k}" type="number" value="${_escapeHtml(String(v(k,dv)))}" style="width:${w}px;text-align:center">`;
+    const row=(label,inner,hint="")=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+            <div style="flex:1"><div style="font-size:13px">${label}</div>
+            ${hint?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${hint}</div>`:""}</div>
+            <div>${inner}</div>
+        </div>`;
+    const pool=(k,ten)=>`
+        <div class="field-group" style="margin-top:10px">
+            <label style="display:flex;align-items:center;gap:8px">
+                <span>${ten} — <span style="font-weight:400;color:var(--text-muted)">mỗi dòng 1 câu</span></span>
+                <span id="cs_dem_${k}" style="margin-left:auto;font-size:11px;color:var(--text-muted)"></span>
+            </label>
+            <textarea id="cs_comment_pool_${k}" rows="6" oninput="_demCmtPool('${k}')"
+                style="width:100%;font-size:13px;padding:8px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm)"
+                placeholder="Còn phòng không bạn ơi&#10;Cho mình xin thông tin với&#10;Giá này bao gồm gì vậy ạ">${_escapeHtml(String(v("comment_pool_"+k,"")))}</textarea>
+        </div>`;
+
+    openModal("⚙️ Cài đặt comment", `
+      <div style="max-height:65vh;overflow:auto;padding-right:6px">
+        <div style="font-size:12px;line-height:1.6;padding:10px;margin-bottom:12px;border-radius:var(--radius-sm);background:rgba(220,150,0,.10);border:1px solid rgba(220,150,0,.35)">
+          ⚠️ <b>Comment trùng nội dung là cách nhanh nhất mất luôn quyền comment.</b>
+          Thư viện càng nhiều câu càng an toàn — mỗi phiên bốc ngẫu nhiên và không lặp câu ở hai bài liền nhau.
+          Mỗi phiên comment vào bao nhiêu bài thì đặt ở <i>Số bài mỗi phiên</i>.
+        </div>
+
+        <div style="font-size:12px;line-height:1.7;color:var(--text-muted);margin:4px 0 12px;padding:9px 11px;background:var(--bg-hover);border-radius:var(--radius-sm)">
+            <b>Một phiên chạy y hệt luồng đăng bài Page</b>, chỉ khác bước cuối:
+            story cá nhân → newsfeed cá nhân → chuyển sang Page → <b>comment từng bài</b>
+            → lướt newsfeed + like 1 bài → kết thúc.<br>
+            Thời lượng các bước lấy đúng theo luồng đăng bài nên không cần chỉnh riêng.
+            Page luôn <b>ưu tiên comment bài của chính mình</b>; chưa có bài nào thì lùi về
+            dùng chung kho.
+        </div>
+
+        ${row("Tỉ lệ comment của acc X_ (%)", num("comment_ti_le",25),
+              "25 = 75% slot đăng bài, 25% slot comment. Chỉ áp cho loại đăng X_Home / X_Thuê / X_Bán.")}
+        ${row("Số bài mỗi phiên", num("comment_so_bai",9),
+              "Tối đa 1 bài mỗi nhóm — nên không bao giờ vượt quá số nhóm đang có trong danh sách")}
+        ${row("Nghỉ giữa 2 bài (giây)",
+              `${num("comment_nghi_min",10)} — ${num("comment_nghi_max",15)}`,
+              "Comment liên tiếp không nghỉ là dấu hiệu máy rõ nhất")}
+
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin:16px 0 6px">THƯ VIỆN CÂU THEO LOẠI</div>
+        ${pool("homestay","🏠 Homestay")}
+        ${pool("thue","🏡 Thuê")}
+        ${pool("ban","💰 Bán")}
+      </div>
+      <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px">
+        <button onclick="closeModal()" class="btn btn-ghost">Huỷ</button>
+        <button onclick="saveCommentSettings()" class="btn btn-primary">💾 Lưu</button>
+      </div>`);
+    CMT_LOAI.forEach(([k])=>_demCmtPool(k));
+}
+
+function _demCmtPool(k){
+    const ta=document.getElementById(`cs_comment_pool_${k}`), el=document.getElementById(`cs_dem_${k}`);
+    if(!ta||!el) return;
+    const n=ta.value.split("\n").filter(s=>s.trim()).length;
+    el.textContent=n?`${n} câu`:"";
+}
+
+async function saveCommentSettings(){
+    const g=id=>document.getElementById(`cs_${id}`);
+    const gi=(id,dv)=>{ const n=parseInt(g(id)?.value); return isNaN(n)?dv:n; };
+    const data={
+        comment_ti_le:    gi("comment_ti_le",25),
+        comment_so_bai:   gi("comment_so_bai",9),
+        comment_nghi_min: gi("comment_nghi_min",10),
+        comment_nghi_max: gi("comment_nghi_max",15),
+    };
+    CMT_LOAI.forEach(([k])=>{ data["comment_pool_"+k]=g("comment_pool_"+k)?.value||""; });
+    if(data.comment_nghi_min > data.comment_nghi_max){
+        Toast.error("Nghỉ giữa 2 bài: giá trị đầu phải nhỏ hơn giá trị sau"); return;
+    }
+    if(data.comment_so_bai < 1){ Toast.error("Số bài mỗi phiên phải từ 1 trở lên"); return; }
+    if(data.comment_ti_le < 0 || data.comment_ti_le > 100){
+        Toast.error("Tỉ lệ comment phải từ 0 đến 100"); return;
+    }
+    // Bật comment mà thư viện rỗng thì phiên sẽ tự bỏ qua — báo trước cho khỏi
+    // ngồi soi log tưởng hỏng cookie.
+    const rong=CMT_LOAI.filter(([k])=>!(data["comment_pool_"+k]||"").trim()).map(([,t])=>t);
+    try{
+        const r=await API.saveSettings(data);
+        if(r.ok){
+            Toast.success(`Đã lưu${rong.length?` — chưa có câu cho: ${rong.join(", ")}`:""}`);
+            closeModal();
+        } else Toast.error(r.error);
+    }catch(e){ Toast.error(e.message); }
+}
+
+// ── Biến thể ảnh chống dedupe ─────────────────────────────────
+async function openBienTheSettings(){
+    let s={};
+    try{ s=(await API.settings()).data||{}; }catch(e){}
+    const v=(k,dv)=>{ const x=s[k]; return (x===undefined||x==="")?dv:x; };
+    const cd=String(v("anh_bien_the_cuong_do","manh"));
+    const opt=(val,ten,mo)=>`<option value="${val}" ${cd===val?"selected":""}>${ten} — ${mo}</option>`;
+
+    openModal("🎲 Biến thể ảnh", `
+      <div style="max-height:65vh;overflow:auto;padding-right:6px">
+        <div style="font-size:12px;line-height:1.6;color:var(--text-muted);margin-bottom:14px">
+          Bật cái này thì <b>mỗi lượt đăng</b> tạo một bản sao: lệch nhẹ độ sáng và độ tương phản,
+          rồi dán một <b>mã 8 ký tự</b> vào một trong 4 góc (mỗi ảnh một mã, ghi trong log để tra ngược).
+          <b>Ảnh gốc không bị sửa</b>, bản sao xoá ngay sau khi đăng xong.
+        </div>
+        <div style="font-size:12px;line-height:1.6;padding:10px;margin-bottom:14px;border-radius:var(--radius-sm);background:rgba(220,150,0,.10);border:1px solid rgba(220,150,0,.35)">
+          ⚠️ <b>Đo thật trên ảnh homestay: chỉ dịch được 0,2–0,4 trên 64 bit</b> — trong khi
+          ngưỡng Facebook coi là cùng ảnh là 8 bit. Nghĩa là bộ này đổi được file và xoá EXIF,
+          nhưng <b>gần như không né được thuật toán nhận ảnh trùng</b>. Mã ở góc đóng góp ~0 bit:
+          thuật toán hạ ảnh về lưới 32×32 nên vài chục pixel ở góc bị xoá mất.
+          Tăng cỡ chữ mã cũng không giúp gì.<br>
+          Muốn thực sự né thì phải bật <b>lật ngang</b> bên dưới (~33/64 bit).
+        </div>
+
+        <label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">
+            <input id="bt_bat" type="checkbox" ${String(v("anh_bien_the_bat","0"))==="1"?"checked":""}
+                   style="width:18px;height:18px;cursor:pointer">
+            <span style="font-size:13px;font-weight:600">Bật biến thể ảnh khi đăng</span>
+        </label>
+
+        <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+            <div style="font-size:13px;margin-bottom:6px">Cường độ</div>
+            <select id="bt_cuong_do" style="width:100%;padding:7px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm)">
+                ${opt("nhe","Nhẹ","sáng/tương phản ±2%, mã rất mờ")}
+                ${opt("vua","Vừa","sáng/tương phản ±4%, mã mờ")}
+                ${opt("manh","Mạnh","sáng/tương phản ±6%, mã rõ hơn chút")}
+            </select>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer">
+            <input id="bt_lat_ngang" type="checkbox" ${String(v("anh_bien_the_lat_ngang","0"))==="1"?"checked":""}
+                   style="width:18px;height:18px;cursor:pointer;flex-shrink:0">
+            <span>
+                <span style="font-size:13px;font-weight:600">Lật ngang ảnh</span>
+                <span style="display:block;font-size:11px;color:var(--text-muted);margin-top:2px">
+                    <b>Đây là thứ duy nhất trong bảng này thực sự né được hash</b> — đo ra ~33/64 bit,
+                    so với 0,2–0,4 của sáng/tương phản/mã cộng lại.
+                    Đổi lại ảnh soi gương: chữ trong ảnh bị ngược, bố cục đảo bên.
+                    Chỉ bật nếu ảnh của bạn không có chữ.
+                </span>
+            </span>
+        </label>
+
+        <div style="margin-top:14px;padding:10px;background:var(--bg-hover);border-radius:var(--radius-sm);font-size:11px;line-height:1.6;color:var(--text-muted)">
+            <b>Tự kiểm chứng, đừng tin suông.</b> Mở CMD tại thư mục phần mềm và chạy:<br>
+            <code style="font-family:var(--font-mono);font-size:11px">python anh_bien_the.py data/media/content/homestay --manh</code><br>
+            Nó in ra khoảng cách hash giữa ảnh gốc và biến thể trên chính ảnh của bạn.
+            Thấy báo "chưa đủ" thì tăng cường độ hoặc bật lật ngang.
+            <br><br>
+            <b>Không phải viên đạn bạc.</b> Cái này chỉ né so khớp mức pixel. Facebook còn
+            nhận dạng theo <i>nội dung</i> ảnh, và caption trùng nhau thường bị soi nặng hơn ảnh.
+        </div>
+      </div>
+      <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px">
+        <button onclick="closeModal()" class="btn btn-ghost">Huỷ</button>
+        <button onclick="saveBienTheSettings()" class="btn btn-primary">💾 Lưu</button>
+      </div>`);
+}
+
+async function saveBienTheSettings(){
+    const g=id=>document.getElementById(`bt_${id}`);
+    const data={
+        anh_bien_the_bat:       g("bat")?.checked?1:0,
+        anh_bien_the_cuong_do:  g("cuong_do")?.value||"manh",
+        anh_bien_the_lat_ngang: g("lat_ngang")?.checked?1:0,
+    };
+    try{
+        const r=await API.saveSettings(data);
+        if(r.ok){
+            Toast.success(data.anh_bien_the_bat
+                ? `Đã bật — cường độ ${data.anh_bien_the_cuong_do}${data.anh_bien_the_lat_ngang?" + lật ngang":""}`
+                : "Đã tắt biến thể ảnh");
+            closeModal();
+        } else Toast.error(r.error);
+    }catch(e){ Toast.error(e.message); }
+}
+
 // ── Cài đặt nuôi nick ─────────────────────────────────────────
 async function openNuoiSettings(){
     let s={};
@@ -1541,7 +1963,7 @@ async function openNuoiSettings(){
                 <span id="ns_group_count" style="margin-left:auto;font-size:11px;color:var(--text-muted)"></span>
             </label>
             <textarea id="ns_nuoi_msg_group_url" rows="4" oninput="_updateGroupCount()"
-                style="width:100%;font-family:var(--font-mono);font-size:12px;padding:8px;background:var(--bg-input,var(--bg-hover));color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm)"
+                style="width:100%;font-family:var(--font-mono);font-size:12px;padding:8px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm)"
                 placeholder="https://www.facebook.com/messages/t/1234567890&#10;https://www.facebook.com/messages/t/9876543210">${_escapeHtml(String(v("nuoi_msg_group_url","")))}</textarea>
         </div>
         ${row("Số tin nhắn mỗi phiên",
@@ -1558,7 +1980,7 @@ async function openNuoiSettings(){
                 </span>
             </label>
             <textarea id="ns_nuoi_msg_pool" rows="8" oninput="_updatePoolCount()"
-                style="width:100%;font-family:inherit;font-size:13px;padding:8px;background:var(--bg-input,var(--bg-hover));color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm)"
+                style="width:100%;font-family:inherit;font-size:13px;padding:8px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm)"
                 placeholder="Hôm nay trời đẹp nhỉ&#10;Mọi người ăn trưa chưa&#10;Cuối tuần này đi đâu chơi không">${_escapeHtml(String(v("nuoi_msg_pool","")))}</textarea>
         </div>
       </div>
@@ -1697,13 +2119,23 @@ function renderScheduleTable(loai,data){
         if(st.startsWith("✅")) stBadge=`<span class="badge badge-success">${st}</span>`;
         else if(st.startsWith("🌱")) stBadge=`<span class="badge" style="background:#064e3b;color:#6ee7b7">${st}</span>`;
         else if(st.startsWith("❌")) stBadge=`<span class="badge badge-danger">${st.slice(0,30)}</span>`;
+        // "Bỏ qua" KHÔNG phải lỗi — phiên chạy bình thường nhưng danh sách link
+        // đang trống. Gộp chung với lỗi thì cả bảng nhìn như hỏng hết, trong
+        // khi việc cần làm chỉ là dán thêm link.
+        else if(st.includes("bỏ qua"))
+            stBadge=`<span class="badge" style="background:#422006;color:#fbbf24"
+                       title="Không phải lỗi — chưa có link trong tab Bài đi Comment cho loại này.">⏸ ${st.replace(/^💬\s*/,"")}</span>`;
+        else if(st.startsWith("💬")) stBadge=`<span class="badge" style="background:#1e3a5f;color:#93c5fd">${st}</span>`;
         else if(st==="X") stBadge=`<span class="badge badge-muted">X</span>`;
         else if(st==="Chờ") stBadge=`<span class="badge badge-warning">Chờ</span>`;
         else stBadge=`<span class="badge badge-muted">${st||"-"}</span>`;
-        // Slot đã bị chuyển thành phiên nuôi nick — hiển thị khác để dễ phân biệt.
-        const isWarm=(r.hoat_dong||"dang_bai")==="nuoi_nick";
-        const contentCell=isWarm
+        // Slot đã bị chuyển thành phiên nuôi / comment — hiển thị khác để dễ phân biệt.
+        const hd=(r.hoat_dong||"dang_bai");
+        const contentCell=
+            hd==="nuoi_nick"
             ? `<td style="text-align:center"><span class="badge" style="background:#064e3b;color:#6ee7b7">🌱 Nuôi nick</span></td>`
+            : hd==="comment"
+            ? `<td style="text-align:center"><span class="badge" style="background:#1e3a5f;color:#93c5fd">💬 Comment</span></td>`
             : sc(r,"ma_content","text-align:center");
         return `<tr>
             ${sc(r,"gio_dang","font-weight:600;white-space:nowrap")}
@@ -1824,11 +2256,30 @@ async function openGenSchedule(loai){
                     placeholder="https://www.facebook.com/groups/...">
             </div>
             <div class="field-group"><label>Từ khóa (cách nhau dấu phẩy)</label><input id="gen-kw" value="${vKw}"></div>
+            ${_renderNhip(res.nhip, res.accs)}
             <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Cài đặt từng tài khoản</div>
             <div id="gen-accs">${_renderGenAccs(res.accs, res.contents)}</div>`;
     }catch(e){
         document.getElementById("gen-panel-body").innerHTML=`<div class="empty" style="color:var(--danger)">${e.message}</div>`;
     }
+}
+
+// Tóm tắt nhịp phủ — cho thấy phiên comment tính ngang phiên đăng bài, và
+// khoảng cách trung bình giữa hai phiên bất kỳ trong ngày.
+function _renderNhip(nhip, accs){
+    if(!nhip) return "";
+    const nCmt = accs.filter(a=>a.chi_comment).length;
+    const nPost = accs.length - nCmt;
+    return `
+    <div style="background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;line-height:1.7">
+        <b>Nhịp phủ nhóm</b> — phiên comment tính ngang phiên đăng bài<br>
+        <span style="color:var(--text-muted)">Đăng bài:</span> ${nPost} acc · <b>${nhip.luc_dang}</b> phiên/h
+        &nbsp;·&nbsp;
+        <span style="color:#c084fc">Comment:</span> ${nCmt} acc · <b>${nhip.luc_comment}</b> phiên/h<br>
+        <span style="color:var(--text-muted)">Tổng lực:</span> <b>${nhip.tong_luc}</b> phiên/h
+        → trung bình <b>${nhip.do_nen} phút</b> lại có một phiên nổ, rải đều cả khung giờ.
+    </div>
+`;
 }
 
 function _renderGenAccs(accs, contents){
@@ -1838,12 +2289,18 @@ function _renderGenAccs(accs, contents){
     return accs.map((acc,i)=>{
         // Trải đều content: acc[0]=H1, acc[1]=H5, acc[2]=H9, acc[3]=H13 (với 17 content, 4 acc)
         const defC = contents[Math.floor(i * nc / n) % nc] || "";
+        // Acc chỉ comment không dùng content lẫn mode — vẫn render <select> ẩn
+        // để runGen đọc theo chỉ số i không bị lệch, nhưng không bày ra cho rối.
+        const oCmt = acc.chi_comment;          // C_* — ẩn ô Content/Mode
+        const oMix = acc.hon_hop;              // X_* — vẫn đăng bài nên giữ nguyên ô
         return `
-        <div style="background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px">
-            <div style="font-weight:600;font-size:13px;margin-bottom:10px">${acc.ten}
-                <span style="font-size:11px;font-weight:400;color:var(--text-muted)"> — nghỉ ${acc.nghi}p · lực ${acc.luc_dang} bài/h</span>
+        <div style="background:var(--bg-hover);border:1px solid ${oCmt?"#c084fc55":"var(--border)"};border-radius:var(--radius-sm);padding:12px;margin-bottom:8px">
+            <div style="font-weight:600;font-size:13px;margin-bottom:${oCmt?0:10}px">${acc.ten}
+                ${oCmt?`<span class="badge" style="background:#3b1f5e;color:#c084fc;margin-left:6px">💬 chỉ comment</span>`:""}
+                ${oMix?`<span class="badge" style="background:#4c1d3d;color:#f472b6;margin-left:6px">📝💬 đăng + comment</span>`:""}
+                <span style="font-size:11px;font-weight:400;color:var(--text-muted)"> — nghỉ ${acc.nghi}p · lực ${acc.luc_dang} phiên/h</span>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div style="display:${oCmt?"none":"grid"};grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
                 <div class="field-group">
                     <label>Content đầu <span style="color:var(--text-muted);font-weight:400">(bắt đầu từ)</span></label>
                     <select id="acc-c-${i}">
@@ -1961,6 +2418,8 @@ document.addEventListener("DOMContentLoaded", ()=>{
     navigate("accounts");
     loadRunnerStatus();
     setInterval(loadRunnerStatus,10000);
+    loadCanhBaoAcc();
+    setInterval(loadCanhBaoAcc,10000);
     _heartbeat();
     setInterval(_heartbeat, 2000);
 });

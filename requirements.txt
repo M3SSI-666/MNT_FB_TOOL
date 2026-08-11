@@ -6,3 +6,6 @@ werkzeug>=3.1,<3.2
 playwright>=1.60,<1.61
 pywebview>=6.2,<6.3
 openpyxl>=3.1,<3.2
+# Biến thể ảnh chống dedupe (anh_bien_the.py). Thiếu Pillow thì tính năng tự
+# tắt và bài vẫn đăng bằng ảnh gốc — không phải dependency bắt buộc.
+pillow>=11.0,<12.0

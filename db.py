@@ -5,8 +5,9 @@ Thay thế hoàn toàn Google Sheets, không cần internet để đọc/ghi dat
 
 import sqlite3
 import os
+import re
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 DB_PATH = Path(__file__).parent / "data" / "app.db"
 
@@ -15,6 +16,66 @@ DB_PATH = Path(__file__).parent / "data" / "app.db"
 # Không có busy timeout thì luồng thứ hai vấp "database is locked" ngay lập tức,
 # nên cho nó chờ tới 15s để lấy khoá thay vì fail.
 BUSY_TIMEOUT_SEC = 15
+
+
+# ═══════════════════════════════════════════════════════════════
+# Loại đăng của tài khoản
+# ═══════════════════════════════════════════════════════════════
+# Một cột DUY NHẤT quyết định acc làm gì. Không có cờ phụ nào khác — trước đây
+# có thêm 2 cột `comment_bai` / `comment_interval` làm đúng việc của "X_", để
+# song song thì cùng một acc có hai nguồn sự thật mâu thuẫn nhau.
+#
+#   Homestay / Thuê / Bán  → chỉ đăng bài
+#   X_Home / X_Thuê / X_Bán → vừa đăng vừa comment, theo tỉ lệ (mặc định 75/25)
+#   C_Home / C_Thuê / C_Bán → chỉ comment, không đăng (acc bị dỡ bài)
+#   (để trống)             → không vào lịch đăng nào
+LOAI_DANG_OPTIONS = ("", "Homestay", "Thuê", "Bán",
+                     "X_Home", "X_Thuê", "X_Bán",
+                     "C_Home", "C_Thuê", "C_Bán")
+
+# loại lịch  →  (chỉ đăng, vừa đăng vừa comment, chỉ comment)
+LOAI_LICH_MAP = {
+    "homestay": ("Homestay", "X_Home", "C_Home"),
+    "thue":     ("Thuê",     "X_Thuê", "C_Thuê"),
+    "ban":      ("Bán",      "X_Bán",  "C_Bán"),
+}
+
+# Bao nhiêu phần trăm slot của acc "X_" là phiên comment. 25 = 75% đăng, 25%
+# comment. Sửa được qua bảng settings (`comment_ti_le`).
+TI_LE_COMMENT_MAC_DINH = 25
+
+# Trạng thái acc do máy tự đặt khi phát hiện acc chết (xem suc_khoe_acc.py).
+# Đặt vào chính cột trang_thai chứ không thêm cột cờ riêng: mọi chỗ đang lọc
+# `trang_thai='Active'` — Gen lịch, get_account_by_name — nhờ đó tự động loại
+# acc hỏng mà không phải sửa gì thêm.
+TRANG_THAI_HONG = "Hỏng"
+TRANG_THAI_OPTIONS = ("Active", "Tạm dừng", "Cookie hết hạn", TRANG_THAI_HONG)
+
+
+def la_loai_comment(loai_dang: str) -> bool:
+    """Acc CHỈ đi comment, không đăng bài (C_*)."""
+    return (loai_dang or "").strip().upper().startswith("C_")
+
+
+def la_loai_hon_hop(loai_dang: str) -> bool:
+    """Acc VỪA đăng VỪA comment theo tỉ lệ (X_*)."""
+    return (loai_dang or "").strip().upper().startswith("X_")
+
+
+def khop_loai_lich(loai_dang: str, loai_lich: str) -> bool:
+    """
+    Acc thuộc lịch nào. So khớp CHÍNH XÁC, không dùng `in`: "C_Thuê" chứa chuỗi
+    con "Thuê" và "C_Bán" chứa "Bán", nên so kiểu substring sẽ kéo nhầm acc chỉ
+    comment vào nhóm đăng bài.
+    """
+    v = (loai_dang or "").strip()
+    return v in LOAI_LICH_MAP.get(loai_lich, ())
+
+
+def accounts_theo_lich(loai_lich: str, trang_thai: str = "Active") -> list[dict]:
+    """Mọi acc thuộc một lịch — gồm cả acc đăng bài lẫn acc chỉ comment."""
+    return [a for a in get_accounts(trang_thai=trang_thai)
+            if khop_loai_lich(a.get("loai_dang"), loai_lich)]
 
 
 def _conn():
@@ -75,8 +136,7 @@ def init_db():
             loai            TEXT NOT NULL,          -- homestay / thue / ban
             ma_content      TEXT NOT NULL,
             noi_dung        TEXT DEFAULT '',
-            link_anh_hook   TEXT DEFAULT '',        -- URL ảnh hook
-            link_anh        TEXT DEFAULT '',        -- comma-separated URLs
+            link_anh        TEXT DEFAULT '',        -- comma-separated URLs, đăng theo đúng thứ tự này
             su_dung         TEXT DEFAULT 'Có',      -- Có / Không
             ghi_chu         TEXT DEFAULT '',
             created_at      TEXT DEFAULT (datetime('now','localtime')),
@@ -124,11 +184,26 @@ def init_db():
             tu_khoa         TEXT DEFAULT '',
             mode            TEXT DEFAULT 'Hybrid',
             trang_thai      TEXT DEFAULT 'Chờ',     -- Chờ / ✅ HH:MM / ❌... / X
-            hoat_dong       TEXT DEFAULT 'dang_bai', -- dang_bai | nuoi_nick (slot bị chuyển thành phiên nuôi)
+            hoat_dong       TEXT DEFAULT 'dang_bai', -- dang_bai | nuoi_nick | comment (slot bị chuyển thành phiên khác)
             updated_at      TEXT DEFAULT (datetime('now','localtime'))
         );
         CREATE INDEX IF NOT EXISTS idx_schedules_loai_status
             ON schedules(loai, trang_thai);
+
+        -- ── Bài viết để đi comment ───────────────────────────────────────
+        -- Acc bị dỡ bài vẫn comment được; comment vào bài cũ làm bài nổi lên
+        -- đầu nhóm mà không cần đăng bài mới.
+        CREATE TABLE IF NOT EXISTS comment_posts (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            loai        TEXT NOT NULL,          -- homestay / thue / ban
+            url         TEXT NOT NULL,
+            ghi_chu     TEXT DEFAULT '',
+            lan_cuoi    TEXT DEFAULT '',        -- 'YYYY-mm-dd HH:MM' lần comment gần nhất
+            so_lan      INTEGER DEFAULT 0,
+            trang_thai  TEXT DEFAULT '',        -- '' chưa chạy | ✅ ... | ❌ ...
+            order_idx   INTEGER DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_comment_posts_loai ON comment_posts(loai);
 
         -- ── Cài đặt hệ thống ─────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS settings (
@@ -155,6 +230,31 @@ def init_db():
         _add_col("accounts",  "nuoi_interval", "nuoi_interval INTEGER DEFAULT 150")
         _add_col("schedules", "hoat_dong",     "hoat_dong TEXT DEFAULT 'dang_bai'")
 
+        # ── Migration: bỏ 2 cột cờ comment ──────────────────────────────
+        # `comment_bai` + `comment_interval` từng là cách thứ hai để acc vừa
+        # đăng vừa comment. Nay việc đó do loại đăng "X_*" đảm nhiệm, để lại
+        # thì cùng một acc có hai nguồn sự thật mâu thuẫn nhau.
+        _acc_cols = [r["name"] for r in con.execute("PRAGMA table_info(accounts)")]
+        for _cot in ("comment_bai", "comment_interval"):
+            if _cot in _acc_cols:
+                con.execute(f"ALTER TABLE accounts DROP COLUMN {_cot}")
+
+        # Nhóm chứa bài — tách sẵn từ URL để bốc bài theo luật "tối đa 1 link
+        # mỗi nhóm mỗi phiên". Tách lúc bốc thì phải parse lại toàn bộ danh sách
+        # mỗi lần, mà danh sách tới 300 dòng × 3 loại.
+        _add_col("comment_posts", "nhom", "nhom TEXT DEFAULT ''")
+        # Page nào đã đăng bài này — để acc "X_" chỉ comment vào bài chính chủ.
+        _add_col("comment_posts", "page", "page TEXT DEFAULT ''")
+        for r in con.execute("SELECT id, url FROM comment_posts "
+                             "WHERE COALESCE(nhom,'') = ''").fetchall():
+            con.execute("UPDATE comment_posts SET nhom=? WHERE id=?",
+                        (tach_nhom_tu_url(r["url"]), r["id"]))
+        # Bỏ cột nhom_url: bước "ghé nhóm chứa bài" đã được thay bằng "ghé Page
+        # được phân công" (lấy từ cột ten_page của slot), không cần nhớ nhóm nữa.
+        if "nhom_url" in [r["name"] for r in
+                          con.execute("PRAGMA table_info(comment_posts)").fetchall()]:
+            con.execute("ALTER TABLE comment_posts DROP COLUMN nhom_url")
+
         # ── Migration: order_idx cho content / uid_groups (kéo-thả đổi thứ tự) ──
         # Không cần backfill như pages ở trên: ADD COLUMN với DEFAULT là hằng số
         # khác NULL thì SQLite ghi luôn 0 cho mọi dòng cũ, nên khoá sắp xếp đầu
@@ -163,6 +263,36 @@ def init_db():
         _add_col("uid_groups", "order_idx", "order_idx INTEGER DEFAULT 0")
         # Cột ghi chú "Acc quản lý" cho pages — chỉ để note, không dùng khi đăng bài.
         _add_col("pages",      "acc_quan_ly", "acc_quan_ly TEXT DEFAULT ''")
+
+        # ── Sức khoẻ acc (xem suc_khoe_acc.py) ──────────────────────────
+        # `lich_su_phien` là chuỗi "o"/"x" của tối đa 20 phiên đăng gần nhất —
+        # gói cả chuỗi lỗi liên tiếp lẫn tỉ lệ hỏng vào một ô, khỏi phải giữ hai
+        # bộ đếm rời rồi lo chúng lệch nhau.
+        _add_col("accounts", "lich_su_phien", "lich_su_phien TEXT DEFAULT ''")
+        # Mốc hết nghỉ (ISO). Rỗng = không nghỉ.
+        _add_col("accounts", "nghi_den",      "nghi_den TEXT DEFAULT ''")
+        # Cảnh báo chưa được xem — giao diện đọc rồi xoá. Scheduler chạy ở tiến
+        # trình riêng nên không đẩy thẳng toast lên web được, phải qua DB.
+        _add_col("accounts", "canh_bao_moi",  "canh_bao_moi TEXT DEFAULT ''")
+
+        # ── Migration: bỏ khái niệm "ảnh hook" ──────────────────────────
+        # Trước đây content có 2 ô ảnh: link_anh_hook (1 ảnh, luôn đăng đầu) và
+        # link_anh (phần còn lại). Giờ gộp làm một danh sách duy nhất.
+        #
+        # PHẢI dồn ảnh hook vào ĐẦU link_anh trước khi xoá cột, nếu không 32
+        # ảnh hook đang có sẽ mất khỏi content và bị "Dọn ảnh thừa" xoá khỏi đĩa.
+        if "link_anh_hook" in [r["name"] for r in
+                               con.execute("PRAGMA table_info(content)").fetchall()]:
+            for r in con.execute(
+                    "SELECT id, link_anh_hook, link_anh FROM content "
+                    "WHERE COALESCE(link_anh_hook,'') <> ''").fetchall():
+                hook = r["link_anh_hook"].strip()
+                con_lai = [u.strip() for u in (r["link_anh"] or "").split(",")
+                           if u.strip() and u.strip() != hook]
+                con.execute("UPDATE content SET link_anh=? WHERE id=?",
+                            (", ".join([hook] + con_lai), r["id"]))
+            con.execute("ALTER TABLE content DROP COLUMN link_anh_hook")
+            print("  ↪ Đã gộp ảnh hook vào danh sách ảnh, bỏ cột link_anh_hook")
     print(f"✅ DB initialized: {DB_PATH}")
 
 
@@ -272,8 +402,107 @@ def update_account_field(acc_id: int, field: str, value: str):
     }
     if field not in safe:
         raise ValueError(f"Field không hợp lệ: {field}")
+    # Loại đăng là tập giá trị đóng. Giá trị lạ ("C_home", "Homestay " thừa
+    # khoảng trắng) sẽ khiến Gen lịch âm thầm bỏ sót acc đó — hỏng kiểu im lặng,
+    # khó lần ra nhất. Chặn ngay tại cửa ghi.
+    if field == "loai_dang":
+        value = (value or "").strip()
+        if value not in LOAI_DANG_OPTIONS:
+            raise ValueError(f"Loại đăng không hợp lệ: '{value}' "
+                             f"(chỉ nhận: {', '.join(x or '(trống)' for x in LOAI_DANG_OPTIONS)})")
     with _conn() as con:
         con.execute(f"UPDATE accounts SET {field}=? WHERE id=?", (value, acc_id))
+        # Người dùng bật acc về Active = "tôi đã xử lý xong". Phải xoá cả lịch sử
+        # phiên, không thì cửa sổ trượt vẫn còn đầy "x" cũ và acc bị tắt lại ngay
+        # sau phiên hỏng kế tiếp, trông như nút bật không ăn.
+        if field == "trang_thai" and value == "Active":
+            con.execute("UPDATE accounts SET lich_su_phien='', nghi_den='', "
+                        "canh_bao_moi='' WHERE id=?", (acc_id,))
+
+
+# ── Sức khoẻ acc ────────────────────────────────────────────────────────
+def acc_duoc_chay(ten_acc: str, hoat_dong: str = "dang_bai") -> tuple[bool, str]:
+    """
+    Acc có được giao phiên này lúc này không.
+
+    Nghỉ tạm chỉ chặn ĐĂNG và COMMENT — hai việc vừa bị Facebook từ chối. Nuôi
+    nick vẫn chạy, vì xem story / lướt feed chính là thứ có cơ gỡ acc ra, cắt nốt
+    là tự bịt đường hồi phục.
+
+    Tắt hẳn thì chặn tất, kể cả nuôi: acc đó đang chờ người xử lý, mà `trang_thai`
+    lúc này là 'Hỏng' nên `get_account_by_name` cũng không tìm ra nó nữa — cho
+    phiên nuôi chạy tiếp chỉ tổ đổ một đống lỗi vô nghĩa vào log.
+    """
+    with _conn() as con:
+        r = con.execute("SELECT trang_thai, nghi_den FROM accounts "
+                        "WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
+    if not r:
+        return True, ""
+    if (r["trang_thai"] or "") == TRANG_THAI_HONG:
+        return False, "acc đã bị tắt do hỏng"
+    if hoat_dong == "nuoi_nick":
+        return True, ""
+    den = r["nghi_den"] or ""
+    if den:
+        try:
+            moc = datetime.fromisoformat(den)
+        except ValueError:
+            return True, ""
+        if datetime.now() < moc:
+            return False, f"đang nghỉ tới {moc:%H:%M}"
+    return True, ""
+
+
+def ghi_nhan_phien_dang(ten_acc: str, ok: bool) -> tuple[str, str]:
+    """
+    Ghi kết quả một phiên đăng bài và áp quyết định của `suc_khoe_acc.danh_gia`.
+
+    Trả `(hanh_dong, ly_do)` để nơi gọi ghi log; hanh_dong ∈ {"", "nghi", "tat"}.
+    """
+    import suc_khoe_acc as sk
+    with _conn() as con:
+        r = con.execute("SELECT id, lich_su_phien FROM accounts "
+                        "WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
+        if not r:
+            return "", ""
+        moi = sk.them_ket_qua(r["lich_su_phien"] or "", ok)
+        con.execute("UPDATE accounts SET lich_su_phien=? WHERE id=?", (moi, r["id"]))
+
+        hanh_dong, ly_do = sk.danh_gia(moi)
+        if hanh_dong == "tat":
+            con.execute(
+                "UPDATE accounts SET trang_thai=?, nghi_den='', canh_bao_moi=? "
+                "WHERE id=?",
+                (TRANG_THAI_HONG, f"Đã tắt '{ten_acc}' — {ly_do}", r["id"]))
+        elif hanh_dong == "nghi":
+            moc = datetime.now() + timedelta(hours=sk.NGHI_GIO)
+            # Ghi dấu ngắt chứ không xoá lịch sử: acc được lại đủ CHUOI_NGHI lượt
+            # thử sau khi nghỉ dậy, mà cửa sổ trượt vẫn giữ các "x" cũ để tầng 2
+            # còn tích đủ mà kết luận acc chết.
+            con.execute(
+                "UPDATE accounts SET nghi_den=?, lich_su_phien=?, canh_bao_moi=? "
+                "WHERE id=?",
+                (moc.isoformat(timespec="seconds"), sk.danh_dau_nghi(moi),
+                 f"'{ten_acc}' nghỉ tới {moc:%H:%M} — {ly_do}", r["id"]))
+        return hanh_dong, ly_do
+
+
+def lay_canh_bao() -> list[dict]:
+    """Cảnh báo chưa xem, kèm mức để giao diện chọn màu."""
+    with _conn() as con:
+        rows = con.execute(
+            "SELECT ten_acc, trang_thai, canh_bao_moi FROM accounts "
+            "WHERE COALESCE(canh_bao_moi,'') != ''").fetchall()
+    return [{"ten_acc": r["ten_acc"], "noi_dung": r["canh_bao_moi"],
+             "muc": "error" if (r["trang_thai"] or "") == TRANG_THAI_HONG else "info"}
+            for r in rows]
+
+
+def xoa_canh_bao():
+    """Giao diện gọi sau khi đã hiện toast."""
+    with _conn() as con:
+        con.execute("UPDATE accounts SET canh_bao_moi='' "
+                    "WHERE COALESCE(canh_bao_moi,'') != ''")
 
 
 # Cột số của accounts — ép về int khi nhập từ Excel (Excel hay để dạng float).
@@ -524,18 +753,18 @@ def get_content_image_urls(content_id: int) -> set:
     """Ảnh mà MỘT dòng content đang trỏ tới."""
     with _conn() as con:
         r = con.execute(
-            "SELECT link_anh_hook, link_anh FROM content WHERE id=?", (content_id,)
+            "SELECT link_anh FROM content WHERE id=?", (content_id,)
         ).fetchone()
-    return _tach_urls(r["link_anh_hook"], r["link_anh"]) if r else set()
+    return _tach_urls(r["link_anh"]) if r else set()
 
 
 def get_all_content_image_urls() -> set:
     """Mọi ảnh còn được BẤT KỲ content nào trỏ tới — dùng để biết ảnh nào mồ côi."""
     with _conn() as con:
-        rows = con.execute("SELECT link_anh_hook, link_anh FROM content").fetchall()
+        rows = con.execute("SELECT link_anh FROM content").fetchall()
     ra = set()
     for r in rows:
-        ra |= _tach_urls(r["link_anh_hook"], r["link_anh"])
+        ra |= _tach_urls(r["link_anh"])
     return ra
 
 
@@ -722,6 +951,157 @@ def reset_daily_schedules():
 # ═══════════════════════════════════════════════════════════════
 # Settings
 # ═══════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════
+# Bài viết để đi comment
+# ═══════════════════════════════════════════════════════════════
+
+# Mỗi hạng mục giữ bao nhiêu link. Cửa sổ trượt: link mới đẩy link cũ ra và
+# link bị đẩy ra bị XOÁ HẲN, không lưu trữ lại.
+#
+# 300 là con số người dùng chốt sau khi cân nhắc độ sâu: với ~1.000–2.400 link
+# sinh ra mỗi ngày, 300 link tương đương 3–7 giờ đăng bài gần nhất.
+GIOI_HAN_LINK = 300
+
+_RE_NHOM_URL = re.compile(r"/groups/([0-9A-Za-z._-]+)/")
+
+
+def tach_nhom_tu_url(url: str) -> str:
+    """Định danh nhóm trong URL bài viết. Có thể là số hoặc slug chữ."""
+    m = _RE_NHOM_URL.search(url or "")
+    return m.group(1) if m else ""
+
+
+def get_comment_posts(loai: str = None) -> list[dict]:
+    with _conn() as con:
+        sql, args = "SELECT * FROM comment_posts", []
+        if loai:
+            sql += " WHERE loai=?"; args.append(loai)
+        sql += " ORDER BY order_idx, id"
+        return [dict(r) for r in con.execute(sql, args).fetchall()]
+
+
+def them_comment_posts(loai: str, urls: list[str], gioi_han: int = None,
+                       page: str = "") -> int:
+    """
+    Thêm URL vào cuối danh sách, BỎ QUA url đã có, rồi cắt bớt link cũ nhất cho
+    danh sách không vượt `gioi_han`.
+
+    Bỏ trùng là bắt buộc: dán lại cả danh sách là thao tác thường ngày, mà mỗi
+    dòng trùng sẽ thành một lượt comment thừa vào đúng một bài.
+
+    `order_idx` tăng dần theo thứ tự thêm vào, và đó chính là "tuổi" của link —
+    nhỏ hơn = vào trước = cũ hơn. Cắt bớt thì cắt từ nhỏ nhất.
+    """
+    gioi_han = GIOI_HAN_LINK if gioi_han is None else gioi_han
+    with _conn() as con:
+        da_co = {r["url"] for r in
+                 con.execute("SELECT url FROM comment_posts WHERE loai=?", (loai,))}
+        idx = (con.execute("SELECT COALESCE(MAX(order_idx),-1) m FROM comment_posts "
+                           "WHERE loai=?", (loai,)).fetchone()["m"]) + 1
+        them = 0
+        for u in urls:
+            u = (u or "").strip()
+            if not u or u in da_co:
+                continue
+            con.execute("INSERT INTO comment_posts(loai,url,nhom,page,order_idx) "
+                        "VALUES(?,?,?,?,?)",
+                        (loai, u, tach_nhom_tu_url(u), page, idx))
+            da_co.add(u)
+            idx  += 1
+            them += 1
+
+        # Cửa sổ trượt: link cũ bị đẩy ra thì XOÁ HẲN, không lưu trữ lại.
+        if gioi_han and gioi_han > 0:
+            con.execute(
+                "DELETE FROM comment_posts WHERE loai=? AND id NOT IN ("
+                "  SELECT id FROM comment_posts WHERE loai=? "
+                "  ORDER BY order_idx DESC LIMIT ?)",
+                (loai, loai, gioi_han))
+        return them
+
+
+def update_comment_post_field(post_id: int, field: str, value):
+    if field not in {"url", "ghi_chu", "trang_thai"}:
+        raise ValueError(f"Không cho sửa cột '{field}'")
+    with _conn() as con:
+        con.execute(f"UPDATE comment_posts SET {field}=? WHERE id=?", (value, post_id))
+
+
+def delete_comment_post(post_id: int):
+    with _conn() as con:
+        con.execute("DELETE FROM comment_posts WHERE id=?", (post_id,))
+
+
+def xoa_het_comment_posts(loai: str) -> int:
+    with _conn() as con:
+        return con.execute("DELETE FROM comment_posts WHERE loai=?", (loai,)).rowcount
+
+
+def boc_bai_de_comment(loai: str, so_bai: int, page: str = "") -> list[dict]:
+    """
+    Bốc tối đa `so_bai` bài để comment trong một phiên, theo hai luật:
+
+    1. **Tối đa 1 link mỗi NHÓM.** Một đợt đăng chéo tạo 9 bài cùng nội dung ở
+       9 nhóm khác nhau, nên cả danh sách 300 link chỉ đến từ ~9 nhóm. Bốc ngẫu
+       nhiên 9–10 link thì chắc chắn có nhóm bị comment 2 lần trong cùng một
+       phiên — hai comment cách nhau vài phút từ cùng một Page là thứ làm admin
+       nhóm để ý nhất. Ràng buộc này cũng tự động cho ra content khác nhau, vì
+       mỗi nhóm chỉ góp một bài.
+       ⇒ Số bài mỗi phiên KHÔNG BAO GIỜ vượt quá số nhóm đang có trong danh sách.
+
+    2. **Ưu tiên bài cũ nhất còn trong cửa sổ**, nhưng xét `so_lan` trước:
+       bài chưa comment lần nào đi trước bài đã comment rồi. Nếu chỉ xét tuổi
+       thì mỗi phiên đều bốc trúng đúng một bài cũ nhất của mỗi nhóm, dội đi dội
+       lại cho tới khi nó bị đẩy khỏi cửa sổ — đúng kiểu lặp cần tránh.
+
+    `page`: chỉ lấy bài do CHÍNH Page đó đăng ("comment vào bài chính chủ").
+    Bỏ trống = lấy mọi bài của hạng mục. Link cũ chưa gắn Page (cột rỗng) bị
+    loại khi có lọc — thà bốc ít còn hơn comment nhầm bài của Page khác.
+    """
+    n = max(0, int(so_bai or 0))
+    if n == 0:
+        return []
+
+    ds = get_comment_posts(loai)
+    if page:
+        ds = [r for r in ds if (r.get("page") or "") == page]
+
+    # Trong mỗi nhóm, lấy đúng một ứng viên: ít comment nhất, rồi cũ nhất.
+    ung_vien = {}
+    for r in ds:
+        nhom = (r.get("nhom") or "").strip() or f"__le_{r['id']}"
+        khoa = (int(r.get("so_lan") or 0), int(r.get("order_idx") or 0))
+        if nhom not in ung_vien or khoa < ung_vien[nhom][0]:
+            ung_vien[nhom] = (khoa, r)
+
+    ds = sorted(ung_vien.values(), key=lambda x: x[0])
+    return [r for _, r in ds[:n]]
+
+
+def ghi_nhan_comment(post_id: int, ok: bool, ghi_chu: str = "", chet: bool = False):
+    """
+    Ghi lại kết quả một lượt comment.
+
+    Chỉ tính `lan_cuoi` / `so_lan` khi THÀNH CÔNG, để hai cột đó phản ánh đúng
+    số comment đã lên thật.
+
+    `chet=True`: bài đã bị xoá / đổi phạm vi → **XOÁ NGAY khỏi danh sách**.
+    Đo thật cho thấy 20–30% bài bị gỡ; để chúng nằm lại chờ bị đẩy ra thì chừng
+    ấy chỗ trong cửa sổ là rác, và mỗi lần bốc trúng là mất một lượt comment.
+    """
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    with _conn() as con:
+        if chet:
+            con.execute("DELETE FROM comment_posts WHERE id=?", (post_id,))
+        elif ok:
+            con.execute("UPDATE comment_posts SET lan_cuoi=?, so_lan=so_lan+1, "
+                        "trang_thai=? WHERE id=?",
+                        (now, f"✅ {now[-5:]}", post_id))
+        else:
+            con.execute("UPDATE comment_posts SET trang_thai=? WHERE id=?",
+                        (f"❌ {now[-5:]} {ghi_chu}"[:60], post_id))
+
 
 def get_setting(key: str, default: str = "") -> str:
     with _conn() as con:

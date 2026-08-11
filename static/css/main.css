@@ -9,6 +9,16 @@ button { cursor: pointer; font-family: inherit; font-size: inherit; border: none
 a { text-decoration: none; color: inherit; }
 input, select, textarea { font-family: inherit; font-size: inherit; }
 
+/* Danh sách xổ ra của <select> do hệ thống vẽ, không nhận style của thẻ cha.
+   Đặt màu thẳng trên <option> cho MỌI select trong app — nếu chỉ sửa từng chỗ
+   thì sớm muộn lại lòi ra một dropdown chữ trắng trên nền trắng. */
+select option,
+select optgroup {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+}
+select option:disabled { color: var(--text-muted); }
+
 /* ── App Shell ───────────────────────────────────────────────── */
 #app {
     display: flex;
@@ -487,7 +497,13 @@ td.editable select {
     font-family: inherit;
     padding: 8px 10px;
 }
-td.editable select { cursor: pointer; }
+/* Nền đặc, KHÔNG transparent: danh sách xổ ra kế thừa nền của select, để
+   trong suốt thì nó lấy nền trắng mặc định của hệ thống trong khi chữ vẫn
+   màu sáng → chữ trắng trên nền trắng. */
+td.editable select {
+    cursor: pointer;
+    background: var(--bg-input);
+}
 td.editable input[data-mono="1"] { font-family: var(--font-mono); font-size: 11px; }
 td.saving { opacity: .5; }
 td.saved  { outline: 2px solid var(--success) !important; }
@@ -524,13 +540,9 @@ td.saved  { outline: 2px solid var(--success) !important; }
 }
 .upload-zone:hover,
 .upload-zone.dragover { border-color: var(--accent); background: var(--accent-light); }
-.upload-zone--hook { border-color: var(--warning); }
-.upload-zone--hook:hover,
-.upload-zone--hook.dragover { border-color: #f59e0b; background: rgba(245,158,11,.1); }
 .upload-zone__icon { font-size: 24px; margin-bottom: 6px; }
 .upload-zone__text { font-size: 13px; color: var(--text-secondary); }
 .upload-zone__text span { color: var(--accent); }
-.upload-zone--hook .upload-zone__text span { color: var(--warning); }
 .upload-zone__sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
 
 /* ── Content image thumbnails ────────────────────────────────── */

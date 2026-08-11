@@ -35,6 +35,7 @@
             <div class="nav-item" data-page="lich-ban"><span class="nav-icon">💰</span> Lịch Bán</div>
             <div class="nav-item" data-page="lich-page"><span class="nav-icon">📄</span> Lịch Đăng Page</div>
             <div class="nav-item" data-page="lich-nuoi"><span class="nav-icon">🌱</span> Lịch Nuôi nick</div>
+            <div class="nav-item" data-page="comment-posts"><span class="nav-icon">💬</span> Bài đi Comment</div>
 
             <div class="nav-section">Vận hành</div>
             <div class="nav-item" data-page="tham-gia-nhom">
@@ -113,6 +114,9 @@
                 <div style="display:flex;gap:4px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
                     <div id="content-tabs" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"></div>
                     <button class="btn btn-ghost" style="margin-left:auto;font-size:12px"
+                            onclick="openBienTheSettings()"
+                            title="Mỗi lần đăng tự đổi ảnh đi một chút để FB không nhận ra là ảnh cũ">🎲 Biến thể ảnh</button>
+                    <button class="btn btn-ghost" style="font-size:12px"
                             onclick="donAnhMoCoi()" title="Xóa ảnh không content nào dùng tới">🧹 Dọn ảnh thừa</button>
                     <button class="btn btn-primary" style="font-size:12px" onclick="openContentForm()">+ Thêm content</button>
                 </div>
@@ -123,12 +127,11 @@
                             <thead><tr>
                                 <th style="width:32px"></th>
                                 <th>Mã content</th><th>Nội dung</th>
-                                <th style="text-align:center">Ảnh Hook</th>
                                 <th style="text-align:center">Ảnh</th>
                                 <th style="text-align:center">Sử dụng</th>
                                 <th>Ghi chú</th><th style="width:90px">Chỉnh sửa</th>
                             </tr></thead>
-                            <tbody id="content-table"><tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr></tbody>
+                            <tbody id="content-table"><tr><td colspan="7" class="loading"><span class="spin">↻</span></td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -165,6 +168,9 @@
             <div class="page" id="page-lich-ban"      style="display:none" data-loai="ban"></div>
             <div class="page" id="page-lich-page"     style="display:none" data-loai="page"></div>
             <div class="page" id="page-lich-nuoi"     style="display:none" data-loai="nuoi"></div>
+
+            <!-- ══ Bài đi Comment ══════════════════════════ -->
+            <div class="page" id="page-comment-posts" style="display:none"></div>
 
             <!-- ══ PAGE: THAM GIA NHÓM ══════════════════════ -->
             <div class="page" id="page-tham-gia-nhom" style="display:none">

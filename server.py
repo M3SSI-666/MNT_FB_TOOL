@@ -17,6 +17,7 @@ sys.path.insert(0, str(BASE_DIR))
 os.chdir(str(BASE_DIR))
 
 from config import PORT, LOG_DIR, MEDIA_DIR
+import db
 from db import (
     init_db,
     # accounts
@@ -32,6 +33,12 @@ from db import (
     # schedules
     get_schedules, update_schedule_status, bulk_set_schedule_status,
     replace_schedules, update_schedule_field,
+    # comment posts
+    get_comment_posts, them_comment_posts, update_comment_post_field,
+    delete_comment_post, xoa_het_comment_posts,
+    # loại đăng
+    LOAI_DANG_OPTIONS, LOAI_LICH_MAP, la_loai_comment, la_loai_hon_hop,
+    TI_LE_COMMENT_MAC_DINH, accounts_theo_lich,
     # settings
     get_setting, set_setting, get_all_settings,
 )
@@ -306,7 +313,8 @@ def run_stop(loai):
 # mà SQLite dùng kiểu động nên nhận chuỗi tuốt — ghi vào thì im lặng, tới lúc
 # đọc ra so sánh mới vỡ. Đã gặp thật: ô "Bài đăng tối đa" bị xoá trống thành ''
 # khiến gen lịch Page lỗi HTTP 500 ('' > 0 không so sánh được).
-COT_SO = {"bai_dang_toi_da", "thoi_gian_nghi", "nuoi_nick", "nuoi_interval", "order_idx"}
+COT_SO = {"bai_dang_toi_da", "thoi_gian_nghi", "nuoi_nick", "nuoi_interval",
+          "order_idx"}
 
 
 def ep_kieu_so(field: str, value):
@@ -528,6 +536,26 @@ def api_accounts_field(acc_id):
     try:
         update_account_field(acc_id, body["field"],
                              ep_kieu_so(body["field"], body["value"]))
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+# ── Cảnh báo sức khoẻ acc ───────────────────────────────────────────────
+# Scheduler là tiến trình riêng nên không đẩy thẳng toast lên web được; nó ghi
+# vào cột accounts.canh_bao_moi, giao diện hỏi ở đây rồi báo đã xem.
+@app.route("/api/canh-bao")
+def api_canh_bao():
+    try:
+        return jsonify({"ok": True, "data": db.lay_canh_bao()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "data": []})
+
+
+@app.route("/api/canh-bao/xong", methods=["POST"])
+def api_canh_bao_xong():
+    try:
+        db.xoa_canh_bao()
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -773,7 +801,7 @@ def api_content_field(content_id):
     body  = request.json or {}
     field = body.get("field", "")
     value = body.get("value", "")
-    safe  = {"ma_content","noi_dung","link_anh_hook","link_anh","su_dung","ghi_chu"}
+    safe  = {"ma_content","noi_dung","link_anh","su_dung","ghi_chu"}
     if field not in safe:
         return jsonify({"ok": False, "error": f"Field không hợp lệ: {field}"})
     try:
@@ -1065,9 +1093,6 @@ def api_schedule_gen(loai):
     n_kw   = len(keyword_pool) if keyword_pool else 1
     n_accs = len(acc_settings)
 
-    tong_luc = sum(60 / a["nghi"] for a in acc_settings)
-    do_nen   = 60 / tong_luc
-
     contents = acc_settings[0].get("contents", []) if acc_settings else []
     if not contents:
         # Lấy từ DB
@@ -1079,29 +1104,26 @@ def api_schedule_gen(loai):
     n_contents     = len(contents)
     content_cursor = {a["ten"]: a.get("c_offset", 0) for a in acc_settings}
     keyword_cursor = {a["ten"]: (i * n_kw // n_accs) % n_kw for i, a in enumerate(acc_settings)}
-    next_time      = {a["ten"]: START_MIN + i * do_nen for i, a in enumerate(acc_settings)}
+    theo_ten       = {a["ten"]: a for a in acc_settings}
+
+    # Phân bổ thời điểm — phiên comment tính ngang phiên đăng bài, cùng một
+    # vòng xoay, cùng góp vào tổng lực. Xem xep_lich.py để hiểu vì sao phải ép
+    # giãn cách tối thiểu.
+    from xep_lich import phan_bo_lich
+    moc = phan_bo_lich(acc_settings, START_MIN, END_MIN)
 
     schedule = []
-    while True:
-        eligible = [(next_time[a["ten"]], i, a)
-                    for i, a in enumerate(acc_settings)
-                    if next_time[a["ten"]] <= END_MIN]
-        if not eligible:
-            break
-        eligible.sort(key=lambda x: x[0])
-        t_float, _, acc = eligible[0]
-        t_min = round(t_float)
-        if t_min > END_MIN:
-            break
+    for t_min, ten in moc:
+        acc = theo_ten[ten]
 
-        cur_c = content_cursor[acc["ten"]]
-        content_cursor[acc["ten"]] = (cur_c + 1) % n_contents
+        cur_c = content_cursor[ten]
+        content_cursor[ten] = (cur_c + 1) % n_contents
 
         mode_acc = acc.get("mode", "Hybrid")
-        cur_kw   = keyword_cursor[acc["ten"]]
+        cur_kw   = keyword_cursor[ten]
         if keyword_pool and mode_acc in ("Via", "Hybrid"):
             tu_khoa = keyword_pool[cur_kw % n_kw]
-            keyword_cursor[acc["ten"]] = (cur_kw + 1) % n_kw
+            keyword_cursor[ten] = (cur_kw + 1) % n_kw
         else:
             tu_khoa = ""
 
@@ -1112,7 +1134,7 @@ def api_schedule_gen(loai):
             "loai":       loai,
             "stt":        len(schedule) + 1,
             "ma_content": contents[cur_c % n_contents],
-            "ten_acc":    acc["ten"],
+            "ten_acc":    ten,
             "ten_page":   acc["page"],
             "gio_dang":   min_to_time(t_min),
             "ma_nhom":    ma_nhom_val,
@@ -1120,7 +1142,6 @@ def api_schedule_gen(loai):
             "mode":       mode_acc,
             "trang_thai": "Chờ",
         })
-        next_time[acc["ten"]] = t_float + acc["nghi"]
 
     if not schedule:
         return jsonify({"ok": False, "error": "Không tạo được lịch"})
@@ -1128,17 +1149,55 @@ def api_schedule_gen(loai):
     # ── Nuôi nick: chuyển một số slot của acc bật nuôi thành phiên nuôi ──
     # Nick càng non → chuyển càng nhiều (đăng ít, nuôi nhiều). Đọc thẳng từ DB
     # theo tên acc nên không cần đổi luồng gen ở frontend.
-    n_warm = 0
+    #
+    # `da_dat` gom mốc giờ của MỌI phiên đã chuyển và được truyền tiếp sang lượt
+    # comment bên dưới, để phiên nuôi và phiên comment không rơi sát nhau.
+    n_warm, n_cmt = 0, 0
+    da_dat = []
     try:
         from nuoi_nick import plan_warming_conversion
         acc_names = {r["ten_acc"] for r in schedule}
+        accs_db   = [a for a in get_accounts() if a["ten_acc"] in acc_names]
+
+        chi_cmt = {a["ten_acc"] for a in accs_db
+                   if la_loai_comment(a.get("loai_dang"))}
+
+        # ── Thứ tự ba bước dưới đây là có chủ đích ──
+        # Cả hai hàm chuyển slot chỉ đụng slot đang là 'dang_bai'. Vì vậy nuôi
+        # nick phải chạy TRƯỚC, rồi mới quét nốt slot còn lại của acc C_* thành
+        # comment. Làm ngược lại thì acc C_* bị khoá hết slot thành 'comment' và
+        # KHÔNG BAO GIỜ được nuôi — trong khi acc chỉ comment cũng cần nuôi y
+        # như acc đăng bài: hy sinh một phiên comment để đi nuôi.
+
+        # 1. Nuôi nick — áp cho MỌI acc tick Nuôi, kể cả acc C_* chỉ comment.
         warm_accs = {a["ten_acc"]: a.get("nuoi_interval")
-                     for a in get_accounts()
-                     if a["ten_acc"] in acc_names and int(a.get("nuoi_nick", 0) or 0) == 1}
+                     for a in accs_db if int(a.get("nuoi_nick", 0) or 0) == 1}
         if warm_accs:
-            n_warm = plan_warming_conversion(schedule, warm_accs)
+            n_warm = plan_warming_conversion(schedule, warm_accs, da_dat=da_dat)
+
+        # 2. Acc "X_*" — vừa đăng vừa comment theo TỈ LỆ (mặc định 75/25).
+        #    Chỉ 3 loại có danh sách bài + thư viện câu; lịch Page thì slot
+        #    comment tới giờ chỉ mở trình duyệt rồi bỏ qua — mất slot đăng mà
+        #    chẳng làm được gì.
+        if loai in LOAI_LICH_MAP:
+            from xep_lich import chuyen_slot_theo_ti_le
+            hon_hop = {a["ten_acc"] for a in accs_db
+                       if la_loai_hon_hop(a.get("loai_dang"))}
+            if hon_hop:
+                ti_le = int(get_setting("comment_ti_le",
+                                        str(TI_LE_COMMENT_MAC_DINH))
+                            or TI_LE_COMMENT_MAC_DINH)
+                n_cmt += chuyen_slot_theo_ti_le(schedule, hon_hop, ti_le)
+
+        # 3. Acc C_*: mọi slot CÒN LẠI thành comment (slot đã bị nuôi chiếm ở
+        #    bước 1 thì giữ nguyên là phiên nuôi).
+        for r in schedule:
+            if r["ten_acc"] in chi_cmt and \
+                    (r.get("hoat_dong") or "dang_bai") == "dang_bai":
+                r["hoat_dong"] = "comment"
+                n_cmt += 1
     except Exception as e:
-        logger.warning(f"Nuôi nick: bỏ qua chuyển slot ({e})")
+        logger.warning(f"Chuyển slot nuôi/comment: bỏ qua ({e})")
 
     replace_schedules(loai, schedule)
 
@@ -1152,6 +1211,7 @@ def api_schedule_gen(loai):
 
     return jsonify({"ok": True, "total": len(schedule),
                     "nuoi": n_warm,
+                    "comment": n_cmt,
                     "from": schedule[0]["gio_dang"],
                     "to":   schedule[-1]["gio_dang"]})
 
@@ -1276,19 +1336,23 @@ def api_schedule_page_gen():
                     "to":   schedule[-1]["gio_dang"]})
 
 
+def _hhmm_to_min(s: str, mac_dinh: int) -> int:
+    """'05:00' → 300. Chuỗi hỏng thì lấy mặc định."""
+    try:
+        h, m = map(int, str(s).split(":"))
+        return h * 60 + m
+    except Exception:
+        return mac_dinh
+
+
 @app.route("/api/schedule/<loai>/gen-data")
 def api_schedule_gen_data(loai):
     """Lấy data cho form gen lịch: acc active + content pool."""
-    accs_db = get_accounts(loai=loai.capitalize(), trang_thai="Active")
-    if loai == "homestay":
-        accs_db = [a for a in get_accounts(trang_thai="Active")
-                   if "Homestay" in (a.get("loai_dang") or "")]
-    elif loai == "thue":
-        accs_db = [a for a in get_accounts(trang_thai="Active")
-                   if "Thuê" in (a.get("loai_dang") or "")]
-    elif loai == "ban":
-        accs_db = [a for a in get_accounts(trang_thai="Active")
-                   if "Bán" in (a.get("loai_dang") or "")]
+    # Gồm cả acc đăng bài (Homestay/Thuê/Bán) lẫn acc chỉ comment (C_Home/...).
+    # Acc chỉ comment vẫn cần slot trong lịch — slot của họ sẽ được đánh dấu
+    # hoat_dong='comment' ở bước gen bên dưới.
+    accs_db = (accounts_theo_lich(loai) if loai in LOAI_LICH_MAP
+               else get_accounts(loai=loai.capitalize(), trang_thai="Active"))
 
     accs = []
     for a in accs_db:
@@ -1301,9 +1365,19 @@ def api_schedule_gen_data(loai):
             "page":     a.get("ten_page", ""),
             "nghi":     nghi,
             "luc_dang": round(60 / nghi, 2),
+            # Acc C_* chỉ đi comment — form gen ẩn ô Content/Mode cho họ, và
+            # bảng lịch hiện badge 💬 thay vì mã content.
+            "chi_comment": la_loai_comment(a.get("loai_dang")),
+            "hon_hop":     la_loai_hon_hop(a.get("loai_dang")),
         })
 
     contents = [r["ma_content"] for r in get_content(loai, su_dung="Có")]
+
+    # Số liệu phủ đều để người dùng thấy trước khi bấm Gen.
+    from xep_lich import tong_luc as _tl, do_nen as _dn
+    nhip = {"tong_luc": round(_tl(accs), 2), "do_nen": round(_dn(accs), 2),
+            "luc_dang":   round(sum(a["luc_dang"] for a in accs if not a["chi_comment"]), 2),
+            "luc_comment": round(sum(a["luc_dang"] for a in accs if a["chi_comment"]), 2)}
 
     # Thiết lập gen gần nhất đã lưu (link nhóm đầu, từ khóa, giờ) — None nếu chưa có.
     prefs = None
@@ -1314,7 +1388,8 @@ def api_schedule_gen_data(loai):
         except Exception:
             prefs = None
 
-    return jsonify({"ok": True, "accs": accs, "contents": contents, "prefs": prefs})
+    return jsonify({"ok": True, "accs": accs, "contents": contents,
+                    "prefs": prefs, "nhip": nhip})
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1346,6 +1421,58 @@ def api_logs(loai):
     if not fname:
         return jsonify({"ok": False, "error": "Loại không hợp lệ"})
     return jsonify({"ok": True, "text": _read_log(fname, n)})
+
+
+# ═══════════════════════════════════════════════════════════════
+# API — Bài viết để đi comment
+# ═══════════════════════════════════════════════════════════════
+
+@app.route("/api/comment-posts/<loai>")
+def api_comment_posts(loai):
+    """
+    Kèm tên Page đã đăng bài. DB chỉ lưu `page_uid` (biết chắc lúc thu link),
+    còn tên Page đổi được nên tra ngược lúc hiển thị chứ không lưu cứng.
+    """
+    ten_theo_uid = {str(p.get("page_uid") or ""): p.get("ten_page", "")
+                    for p in get_pages() if p.get("page_uid")}
+    rows = get_comment_posts(loai)
+    for r in rows:
+        uid = str(r.get("page") or "")
+        r["ten_page"] = ten_theo_uid.get(uid, uid)
+    return jsonify({"ok": True, "data": rows})
+
+
+@app.route("/api/comment-posts/<loai>/add", methods=["POST"])
+def api_comment_posts_add(loai):
+    """Dán cả danh sách: mỗi dòng một URL. Bỏ dòng không phải link và URL trùng."""
+    raw  = (request.json or {}).get("urls", "")
+    urls = [u.strip() for u in raw.replace(",", "\n").splitlines()]
+    urls = [u for u in urls if u.startswith("http")]
+    if not urls:
+        return jsonify({"ok": False, "error": "Không có link hợp lệ (phải bắt đầu bằng http)"})
+    them = them_comment_posts(loai, urls)
+    return jsonify({"ok": True, "them": them, "bo_trung": len(urls) - them})
+
+
+@app.route("/api/comment-posts/<int:post_id>/field", methods=["POST"])
+def api_comment_post_field(post_id):
+    body = request.json or {}
+    try:
+        update_comment_post_field(post_id, body.get("field", ""), body.get("value", ""))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)})
+    return jsonify({"ok": True})
+
+
+@app.route("/api/comment-posts/<int:post_id>", methods=["DELETE"])
+def api_comment_post_delete(post_id):
+    delete_comment_post(post_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/comment-posts/<loai>/clear", methods=["POST"])
+def api_comment_posts_clear(loai):
+    return jsonify({"ok": True, "da_xoa": xoa_het_comment_posts(loai)})
 
 
 # ═══════════════════════════════════════════════════════════════

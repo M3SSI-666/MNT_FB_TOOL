@@ -72,6 +72,17 @@ const API = {
     joinDelete:     (id)                            => API.del(`/api/join/${id}`),
     logsJoin:       (n=200)                         => API.get(`/api/logs/join?n=${n}`),
 
+    // Bài đi comment
+    commentPosts:       (loai)       => API.get(`/api/comment-posts/${loai}`),
+    commentPostsAdd:    (loai, urls) => API.post(`/api/comment-posts/${loai}/add`, {urls}),
+    commentPostField:   (id, f, v)   => API.post(`/api/comment-posts/${id}/field`, {field:f, value:v}),
+    commentPostDelete:  (id)         => API.del(`/api/comment-posts/${id}`),
+    commentPostsClear:  (loai)       => API.post(`/api/comment-posts/${loai}/clear`, {}),
+
+    // Cảnh báo sức khoẻ acc
+    canhBao:         ()           => API.get("/api/canh-bao"),
+    canhBaoXong:     ()           => API.post("/api/canh-bao/xong", {}),
+
     // Settings
     settings:        ()           => API.get("/api/settings"),
     saveSettings:    (data)       => API.post("/api/settings/save", data),

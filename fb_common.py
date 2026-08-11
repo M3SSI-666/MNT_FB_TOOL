@@ -276,9 +276,15 @@ async def dismiss_anon_dialog(page, wait_ms: int = 0) -> bool:
 #      không bao giờ thấy nó biến mất → báo thất bại dù bài ĐÃ lên.
 # Đóng nó đi là an toàn: đây chỉ là thông báo, Facebook đã gỡ nội dung từ trước.
 CANH_BAO_MOC = (
-    "chúng tôi đã gỡ", "tiêu chuẩn cộng đồng", "trạng thái tài khoản",
-    "we removed", "community standards", "account status",
+    "chúng tôi đã gỡ một số nội dung", "trạng thái tài khoản",
+    "tiêu chuẩn cộng đồng",
+    "we removed some of your", "account status", "community standards",
 )
+
+# Bảng thông báo cũng là role=dialog, và từng thông báo bên trong nó cũng chứa
+# các cụm trên ("Chúng tôi đã gỡ nội dung ... của thành viên khỏi nhóm"). Đã bắt
+# nhầm một lần thật — log 09:42:28 ngày 7/8. Loại theo tiêu đề dòng đầu.
+_KHONG_PHAI_CANH_BAO = ("thông báo", "notifications")
 
 _NUT_DONG = (
     "div[role='button'][aria-label='Đóng']",
@@ -304,7 +310,11 @@ async def _tim_dialog_canh_bao(page):
             text = (await dlg.inner_text()) or ""
         except Exception:
             continue
-        if any(m in text.lower() for m in CANH_BAO_MOC):
+
+        thap = text.lower()
+        if thap.strip().split("\n", 1)[0].strip() in _KHONG_PHAI_CANH_BAO:
+            continue
+        if any(m in thap for m in CANH_BAO_MOC):
             return dlg, text
     return None, ""
 
@@ -402,6 +412,63 @@ async def dong_dialog_canh_bao(page, so_lan: int = 3, cho_escape: bool = True) -
 
     logger.error("    ❌ KHÔNG đóng được dialog cảnh báo — nó sẽ chặn thao tác kế tiếp")
     return canh_bao
+
+
+async def _vong_canh(page, chu_ky: float):
+    """Vòng lặp nền của bat_dau_canh_dialog — xem chú thích ở hàm đó."""
+    while True:
+        try:
+            await asyncio.sleep(chu_ky)
+            if page.is_closed():
+                return
+
+            dlg, text = await _tim_dialog_canh_bao(page)
+            if dlg is None:
+                continue
+
+            btn = await _nut_dong(dlg)
+            if btn is None:
+                continue        # để lời gọi trực tiếp (có Escape) xử lý
+
+            logger.warning(f"    ⚠️  FB cảnh báo (vòng canh): "
+                           f"{' '.join(text.split())[:90]}")
+            try:
+                await btn.click(timeout=3000)
+            except Exception:
+                try:
+                    await btn.evaluate("el => el.click()")
+                except Exception:
+                    pass
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            if page.is_closed():
+                return
+
+
+def bat_dau_canh_dialog(page, chu_ky_giay: float = 5.0):
+    """
+    Chạy nền suốt phiên, cứ vài giây quét và đóng dialog cảnh báo một lần.
+
+    Cần vòng canh vì Facebook bật lại dialog này liên tục ở thời điểm không
+    đoán trước được — đo thực tế: cùng một nick bị bật lại sau 110 giây. Rải
+    lời gọi ở từng điểm nghi ngờ thì lần nào cũng sót một chỗ mới, và giữa hai
+    điểm kiểm tra dialog vẫn nằm chình ình trên màn hình.
+
+    Vòng canh chạy XEN KẼ với luồng chính nên bị giới hạn có chủ đích: chỉ bấm
+    đúng nút X nằm bên trong dialog cảnh báo, KHÔNG bấm Escape và KHÔNG bắn
+    chuột theo toạ độ. Hai thứ đó tác động ra ngoài phạm vi dialog nên có thể
+    đóng nhầm ô soạn bài hoặc khung chat mà luồng chính đang mở dở. Trường hợp
+    dialog không có nút X thì để các lời gọi trực tiếp lo.
+
+    Task tự huỷ khi page đóng, bên gọi không phải dọn gì.
+    """
+    task = asyncio.create_task(_vong_canh(page, chu_ky_giay))
+    try:
+        page.once("close", lambda *_: task.cancel())
+    except Exception:
+        pass
+    return task
 
 
 # Ô soạn bài là dialog DUY NHẤT chứa vùng nhập nội dung. Bám vào đặc điểm đó
