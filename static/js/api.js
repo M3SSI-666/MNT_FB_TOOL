@@ -78,6 +78,7 @@ const API = {
     commentPostField:   (id, f, v)   => API.post(`/api/comment-posts/${id}/field`, {field:f, value:v}),
     commentPostDelete:  (id)         => API.del(`/api/comment-posts/${id}`),
     commentPostsClear:  (loai)       => API.post(`/api/comment-posts/${loai}/clear`, {}),
+    commentCauMau:      ()           => API.get("/api/comment/cau-mau"),
 
     // Cảnh báo sức khoẻ acc
     canhBao:         ()           => API.get("/api/canh-bao"),

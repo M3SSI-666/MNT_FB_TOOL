@@ -1227,6 +1227,34 @@ def api_nuoi_msg_mau():
     return jsonify({"ok": True, "total": len(lines), "text": "\n".join(lines)})
 
 
+@app.route("/api/comment/cau-mau")
+def api_comment_cau_mau():
+    """
+    Thư viện câu comment mẫu (comment_mau.txt), tách theo loại đăng.
+
+    Nạp tay từng câu trên mỗi máy vệ tinh vừa tốn thời gian vừa dễ ra kết quả
+    khác nhau giữa các máy — mà ba bộ câu giống nhau chính là kiểu trùng lặp dễ
+    bị quét nhất. Để câu mẫu đi theo repo thì mọi máy nạp ra cùng một bộ.
+    """
+    f = BASE_DIR / "comment_mau.txt"
+    if not f.exists():
+        return jsonify({"ok": False, "error": "Không tìm thấy comment_mau.txt"})
+    data, loai = {}, None
+    for ln in f.read_text(encoding="utf-8").splitlines():
+        ln = ln.strip()
+        if not ln or ln.startswith("#"):
+            continue
+        if ln.startswith("[") and ln.endswith("]"):
+            loai = ln[1:-1].strip().lower()
+            data.setdefault(loai, [])
+            continue
+        if loai:
+            data[loai].append(ln)
+    return jsonify({"ok": True,
+                    "data":  {k: "\n".join(v) for k, v in data.items()},
+                    "total": {k: len(v) for k, v in data.items()}})
+
+
 @app.route("/api/schedule/nuoi/gen", methods=["POST"])
 def api_schedule_nuoi_gen():
     """

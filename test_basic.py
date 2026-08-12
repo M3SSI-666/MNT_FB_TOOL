@@ -1172,6 +1172,27 @@ check("bật lại -> xoá mốc nghỉ",        _r["nghi_den"] == "")
 check("bật lại -> xoá cảnh báo",        _r["canh_bao_moi"] == "")
 db.delete_account(_aid)
 
+# ── Thư viện câu comment mẫu (comment_mau.txt) ─────────────────────────────
+_cm = server.app.test_client().get("/api/comment/cau-mau").get_json()
+check("endpoint câu mẫu chạy",          _cm.get("ok") is True)
+_pool = {k: [x for x in v.split("\n") if x.strip()] for k, v in _cm["data"].items()}
+check("đủ 3 loại",                      set(_pool) == {"homestay", "thue", "ban"})
+for _k in ("homestay", "thue", "ban"):
+    check(f"{_k}: 30 câu",              len(_pool[_k]) == 30)
+    check(f"{_k}: không trùng nội bộ",   len({x.lower() for x in _pool[_k]}) == 30)
+
+# Ba loại PHẢI khác nhau — dùng chung một bộ câu cho cả ba là kiểu trùng lặp dễ
+# bị quét nhất: cùng chuỗi ký tự xuất hiện ở bài homestay, bài thuê lẫn bài bán,
+# trong cùng cụm nhóm, từ cùng một hệ thống Page. Bộ 20 câu đời đầu bị đúng lỗi
+# này — cả ba loại giống hệt nhau từng chữ.
+for _a, _b in (("homestay", "thue"), ("homestay", "ban"), ("thue", "ban")):
+    check(f"{_a} ≠ {_b}",
+          not ({x.lower() for x in _pool[_a]} & {x.lower() for x in _pool[_b]}))
+
+# Dòng ghi chú và dòng [tên loại] không được lọt vào thư viện.
+check("không lẫn dòng ghi chú",         not any(x.startswith("#") for v in _pool.values() for x in v))
+check("không lẫn dòng tiêu đề loại",    not any(x.startswith("[") for v in _pool.values() for x in v))
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:

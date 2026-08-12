@@ -1790,7 +1790,17 @@ async function openCommentSettings(){
               `${num("comment_nghi_min",10)} — ${num("comment_nghi_max",15)}`,
               "Comment liên tiếp không nghỉ là dấu hiệu máy rõ nhất")}
 
-        <div style="font-size:12px;font-weight:700;color:var(--accent);margin:16px 0 6px">THƯ VIỆN CÂU THEO LOẠI</div>
+        <div style="display:flex;align-items:center;gap:8px;margin:16px 0 6px">
+            <span style="font-size:12px;font-weight:700;color:var(--accent)">THƯ VIỆN CÂU THEO LOẠI</span>
+            <span style="margin-left:auto;display:flex;gap:6px">
+                <button type="button" class="btn btn-ghost" style="padding:3px 8px;font-size:11px"
+                        title="Thêm câu mẫu còn thiếu vào cả 3 loại, giữ nguyên câu bạn đã tự viết"
+                        onclick="napCauMauComment(true)">➕ Thêm câu mẫu</button>
+                <button type="button" class="btn btn-ghost" style="padding:3px 8px;font-size:11px"
+                        title="XOÁ hết câu đang có rồi thay bằng bộ mẫu 30 câu/loại"
+                        onclick="napCauMauComment(false)">📥 Nạp lại từ đầu</button>
+            </span>
+        </div>
         ${pool("homestay","🏠 Homestay")}
         ${pool("thue","🏡 Thuê")}
         ${pool("ban","💰 Bán")}
@@ -1800,6 +1810,41 @@ async function openCommentSettings(){
         <button onclick="saveCommentSettings()" class="btn btn-primary">💾 Lưu</button>
       </div>`);
     CMT_LOAI.forEach(([k])=>_demCmtPool(k));
+}
+
+/**
+ * Nạp thư viện câu mẫu vào cả 3 ô cùng lúc.
+ * `them=true`  → chỉ thêm câu còn thiếu, giữ nguyên câu người dùng tự viết.
+ * `them=false` → thay sạch, có hỏi lại vì đây là thao tác xoá dữ liệu.
+ */
+async function napCauMauComment(them){
+    if(!them && !confirm("Xoá hết câu đang có ở cả 3 loại rồi thay bằng bộ mẫu 30 câu/loại?\n\n"
+                       + "Câu bạn tự viết sẽ mất. Muốn giữ lại thì bấm Huỷ rồi chọn “Thêm câu mẫu”."))
+        return;
+    try{
+        const r=await API.commentCauMau();
+        if(!r.ok){ Toast.error(r.error); return; }
+        const bao=[];
+        CMT_LOAI.forEach(([k,ten])=>{
+            const ta=document.getElementById(`cs_comment_pool_${k}`);
+            const mau=(r.data?.[k]||"").split("\n").map(s=>s.trim()).filter(Boolean);
+            if(!ta || !mau.length) return;
+            let ra=mau;
+            if(them){
+                const cu=ta.value.split("\n").map(s=>s.trim()).filter(Boolean);
+                // So khớp không phân biệt hoa thường: bấm hai lần không được đẻ
+                // ra bản sao chỉ khác mỗi chữ đầu viết hoa.
+                const da=new Set(cu.map(s=>s.toLowerCase()));
+                ra=[...cu, ...mau.filter(m=>!da.has(m.toLowerCase()))];
+            }
+            ta.value=ra.join("\n");
+            _demCmtPool(k);
+            bao.push(`${ten.replace(/^\S+\s/,"")} ${ra.length}`);
+        });
+        if(!bao.length){ Toast.error("comment_mau.txt không có câu nào"); return; }
+        // Toast.success chỉ nhận 1 tham số — dùng Toast.show để đặt được thời lượng.
+        Toast.show((them?"Đã thêm — ":"Đã nạp — ")+bao.join(" · ")+" câu. Nhớ bấm Lưu.", "success", 6000);
+    }catch(e){ Toast.error(e.message); }
 }
 
 function _demCmtPool(k){

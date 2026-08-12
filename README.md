@@ -106,17 +106,22 @@ dỡ, cho acc comment vào các bài cũ còn sống để đẩy chúng lên.
    một link bài viết, link trùng tự bỏ).
 2. **⚙️ Cài đặt comment** → nhập **thư viện câu** cho từng loại. Không có câu
    thì phiên tự bỏ qua.
-3. Bảng **Tài khoản** → tick cột **Comment**, đặt **Chu kỳ CM (p)**.
+3. Bảng **Tài khoản** → đặt cột **Loại đăng** thành `C_*` hoặc `X_*` (xem bảng dưới).
 4. **Gen lịch** lại. Slot bị chuyển hiện badge 💬 Comment.
 
 ### Hai cách cho acc đi comment
 | Cột **Loại đăng** | Acc làm gì |
 |---|---|
 | **C_Home** / **C_Thuê** / **C_Bán** | **Chỉ comment, không đăng bài.** Vào đúng lịch của mảng đó, mọi slot đều là phiên comment. Dùng cho acc bị dỡ bài. |
-| Homestay / Thuê / Bán + tick cột **Comment** | Vừa đăng vừa comment: cứ mỗi *Chu kỳ CM* thì một slot đăng biến thành phiên comment. |
+| **X_Home** / **X_Thuê** / **X_Bán** | **Vừa đăng vừa comment** theo tỉ lệ đặt ở *⚙️ Cài đặt comment* (mặc định 75% đăng / 25% comment). Ưu tiên comment vào bài của chính Page mình. |
+| Homestay / Thuê / Bán | Chỉ đăng bài, không comment. |
 
-Song song với cơ chế nuôi nick (Loại đăng trống + tick Nuôi = chỉ nuôi). Acc đã
-là `C_*` thì cột Comment bị bỏ qua — mọi slot vốn đã là comment.
+Song song với cơ chế nuôi nick (Loại đăng trống + tick Nuôi = chỉ nuôi).
+
+> Chỉ có **ba** cách dùng một acc: đăng, chỉ comment, đăng + comment — và cả ba
+> đều nằm gọn trong cột *Loại đăng*. Bản đầu còn thêm cột tick **Comment** + cột
+> **Chu kỳ CM**; hai cột đó **đã bị xoá** vì cùng một acc có hai nguồn sự thật
+> mâu thuẫn nhau. Tài liệu hay ảnh chụp cũ nhắc tới chúng thì bỏ qua.
 
 **Acc `C_*` tick thêm Nuôi thì vẫn được nuôi bình thường**: cứ mỗi *Chu kỳ (p)*
 lại hy sinh một phiên comment để đi nuôi, y như acc đăng bài hy sinh một slot
@@ -225,13 +230,12 @@ Bài cũ bị xoá hoặc đổi phạm vi hiển thị là chuyện bình thư�
 Hệ thống nhận ra và đánh dấu riêng — **không** gộp vào lỗi thường, vì link chết
 thì xoá khỏi danh sách, còn selector hỏng thì phải sửa code.
 
-- Gặp trong lúc chạy → trạng thái ghi `💀 Link chết (HH:MM)`, log in ra đầy đủ
-  URL, và tab **Bài đi Comment** hiện dải đỏ kèm nút **💀 Xoá n link chết**.
-- Chủ động dọn → nút **🔎 Quét link chết**: mở lần lượt từng link để kiểm tra,
-  **không comment gì** nên không tốn lượt comment của acc.
+Phát hiện lúc đang comment thì **xoá khỏi danh sách ngay**, log in ra đầy đủ URL.
+Không có nút quét riêng: phiên comment vốn đã phải mở từng link, quét thêm một
+lượt nữa chỉ là làm lại đúng việc đó bằng lượt truy cập thừa.
 
-> Lỗi mạng/timeout khi quét **không** bị coi là link chết. Đánh dấu nhầm rồi xoá
-> là mất link tốt, không lấy lại được.
+> Lỗi mạng/timeout **không** bị coi là link chết. Đánh dấu nhầm rồi xoá là mất
+> link tốt, không lấy lại được.
 
 Xác minh sau khi gửi: gõ xong không lỗi **không** có nghĩa comment đã lên. Code
 kiểm ô nhập có được xoá trắng không (Facebook xoá trắng khi gửi thành công);
@@ -242,6 +246,23 @@ Chạy tay để thử một phiên (hiện cửa sổ Chrome):
 ```
 python comment_bai.py "Tên acc" homestay
 ```
+
+### Thư viện câu — [comment_mau.txt](comment_mau.txt)
+Trong **⚙️ Cài đặt comment** có hai nút:
+
+- **➕ Thêm câu mẫu** — thêm câu còn thiếu vào cả 3 loại, giữ nguyên câu bạn tự
+  viết. So khớp không phân biệt hoa thường nên bấm nhiều lần không sinh bản sao.
+- **📥 Nạp lại từ đầu** — xoá sạch rồi thay bằng bộ mẫu 30 câu/loại. Có hỏi lại.
+
+Cả hai chỉ đổi nội dung ô nhập, **phải bấm 💾 Lưu** mới ghi xuống DB.
+
+Câu mẫu đi theo repo nên máy vệ tinh chỉ cần bấm nút thay vì gõ tay từng câu, và
+mọi máy nạp ra cùng một bộ. Muốn sửa thì sửa `comment_mau.txt` rồi commit.
+
+**Ba loại phải khác nhau.** Bộ 20 câu đời đầu dùng chung một danh sách cho cả ba
+— cùng một chuỗi ký tự xuất hiện ở bài homestay, bài thuê lẫn bài bán, trong cùng
+cụm nhóm, từ cùng một hệ thống Page. Đó đúng là kiểu trùng lặp dễ bị quét nhất.
+Test kiểm điều này, ba bộ giao nhau bằng 0.
 
 ## Biến thể ảnh
 Bật ở tab **Content → 🎲 Biến thể ảnh**. Mỗi lượt đăng sinh một bản sao trong
@@ -351,5 +372,5 @@ chạy lại phép đo đó trước.**
 
 ## Test
 ```
-python test_basic.py   # 368 assertion, chạy trên DB tạm — không đụng data thật
+python test_basic.py   # 381 assertion, chạy trên DB tạm — không đụng data thật
 ```
