@@ -22,8 +22,36 @@ Xong thì chạy `RUN_APP.bat`.
 | `RESTART.bat` | Tắt hết rồi mở lại cửa sổ (dùng sau khi sửa code Python). |
 | `INSTALL_AUTOSTART.bat` | Đăng ký tự chạy nền khi mở máy. |
 | `UNINSTALL_AUTOSTART.bat` | Gỡ tự chạy. |
+| `UPDATE.bat` | Cập nhật máy vệ tinh lên bản mới nhất. Dữ liệu giữ nguyên. |
 
 Bảng điều khiển: `http://localhost:8080`
+
+### Cập nhật máy vệ tinh
+Bấm **`UPDATE.bat`**: tắt app → `git reset --hard origin/main` → cài thư viện nếu
+đổi → mở lại app (schema tự nâng cấp). `data/` `cookies/` `profiles/` nằm ngoài
+git nên không bị đụng.
+
+> `git reset --hard` **xoá mọi sửa đổi cục bộ** của file đã theo dõi. Cố ý, để
+> pull không bao giờ kẹt. Máy nào bạn từng sửa tay file `.py` / `.bat` thì thay
+> đổi đó mất — dữ liệu thì an toàn tuyệt đối.
+
+**Thiếu git thì tự cài** — [`_TIM_GIT.bat`](_TIM_GIT.bat) lo việc này, `UPDATE.bat`
+và `SETUP.bat` đều gọi nó. Báo "thiếu GIT" thường **không** phải vì chưa cài, nên
+nó thử theo thứ tự:
+
+1. `git` đã dùng được chưa
+2. **Nạp lại PATH từ registry** — git đã cài nhưng cửa sổ cmd mở *trước* lúc cài
+3. **Dò thẳng thư mục cài** — git cài kiểu per-user (`%LOCALAPPDATA%`) không ghi
+   vào PATH máy; hoặc người dùng lỡ dọn PATH
+4. Chưa có thật → cài: **winget**, nếu máy không có winget thì **tải bộ cài chính
+   thức** từ `github.com/git-for-windows` (đúng nguồn winget lấy về) và chạy im lặng
+
+Bước 4b là thứ bản cũ thiếu: hết winget là bó tay, nên máy Win10 đời cũ chưa có
+App Installer **không bao giờ update được**.
+
+> `_TIM_GIT.bat` **không được đặt `setlocal`** — nó sửa `PATH` cho chính file gọi
+> nó dùng (giống `_TIM_PYTHON.bat` đặt biến `PYW`). Có `setlocal` thì PATH vừa sửa
+> mất ngay khi thoát và file gọi vẫn báo thiếu git y nguyên.
 
 > **Chỉ chạy tại máy.** Server lắng nghe `127.0.0.1` nên không máy nào khác —
 > kể cả trong cùng mạng LAN — chạm được cổng 8080. Vì vậy cũng không cần mật

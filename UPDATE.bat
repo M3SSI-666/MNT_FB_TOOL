@@ -33,33 +33,27 @@ if not exist ".git" (
     exit /b 1
 )
 
-:: --- [1] Kiem tra git, tu cai qua winget neu thieu ---
+:: --- [1] Kiem tra git, tu cai neu thieu ---
+:: Toan bo viec tim va cai git nam trong _TIM_GIT.bat (xem giai thich trong do).
+:: Ban cu chi thu moi "git --version" roi doi hoi winget, thieu winget la bo
+:: cuoc — nen may khong co winget khong bao gio update duoc.
+echo [1/5] Kiem tra git...
+call "%~dp0_TIM_GIT.bat"
+if errorlevel 1 (
+    pause
+    exit /b 1
+)
+:: Tu kiem lai chu khong tin moi ma tra ve: neu vi ly do nao do git van chua
+:: goi duoc thi bao ngay o day, con hon de buoc [3] chet giua chung sau khi
+:: app da bi tat.
 git --version >nul 2>&1
 if errorlevel 1 (
-    echo [1/5] Chua co git - dang thu tu cai qua winget...
-    where winget >nul 2>&1
-    if errorlevel 1 (
-        echo [LOI] May khong co winget de tu cai git.
-        echo       Tai git thu cong tai: https://git-scm.com/download/win
-        echo       Cai xong, mo lai UPDATE.bat.
-        pause
-        exit /b 1
-    )
-    winget install --id Git.Git -e --accept-package-agreements --accept-source-agreements --silent
-    :: winget cai xong nhung PATH cua cua so nay chua co git -> nap PATH may lai
-    for /f "usebackq tokens=2,*" %%A in (`reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul`) do set "SYSPATH=%%B"
-    set "PATH=%SYSPATH%;%PATH%;C:\Program Files\Git\cmd"
-    git --version >nul 2>&1
-    if errorlevel 1 (
-        echo [LOI] Da cai git nhung cua so nay chua nhan.
-        echo       Dong UPDATE.bat roi mo lai la duoc.
-        pause
-        exit /b 1
-    )
-    echo [OK] Da cai git.
-) else (
-    echo [1/5] git da co san.
+    echo [LOI] Van chua dung duoc lenh git.
+    echo       Dong cua so nay roi bam lai UPDATE.bat.
+    pause
+    exit /b 1
 )
+echo [OK] git san sang.
 echo.
 
 :: --- [2] Tat app dang chay (giong RESTART.bat) ---

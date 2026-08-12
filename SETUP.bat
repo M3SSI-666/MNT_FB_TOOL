@@ -30,31 +30,61 @@ if "%REPO_URL%"=="https://github.com/TAI-KHOAN/MNT_FB_TOOL.git" (
 )
 
 :: --- [1] Kiem tra / cai git ---
+:: Viec tim va cai git nam trong _TIM_GIT.bat. Nhung SETUP.bat chay DOC LAP
+:: (truoc khi co repo) nen thuong khong co file do nam canh — luc ay tai tam
+:: no ve %TEMP% roi goi. Tai ve con hon chep tay logic sang day: hai ban se
+:: lech nhau, va ban o SETUP la ban khong ai test.
+echo [1/3] Kiem tra git...
+
+:: May da co git roi thi DUNG LAI o day. Thieu buoc nay thi khi tai
+:: _TIM_GIT.bat that bai (mang chap chon), script nhay thang sang winget va
+:: di cai de len ban git dang chay ngon lanh.
+git --version >nul 2>&1
+if not errorlevel 1 goto GIT_XONG
+
+:: Chua co git -> muon dung _TIM_GIT.bat. Khong co san canh minh thi tai tam
+:: ve %TEMP%. Tai ve con hon chep tay logic sang day: hai ban se lech nhau, va
+:: ban o SETUP la ban khong ai test.
+set "TIMGIT=%~dp0_TIM_GIT.bat"
+if exist "!TIMGIT!" goto GOI_TIMGIT
+
+set "REPO_PATH=%REPO_URL:https://github.com/=%"
+set "REPO_PATH=!REPO_PATH:.git=!"
+set "RAW=https://raw.githubusercontent.com/!REPO_PATH!/main/_TIM_GIT.bat"
+set "TIMGIT=%TEMP%\_TIM_GIT.bat"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; try { [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest '!RAW!' -OutFile '!TIMGIT!' -UseBasicParsing } catch { exit 1 }"
+if not exist "!TIMGIT!" goto CAI_WINGET
+
+:GOI_TIMGIT
+call "!TIMGIT!"
+if errorlevel 1 (
+    pause
+    exit /b 1
+)
+goto GIT_XONG
+
+:CAI_WINGET
+:: Khong tai duoc file phu -> thu not cach co san tren may
+where winget >nul 2>&1
+if errorlevel 1 (
+    echo [LOI] May chua co git, va khong tai duoc bo cai tu dong.
+    echo       Tai git thu cong tai: https://git-scm.com/download/win
+    echo       Cai xong DONG cua so nay roi mo lai SETUP.bat.
+    pause
+    exit /b 1
+)
+winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements --silent
+for /f "usebackq tokens=2,*" %%A in (`reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul`) do set "SYSPATH=%%B"
+set "PATH=!SYSPATH!;%PATH%;%ProgramFiles%\Git\cmd"
+
+:GIT_XONG
 git --version >nul 2>&1
 if errorlevel 1 (
-    echo [1/3] Chua co git - dang thu cai qua winget...
-    where winget >nul 2>&1
-    if errorlevel 1 (
-        echo [LOI] May khong co winget. Tai git thu cong tai:
-        echo       https://git-scm.com/download/win
-        echo       Cai xong roi mo lai SETUP.bat.
-        pause
-        exit /b 1
-    )
-    winget install --id Git.Git -e --accept-package-agreements --accept-source-agreements --silent
-    for /f "usebackq tokens=2,*" %%A in (`reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul`) do set "SYSPATH=%%B"
-    set "PATH=%SYSPATH%;%PATH%;C:\Program Files\Git\cmd"
-    git --version >nul 2>&1
-    if errorlevel 1 (
-        echo [Chu y] Da cai git nhung cua so nay chua nhan.
-        echo         Dong SETUP.bat roi mo lai la duoc.
-        pause
-        exit /b 1
-    )
-    echo [OK] Da cai git.
-) else (
-    echo [1/3] git da co san.
+    echo [LOI] Van chua dung duoc git. Dong cua so nay roi mo lai SETUP.bat.
+    pause
+    exit /b 1
 )
+echo [OK] git san sang.
 echo.
 
 :: --- [2] Tai code ve (git clone) ---
