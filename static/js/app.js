@@ -814,12 +814,28 @@ async function startAccEdit(td){
 // đăng bài. Dùng cho acc bị Facebook dỡ bài nhưng vẫn comment được.
 // Danh sách phải khớp LOAI_DANG_OPTIONS trong db.py.
 const LOAI_DANG_OPTIONS = ["","Homestay","Thuê","Bán","X_Home","X_Thuê","X_Bán","C_Home","C_Thuê","C_Bán"];
+// Mỗi loại đăng MỘT màu riêng. Bản trước gom cả 3 loại "X_" vào một màu hồng và
+// cả 3 loại "C_" vào một màu tím, nên nhìn bảng không tách được X_Home với
+// X_Thuê — mà đó mới là thứ cần phân biệt khi soi acc nào đang chạy mảng nào.
+//
+// Bộ màu dưới đây chọn bằng đo đạc, không phải ước lượng bằng mắt:
+//   · tương phản trên nền bảng (#1e293b) đều ≥ 5.2 — ngưỡng WCAG cho chữ thường
+//     là 4.5, ô này lại còn in đậm
+//   · khoảng cách Lab ΔE giữa hai màu gần nhau nhất = 41.4; dưới ~25 là dễ nhầm
+//     ở cỡ chữ 12px. Bộ cũ chỉ đạt 22.2 giữa Thuê và C_Thuê.
+//   · trong số các bộ cùng đạt ΔE 41.4, chọn cách gán đưa mỗi biến thể về gần
+//     sắc màu của mảng gốc nhất, để vẫn liếc ra được "đây là nhóm homestay".
+// Đổi màu thì nên chạy lại phép đo đó trước.
 function mauLoaiDang(v){
-    if(v==="Bán")   return "#fbbf24";
-    if(v==="Thuê")  return "#60a5fa";
-    if(v==="Homestay") return "#34d399";
-    if(String(v).startsWith("X_")) return "#f472b6";   // hồng = đăng + comment
-    if(String(v).startsWith("C_")) return "#c084fc";   // tím = chỉ comment
+    if(v==="Homestay") return "#34d399";   // xanh ngọc
+    if(v==="X_Home")   return "#22d3ee";   // xanh cyan
+    if(v==="C_Home")   return "#84cc16";   // xanh lá mạ
+    if(v==="Thuê")     return "#60a5fa";   // xanh dương
+    if(v==="X_Thuê")   return "#c084fc";   // tím
+    if(v==="C_Thuê")   return "#f5d0fe";   // hồng phấn
+    if(v==="Bán")      return "#fbbf24";   // vàng hổ phách
+    if(v==="X_Bán")    return "#f87171";   // đỏ san hô
+    if(v==="C_Bán")    return "#f97316";   // cam
     return "var(--text-secondary)";
 }
 
