@@ -1,106 +1,109 @@
-# Thư viện câu comment mẫu, tách theo loại đăng.
-# Mỗi dòng 1 câu. Dòng bắt đầu bằng # là ghi chú, sẽ bị bỏ qua.
-# Dòng [tên] mở một loại mới — phải khớp homestay / thue / ban.
+# Thu vien cau comment mau, tach theo loai dang.
+# Moi dong 1 cau. Dong bat dau bang # la ghi chu, se bi bo qua.
+# Dong [ten] mo mot loai moi - phai khop homestay / thue / ban.
 #
-# Đây là câu Page tự comment vào BÀI CỦA CHÍNH MÌNH để đẩy bài lên đầu nhóm,
-# nên viết bằng giọng người bán, không phải giọng khách đi hỏi.
+# Day la cau Page tu comment vao BAI CUA CHINH MINH de day bai len dau nhom,
+# nen viet bang giong nguoi ban, khong phai giong khach di hoi.
 #
-# QUAN TRỌNG: ba loại phải khác nhau. Dùng chung một bộ câu cho cả ba là kiểu
-# trùng lặp dễ bị quét nhất — cùng một chuỗi ký tự xuất hiện ở bài homestay,
-# bài thuê lẫn bài bán, trong cùng một cụm nhóm, từ cùng một hệ thống Page.
+# NGAN THOI. Comment dai doc nhu quang cao, ma muc dich chi la day bai len.
+# Giu quanh 3-4 tu, dung qua 6 tu.
+#
+# QUAN TRONG: ba loai phai khac nhau. Dung chung mot bo cau cho ca ba la kieu
+# trung lap de bi quet nhat - cung mot chuoi ky tu xuat hien o bai homestay,
+# bai thue lan bai ban, trong cung mot cum nhom, tu cung mot he thong Page.
 
 [homestay]
-Còn phòng cho cuối tuần này cả nhà ơi
-Nhà em còn trống vài ngày trong tháng ạ
-Phòng sạch sẽ, đầy đủ tiện nghi nha cả nhà
-Ai cần đặt phòng ib em nhé
-Em còn phòng đôi và phòng gia đình ạ
-Đặt sớm giúp em để giữ phòng nha
-Nhận khách theo ngày và theo tuần ạ
-Có bếp, máy giặt đầy đủ nhé cả nhà
-Vị trí đi lại tiện lắm ạ, ib em xem ảnh
-Em gửi ảnh phòng thật qua zalo nha
-Ở dài ngày em giảm giá nhé ạ
-Phòng còn trống, cả nhà nhắn em nha
-Em có hỗ trợ nhận phòng sớm ạ
-Chỗ để xe rộng rãi nhé cả nhà
-Ai đi nhóm đông ib em tư vấn ạ
-Em còn vài phòng view thoáng nha
-Giá đã gồm dọn dẹp rồi ạ
-Cả nhà cần xem phòng em dẫn đi nhé
-Nhắn zalo em gửi bảng giá chi tiết ạ
-Em rep tin nhắn nhanh nha cả nhà
-Nhà em nhận khách quanh năm ạ
-Còn trống dịp lễ nhé, ai cần ib sớm
-Em hỗ trợ đặt phòng cả ngày ạ
-Phòng thoáng, khu yên tĩnh nha cả nhà
-Ai quan tâm để lại tin nhắn em ạ
-Em gửi vị trí cụ thể qua ib nhé
-Nhận cả khách lẻ và khách đoàn ạ
-Cả nhà ib em để em giữ phòng nha
-Có phòng giá tốt cho khách ở lâu ạ
-Liên hệ em sớm để chọn được phòng đẹp nhé
+Còn phòng nhé
+Ib em đặt phòng
+Phòng còn trống ạ
+Ai cần phòng ib em
+Nhắn em giữ phòng
+Còn trống cuối tuần
+Phòng sạch đẹp ạ
+Em gửi ảnh phòng nhé
+Đặt sớm giúp em
+Còn phòng đôi ạ
+Có phòng gia đình nhé
+Ib xem phòng nha
+Ở lâu giảm giá ạ
+Nhận khách theo ngày
+Phòng đầy đủ đồ nhé
+Em còn vài phòng
+Zalo em đặt phòng
+Chỗ để xe rộng ạ
+Có bếp nấu nhé
+Nhận khách đoàn ạ
+Em giữ phòng cho nhé
+Phòng yên tĩnh ạ
+Ai đi nhóm ib em
+Còn phòng dịp lễ nhé
+Em gửi giá phòng ạ
+Ở ngắn ngày cũng được
+Nhận phòng sớm được ạ
+Phòng thoáng lắm nhé
+Ai cần chỗ ở ib em
+Em rep nhanh nhé
 
 [thue]
-Căn này còn trống nha cả nhà
-Ai cần thuê ib em nhé
-Em còn nhiều căn khác cùng khu ạ
-Nhà đầy đủ nội thất nhé cả nhà
-Em gửi ảnh thật qua zalo nha
-Giá thuê thương lượng được ạ
-Ai cần xem nhà em dẫn đi nhé
-Còn căn hai phòng ngủ nha cả nhà
-Em hỗ trợ làm hợp đồng đầy đủ ạ
-Nhận cọc giữ căn nhé cả nhà
-Khu này an ninh tốt lắm ạ
-Em có căn giá mềm hơn nữa nha
-Ib em gửi bảng giá chi tiết ạ
-Vào ở ngay được luôn nhé cả nhà
-Ai thuê lâu dài em ưu tiên giá ạ
-Em còn căn tầng cao thoáng mát nha
-Chỗ để xe miễn phí nhé ạ
-Cả nhà cần thuê nhắn em nha
-Em phản hồi tin nhắn nhanh ạ
-Nhà mới sửa, sạch sẽ nhé cả nhà
-Có căn cho thuê nguyên căn luôn ạ
-Ai quan tâm để lại số em gọi lại nhé
-Em tư vấn miễn phí nha cả nhà
-Còn vài căn trống trong tháng này ạ
-Gần chợ, gần trường tiện lắm nhé
-Em gửi vị trí qua ib cho tiện ạ
-Nhận khách thuê cả gia đình nha
-Cả nhà ib em để em giữ căn nhé
-Em có nhiều mức giá để chọn ạ
-Liên hệ sớm giúp em nha cả nhà
+Còn căn nhé
+Ai thuê ib em
+Căn còn trống ạ
+Em gửi ảnh căn nhé
+Giá thuê tốt ạ
+Ib xem nhà nha
+Có nội thất nhé
+Còn căn hai phòng ạ
+Vào ở ngay nhé
+Em dẫn đi xem ạ
+Thuê lâu giá mềm nhé
+Nhận cọc giữ căn ạ
+Còn nhiều căn nhé
+Ai cần thuê nhắn em
+Hợp đồng đầy đủ ạ
+Khu an ninh nhé
+Zalo em xem nhà
+Nhà mới sửa ạ
+Để xe miễn phí nhé
+Em gửi giá thuê ạ
+Có căn nguyên căn nhé
+Gần chợ gần trường ạ
+Còn căn tầng cao nhé
+Em tư vấn miễn phí
+Thuê cả nhà được ạ
+Giá thương lượng nhé
+Ai quan tâm nhắn em
+Em gửi vị trí ạ
+Còn vài căn nhé
+Em trả lời nhanh ạ
 
 [ban]
-Căn này vẫn còn nha cả nhà
-Ai quan tâm ib em nhé
-Sổ hồng đầy đủ nha cả nhà
-Em gửi ảnh thật qua zalo ạ
-Giá còn thương lượng được nhé
-Ai cần xem nhà em dẫn đi ạ
-Em còn nhiều căn khác cùng khu nha
-Pháp lý rõ ràng nhé cả nhà
-Có hỗ trợ vay ngân hàng ạ
-Ib em gửi thông tin chi tiết nha
-Nhà chính chủ nhé cả nhà
-Em có căn tầm giá tốt hơn nữa ạ
-Vị trí đẹp, tiện kinh doanh nha
-Ai thiện chí em để giá tốt ạ
-Em cho xem sổ trực tiếp luôn nhé
-Còn đúng một căn này thôi ạ
-Cả nhà cần mua nhắn em nha
-Em nhắn lại ngay khi thấy tin ạ
-Nhà mới, vào ở ngay được nhé
-Có hỗ trợ sang tên nhanh ạ
-Em tư vấn pháp lý miễn phí nha cả nhà
-Khu dân cư đông đúc nhé ạ
-Ai quan tâm để lại số em gọi lại nha
-Em gửi vị trí cụ thể qua ib ạ
-Cả nhà ib em xem thực tế nha
-Nhận cọc là làm thủ tục luôn ạ
-Đầu tư hay để ở đều hợp nhé cả nhà
-Em có nhiều tầm giá để chọn ạ
-Xem nhà bất kể giờ nào cũng được ạ
-Liên hệ em sớm nha cả nhà
+Còn hàng nhé
+Ai mua ib em
+Sổ hồng sẵn ạ
+Em gửi ảnh nhà nhé
+Giá tốt lắm ạ
+Ib xem thực tế nha
+Pháp lý rõ nhé
+Nhà chính chủ ạ
+Hỗ trợ vay nhé
+Em cho xem sổ ạ
+Còn duy nhất căn này
+Ai cần mua nhắn em
+Sang tên nhanh ạ
+Vị trí đẹp nhé
+Zalo em nhé
+Nhà mới bàn giao ạ
+Bán nhanh trong tuần
+Em gửi giá nhé
+Đầu tư tốt ạ
+Còn nhiều căn khác nhé
+Thiện chí em giảm ạ
+Nhận cọc là xong nhé
+Khu đông dân ạ
+Em gửi sổ xem nhé
+Ai quan tâm để lại số
+Xem nhà giờ nào cũng được
+Tiện kinh doanh nhé
+Em tư vấn pháp lý
+Nhiều tầm giá ạ
+Em phản hồi nhanh nhé
