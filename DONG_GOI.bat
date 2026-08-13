@@ -126,5 +126,9 @@ echo    1. Giai nen ra 1 thu muc.
 echo    2. Cai Python 3.11+ ^(tick "Add Python to PATH"^).
 echo    3. Chay INSTALL.bat  -^> RUN_APP.bat
 echo    4. Nhap lai tai khoan / cookie o bang dieu khien.
+echo.
+echo  Muon cap nhat len ban moi nhat: bam UPDATE.bat.
+echo  Lan dau UPDATE.bat se tu gan git ^(tai va cai neu may chua co^)
+echo  roi keo code moi ve. Du lieu da nhap ^(tai khoan/cookie/lich^) giu nguyen.
 echo ============================================================
 pause

@@ -21,16 +21,59 @@ echo  MNT FB AutoPost - Cap nhat phien ban moi nhat
 echo ============================================================
 echo.
 
-:: --- [0] Phai la thu muc git (da SETUP bang git clone) ---
+:: Link repo GitHub - phai KHOP voi SETUP.bat (dong "set REPO_URL=...").
+:: Doi repo thi sua ca hai noi. URL gan nhu co dinh nen chap nhan trung.
+set "REPO_URL=https://github.com/M3SSI-666/MNT_FB_TOOL.git"
+
+:: --- [0] Neu chua phai thu muc git thi TU GAN GIT vao tai cho ---
+:: Ban giai nen tu ZIP khong co .git -> truoc day UPDATE.bat bao loi va dung.
+:: Gio: neu thieu .git thi khoi tao repo ngay tai thu muc nay (KHONG xoa file),
+:: keo code moi nhat tu GitHub ve. Du lieu ca nhan (data\ cookies\ profiles\...)
+:: nam trong .gitignore nen reset --hard KHONG dong toi -> an toan.
 if not exist ".git" (
-    echo [LOI] Thu muc nay chua duoc cai bang git.
-    echo       Ban dang chay tu ban giai nen ZIP cu.
+    echo [0/5] Chua phai thu muc git - dang gan git va lay code moi...
+
+    :: Phai co git truoc da. _TIM_GIT.bat co san trong goi ZIP.
+    call "%~dp0_TIM_GIT.bat"
+    if errorlevel 1 (
+        pause
+        exit /b 1
+    )
+    git --version >nul 2>&1
+    if errorlevel 1 (
+        echo [LOI] Van chua dung duoc git. Dong cua so nay roi bam lai UPDATE.bat.
+        pause
+        exit /b 1
+    )
+
+    :: Khoi tao repo tai cho. git init KHONG xoa file dang co - chi tao .git\.
+    git init >nul 2>&1
+    git remote add origin "%REPO_URL%" >nul 2>&1
+    :: Neu remote da ton tai (lan truoc chay do giua chung) thi cap nhat lai URL.
+    git remote set-url origin "%REPO_URL%" >nul 2>&1
+
+    echo       Dang tai code moi nhat tu GitHub...
+    git fetch origin >nul 2>&1
+    if errorlevel 1 (
+        echo [LOI] Khong tai duoc code tu GitHub. Kiem tra ket noi mang roi thu lai.
+        pause
+        exit /b 1
+    )
+    :: reset --hard: ghi de file CODE bang ban GitHub. File bi .gitignore
+    :: (data\ cookies\ profiles\ backup\ logs\) KHONG bi dong toi.
+    git reset --hard origin/main
+    if errorlevel 1 (
+        echo [LOI] Khong dat duoc code ve ban GitHub. Chup man hinh nay va lien he ho tro.
+        pause
+        exit /b 1
+    )
+    :: QUAN TRONG: git init tao nhanh mac dinh ten "master", nhung repo tren
+    :: GitHub dung "main". Neu de nguyen, lan UPDATE sau buoc [3] doc ten nhanh
+    :: ra "master" roi "git reset --hard origin/master" -> LOI unknown revision.
+    :: Tao han nhanh "main" bam vao origin/main de cac lan sau chay tron.
+    git checkout -B main --track origin/main >nul 2>&1
+    echo [OK] Da gan git xong. Tiep tuc cap nhat binh thuong.
     echo.
-    echo   Cach xu ly: chay SETUP.bat mot lan de cai lai bang git,
-    echo   HOAC lien he nguoi cung cap phan mem de duoc huong dan.
-    echo.
-    pause
-    exit /b 1
 )
 
 :: --- [1] Kiem tra git, tu cai neu thieu ---
