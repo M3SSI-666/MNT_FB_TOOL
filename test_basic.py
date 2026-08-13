@@ -1172,6 +1172,92 @@ check("bật lại -> xoá mốc nghỉ",        _r["nghi_den"] == "")
 check("bật lại -> xoá cảnh báo",        _r["canh_bao_moi"] == "")
 db.delete_account(_aid)
 
+# ── Nhận biết acc bị gỡ bài vì spam ────────────────────────────────────────
+# Mẫu dựng theo đúng dialog "Sự việc" người dùng chụp được: tiêu đề + 5 dòng
+# "Spam / Đã gỡ bài viết / <ngày>" + nút "Xem tất cả (12)".
+_DLG_SPAM = ("Sự việc 13 tháng 8, 2026 Chúng tôi đã gỡ một số nội dung hoặc tin nhắn "
+             + "Spam Đã gỡ bài viết 13 tháng 8, 2026 " * 5
+             + "Xem tất cả (12)")
+
+check("đọc được số vụ từ 'Xem tất cả'", _sk.doc_vi_pham(_DLG_SPAM) == {"so": 12, "spam": True})
+check("nhận ra là do spam",             _sk.doc_vi_pham(_DLG_SPAM)["spam"] is True)
+# Không có "Xem tất cả" thì đếm số dòng.
+check("thiếu 'Xem tất cả' -> đếm dòng",
+      _sk.doc_vi_pham("Spam Đã gỡ bài viết hôm nay Spam Đã gỡ bài viết hôm nay")["so"] == 2)
+# Facebook diễn đạt hai kiểu. Đọc 9 chuỗi cảnh báo THẬT trong log thấy 4 chuỗi
+# ghi "Đã gỡ bài viết" còn 5 chuỗi ghi "Ảnh đã bị gỡ" — bắt thiếu một vế là bỏ
+# sót quá nửa số ca. Phần mềm này đăng bài kèm ảnh nên hai thứ là một.
+check("bắt cả 'Ảnh đã bị gỡ'", (_sk.doc_vi_pham(
+    "Sự việc 11 tháng 8, 2026 Chúng tôi đã gỡ một số nội dung hoặc tin nhắn "
+    "Spam Ảnh đã bị gỡ 11 tháng 8, 2026") or {}).get("spam") is True)
+# Dialog gỡ TIN NHẮN không được coi là gỡ bài — nó không phải lý do dừng đăng.
+check("gỡ tin nhắn -> bỏ qua",
+      _sk.doc_vi_pham("Sự việc Chúng tôi đã gỡ một số tin nhắn của bạn") is None)
+check("chuỗi rỗng -> bỏ qua",           _sk.doc_vi_pham("") is None)
+check("dialog thường -> bỏ qua",        _sk.doc_vi_pham("Đoạn chat Tất cả Chưa đọc") is None)
+
+# Lần đo ĐẦU chỉ ghi mốc. Thiếu luật này thì ngay phiên đầu sau khi bật tính
+# năng, mọi acc có sẵn vi phạm cũ đều bị đánh spam cùng lúc.
+check("lần đo đầu KHÔNG gắn cờ",        _sk.co_vu_moi(-1, 12) is False)
+check("số vụ tăng -> có vụ mới",        _sk.co_vu_moi(12, 13) is True)
+check("số vụ đứng yên -> không",        _sk.co_vu_moi(12, 12) is False)
+check("số vụ giảm -> không",            _sk.co_vu_moi(12, 9) is False)
+
+# ── Spam: tầng DB ──────────────────────────────────────────────────────────
+_sid = db.upsert_account({"ten_acc": "SPAM Test", "trang_thai": "Active",
+                          "loai_dang": "Homestay", "ten_page": "P"})
+from datetime import datetime as _dt
+_gio_sau = f"{min(23, _dt.now().hour + 1):02d}:00"
+_gio_truoc = "00:01"
+with db._conn() as _c:
+    for _hd, _g in (("dang_bai", _gio_sau), ("dang_bai", _gio_truoc),
+                    ("comment", _gio_sau), ("nuoi_nick", _gio_sau)):
+        _c.execute("INSERT INTO schedules (loai,stt,ma_content,ten_acc,gio_dang,"
+                   "trang_thai,hoat_dong) VALUES ('homestay',900,'X',?,?,'Chờ',?)",
+                   ("SPAM Test", _g, _hd))
+
+_moi1, _cu1 = db.ghi_nhan_vi_pham("SPAM Test", 12, True)
+check("lần đo đầu chỉ ghi mốc",         _moi1 is False and _cu1 == -1)
+_moi2, _cu2 = db.ghi_nhan_vi_pham("SPAM Test", 12, True)
+check("đo lại cùng số -> không dính",   _moi2 is False and _cu2 == 12)
+_moi3, _cu3 = db.ghi_nhan_vi_pham("SPAM Test", 15, True)
+check("số vụ tăng -> vừa dính spam",    _moi3 is True and _cu3 == 12)
+
+_n_slot = db.danh_dau_spam("SPAM Test", "3 bài mới bị gỡ")
+check("chuyển trạng thái sang Spam",
+      db.get_accounts()[0] is not None and any(
+          a["ten_acc"] == "SPAM Test" and a["trang_thai"] == db.TRANG_THAI_SPAM
+          for a in db.get_accounts()))
+check("dừng slot đăng bài còn lại",     _n_slot == 1)
+with db._conn() as _c:
+    _rows = {(r["hoat_dong"], r["gio_dang"]): r["trang_thai"] for r in _c.execute(
+        "SELECT hoat_dong,gio_dang,trang_thai FROM schedules WHERE ten_acc='SPAM Test'")}
+check("slot đăng sắp tới -> Nghỉ Spam", _rows[("dang_bai", _gio_sau)] == db.TT_LICH_NGHI_SPAM)
+check("slot đăng đã qua giờ -> để yên", _rows[("dang_bai", _gio_truoc)] == "Chờ")
+# Acc dính spam VẪN comment được — đó là cả tiền đề của tính năng đi comment.
+check("slot comment KHÔNG bị dừng",     _rows[("comment", _gio_sau)] == "Chờ")
+check("slot nuôi KHÔNG bị dừng",        _rows[("nuoi_nick", _gio_sau)] == "Chờ")
+
+check("spam chặn ĐĂNG BÀI",             db.acc_duoc_chay("SPAM Test", "dang_bai")[0] is False)
+check("spam VẪN cho comment",           db.acc_duoc_chay("SPAM Test", "comment")[0] is True)
+check("spam VẪN cho nuôi nick",         db.acc_duoc_chay("SPAM Test", "nuoi_nick")[0] is True)
+# get_account_by_name lọc cứng 'Active' thì phiên comment/nuôi không lấy được
+# cookie và chết theo — trong khi việc chặn đăng đã do acc_duoc_chay lo rồi.
+check("vẫn tra được acc để lấy cookie", db.get_account_by_name("SPAM Test") is not None)
+check("có sinh cảnh báo mức error",     any(c["ten_acc"] == "SPAM Test" and c["muc"] == "error"
+                                            for c in db.lay_canh_bao()))
+
+db.update_account_field(_sid, "trang_thai", "Active")
+check("bật lại -> đăng bài được",       db.acc_duoc_chay("SPAM Test", "dang_bai")[0] is True)
+with db._conn() as _c:
+    _sv = _c.execute("SELECT so_vi_pham FROM accounts WHERE id=?", (_sid,)).fetchone()[0]
+# Số vụ phải GIỮ: xoá về -1 thì lần dính kế tiếp bị bỏ lỡ vì coi như chưa đo.
+check("bật lại vẫn giữ số vụ đã đo",    _sv == 15)
+with db._conn() as _c:
+    _c.execute("DELETE FROM schedules WHERE ten_acc='SPAM Test'")
+db.delete_account(_sid)
+db.xoa_canh_bao()
+
 # ── Thư viện câu comment mẫu (comment_mau.txt) ─────────────────────────────
 _cm = server.app.test_client().get("/api/comment/cau-mau").get_json()
 check("endpoint câu mẫu chạy",          _cm.get("ok") is True)

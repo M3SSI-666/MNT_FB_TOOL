@@ -49,13 +49,22 @@ TI_LE_COMMENT_MAC_DINH = 25
 # `trang_thai='Active'` — Gen lịch, get_account_by_name — nhờ đó tự động loại
 # acc hỏng mà không phải sửa gì thêm.
 TRANG_THAI_HONG = "Hỏng"
-TRANG_THAI_OPTIONS = ("Active", "Tạm dừng", "Cookie hết hạn", TRANG_THAI_HONG)
+# Acc bị Facebook gỡ bài vì spam. KHÁC "Hỏng": acc spam vẫn comment được — đó
+# là cả tiền đề của tính năng đi comment — nên nó chỉ bị chặn ĐĂNG BÀI.
+TRANG_THAI_SPAM = "Spam"
+TRANG_THAI_OPTIONS = ("Active", "Tạm dừng", "Cookie hết hạn",
+                      TRANG_THAI_HONG, TRANG_THAI_SPAM)
 
 # Trạng thái slot lịch do MÁY tự tắt vì acc nghỉ/chết/cookie hết hạn. Phải KHÁC
 # "X" thủ công: "X" người dùng tự tắt được giữ qua ngày (reset_schedules_to_wait
 # keep=("X",)), còn "X😴" tự động thì KHÔNG nằm trong keep nên đầu ngày mới tự về
 # "Chờ" — acc nghỉ tạm hôm qua sẽ chạy lại hôm nay.
 TT_LICH_X_TU_DONG = "X😴"
+
+# Slot đăng bài bị dừng vì acc dính spam. Tách khỏi "X😴" (nghỉ vì lỗi liên
+# tiếp) để nhìn bảng lịch là phân biệt được hai nguyên nhân. Cũng KHÔNG nằm
+# trong keep của reset_schedules_to_wait nên sáng hôm sau tự về "Chờ".
+TT_LICH_NGHI_SPAM = "Nghỉ Spam"
 
 
 def la_loai_comment(loai_dang: str) -> bool:
@@ -280,6 +289,10 @@ def init_db():
         # Cảnh báo chưa được xem — giao diện đọc rồi xoá. Scheduler chạy ở tiến
         # trình riêng nên không đẩy thẳng toast lên web được, phải qua DB.
         _add_col("accounts", "canh_bao_moi",  "canh_bao_moi TEXT DEFAULT ''")
+        # Số vụ Facebook gỡ bài đo được lần gần nhất. -1 = CHƯA từng đo.
+        # Mặc định phải là -1 chứ không phải 0: để 0 thì ngay phiên đầu sau khi
+        # bật tính năng, mọi acc có sẵn vi phạm cũ đều bị đánh spam cùng lúc.
+        _add_col("accounts", "so_vi_pham",    "so_vi_pham INTEGER DEFAULT -1")
 
         # ── Migration: bỏ khái niệm "ảnh hook" ──────────────────────────
         # Trước đây content có 2 ô ảnh: link_anh_hook (1 ảnh, luôn đăng đầu) và
@@ -353,17 +366,28 @@ def get_account_by_id(acc_id: int) -> dict | None:
 
 
 def get_account_by_name(ten_acc: str, ten_page: str = "") -> dict | None:
+    """
+    Tra acc theo tên. Nhận cả trạng thái 'Spam' chứ không chỉ 'Active'.
+
+    Acc dính spam vẫn phải chạy được phiên comment và phiên nuôi; hàm này là
+    nơi các phiên đó lấy cookie. Lọc cứng 'Active' thì acc vừa bị đánh spam sẽ
+    không tra ra được và cả hai loại phiên chết theo — trong khi việc chặn đăng
+    bài đã do `acc_duoc_chay` lo rồi.
+    """
+    dung = (TRANG_THAI_SPAM, "Active")
     with _conn() as con:
         if ten_page:
             r = con.execute(
-                "SELECT * FROM accounts WHERE ten_acc = ? AND ten_page = ? AND trang_thai = 'Active' LIMIT 1",
-                (ten_acc, ten_page)
+                "SELECT * FROM accounts WHERE ten_acc = ? AND ten_page = ? "
+                "AND trang_thai IN (?,?) ORDER BY trang_thai='Active' DESC LIMIT 1",
+                (ten_acc, ten_page, *dung)
             ).fetchone()
             if r:
                 return dict(r)
         r = con.execute(
-            "SELECT * FROM accounts WHERE ten_acc = ? AND trang_thai = 'Active' LIMIT 1",
-            (ten_acc,)
+            "SELECT * FROM accounts WHERE ten_acc = ? AND trang_thai IN (?,?) "
+            "ORDER BY trang_thai='Active' DESC LIMIT 1",
+            (ten_acc, *dung)
         ).fetchone()
         return dict(r) if r else None
 
@@ -444,8 +468,14 @@ def acc_duoc_chay(ten_acc: str, hoat_dong: str = "dang_bai") -> tuple[bool, str]
                         "WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
     if not r:
         return True, ""
-    if (r["trang_thai"] or "") == TRANG_THAI_HONG:
+    tt = r["trang_thai"] or ""
+    if tt == TRANG_THAI_HONG:
         return False, "acc đã bị tắt do hỏng"
+    # Spam chỉ chặn ĐĂNG BÀI. Acc bị gỡ bài vẫn comment được, và comment đẩy
+    # bài cũ lên đầu nhóm — đó là cả lý do tính năng đi comment tồn tại. Cắt
+    # nốt là tự bỏ đường duy nhất acc đó còn làm được việc.
+    if tt == TRANG_THAI_SPAM and hoat_dong == "dang_bai":
+        return False, "acc đang nghỉ vì dính spam"
     if hoat_dong == "nuoi_nick":
         return True, ""
     den = r["nghi_den"] or ""
@@ -501,14 +531,65 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool) -> tuple[str, str]:
         return hanh_dong, ly_do
 
 
+def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool) -> tuple[bool, int]:
+    """
+    Ghi số vụ Facebook gỡ bài đo được sau một phiên đăng.
+
+    Chỉ khi số vụ TĂNG so với lần đo trước mới coi là vừa dính — xem
+    `suc_khoe_acc.co_vu_moi`. Lần đo đầu tiên chỉ ghi mốc.
+
+    Trả `(vua_dinh, so_cu)`.
+    """
+    import suc_khoe_acc as sk
+    with _conn() as con:
+        r = con.execute("SELECT id, so_vi_pham, trang_thai FROM accounts "
+                        "WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
+        if not r:
+            return False, -1
+        so_cu = r["so_vi_pham"] if r["so_vi_pham"] is not None else -1
+        con.execute("UPDATE accounts SET so_vi_pham=? WHERE id=?", (so_moi, r["id"]))
+        vua_dinh = la_spam and sk.co_vu_moi(so_cu, so_moi)
+    return vua_dinh, so_cu
+
+
+def danh_dau_spam(ten_acc: str, chi_tiet: str = "") -> int:
+    """
+    Chuyển acc sang trạng thái 'Spam' và dừng phần ĐĂNG BÀI còn lại hôm nay.
+
+    Chỉ đụng slot `dang_bai` đang 'Chờ'. Slot comment và slot nuôi giữ nguyên:
+    acc bị gỡ bài vẫn comment được, và nuôi là thứ có cơ gỡ nó ra.
+
+    Trả số slot đã chuyển sang 'Nghỉ Spam'.
+    """
+    gio = datetime.now().strftime("%H:%M")
+    with _conn() as con:
+        r = con.execute("SELECT id FROM accounts WHERE ten_acc=? LIMIT 1",
+                        (ten_acc,)).fetchone()
+        if not r:
+            return 0
+        con.execute(
+            "UPDATE accounts SET trang_thai=?, canh_bao_moi=? WHERE id=?",
+            (TRANG_THAI_SPAM,
+             f"'{ten_acc}' bị Facebook gỡ bài (spam) — đã dừng đăng"
+             + (f": {chi_tiet}" if chi_tiet else ""),
+             r["id"]))
+        return con.execute(
+            "UPDATE schedules SET trang_thai=?, "
+            "updated_at=datetime('now','localtime') "
+            "WHERE ten_acc=? AND trang_thai='Chờ' AND gio_dang > ? "
+            "AND COALESCE(hoat_dong,'dang_bai')='dang_bai'",
+            (TT_LICH_NGHI_SPAM, ten_acc, gio)).rowcount
+
+
 def lay_canh_bao() -> list[dict]:
     """Cảnh báo chưa xem, kèm mức để giao diện chọn màu."""
     with _conn() as con:
         rows = con.execute(
             "SELECT ten_acc, trang_thai, canh_bao_moi FROM accounts "
             "WHERE COALESCE(canh_bao_moi,'') != ''").fetchall()
+    nang = (TRANG_THAI_HONG, TRANG_THAI_SPAM)
     return [{"ten_acc": r["ten_acc"], "noi_dung": r["canh_bao_moi"],
-             "muc": "error" if (r["trang_thai"] or "") == TRANG_THAI_HONG else "info"}
+             "muc": "error" if (r["trang_thai"] or "") in nang else "info"}
             for r in rows]
 
 

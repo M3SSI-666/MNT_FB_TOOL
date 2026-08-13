@@ -23,6 +23,7 @@ Chạy lại đúng 766 phiên đó với ngưỡng dưới đây: tắt 1 acc (
 đã chết), cho nghỉ 2 acc rồi cả hai chạy tiếp bình thường, không đụng tới 7 acc
 khoẻ. Sửa ngưỡng thì nên chạy lại phép đo đó trước.
 """
+import re
 
 # Bao nhiêu lỗi liên tiếp thì cho nghỉ. Acc khoẻ nhất trong cửa sổ đo có chuỗi
 # dài nhất là 2, acc 16% lỗi có chuỗi 10 — nên 5 nằm gọn giữa hai vùng.
@@ -87,6 +88,60 @@ def ti_le_hong(lich_su: str) -> float:
     lich_su = lich_su or ""
     n = _so_phien(lich_su)
     return lich_su.count(KY_TU_LOI) / n if n else 0.0
+
+
+# ── Nhận biết acc bị Facebook gỡ bài vì spam ────────────────────────────
+# Nguồn tín hiệu là dialog "Sự việc" Facebook tự bật khi vừa gỡ nội dung của
+# nick. Thân dialog liệt kê từng vụ dạng "Spam / Đã gỡ bài viết / <ngày>", đáy
+# có nút "Xem tất cả (N)" với N là TỔNG số vụ.
+#
+# Vì sao đếm N chứ không bắt theo ngày: dialog hiện lại y nguyên suốt nhiều
+# ngày sau đó (log có cả vụ 7/8, 10/8, 11/8, 12/8, 13/8), nên "thấy dialog =
+# vừa dính" là sai — sẽ gắn cờ acc mỗi phiên vì một vụ từ tuần trước. Đếm thì
+# chỉ cần N TĂNG mới là có vụ mới, không phụ thuộc vào việc đọc định dạng ngày
+# tiếng Việt cho đúng.
+_RE_XEM_TAT_CA = re.compile(r"xem tất cả\s*\((\d+)\)", re.I)
+
+# Facebook diễn đạt việc gỡ nội dung theo HAI cách, và phải nhận cả hai. Đọc 9
+# chuỗi cảnh báo thật trong log thấy 4 chuỗi ghi "Đã gỡ bài viết" còn 5 chuỗi
+# ghi "Ảnh đã bị gỡ" — bản đầu chỉ bắt vế trước nên bỏ sót quá nửa. Phần mềm
+# này đăng bài KÈM ẢNH, nên ảnh bị gỡ chính là bài bị gỡ.
+_MOC_GO_BAI = ("đã gỡ bài viết", "ảnh đã bị gỡ",
+               "removed your post", "your photo was removed")
+_MOC_SPAM   = ("spam",)
+
+
+def doc_vi_pham(text: str) -> dict | None:
+    """
+    Đọc nội dung dialog cảnh báo, trả về số vụ gỡ bài.
+
+    Trả `None` nếu đây không phải dialog gỡ BÀI VIẾT — dialog cũng bật cho việc
+    gỡ tin nhắn hay bình luận, mà hai thứ đó không phải lý do dừng đăng bài.
+
+    Trả `{"so": N, "spam": bool}` với N là tổng số vụ. Ưu tiên số trong "Xem tất
+    cả (N)" vì danh sách chỉ hiện sẵn 5 dòng đầu; không có thì đếm số dòng.
+    """
+    if not text:
+        return None
+    thap = " ".join(text.split()).lower()
+    if not any(m in thap for m in _MOC_GO_BAI):
+        return None
+    m = _RE_XEM_TAT_CA.search(thap)
+    so = int(m.group(1)) if m else sum(thap.count(k) for k in _MOC_GO_BAI)
+    return {"so": max(so, 1), "spam": any(k in thap for k in _MOC_SPAM)}
+
+
+def co_vu_moi(so_cu: int, so_moi: int) -> bool:
+    """
+    Có vụ gỡ bài MỚI so với lần đo trước không.
+
+    `so_cu < 0` nghĩa là chưa từng đo acc này — lần đầu chỉ ghi mốc, KHÔNG gắn
+    cờ. Thiếu bước này thì ngay phiên đầu tiên sau khi bật tính năng, mọi acc có
+    sẵn vi phạm cũ đều bị đánh spam cùng lúc.
+    """
+    if so_cu < 0:
+        return False
+    return so_moi > so_cu
 
 
 def danh_gia(lich_su: str) -> tuple[str, str]:

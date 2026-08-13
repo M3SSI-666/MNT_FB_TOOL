@@ -404,8 +404,13 @@ async def dong_dialog_canh_bao(page, so_lan: int = 3, cho_escape: bool = True) -
             return canh_bao
 
         if not canh_bao:
-            canh_bao = " ".join(text.split())[:110]
-            logger.warning(f"    ⚠️  FB cảnh báo nick này: {canh_bao}")
+            # Giữ 1200 ký tự chứ không phải 110 như bản đầu. Dòng tiêu đề
+            # ("Chúng tôi đã gỡ một số nội dung...") chỉ ~70 ký tự, nên cắt ở
+            # 110 là vứt sạch phần THÂN — nơi chứa "Spam / Đã gỡ bài viết" và
+            # nút "Xem tất cả (N)". Đó chính là dữ liệu suc_khoe_acc.doc_vi_pham
+            # cần để biết acc vừa bị gỡ mấy bài.
+            canh_bao = " ".join(text.split())[:1200]
+            logger.warning(f"    ⚠️  FB cảnh báo nick này: {canh_bao[:110]}")
 
         await _thu_dong(page, dlg, buoc=lan, cho_escape=cho_escape)
         await asyncio.sleep(1.2)

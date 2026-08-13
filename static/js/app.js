@@ -535,7 +535,8 @@ let _accData=[];
 
 // ── Sức khoẻ acc (xem suc_khoe_acc.py) ────────────────────────────────
 const TRANG_THAI_HONG="Hỏng";
-const TRANG_THAI_OPTIONS=["Active","Tạm dừng","Cookie hết hạn",TRANG_THAI_HONG];
+const TRANG_THAI_SPAM="Spam";
+const TRANG_THAI_OPTIONS=["Active","Tạm dừng","Cookie hết hạn",TRANG_THAI_HONG,TRANG_THAI_SPAM];
 
 function _dangNghi(r){
     if(!r.nghi_den) return false;
@@ -552,6 +553,11 @@ function _trangThaiAcc(r){
     if(val===TRANG_THAI_HONG)
         return {nhan:"❌ Hỏng", mau:"var(--danger)", dam:true,
                 chiTiet:`Máy tự tắt. Sửa ô này về Active để bật lại.`};
+    if(val===TRANG_THAI_SPAM)
+        return {nhan:"🚫 Spam", mau:"var(--danger)", dam:true,
+                chiTiet:`Facebook đã gỡ ${r.so_vi_pham>0?r.so_vi_pham+" bài":"bài"} của nick này. `
+                       +`Đã dừng ĐĂNG BÀI; comment và nuôi vẫn chạy. `
+                       +`Sửa ô này về Active để đăng lại.`};
     if(val==="Cookie hết hạn")
         return {nhan:val, mau:"var(--danger)", dam:false, chiTiet:"Cần đăng nhập lại"};
     if(_dangNghi(r)){
@@ -1615,7 +1621,7 @@ function renderSchedulePage(loai){
             <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
                 <select id="${loai}-filter" class="btn btn-ghost" style="padding:6px 10px" onchange="renderScheduleTable('${loai}',_schedData['${loai}']||[])">
                     <option value="">Tất cả</option><option value="Chờ">Chờ</option>
-                    <option value="done">✅</option><option value="fail">❌</option><option value="X😴">😴 Nghỉ</option><option value="X">X</option>
+                    <option value="done">✅</option><option value="fail">❌</option><option value="X😴">😴 Nghỉ</option><option value="Nghỉ Spam">🚫 Nghỉ Spam</option><option value="X">X</option>
                 </select>
                 <span id="${loai}-count" style="font-size:12px;color:var(--text-muted)"></span>
             </div>

@@ -852,6 +852,38 @@ async def _run_page_via(
             except Exception as e:
                 logger.warning(f"  ⚠️  Không lưu được link: {e}")
 
+        # ── Dò xem Facebook vừa gỡ bài của nick này chưa ───────────────
+        # Đặt ở ĐÂY vì đây là lúc muộn nhất trong phiên: đã qua 90s chờ thông
+        # báo, mà theo quan sát thực tế Facebook đẩy thông báo gỡ bài về trong
+        # vài chục giây sau khi đăng. Dò sớm hơn (bước 1) chỉ thấy vụ của hôm
+        # trước.
+        #
+        # Không tin "thấy dialog = vừa dính": dialog hiện lại y nguyên nhiều
+        # ngày sau đó. Phải so SỐ VỤ với lần đo trước mới biết có vụ mới.
+        try:
+            import suc_khoe_acc as _sk
+            import db as _db2
+            await page.goto("https://www.facebook.com/",
+                            wait_until="domcontentloaded", timeout=30000)
+            await _human_delay(4000, 6000)
+            _txt = await dong_dialog_canh_bao(page)
+            _vp = _sk.doc_vi_pham(_txt)
+            if _vp:
+                _moi, _cu = _db2.ghi_nhan_vi_pham(acc_name, _vp["so"], _vp["spam"])
+                logger.warning(f"  ⚠️  FB đã gỡ {_vp['so']} bài của '{acc_name}'"
+                               f" (lần đo trước: {'chưa đo' if _cu < 0 else _cu})")
+                if _moi:
+                    _n = _db2.danh_dau_spam(
+                        acc_name, f"{_vp['so'] - _cu} bài mới bị gỡ")
+                    logger.error(
+                        f"  🚫 '{acc_name}' DÍNH SPAM — chuyển trạng thái Spam, "
+                        f"dừng {_n} slot đăng bài còn lại hôm nay. "
+                        f"Slot comment và nuôi vẫn chạy.")
+            else:
+                logger.info("  ✅ Không thấy cảnh báo gỡ bài")
+        except Exception as e:
+            logger.warning(f"  ⚠️  Không dò được cảnh báo spam: {e}")
+
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 7 — Scroll 15-30s + like tối đa 1 bài (đang là Page) rồi đóng Chrome
         # ════════════════════════════════════════════════════════════════

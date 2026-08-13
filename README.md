@@ -363,6 +363,37 @@ Chạy lại đúng 766 phiên đó: tắt 1 acc (đúng acc đã chết), cho n
 hai chạy tiếp, không đụng 7 acc khoẻ, cứu 86/766 slot (11%). **Sửa ngưỡng thì nên
 chạy lại phép đo đó trước.**
 
+### Dính spam — dừng đăng, vẫn cho comment
+Sau khi đăng xong, phiên quay lại trang chủ và đọc dialog **"Sự việc"** Facebook
+tự bật khi vừa gỡ nội dung của nick. Đặt ở cuối phiên vì Facebook đẩy thông báo
+gỡ bài về trong vài chục giây sau khi đăng — dò ở đầu phiên chỉ thấy vụ hôm qua.
+
+Nhận ra thì:
+
+| | |
+|---|---|
+| Trạng thái acc | → `Spam` (đỏ, có toast) |
+| Slot **đăng bài** còn lại hôm nay | → `Nghỉ Spam` |
+| Slot **comment** | **giữ nguyên** — acc bị gỡ bài vẫn comment được, đó là cả tiền đề của tính năng đi comment |
+| Slot **nuôi nick** | **giữ nguyên** — nuôi là thứ có cơ gỡ acc ra |
+
+Bật lại: sửa cột Trạng thái về `Active`.
+
+> **So SỐ VỤ, không phải "thấy dialog là dính".** Dialog hiện lại y nguyên nhiều
+> ngày sau đó — log có cả vụ 7/8, 10/8, 11/8, 12/8, 13/8 — nên bắt theo sự hiện
+> diện sẽ gắn cờ acc mỗi phiên vì một vụ từ tuần trước. Chỉ khi số vụ ở "Xem tất
+> cả (N)" TĂNG so với lần đo trước mới tính. Lần đo đầu chỉ ghi mốc (`so_vi_pham`
+> mặc định `-1`), nếu không thì phiên đầu sau khi bật tính năng sẽ đánh spam
+> hàng loạt vì vi phạm cũ.
+
+> **Facebook diễn đạt hai kiểu**: `Đã gỡ bài viết` và `Ảnh đã bị gỡ`. Trong 9
+> chuỗi cảnh báo thật lấy từ log, 4 chuỗi dùng vế đầu và 5 chuỗi dùng vế sau —
+> bắt thiếu một vế là bỏ sót quá nửa. Phần mềm đăng bài kèm ảnh nên hai thứ là
+> một. Gỡ **tin nhắn** thì bỏ qua, không phải lý do dừng đăng.
+
+> Chuỗi cảnh báo từng bị cắt ở **110 ký tự** — vừa đủ dòng tiêu đề, mất sạch phần
+> thân chứa `Spam / Đã gỡ bài viết` và `Xem tất cả (N)`. Nay giữ 1200 ký tự.
+
 ### Thấy ở đâu
 - Cột **Trạng thái** tab Tài khoản: `😴 Nghỉ tới 14:20` (cam) / `❌ Hỏng` (đỏ).
   Rê chuột hiện chi tiết. Bấm vào ra dropdown — chọn `Active` là **bật lại**.
@@ -400,5 +431,5 @@ chạy lại phép đo đó trước.**
 
 ## Test
 ```
-python test_basic.py   # 381 assertion, chạy trên DB tạm — không đụng data thật
+python test_basic.py   # 408 assertion, chạy trên DB tạm — không đụng data thật
 ```
