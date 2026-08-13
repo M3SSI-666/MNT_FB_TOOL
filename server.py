@@ -27,6 +27,7 @@ from db import (
     get_pages, get_page_by_name, upsert_page, delete_page, reorder_pages, import_pages,
     # content
     get_content, get_content_by_code, upsert_content, delete_content, reorder_content,
+    import_content,
     # uid groups
     get_uid_groups_by_code, get_all_uid_groups, upsert_uid_group, delete_uid_group,
     reorder_uid_groups, import_uid_groups,
@@ -859,6 +860,212 @@ def api_content_upload_image():
         return jsonify({"ok": True, "url": url})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
+
+# ── Sao lưu content KÈM ẢNH ─────────────────────────────────────────────
+# Ảnh của content là file thật nằm trong data/media/ (URL dạng /media/...), nên
+# Excel không mang theo được. Xuất/nhập dạng .zip gồm: content.xlsx + thư mục
+# images/ chứa file ảnh thật. Trong Excel, cột "Ảnh" chỉ ghi TÊN FILE (phân tách
+# bằng dấu phẩy) — lúc nhập ở máy khác, server chép ảnh vào đĩa rồi dựng link mới.
+
+# Cột xuất/nhập cho content. Cột đầu là key DB, cột sau là header người đọc.
+EXPORT_CONTENT_COLUMNS = [
+    ("ma_content", "Mã content"),
+    ("noi_dung",   "Nội dung"),
+    ("link_anh",   "Ảnh"),          # trong file chỉ chứa tên file, không phải URL
+    ("su_dung",    "Sử dụng"),
+    ("ghi_chu",    "Ghi chú"),
+]
+
+
+@app.route("/api/content/export-zip")
+def api_content_export_zip():
+    """Xuất content của MỘT loại ra .zip (content.xlsx + ảnh), lưu vào Downloads."""
+    import zipfile
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    loai = request.args.get("loai", "homestay")
+    rows = get_content(loai)
+
+    # Bảng Excel: cột Ảnh ghi TÊN FILE, kèm tập file ảnh cần đóng gói.
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Content"
+    ws.append([label for _, label in EXPORT_CONTENT_COLUMNS])
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+
+    anh_can_dong = {}   # tên file trong zip -> đường dẫn tuyệt đối trên đĩa
+    widths = [len(label) for _, label in EXPORT_CONTENT_COLUMNS]
+    for row in rows:
+        values = []
+        for key, _ in EXPORT_CONTENT_COLUMNS:
+            if key == "link_anh":
+                # URL /media/.../abc.jpg -> abc.jpg; gom file thật để bỏ vào zip.
+                names = []
+                for u in (row.get("link_anh") or "").split(","):
+                    u = u.strip()
+                    if not u:
+                        continue
+                    ten = os.path.basename(u)
+                    names.append(ten)
+                    if u.startswith("/"):
+                        p = MEDIA_DIR.parent / u.lstrip("/")
+                        if p.exists():
+                            anh_can_dong[ten] = str(p)
+                v = ", ".join(names)
+            else:
+                v = row.get(key, "")
+                v = "" if v is None else str(v)
+            values.append(v)
+        ws.append(values)
+        for i, val in enumerate(values):
+            widths[i] = max(widths[i], min(len(val), 60))
+
+    for i, _ in enumerate(EXPORT_CONTENT_COLUMNS, start=1):
+        letter = ws.cell(row=1, column=i).column_letter
+        ws.column_dimensions[letter].width = min(widths[i - 1] + 2, 60)
+    ws.freeze_panes = "A2"
+
+    xlsx_buf = BytesIO()
+    wb.save(xlsx_buf)
+
+    name = f"content_{loai}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+    path = _export_dir() / name
+    try:
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("content.xlsx", xlsx_buf.getvalue())
+            # Ghi loại vào zip để lúc nhập biết đổ vào tab nào (dù người dùng
+            # cũng chọn tab trước khi nhập, đây là lớp phòng khi nhầm).
+            zf.writestr("loai.txt", loai)
+            for ten, src in anh_can_dong.items():
+                try:
+                    zf.write(src, f"images/{ten}")
+                except OSError:
+                    pass
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+    _reveal_in_explorer(path)
+    return jsonify({"ok": True, "path": str(path),
+                    "count": len(rows), "so_anh": len(anh_can_dong)})
+
+
+@app.route("/api/content/import-zip", methods=["POST"])
+def api_content_import_zip():
+    """Nhập content từ .zip (content.xlsx + ảnh) vào loại đang chọn.
+
+    Chế độ "thêm & bỏ trùng" theo ma_content. Ảnh trong zip được chép vào
+    data/media/content/<loai>/ với tên uuid mới (tránh đè ảnh sẵn có), rồi
+    link_anh được dựng lại trỏ tới file mới (URL /media/...).
+    """
+    import zipfile
+    from io import BytesIO
+    from openpyxl import load_workbook
+    from storage import save_image
+
+    loai = request.form.get("loai", "homestay")
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"ok": False, "error": "Không có file"})
+
+    try:
+        zf = zipfile.ZipFile(BytesIO(file.read()))
+    except Exception:
+        return jsonify({"ok": False, "error": "File không phải .zip hợp lệ"})
+
+    names = set(zf.namelist())
+    if "content.xlsx" not in names:
+        return jsonify({"ok": False, "error": "Trong zip thiếu content.xlsx"})
+
+    try:
+        wb = load_workbook(BytesIO(zf.read("content.xlsx")),
+                           read_only=True, data_only=True)
+    except Exception:
+        return jsonify({"ok": False, "error": "content.xlsx trong zip không hợp lệ"})
+    ws = wb.active
+
+    rows_iter = ws.iter_rows(values_only=True)
+    try:
+        header = next(rows_iter)
+    except StopIteration:
+        return jsonify({"ok": False, "error": "File rỗng"})
+
+    label_to_key = {label.strip().lower(): key for key, label in EXPORT_CONTENT_COLUMNS}
+    col_key = {}
+    for idx, h in enumerate(header):
+        if h is None:
+            continue
+        key = label_to_key.get(str(h).strip().lower())
+        if key:
+            col_key[idx] = key
+
+    if "ma_content" not in col_key.values():
+        return jsonify({"ok": False, "error": "File thiếu cột Mã content"})
+
+    # Chép mỗi ảnh trong zip vào đĩa DUY NHẤT MỘT lần, kể cả khi nhiều content
+    # dùng chung — map tên file cũ -> URL mới.
+    ten_cu_to_url = {}
+
+    def _url_cho_anh(ten_cu: str) -> str:
+        ten_cu = ten_cu.strip()
+        if not ten_cu:
+            return ""
+        if ten_cu in ten_cu_to_url:
+            return ten_cu_to_url[ten_cu]
+        arc = f"images/{ten_cu}"
+        if arc not in names:
+            return ""   # zip không kèm ảnh này -> bỏ, không dựng link chết
+        try:
+            url = save_image(zf.read(arc), ten_cu, loai)
+        except Exception:
+            return ""
+        ten_cu_to_url[ten_cu] = url
+        return url
+
+    # Mã content đã có trong loại này -> khỏi chép ảnh cho dòng trùng (import_content
+    # cũng bỏ qua nó), tránh để lại ảnh mồ côi trên đĩa.
+    from db import _conn
+    with _conn() as con:
+        da_co = {(r["ma_content"] or "").strip()
+                 for r in con.execute("SELECT ma_content FROM content WHERE loai=?",
+                                      (loai,)).fetchall()}
+    da_them = set()
+
+    records = []
+    for row in rows_iter:
+        # Đọc mọi ô ra trước; mã content quyết định có chép ảnh hay không, mà cột
+        # có thể đứng ở bất kỳ vị trí nào nên phải gom hết rồi mới xử ảnh.
+        raw = {}
+        for idx, key in col_key.items():
+            v = row[idx] if idx < len(row) else None
+            raw[key] = "" if v is None else str(v).strip()
+
+        ma = raw.get("ma_content", "")
+        if not ma:
+            continue
+        trung = ma in da_co or ma in da_them
+        da_them.add(ma)
+
+        rec = dict(raw)
+        # Chỉ chép ảnh cho dòng thật sự sẽ được thêm. Dòng trùng bỏ qua ảnh.
+        anh = raw.get("link_anh", "")
+        if trung or not anh:
+            rec["link_anh"] = ""
+        else:
+            urls = [_url_cho_anh(t) for t in anh.split(",")]
+            rec["link_anh"] = ", ".join(u for u in urls if u)
+        records.append(rec)
+
+    try:
+        added, skipped = import_content(records, loai)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+    return jsonify({"ok": True, "added": added, "skipped": skipped,
+                    "so_anh": len(ten_cu_to_url)})
 
 
 # Danh mục (tab) của Content — CỐ ĐỊNH 3 loại, khớp với phần Lịch (homestay/thue/ban).

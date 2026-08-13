@@ -768,6 +768,45 @@ def get_all_content_image_urls() -> set:
     return ra
 
 
+def import_content(records: list[dict], loai: str) -> tuple[int, int]:
+    """Nhập content vào MỘT loại (homestay/thue/ban).
+
+    Chế độ "thêm & bỏ trùng": ma_content nào đã có trong loại đó thì bỏ qua,
+    chỉ thêm cái mới. `link_anh` trong records đã là URL /media/... hợp lệ
+    (server đã chép ảnh vào đĩa trước khi gọi hàm này). Dòng mới xuống cuối
+    danh sách của loại (order_idx tăng dần) như upsert_content lúc thêm tay.
+    """
+    added = skipped = 0
+    with _conn() as con:
+        seen = {(r["ma_content"] or "").strip()
+                for r in con.execute("SELECT ma_content FROM content WHERE loai=?",
+                                     (loai,)).fetchall()}
+        nxt = con.execute(
+            "SELECT COALESCE(MAX(order_idx), -1) + 1 FROM content WHERE loai=?",
+            (loai,)
+        ).fetchone()[0]
+        for rec in records:
+            ma = (rec.get("ma_content") or "").strip()
+            if not ma:
+                skipped += 1
+                continue
+            if ma in seen:
+                skipped += 1
+                continue
+            seen.add(ma)
+            con.execute(
+                "INSERT INTO content (loai, ma_content, noi_dung, link_anh, "
+                "su_dung, ghi_chu, order_idx) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (loai, ma, rec.get("noi_dung", "") or "",
+                 rec.get("link_anh", "") or "",
+                 rec.get("su_dung", "Có") or "Có",
+                 rec.get("ghi_chu", "") or "", nxt)
+            )
+            nxt += 1
+            added += 1
+    return added, skipped
+
+
 # ═══════════════════════════════════════════════════════════════
 # UID Groups
 # ═══════════════════════════════════════════════════════════════

@@ -1250,6 +1250,32 @@ async function donAnhMoCoi(){
     }catch(e){ Toast.error(e.message); }
 }
 
+// Sao lưu content của tab đang xem KÈM ảnh ra file .zip (lưu vào Downloads).
+async function exportContentZip(){
+    try{
+        const r=await fetch(`/api/content/export-zip?loai=${encodeURIComponent(_currentContentLoai)}`);
+        const res=await r.json();
+        if(!res.ok) throw new Error(res.error||"không rõ lỗi");
+        Toast.show(`Đã lưu ${res.count} content + ${res.so_anh} ảnh: ${res.path}`, "success", 10000);
+    }catch(e){ Toast.error("Lỗi xuất backup: "+e.message); }
+}
+
+// Nhập content từ .zip vào tab đang xem (thêm & bỏ trùng theo Mã content).
+async function importContentZip(e){
+    const file=e.target.files[0]; if(!file) return;
+    e.target.value="";  // reset để chọn lại cùng file vẫn kích hoạt onchange
+    try{
+        const fd=new FormData();
+        fd.append("file",file);
+        fd.append("loai",_currentContentLoai);
+        const r=await fetch("/api/content/import-zip",{method:"POST",body:fd});
+        const res=await r.json();
+        if(!res.ok) throw new Error(res.error||"không rõ lỗi");
+        Toast.success(`Đã thêm ${res.added} content mới (${res.so_anh} ảnh), bỏ qua ${res.skipped} trùng`);
+        loadContent(_currentContentLoai);
+    }catch(err){ Toast.error("Lỗi nhập backup: "+err.message); }
+}
+
 function openContentTab(loai){
     const keys = CONTENT_CATEGORIES.map(c=>c.key);
     const target = keys.includes(loai) ? loai
