@@ -1615,7 +1615,7 @@ function renderSchedulePage(loai){
             <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
                 <select id="${loai}-filter" class="btn btn-ghost" style="padding:6px 10px" onchange="renderScheduleTable('${loai}',_schedData['${loai}']||[])">
                     <option value="">Tất cả</option><option value="Chờ">Chờ</option>
-                    <option value="done">✅</option><option value="fail">❌</option><option value="X">X</option>
+                    <option value="done">✅</option><option value="fail">❌</option><option value="X😴">😴 Nghỉ</option><option value="X">X</option>
                 </select>
                 <span id="${loai}-count" style="font-size:12px;color:var(--text-muted)"></span>
             </div>
@@ -2178,8 +2178,9 @@ function renderScheduleSummary(loai,data){
     const total=data.length,cho=data.filter(r=>r.trang_thai==="Chờ").length,
           done=data.filter(r=>r.trang_thai.startsWith("✅")).length,
           fail=data.filter(r=>r.trang_thai.startsWith("❌")).length,
+          nghi=data.filter(r=>r.trang_thai==="X😴").length,
           stop=data.filter(r=>r.trang_thai==="X").length;
-    box.innerHTML=[{l:"Tổng",v:total},{l:"Chờ",v:cho},{l:"✅",v:done},{l:"❌",v:fail},{l:"X",v:stop}]
+    box.innerHTML=[{l:"Tổng",v:total},{l:"Chờ",v:cho},{l:"✅",v:done},{l:"❌",v:fail},{l:"😴 Nghỉ",v:nghi},{l:"X",v:stop}]
         .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1;min-width:70px"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px">${s.v}</div></div>`).join("");
 }
 
@@ -2213,6 +2214,7 @@ function renderScheduleTable(loai,data){
             stBadge=`<span class="badge" style="background:#422006;color:#fbbf24"
                        title="Không phải lỗi — chưa có link trong tab Bài đi Comment cho loại này.">⏸ ${st.replace(/^💬\s*/,"")}</span>`;
         else if(st.startsWith("💬")) stBadge=`<span class="badge" style="background:#1e3a5f;color:#93c5fd">${st}</span>`;
+        else if(st==="X😴") stBadge=`<span class="badge" style="background:#422006;color:#fbbf24" title="Máy tự tắt vì acc nghỉ/chết/cookie hết hạn — sẽ tự về Chờ ngày mai">😴 Nghỉ</span>`;
         else if(st==="X") stBadge=`<span class="badge badge-muted">X</span>`;
         else if(st==="Chờ") stBadge=`<span class="badge badge-warning">Chờ</span>`;
         else stBadge=`<span class="badge badge-muted">${st||"-"}</span>`;

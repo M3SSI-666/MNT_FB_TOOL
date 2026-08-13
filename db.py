@@ -51,6 +51,12 @@ TI_LE_COMMENT_MAC_DINH = 25
 TRANG_THAI_HONG = "Hỏng"
 TRANG_THAI_OPTIONS = ("Active", "Tạm dừng", "Cookie hết hạn", TRANG_THAI_HONG)
 
+# Trạng thái slot lịch do MÁY tự tắt vì acc nghỉ/chết/cookie hết hạn. Phải KHÁC
+# "X" thủ công: "X" người dùng tự tắt được giữ qua ngày (reset_schedules_to_wait
+# keep=("X",)), còn "X😴" tự động thì KHÔNG nằm trong keep nên đầu ngày mới tự về
+# "Chờ" — acc nghỉ tạm hôm qua sẽ chạy lại hôm nay.
+TT_LICH_X_TU_DONG = "X😴"
+
 
 def la_loai_comment(loai_dang: str) -> bool:
     """Acc CHỈ đi comment, không đăng bài (C_*)."""
@@ -484,6 +490,14 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool) -> tuple[str, str]:
                 "WHERE id=?",
                 (moc.isoformat(timespec="seconds"), sk.danh_dau_nghi(moi),
                  f"'{ten_acc}' nghỉ tới {moc:%H:%M} — {ly_do}", r["id"]))
+        if hanh_dong in ("nghi", "tat"):
+            # Đánh 'X😴' các slot còn lại hôm nay để nhìn bảng lịch là biết ngay
+            # acc này nghỉ — không phải đợi từng slot tới giờ mới đổi thành 😴.
+            # Dùng chung `con` đang mở (đừng gọi hàm mở _conn() lần nữa = khoá lồng).
+            con.execute(
+                "UPDATE schedules SET trang_thai=?, updated_at=datetime('now','localtime') "
+                "WHERE ten_acc=? AND trang_thai='Chờ' AND gio_dang > ?",
+                (TT_LICH_X_TU_DONG, ten_acc, datetime.now().strftime("%H:%M")))
         return hanh_dong, ly_do
 
 
@@ -936,6 +950,25 @@ def reset_schedules_to_wait(loai: str, keep: tuple = ("X",)) -> int:
         if keep:
             sql += " AND trang_thai NOT IN (%s)" % ",".join("?" * len(keep))
             args += list(keep)
+        return con.execute(sql, args).rowcount
+
+
+def danh_dau_x_con_lai_hom_nay(ten_acc: str, loai: str = None) -> int:
+    """Đánh 'X😴' cho các slot ĐANG 'Chờ' của acc mà giờ đăng còn ở tương lai
+    trong hôm nay (gio_dang > giờ hiện tại). Chỉ đụng slot 'Chờ' — không ghi đè
+    ✅/❌/X thủ công đã có. `loai=None` = đánh toàn bộ lịch của acc (acc dùng
+    chung 1 cookie, nghỉ là nghỉ hết mọi loại).
+
+    So gio_dang (HH:MM) theo chuỗi: cùng định dạng zero-padded nên so chuỗi =
+    so giờ. Slot đã qua giờ mà còn 'Chờ' là slot lỡ — bỏ qua, để reset ngày mai lo.
+    """
+    gio = datetime.now().strftime("%H:%M")
+    sql = ("UPDATE schedules SET trang_thai=?, updated_at=datetime('now','localtime') "
+           "WHERE ten_acc=? AND trang_thai='Chờ' AND gio_dang > ?")
+    args = [TT_LICH_X_TU_DONG, ten_acc, gio]
+    if loai:
+        sql += " AND loai=?"; args.append(loai)
+    with _conn() as con:
         return con.execute(sql, args).rowcount
 
 

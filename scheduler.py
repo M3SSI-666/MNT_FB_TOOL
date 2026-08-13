@@ -243,13 +243,21 @@ def _don_cache_sau_phien(acc_name: str):
 
 
 def _mark_cookie_dead(acc_name: str):
-    """Đánh dấu account để dễ thấy trong tab Tài khoản."""
+    """Đánh dấu account để dễ thấy trong tab Tài khoản, và đánh 'X😴' các slot
+    lịch còn lại hôm nay của acc để nhìn bảng là biết ngay acc này ngưng chạy."""
     try:
         a = get_account_by_name(acc_name)
         if a:
             update_account_field(a["id"], "trang_thai", "Cookie hết hạn")
     except Exception as e:
         logger.warning(f"⚠️  Không đánh dấu được acc '{acc_name}' hết cookie: {e}")
+    try:
+        from db import danh_dau_x_con_lai_hom_nay
+        n = danh_dau_x_con_lai_hom_nay(acc_name)
+        if n:
+            logger.info(f"  🚫 Đã đánh X {n} slot còn lại hôm nay của '{acc_name}'")
+    except Exception as e:
+        logger.warning(f"⚠️  Không đánh X được lịch của '{acc_name}': {e}")
 
 
 def _run_warming(item: dict):
