@@ -570,15 +570,23 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool) -> tuple[str, str]:
                 "WHERE id=?",
                 (TRANG_THAI_HONG, f"Đã tắt '{ten_acc}' — {ly_do}", r["id"]))
         elif hanh_dong == "nghi":
-            moc = datetime.now() + timedelta(hours=sk.NGHI_GIO)
-            # Ghi dấu ngắt chứ không xoá lịch sử: acc được lại đủ CHUOI_NGHI lượt
-            # thử sau khi nghỉ dậy, mà cửa sổ trượt vẫn giữ các "x" cũ để tầng 2
-            # còn tích đủ mà kết luận acc chết.
+            moc = datetime.now() + timedelta(minutes=sk.THAM_DO_PHUT)
+            # Ghi dấu ngắt chứ không xoá lịch sử. Dấu ngắt có HAI việc: cắt
+            # chuỗi lỗi liên tiếp, và đánh mốc để `danh_gia` nhận ra phiên kế
+            # tiếp là phiên THĂM DÒ (hỏng thì nghỉ lại ngay). Cửa sổ trượt vẫn
+            # giữ các "x" cũ để tầng 2 còn tích đủ mà kết luận acc chết.
             con.execute(
                 "UPDATE accounts SET nghi_den=?, lich_su_phien=?, canh_bao_moi=? "
                 "WHERE id=?",
                 (moc.isoformat(timespec="seconds"), sk.danh_dau_nghi(moi),
-                 f"'{ten_acc}' nghỉ tới {moc:%H:%M} — {ly_do}", r["id"]))
+                 f"'{ten_acc}' nghỉ, thăm dò lại lúc {moc:%H:%M} — {ly_do}",
+                 r["id"]))
+        elif ok:
+            # Phiên chạy được → xoá mốc nghỉ cũ cho sạch. Không xoá thì cột
+            # nghi_den giữ một mốc quá khứ vô nghĩa, và giao diện phải tự đoán
+            # xem nó còn hiệu lực hay không.
+            con.execute("UPDATE accounts SET nghi_den='' WHERE id=? "
+                        "AND COALESCE(nghi_den,'') != ''", (r["id"],))
         if hanh_dong in ("nghi", "tat"):
             # Đánh 'X😴' các slot còn lại hôm nay để nhìn bảng lịch là biết ngay
             # acc này nghỉ — không phải đợi từng slot tới giờ mới đổi thành 😴.
@@ -687,17 +695,20 @@ def mo_duong_tham_do() -> list[dict]:
     """
     ra = []
     with _conn() as con:
+        # Cả HAI đường nghỉ, không chỉ đường Spam: nghỉ vì lỗi liên tiếp (tầng 1,
+        # trạng thái vẫn 'Active', slot đánh 'X😴') cũng cần được mở đường thăm
+        # dò y hệt. Bỏ sót nó thì acc tầng 1 nằm im tới hết ngày.
         rows = con.execute(
-            "SELECT id, ten_acc, nghi_den FROM accounts WHERE trang_thai=?",
-            (TRANG_THAI_SPAM,)).fetchall()
+            "SELECT id, ten_acc, nghi_den, trang_thai FROM accounts "
+            "WHERE COALESCE(nghi_den,'') != ''").fetchall()
         for r in rows:
             if _moc_nghi(r["nghi_den"]):
                 continue                      # vẫn còn đang nghỉ
             n = con.execute(
                 "UPDATE schedules SET trang_thai='Chờ', "
                 "updated_at=datetime('now','localtime') "
-                "WHERE ten_acc=? AND trang_thai=?",
-                (r["ten_acc"], TT_LICH_NGHI_SPAM)).rowcount
+                "WHERE ten_acc=? AND trang_thai IN (?,?)",
+                (r["ten_acc"], TT_LICH_NGHI_SPAM, TT_LICH_X_TU_DONG)).rowcount
             if n:
                 ra.append({"ten_acc": r["ten_acc"], "so_slot": n})
     return ra

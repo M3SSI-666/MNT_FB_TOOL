@@ -423,7 +423,8 @@ Có đúng **hai kiểu hỏng**, và chúng đòi hai cách xử lý ngược n
 Chuỗi lỗi liên tiếp **không** phân biệt được hai ca này (29 và 71 đều dài), nên
 dùng hai tín hiệu tách rời:
 
-- **Tầng 1** — 5 lỗi liên tiếp → cho nghỉ 3 giờ. Sai cũng không hại, acc tự quay lại.
+- **Tầng 1** — 5 lỗi liên tiếp → nghỉ 60 phút, rồi **thăm dò một phiên**. Được thì
+  chạy tiếp; hỏng thì nghỉ thêm 60 phút rồi dò lại. Sai cũng không hại.
 - **Tầng 2** — 20 phiên gần nhất hỏng ≥80% → tắt hẳn. Chỉ acc không hồi mới tụt tới mức này.
 
 Chạy lại đúng 766 phiên đó: tắt 1 acc (đúng acc đã chết), cho nghỉ 2 acc rồi cả
@@ -554,5 +555,5 @@ nội dung — mà đó đúng là ba chỗ phép kiểm được gọi nhiều 
 
 ## Test
 ```
-python test_basic.py   # 455 assertion, chạy trên DB tạm — không đụng data thật
+python test_basic.py   # 457 assertion, chạy trên DB tạm — không đụng data thật
 ```

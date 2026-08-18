@@ -14,7 +14,7 @@ Chuỗi lỗi liên tiếp KHÔNG phân biệt được hai ca này: 29 và 71 �
 Vì vậy phải dùng hai tín hiệu khác nhau, và đây là lý do module này tồn tại thay
 vì một biến đếm lỗi:
 
-  Tầng 1 — chuỗi lỗi liên tiếp → cho nghỉ vài giờ rồi tự thử lại.
+  Tầng 1 — chuỗi lỗi liên tiếp → nghỉ rồi THĂM DÒ lại mỗi giờ.
            Sai cũng không hại: acc chỉ mất vài slot, tự quay lại.
   Tầng 2 — tỉ lệ hỏng trên cửa sổ trượt → tắt hẳn, cần người xử lý.
            Chỉ acc KHÔNG hồi mới tụt được tỉ lệ cửa sổ xuống mức này.
@@ -28,10 +28,10 @@ import re
 # Bao nhiêu lỗi liên tiếp thì cho nghỉ. Acc khoẻ nhất trong cửa sổ đo có chuỗi
 # dài nhất là 2, acc 16% lỗi có chuỗi 10 — nên 5 nằm gọn giữa hai vùng.
 CHUOI_NGHI = 5
-NGHI_GIO   = 3
 
-# Dính spam thì nghỉ bao lâu rồi THĂM DÒ một phiên. Được thì chạy tiếp bình
-# thường, không được thì nghỉ thêm chừng đó nữa rồi dò lại.
+# Nghỉ bao lâu rồi THĂM DÒ một phiên. Được thì chạy tiếp bình thường, không được
+# thì nghỉ thêm chừng đó nữa rồi dò lại. Dùng chung cho CẢ HAI đường: nghỉ vì
+# lỗi liên tiếp (tầng 1) và nghỉ vì Facebook gỡ bài (spam).
 #
 # Vì sao thăm dò thay vì nghỉ cứng: đo trên acc 'Thao Ngan' ngày 18/08 — bị chặn
 # đăng lúc 22:32, tới 00:51 đã đăng lại được 9 nhóm. Facebook thả sau chưa tới
@@ -171,6 +171,15 @@ def danh_gia(lich_su: str) -> tuple[str, str]:
     if _so_phien(lich_su) >= CUA_SO and ti_le_hong(lich_su) >= NGUONG_TAT:
         hong = lich_su.count(KY_TU_LOI)
         return "tat", f"hỏng {hong}/{_so_phien(lich_su)} phiên gần nhất"
+
+    # Phiên ĐẦU TIÊN sau khi nghỉ dậy chính là phiên THĂM DÒ. Hỏng thì nghỉ lại
+    # ngay, không đợi gom đủ 5 lỗi nữa.
+    #
+    # Thiếu luật này thì sau mỗi lần nghỉ, acc đang bị chặn được đâm đầu thêm 5
+    # phiên nữa mới nghỉ lại — vừa phí 5 slot, vừa là đúng thứ khiến Facebook soi
+    # nặng thêm. Dấu ngắt "-" do `danh_dau_nghi` để lại chính là chỗ nhận biết.
+    if lich_su.endswith(KY_TU_NGHI + KY_TU_LOI):
+        return "nghi", "thăm dò sau khi nghỉ vẫn hỏng"
 
     n = chuoi_loi(lich_su)
     if n >= CHUOI_NGHI:

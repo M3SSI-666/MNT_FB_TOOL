@@ -1173,7 +1173,17 @@ _sau = _sk.danh_dau_nghi("x" * 5)
 check("dấu ngắt cắt chuỗi lỗi",         _sk.chuoi_loi(_sau) == 0)
 check("dấu ngắt giữ lại các lỗi cũ",    _sau.count("x") == 5)
 check("dấu ngắt không tính là phiên",   _sk.ti_le_hong(_sau) == 1.0)
-check("nghỉ dậy được thử lại đủ lượt",  _sk.danh_gia(_sk.them_ket_qua(_sau, False))[0] == "")
+# Phiên ĐẦU sau khi nghỉ dậy là phiên THĂM DÒ: hỏng thì nghỉ lại ngay, không
+# đợi gom đủ 5 lỗi nữa. Thiếu luật này thì acc đang bị chặn được đâm đầu thêm 5
+# phiên mới nghỉ lại — vừa phí slot, vừa làm Facebook soi nặng thêm.
+check("thăm dò hỏng -> nghỉ lại ngay",
+      _sk.danh_gia(_sk.them_ket_qua(_sau, False)) == ("nghi", "thăm dò sau khi nghỉ vẫn hỏng"))
+check("thăm dò ĐƯỢC -> chạy tiếp bình thường",
+      _sk.danh_gia(_sk.them_ket_qua(_sau, True))[0] == "")
+# Sau khi thăm dò được, acc lại có đủ CHUOI_NGHI lượt trước khi nghỉ lần nữa.
+_ok1 = _sk.them_ket_qua(_sau, True)
+check("thăm dò được rồi hỏng 1 lượt -> chưa nghỉ",
+      _sk.danh_gia(_sk.them_ket_qua(_ok1, False))[0] == "")
 
 # Acc chết vẫn phải tới được "tắt" dù đã nghỉ nhiều lần giữa chừng.
 _ls = ""
