@@ -301,6 +301,25 @@ lại lướt + like là làm acc bị soi thêm.
 Lỗi khi comment **không** đặt `lan_cuoi` / `so_lan`, để hai cột đó phản ánh
 đúng số comment đã lên thật.
 
+### Bốc bài: chính chủ trước, rồi lấp đầy
+`page` là **thứ tự ưu tiên**, không phải bộ lọc cứng. Mỗi phiên luôn cố lấy đủ
+*Số bài mỗi phiên*: bài của chính Page đi trước, thiếu bao nhiêu thì lấy tiếp bài
+của Page khác **cùng hạng mục**.
+
+> **Lọc cứng làm hỏng đúng các acc yếu.** Acc chỉ đăng chéo được vào 1 nhóm thì
+> cả kho chỉ có 1 link của nó → mỗi phiên comment đúng **1 bài thay vì 10**, mất
+> 90% công suất của phiên. Nhánh "lùi về kho chung" cũ chỉ chạy khi có **đúng 0**
+> link chính chủ, nên ca "có 1 link" rơi vào kẽ hở: không đủ bài, cũng không được
+> lùi về. Nay acc đó comment đủ 10 bài — 1 của mình + 9 của hạng mục.
+
+Khoá xếp hạng gồm ba bậc, xét đúng thứ tự: **chính chủ → ít comment nhất → cũ
+nhất**. Luật **tối đa 1 link mỗi nhóm** vẫn giữ trên cả tập đã gộp — đặt bậc
+"chính chủ" lên đầu nên nhóm nào có cả bài của mình lẫn bài Page khác thì bài của
+mình được chọn làm đại diện nhóm đó.
+
+Đo trên dữ liệu thật: lịch homestay 5 Page (Page ít nhất chỉ 10 link) và lịch
+thuê 3 Page — **mọi Page đều lấy đủ 10 bài mỗi phiên**.
+
 ### Link chết
 Bài cũ bị xoá hoặc đổi phạm vi hiển thị là chuyện bình thường theo thời gian.
 Hệ thống nhận ra và đánh dấu riêng — **không** gộp vào lỗi thường, vì link chết
