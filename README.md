@@ -147,9 +147,9 @@ dỡ, cho acc comment vào các bài cũ còn sống để đẩy chúng lên.
 Song song với cơ chế nuôi nick (Loại đăng trống + tick Nuôi = chỉ nuôi).
 
 **Acc "chỉ comment" không còn là một lựa chọn phải tự đặt.** Khi máy phát hiện
-Facebook gỡ bài, nó chuyển acc sang trạng thái `Spam`; từ đó acc **không đăng
-nữa nhưng vẫn comment**, và Gen lịch tự cho nó toàn slot comment. Đúng việc mà
-`C_Home` / `C_Thuê` / `C_Bán` từng làm, nhưng tự động.
+Facebook gỡ bài, nó chuyển acc sang trạng thái `Spam` và cho **nghỉ hẳn 3 tiếng**
+— không đăng, không comment, không nuôi — rồi tự bật lại. Xem
+[Dính spam](#dính-spam--nghỉ-hẳn-3-tiếng-rồi-tự-chạy-lại).
 
 > **Đã bỏ loại đăng `C_*`.** Giữ song song với trạng thái `Spam` thì cùng một
 > tình huống có hai nguồn sự thật — đúng lỗi đã mắc với hai cột `comment_bai` /
@@ -375,7 +375,7 @@ Chạy lại đúng 766 phiên đó: tắt 1 acc (đúng acc đã chết), cho n
 hai chạy tiếp, không đụng 7 acc khoẻ, cứu 86/766 slot (11%). **Sửa ngưỡng thì nên
 chạy lại phép đo đó trước.**
 
-### Dính spam — dừng đăng, vẫn cho comment
+### Dính spam — nghỉ hẳn 3 tiếng rồi tự chạy lại
 Sau khi đăng xong, phiên quay lại trang chủ và đọc dialog **"Sự việc"** Facebook
 tự bật khi vừa gỡ nội dung của nick. Đặt ở cuối phiên vì Facebook đẩy thông báo
 gỡ bài về trong vài chục giây sau khi đăng — dò ở đầu phiên chỉ thấy vụ hôm qua.
@@ -384,12 +384,21 @@ Nhận ra thì:
 
 | | |
 |---|---|
-| Trạng thái acc | → `Spam` (đỏ, có toast) |
-| Slot **đăng bài** còn lại hôm nay | → `Nghỉ Spam` |
-| Slot **comment** | **giữ nguyên** — acc bị gỡ bài vẫn comment được, đó là cả tiền đề của tính năng đi comment |
-| Slot **nuôi nick** | **giữ nguyên** — nuôi là thứ có cơ gỡ acc ra |
+| Trạng thái acc | → `Spam` (đỏ, có toast), kèm mốc hết nghỉ |
+| Slot **đăng bài** + **comment** còn lại hôm nay | → `Nghỉ Spam` |
+| **Nuôi nick** | cũng bị chặn, nhưng qua `acc_duoc_chay` chứ không đổi trạng thái slot |
+| Sau `NGHI_SPAM_GIO` = **3 tiếng** | acc tự về `Active`, mọi slot `Nghỉ Spam` tự về `Chờ` |
 
-Bật lại: sửa cột Trạng thái về `Active`.
+**Nghỉ HẲN, không chừa comment.** Facebook gỡ bài nghĩa là nó đang soi nick ngay
+lúc đó; mọi thao tác tự động lúc này đều làm nặng thêm. Khác với nghỉ-vì-lỗi-
+liên-tiếp (chỉ chặn đăng và comment, vẫn cho nuôi).
+
+Không cần làm gì để bật lại — `hoi_sinh_het_nghi_spam()` chạy mỗi vòng lặp
+scheduler (60s) nên chậm nhất là muộn 1 phút so với mốc.
+
+> **Trả slot đã lỡ về `Chờ` KHÔNG gây dồn bài.** Scheduler chỉ chạy dòng nằm
+> trong cửa sổ `WINDOW_MINUTES` (3 phút) sau giờ hẹn, nên slot lỡ trong lúc nghỉ
+> đơn giản không bao giờ tới lượt — nó nằm đó tới lần reset đầu ngày.
 
 > **So SỐ VỤ, không phải "thấy dialog là dính".** Dialog hiện lại y nguyên nhiều
 > ngày sau đó — log có cả vụ 7/8, 10/8, 11/8, 12/8, 13/8 — nên bắt theo sự hiện
@@ -443,5 +452,5 @@ Bật lại: sửa cột Trạng thái về `Active`.
 
 ## Test
 ```
-python test_basic.py   # 410 assertion, chạy trên DB tạm — không đụng data thật
+python test_basic.py   # 420 assertion, chạy trên DB tạm — không đụng data thật
 ```

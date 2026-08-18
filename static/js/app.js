@@ -553,11 +553,15 @@ function _trangThaiAcc(r){
     if(val===TRANG_THAI_HONG)
         return {nhan:"❌ Hỏng", mau:"var(--danger)", dam:true,
                 chiTiet:`Máy tự tắt. Sửa ô này về Active để bật lại.`};
-    if(val===TRANG_THAI_SPAM)
-        return {nhan:"🚫 Spam", mau:"var(--danger)", dam:true,
+    if(val===TRANG_THAI_SPAM){
+        const t=r.nghi_den?new Date(r.nghi_den):null;
+        const den=(t&&!isNaN(t))?` tới ${String(t.getHours()).padStart(2,"0")}:`
+                                 +`${String(t.getMinutes()).padStart(2,"0")}`:"";
+        return {nhan:`🚫 Spam${den}`, mau:"var(--danger)", dam:true,
                 chiTiet:`Facebook đã gỡ ${r.so_vi_pham>0?r.so_vi_pham+" bài":"bài"} của nick này. `
-                       +`Đã dừng ĐĂNG BÀI; comment và nuôi vẫn chạy. `
-                       +`Sửa ô này về Active để đăng lại.`};
+                       +`Nghỉ hẳn — không đăng, không comment, không nuôi. `
+                       +`Hết giờ tự chạy lại, không cần làm gì.`};
+    }
     if(val==="Cookie hết hạn")
         return {nhan:val, mau:"var(--danger)", dam:false, chiTiet:"Cần đăng nhập lại"};
     if(_dangNghi(r)){

@@ -481,17 +481,32 @@ def update_account_field(acc_id: int, field: str, value: str):
 
 
 # ── Sức khoẻ acc ────────────────────────────────────────────────────────
+def _moc_nghi(nghi_den: str):
+    """Mốc hết nghỉ nếu CÒN đang nghỉ, `None` nếu đã hết hoặc không hợp lệ."""
+    if not nghi_den:
+        return None
+    try:
+        moc = datetime.fromisoformat(nghi_den)
+    except ValueError:
+        return None
+    return moc if datetime.now() < moc else None
+
+
 def acc_duoc_chay(ten_acc: str, hoat_dong: str = "dang_bai") -> tuple[bool, str]:
     """
     Acc có được giao phiên này lúc này không.
 
-    Nghỉ tạm chỉ chặn ĐĂNG và COMMENT — hai việc vừa bị Facebook từ chối. Nuôi
-    nick vẫn chạy, vì xem story / lướt feed chính là thứ có cơ gỡ acc ra, cắt nốt
-    là tự bịt đường hồi phục.
+    Nghỉ tạm vì LỖI LIÊN TIẾP chỉ chặn ĐĂNG và COMMENT — hai việc vừa bị
+    Facebook từ chối. Nuôi nick vẫn chạy, vì xem story / lướt feed chính là thứ
+    có cơ gỡ acc ra, cắt nốt là tự bịt đường hồi phục.
 
-    Tắt hẳn thì chặn tất, kể cả nuôi: acc đó đang chờ người xử lý, mà `trang_thai`
-    lúc này là 'Hỏng' nên `get_account_by_name` cũng không tìm ra nó nữa — cho
-    phiên nuôi chạy tiếp chỉ tổ đổ một đống lỗi vô nghĩa vào log.
+    Nghỉ vì DÍNH SPAM thì chặn TẤT, kể cả nuôi. Facebook vừa gỡ bài nghĩa là nó
+    đang soi nick ngay lúc đó; mọi thao tác tự động lúc này đều làm nặng thêm.
+    Nằm im hết 3 tiếng rồi quay lại là an toàn nhất.
+
+    Tắt hẳn cũng chặn tất: acc đó đang chờ người xử lý, mà `trang_thai` lúc này
+    là 'Hỏng' nên `get_account_by_name` cũng không tìm ra nó nữa — cho phiên nuôi
+    chạy tiếp chỉ tổ đổ một đống lỗi vô nghĩa vào log.
     """
     with _conn() as con:
         r = con.execute("SELECT trang_thai, nghi_den FROM accounts "
@@ -501,21 +516,18 @@ def acc_duoc_chay(ten_acc: str, hoat_dong: str = "dang_bai") -> tuple[bool, str]
     tt = r["trang_thai"] or ""
     if tt == TRANG_THAI_HONG:
         return False, "acc đã bị tắt do hỏng"
-    # Spam chỉ chặn ĐĂNG BÀI. Acc bị gỡ bài vẫn comment được, và comment đẩy
-    # bài cũ lên đầu nhóm — đó là cả lý do tính năng đi comment tồn tại. Cắt
-    # nốt là tự bỏ đường duy nhất acc đó còn làm được việc.
-    if tt == TRANG_THAI_SPAM and hoat_dong == "dang_bai":
-        return False, "acc đang nghỉ vì dính spam"
+    if tt == TRANG_THAI_SPAM:
+        den = _moc_nghi(r["nghi_den"])
+        if den:
+            return False, f"nghỉ hẳn vì dính spam, tới {den:%H:%M}"
+        # Hết giờ nghỉ mà chưa được hồi sinh (scheduler chưa kịp quét) — cho
+        # chạy luôn chứ đừng bắt đợi thêm một vòng lặp.
+        return True, ""
     if hoat_dong == "nuoi_nick":
         return True, ""
-    den = r["nghi_den"] or ""
-    if den:
-        try:
-            moc = datetime.fromisoformat(den)
-        except ValueError:
-            return True, ""
-        if datetime.now() < moc:
-            return False, f"đang nghỉ tới {moc:%H:%M}"
+    moc = _moc_nghi(r["nghi_den"])
+    if moc:
+        return False, f"đang nghỉ tới {moc:%H:%M}"
     return True, ""
 
 
@@ -582,36 +594,76 @@ def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool) -> tuple[bool, in
     return vua_dinh, so_cu
 
 
-def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None) -> int:
+def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None) -> tuple[int, object]:
     """
-    Chuyển acc sang trạng thái 'Spam' và dừng phần ĐĂNG BÀI còn lại hôm nay.
+    Cho acc NGHỈ HẲN vì Facebook vừa gỡ bài: không đăng, không comment, không nuôi.
 
-    Chỉ đụng slot `dang_bai` đang 'Chờ'. Slot comment và slot nuôi giữ nguyên:
-    acc bị gỡ bài vẫn comment được, và nuôi là thứ có cơ gỡ nó ra.
+    Facebook gỡ bài nghĩa là nó đang soi nick ngay lúc đó. Mọi thao tác tự động
+    lúc này chỉ làm nặng thêm, nên nằm im trọn `SK.NGHI_SPAM_GIO` tiếng rồi quay
+    lại. Hết giờ thì `hoi_sinh_het_nghi_spam` tự bật lại và trả lịch về 'Chờ' —
+    không cần người can thiệp.
+
+    Đánh 'Nghỉ Spam' cho MỌI slot còn lại hôm nay (đăng lẫn comment), chỉ chừa
+    slot đã qua giờ. Slot nuôi cũng bị chặn nhưng qua `acc_duoc_chay` chứ không
+    đổi trạng thái, để nuôi tự chạy lại ngay khi hết giờ nghỉ.
 
     `gio` (HH:MM) chỉ để test đặt mốc cố định — bỏ trống thì lấy giờ hiện tại.
-    Không có nó thì test phải bám đồng hồ thật và hỏng khi chạy lúc gần nửa đêm.
 
-    Trả số slot đã chuyển sang 'Nghỉ Spam'.
+    Trả `(số slot đã dừng, mốc hết nghỉ)`.
     """
+    import suc_khoe_acc as sk
     gio = gio or datetime.now().strftime("%H:%M")
+    moc = datetime.now() + timedelta(hours=sk.NGHI_SPAM_GIO)
     with _conn() as con:
         r = con.execute("SELECT id FROM accounts WHERE ten_acc=? LIMIT 1",
                         (ten_acc,)).fetchone()
         if not r:
-            return 0
+            return 0, None
         con.execute(
-            "UPDATE accounts SET trang_thai=?, canh_bao_moi=? WHERE id=?",
-            (TRANG_THAI_SPAM,
-             f"'{ten_acc}' bị Facebook gỡ bài (spam) — đã dừng đăng"
+            "UPDATE accounts SET trang_thai=?, nghi_den=?, canh_bao_moi=? WHERE id=?",
+            (TRANG_THAI_SPAM, moc.isoformat(timespec="seconds"),
+             f"'{ten_acc}' bị Facebook gỡ bài (spam) — nghỉ hẳn tới {moc:%H:%M}"
              + (f": {chi_tiet}" if chi_tiet else ""),
              r["id"]))
-        return con.execute(
+        n = con.execute(
             "UPDATE schedules SET trang_thai=?, "
             "updated_at=datetime('now','localtime') "
             "WHERE ten_acc=? AND trang_thai='Chờ' AND gio_dang > ? "
-            "AND COALESCE(hoat_dong,'dang_bai')='dang_bai'",
+            "AND COALESCE(hoat_dong,'dang_bai') IN ('dang_bai','comment')",
             (TT_LICH_NGHI_SPAM, ten_acc, gio)).rowcount
+    return n, moc
+
+
+def hoi_sinh_het_nghi_spam() -> list[dict]:
+    """
+    Bật lại các acc đã nghỉ đủ giờ vì dính spam, và trả lịch của chúng về 'Chờ'.
+
+    Trả lại slot ĐÃ QUA GIỜ về 'Chờ' là an toàn, không gây dồn bài: scheduler chỉ
+    chạy dòng nằm trong cửa sổ `WINDOW_MINUTES` (3 phút) sau giờ hẹn, nên slot lỡ
+    trong lúc nghỉ đơn giản không bao giờ tới lượt — nó chỉ nằm đó tới lần reset
+    đầu ngày.
+
+    Trả danh sách `[{"ten_acc":…, "so_slot":…}]` để nơi gọi ghi log.
+    """
+    ra = []
+    with _conn() as con:
+        rows = con.execute(
+            "SELECT id, ten_acc, nghi_den FROM accounts WHERE trang_thai=?",
+            (TRANG_THAI_SPAM,)).fetchall()
+        for r in rows:
+            if _moc_nghi(r["nghi_den"]):
+                continue                      # vẫn còn đang nghỉ
+            con.execute("UPDATE accounts SET trang_thai='Active', nghi_den='', "
+                        "lich_su_phien='', canh_bao_moi=? WHERE id=?",
+                        (f"'{r['ten_acc']}' đã nghỉ đủ giờ — chạy lại bình thường",
+                         r["id"]))
+            n = con.execute(
+                "UPDATE schedules SET trang_thai='Chờ', "
+                "updated_at=datetime('now','localtime') "
+                "WHERE ten_acc=? AND trang_thai=?",
+                (r["ten_acc"], TT_LICH_NGHI_SPAM)).rowcount
+            ra.append({"ten_acc": r["ten_acc"], "so_slot": n})
+    return ra
 
 
 def lay_canh_bao() -> list[dict]:

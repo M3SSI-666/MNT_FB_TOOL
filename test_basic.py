@@ -1212,6 +1212,7 @@ _sid = db.upsert_account({"ten_acc": "SPAM Test", "trang_thai": "Active",
                           "loai_dang": "Homestay", "ten_page": "P"})
 # Mốc giờ CỐ ĐỊNH, không lấy từ đồng hồ thật: bản đầu dùng "giờ hiện tại + 1"
 # nên chạy test lúc 23 giờ là hỏng — min(23, 24) ra 23:00, không còn ở tương lai.
+from datetime import datetime as _dt, timedelta as _td
 _GIO_MOC  = "12:00"
 _gio_sau   = "13:00"
 _gio_truoc = "11:00"
@@ -1229,24 +1230,51 @@ check("đo lại cùng số -> không dính",   _moi2 is False and _cu2 == 12)
 _moi3, _cu3 = db.ghi_nhan_vi_pham("SPAM Test", 15, True)
 check("số vụ tăng -> vừa dính spam",    _moi3 is True and _cu3 == 12)
 
-_n_slot = db.danh_dau_spam("SPAM Test", "3 bài mới bị gỡ", gio=_GIO_MOC)
+_n_slot, _moc_spam = db.danh_dau_spam("SPAM Test", "3 bài mới bị gỡ", gio=_GIO_MOC)
 check("chuyển trạng thái sang Spam",
-      db.get_accounts()[0] is not None and any(
-          a["ten_acc"] == "SPAM Test" and a["trang_thai"] == db.TRANG_THAI_SPAM
+      any(a["ten_acc"] == "SPAM Test" and a["trang_thai"] == db.TRANG_THAI_SPAM
           for a in db.get_accounts()))
-check("dừng slot đăng bài còn lại",     _n_slot == 1)
+check("nghỉ đúng 3 tiếng",
+      abs((_moc_spam - _dt.now()).total_seconds() / 3600 - _sk.NGHI_SPAM_GIO) < 0.02)
+# FB gỡ bài = nick đang bị soi ngay lúc đó, nên NGHỈ HẲN: dừng cả đăng lẫn
+# comment. Khác nghỉ-vì-lỗi-liên-tiếp (chỉ chặn đăng/comment, vẫn nuôi).
+check("dừng cả slot đăng lẫn comment",  _n_slot == 2)
 with db._conn() as _c:
     _rows = {(r["hoat_dong"], r["gio_dang"]): r["trang_thai"] for r in _c.execute(
         "SELECT hoat_dong,gio_dang,trang_thai FROM schedules WHERE ten_acc='SPAM Test'")}
 check("slot đăng sắp tới -> Nghỉ Spam", _rows[("dang_bai", _gio_sau)] == db.TT_LICH_NGHI_SPAM)
+check("slot comment -> Nghỉ Spam",      _rows[("comment", _gio_sau)] == db.TT_LICH_NGHI_SPAM)
 check("slot đăng đã qua giờ -> để yên", _rows[("dang_bai", _gio_truoc)] == "Chờ")
-# Acc dính spam VẪN comment được — đó là cả tiền đề của tính năng đi comment.
-check("slot comment KHÔNG bị dừng",     _rows[("comment", _gio_sau)] == "Chờ")
-check("slot nuôi KHÔNG bị dừng",        _rows[("nuoi_nick", _gio_sau)] == "Chờ")
+# Slot nuôi KHÔNG đổi trạng thái — nó bị chặn qua acc_duoc_chay, để hết giờ nghỉ
+# là tự chạy lại ngay mà không cần đợi hồi sinh trả trạng thái về.
+check("slot nuôi giữ nguyên trạng thái", _rows[("nuoi_nick", _gio_sau)] == "Chờ")
 
 check("spam chặn ĐĂNG BÀI",             db.acc_duoc_chay("SPAM Test", "dang_bai")[0] is False)
-check("spam VẪN cho comment",           db.acc_duoc_chay("SPAM Test", "comment")[0] is True)
-check("spam VẪN cho nuôi nick",         db.acc_duoc_chay("SPAM Test", "nuoi_nick")[0] is True)
+check("spam chặn CẢ comment",           db.acc_duoc_chay("SPAM Test", "comment")[0] is False)
+check("spam chặn CẢ nuôi nick",         db.acc_duoc_chay("SPAM Test", "nuoi_nick")[0] is False)
+
+# ── Hết 3 tiếng thì tự bật lại, lịch về 'Chờ' ──────────────────────────────
+check("chưa hết giờ -> chưa hồi sinh",  db.hoi_sinh_het_nghi_spam() == [])
+with db._conn() as _c:   # tua đồng hồ: đặt mốc nghỉ về quá khứ
+    _c.execute("UPDATE accounts SET nghi_den=? WHERE id=?",
+               ((_dt.now() - _td(minutes=1)).isoformat(timespec="seconds"), _sid))
+_hs = db.hoi_sinh_het_nghi_spam()
+check("hết giờ -> hồi sinh acc",        len(_hs) == 1 and _hs[0]["ten_acc"] == "SPAM Test")
+check("trả đúng 2 slot về Chờ",         _hs[0]["so_slot"] == 2)
+with db._conn() as _c:
+    _sau = {(r["hoat_dong"], r["gio_dang"]): r["trang_thai"] for r in _c.execute(
+        "SELECT hoat_dong,gio_dang,trang_thai FROM schedules WHERE ten_acc='SPAM Test'")}
+check("slot đăng về lại Chờ",           _sau[("dang_bai", _gio_sau)] == "Chờ")
+check("slot comment về lại Chờ",        _sau[("comment", _gio_sau)] == "Chờ")
+check("acc về lại Active",
+      any(a["ten_acc"] == "SPAM Test" and a["trang_thai"] == "Active"
+          for a in db.get_accounts()))
+check("hồi sinh xong -> đăng bài lại được", db.acc_duoc_chay("SPAM Test", "dang_bai")[0] is True)
+check("hồi sinh xong -> comment lại được",  db.acc_duoc_chay("SPAM Test", "comment")[0] is True)
+check("chạy lại lần nữa -> không có ai",    db.hoi_sinh_het_nghi_spam() == [])
+# Đặt lại trạng thái Spam cho các assertion phía dưới.
+with db._conn() as _c:
+    _c.execute("UPDATE accounts SET trang_thai=? WHERE id=?", (db.TRANG_THAI_SPAM, _sid))
 # get_account_by_name lọc cứng 'Active' thì phiên comment/nuôi không lấy được
 # cookie và chết theo — trong khi việc chặn đăng đã do acc_duoc_chay lo rồi.
 check("vẫn tra được acc để lấy cookie", db.get_account_by_name("SPAM Test") is not None)

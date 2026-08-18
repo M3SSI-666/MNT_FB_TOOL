@@ -873,12 +873,12 @@ async def _run_page_via(
                 logger.warning(f"  ⚠️  FB đã gỡ {_vp['so']} bài của '{acc_name}'"
                                f" (lần đo trước: {'chưa đo' if _cu < 0 else _cu})")
                 if _moi:
-                    _n = _db2.danh_dau_spam(
+                    _n, _moc = _db2.danh_dau_spam(
                         acc_name, f"{_vp['so'] - _cu} bài mới bị gỡ")
                     logger.error(
-                        f"  🚫 '{acc_name}' DÍNH SPAM — chuyển trạng thái Spam, "
-                        f"dừng {_n} slot đăng bài còn lại hôm nay. "
-                        f"Slot comment và nuôi vẫn chạy.")
+                        f"  🚫 '{acc_name}' DÍNH SPAM — nghỉ hẳn tới "
+                        f"{_moc:%H:%M} (không đăng, không comment, không nuôi), "
+                        f"dừng {_n} slot còn lại. Hết giờ tự chạy lại.")
             else:
                 logger.info("  ✅ Không thấy cảnh báo gỡ bài")
         except Exception as e:
