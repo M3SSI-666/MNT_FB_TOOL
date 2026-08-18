@@ -520,11 +520,12 @@ def acc_duoc_chay(ten_acc: str, hoat_dong: str = "dang_bai") -> tuple[bool, str]
         den = _moc_nghi(r["nghi_den"])
         # Nuôi nick vẫn chạy suốt thời gian nghỉ: xem story / lướt feed là hành
         # vi người thật, nó không phải thứ khiến Facebook gỡ bài, và giữ nick
-        # sống thay vì im lìm cả 3 tiếng.
+        # sống thay vì im lìm.
         if den and hoat_dong != "nuoi_nick":
-            return False, f"nghỉ vì dính spam, tới {den:%H:%M}"
-        # Hết giờ nghỉ mà chưa được hồi sinh (scheduler chưa kịp quét) — cho
-        # chạy luôn chứ đừng bắt đợi thêm một vòng lặp.
+            return False, f"nghỉ vì dính spam, thăm dò lại lúc {den:%H:%M}"
+        # Hết giờ nghỉ — cho chạy PHIÊN THĂM DÒ. Trạng thái vẫn là Spam cho tới
+        # khi phiên đó thành công; `ghi_nhan_phien_dang` quyết định thả hay
+        # nghỉ tiếp.
         return True, ""
     if hoat_dong == "nuoi_nick":
         return True, ""
@@ -542,10 +543,23 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool) -> tuple[str, str]:
     """
     import suc_khoe_acc as sk
     with _conn() as con:
-        r = con.execute("SELECT id, lich_su_phien FROM accounts "
+        r = con.execute("SELECT id, lich_su_phien, trang_thai FROM accounts "
                         "WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
         if not r:
             return "", ""
+
+    # Acc đang dính spam: phiên vừa chạy là PHIÊN THĂM DÒ, không phải phiên
+    # thường. Xử riêng và KHÔNG cộng vào lịch sử sức khoẻ — phiên thăm dò hỏng
+    # là chuyện dự kiến, để nó dồn vào cửa sổ trượt thì acc sẽ bị "tắt hẳn" oan
+    # chỉ vì đang chờ Facebook thả.
+    if (r["trang_thai"] or "") == TRANG_THAI_SPAM:
+        if ok:
+            n = het_spam(ten_acc)
+            return "het_spam", f"thăm dò thành công — trả {n} slot về Chờ"
+        _, moc = danh_dau_spam(ten_acc, "thăm dò vẫn hỏng")
+        return "tham_do_hong", f"thăm dò vẫn hỏng — dò lại lúc {moc:%H:%M}"
+
+    with _conn() as con:
         moi = sk.them_ket_qua(r["lich_su_phien"] or "", ok)
         con.execute("UPDATE accounts SET lich_su_phien=? WHERE id=?", (moi, r["id"]))
 
@@ -602,9 +616,12 @@ def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None) -> tuple[in
     Cho acc nghỉ ĐĂNG và COMMENT vì Facebook vừa gỡ bài. Nuôi nick vẫn chạy.
 
     Facebook gỡ bài nghĩa là nó đang soi nick ngay lúc đó, nên dừng hai việc vừa
-    bị phạt trong `SK.NGHI_SPAM_GIO` tiếng. Nuôi thì giữ: xem story / lướt feed
-    là hành vi người thật, không phải thứ bị gỡ bài. Hết giờ thì
-    `hoi_sinh_het_nghi_spam` tự bật lại và trả lịch về 'Chờ'.
+    bị phạt trong `SK.THAM_DO_PHUT` phút. Nuôi thì giữ: xem story / lướt feed là
+    hành vi người thật, không phải thứ bị gỡ bài.
+
+    Hết giờ, `mo_duong_tham_do` trả lịch về 'Chờ' cho MỘT phiên thăm dò chạy —
+    thành công thì `het_spam` thả hẳn, hỏng thì gọi lại chính hàm này, nghỉ thêm
+    một lượt nữa rồi dò tiếp. Gọi lại được nhiều lần, không tích luỹ trạng thái.
 
     Đánh 'Nghỉ Spam' cho MỌI slot đăng và comment còn lại hôm nay, chỉ chừa slot
     đã qua giờ. Slot nuôi không đụng tới.
@@ -615,7 +632,7 @@ def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None) -> tuple[in
     """
     import suc_khoe_acc as sk
     gio = gio or datetime.now().strftime("%H:%M")
-    moc = datetime.now() + timedelta(hours=sk.NGHI_SPAM_GIO)
+    moc = datetime.now() + timedelta(minutes=sk.THAM_DO_PHUT)
     with _conn() as con:
         r = con.execute("SELECT id FROM accounts WHERE ten_acc=? LIMIT 1",
                         (ten_acc,)).fetchone()
@@ -624,7 +641,7 @@ def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None) -> tuple[in
         con.execute(
             "UPDATE accounts SET trang_thai=?, nghi_den=?, canh_bao_moi=? WHERE id=?",
             (TRANG_THAI_SPAM, moc.isoformat(timespec="seconds"),
-             f"'{ten_acc}' bị Facebook gỡ bài (spam) — nghỉ hẳn tới {moc:%H:%M}"
+             f"'{ten_acc}' dính spam — nghỉ, thăm dò lại lúc {moc:%H:%M}"
              + (f": {chi_tiet}" if chi_tiet else ""),
              r["id"]))
         n = con.execute(
@@ -636,16 +653,37 @@ def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None) -> tuple[in
     return n, moc
 
 
-def hoi_sinh_het_nghi_spam() -> list[dict]:
+def het_spam(ten_acc: str) -> int:
+    """Thả hẳn acc: về 'Active', xoá mốc nghỉ, trả mọi slot 'Nghỉ Spam' về 'Chờ'."""
+    with _conn() as con:
+        con.execute(
+            "UPDATE accounts SET trang_thai='Active', nghi_den='', "
+            "lich_su_phien='', canh_bao_moi=? WHERE ten_acc=?",
+            (f"'{ten_acc}' thăm dò thành công — chạy lại bình thường", ten_acc))
+        return con.execute(
+            "UPDATE schedules SET trang_thai='Chờ', "
+            "updated_at=datetime('now','localtime') "
+            "WHERE ten_acc=? AND trang_thai=?",
+            (ten_acc, TT_LICH_NGHI_SPAM)).rowcount
+
+
+def mo_duong_tham_do() -> list[dict]:
     """
-    Bật lại các acc đã nghỉ đủ giờ vì dính spam, và trả lịch của chúng về 'Chờ'.
+    Acc dính spam đã nghỉ đủ giờ → trả lịch về 'Chờ' để chạy PHIÊN THĂM DÒ.
 
-    Trả lại slot ĐÃ QUA GIỜ về 'Chờ' là an toàn, không gây dồn bài: scheduler chỉ
+    Vẫn giữ `trang_thai='Spam'`: đây mới là mở đường thử, chưa phải thả. Kết quả
+    phiên thăm dò do `ghi_nhan_phien_dang` xử — thành công thì `het_spam`, hỏng
+    thì `danh_dau_spam` lại, nghỉ thêm `THAM_DO_PHUT` phút rồi dò tiếp.
+
+    Không trả slot về 'Chờ' thì phiên thăm dò KHÔNG BAO GIỜ chạy được: mọi slot
+    của acc đang là 'Nghỉ Spam' mà scheduler chỉ bốc dòng 'Chờ'. Đó là mắt xích
+    dễ quên nhất của cơ chế này.
+
+    Trả slot ĐÃ QUA GIỜ về 'Chờ' là an toàn, không gây dồn bài: scheduler chỉ
     chạy dòng nằm trong cửa sổ `WINDOW_MINUTES` (3 phút) sau giờ hẹn, nên slot lỡ
-    trong lúc nghỉ đơn giản không bao giờ tới lượt — nó chỉ nằm đó tới lần reset
-    đầu ngày.
+    trong lúc nghỉ đơn giản không bao giờ tới lượt.
 
-    Trả danh sách `[{"ten_acc":…, "so_slot":…}]` để nơi gọi ghi log.
+    Trả `[{"ten_acc":…, "so_slot":…}]` để nơi gọi ghi log.
     """
     ra = []
     with _conn() as con:
@@ -655,16 +693,13 @@ def hoi_sinh_het_nghi_spam() -> list[dict]:
         for r in rows:
             if _moc_nghi(r["nghi_den"]):
                 continue                      # vẫn còn đang nghỉ
-            con.execute("UPDATE accounts SET trang_thai='Active', nghi_den='', "
-                        "lich_su_phien='', canh_bao_moi=? WHERE id=?",
-                        (f"'{r['ten_acc']}' đã nghỉ đủ giờ — chạy lại bình thường",
-                         r["id"]))
             n = con.execute(
                 "UPDATE schedules SET trang_thai='Chờ', "
                 "updated_at=datetime('now','localtime') "
                 "WHERE ten_acc=? AND trang_thai=?",
                 (r["ten_acc"], TT_LICH_NGHI_SPAM)).rowcount
-            ra.append({"ten_acc": r["ten_acc"], "so_slot": n})
+            if n:
+                ra.append({"ten_acc": r["ten_acc"], "so_slot": n})
     return ra
 
 

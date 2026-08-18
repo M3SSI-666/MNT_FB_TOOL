@@ -876,9 +876,9 @@ async def _run_page_via(
                     _n, _moc = _db2.danh_dau_spam(
                         acc_name, f"{_vp['so'] - _cu} bài mới bị gỡ")
                     logger.error(
-                        f"  🚫 '{acc_name}' DÍNH SPAM — nghỉ đăng và comment tới "
-                        f"{_moc:%H:%M} (nuôi nick vẫn chạy), "
-                        f"dừng {_n} slot còn lại. Hết giờ tự chạy lại.")
+                        f"  🚫 '{acc_name}' DÍNH SPAM — nghỉ đăng và comment, "
+                        f"thăm dò lại lúc {_moc:%H:%M} (nuôi nick vẫn chạy), "
+                        f"dừng {_n} slot còn lại.")
             else:
                 logger.info("  ✅ Không thấy cảnh báo gỡ bài")
         except Exception as e:

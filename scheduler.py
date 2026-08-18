@@ -500,14 +500,15 @@ def main():
 
             logger.info(f"⏰ [{now.strftime('%H:%M:%S')}] Kiểm tra lịch {LOAI}...")
 
-            # Acc nghỉ vì dính spam đã đủ giờ thì bật lại và trả lịch về 'Chờ'.
-            # Quét mỗi vòng (60s) nên chậm nhất là muộn 1 phút so với mốc.
+            # Acc dính spam đã nghỉ đủ giờ thì trả lịch về 'Chờ' để chạy MỘT
+            # phiên thăm dò. Vẫn giữ trạng thái Spam — được thì phiên đó tự thả,
+            # hỏng thì tự nghỉ thêm một lượt. Quét mỗi vòng (60s).
             try:
-                for _hs in db.hoi_sinh_het_nghi_spam():
-                    logger.info(f"🔄 Bật lại '{_hs['ten_acc']}' sau khi nghỉ spam "
-                                f"— trả {_hs['so_slot']} slot về Chờ")
+                for _hs in db.mo_duong_tham_do():
+                    logger.info(f"🔍 '{_hs['ten_acc']}' hết giờ nghỉ spam — mở "
+                                f"{_hs['so_slot']} slot để chạy phiên thăm dò")
             except Exception as e:
-                logger.warning(f"⚠️  Không hồi sinh được acc nghỉ spam: {e}")
+                logger.warning(f"⚠️  Không mở được đường thăm dò: {e}")
 
             rows = get_schedules(LOAI, trang_thai="Chờ")
             due  = [r for r in rows if r["gio_dang"] and _is_due(r["gio_dang"])]

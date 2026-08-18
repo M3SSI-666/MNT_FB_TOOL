@@ -557,10 +557,12 @@ function _trangThaiAcc(r){
         const t=r.nghi_den?new Date(r.nghi_den):null;
         const den=(t&&!isNaN(t))?` tới ${String(t.getHours()).padStart(2,"0")}:`
                                  +`${String(t.getMinutes()).padStart(2,"0")}`:"";
-        return {nhan:`🚫 Spam${den}`, mau:"var(--danger)", dam:true,
+        return {nhan:`🚫 Spam${den?" · dò lúc"+den.replace(" tới",""):""}`,
+                mau:"var(--danger)", dam:true,
                 chiTiet:`Facebook đã gỡ ${r.so_vi_pham>0?r.so_vi_pham+" bài":"bài"} của nick này. `
                        +`Nghỉ đăng và comment; nuôi nick vẫn chạy. `
-                       +`Hết giờ tự chạy lại, không cần làm gì.`};
+                       +`Mỗi 60 phút tự chạy 1 phiên thăm dò — được thì chạy lại `
+                       +`bình thường, chưa được thì nghỉ tiếp. Không cần làm gì.`};
     }
     if(val==="Cookie hết hạn")
         return {nhan:val, mau:"var(--danger)", dam:false, chiTiet:"Cần đăng nhập lại"};

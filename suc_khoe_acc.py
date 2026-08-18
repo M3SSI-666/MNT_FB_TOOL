@@ -30,11 +30,17 @@ import re
 CHUOI_NGHI = 5
 NGHI_GIO   = 3
 
-# Nghỉ bao lâu khi Facebook GỠ BÀI. Khác `NGHI_GIO` ở trên về bản chất: đó là
-# nghỉ vì lỗi liên tiếp (đoán là bị chặn), còn đây là Facebook đã nói thẳng nó
-# vừa gỡ nội dung. Dừng ĐĂNG và COMMENT — hai việc vừa bị phạt — nhưng vẫn nuôi
-# nick, vì lướt feed / xem story là hành vi người thật, không phải thứ bị gỡ.
-NGHI_SPAM_GIO = 3
+# Dính spam thì nghỉ bao lâu rồi THĂM DÒ một phiên. Được thì chạy tiếp bình
+# thường, không được thì nghỉ thêm chừng đó nữa rồi dò lại.
+#
+# Vì sao thăm dò thay vì nghỉ cứng: đo trên acc 'Thao Ngan' ngày 18/08 — bị chặn
+# đăng lúc 22:32, tới 00:51 đã đăng lại được 9 nhóm. Facebook thả sau chưa tới
+# 90 phút, mà mốc nghỉ cứng 3 tiếng bắt nó nằm không thêm ~84 phút vô ích.
+#
+# Nhưng cũng KHÔNG rút cứng xuống 90 phút: lần chặn trước của chính acc đó kéo
+# dài tới ~6 tiếng. Độ dài mỗi lần chặn không đoán được, nên hỏi Facebook mỗi
+# tiếng một câu là cách rẻ nhất — sai thì chỉ mất đúng một phiên.
+THAM_DO_PHUT = 60
 
 # Cửa sổ trượt để quyết định tắt hẳn. 20 phiên ≈ nửa ngày chạy của một acc.
 CUA_SO     = 20

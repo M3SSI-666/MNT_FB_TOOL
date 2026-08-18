@@ -148,8 +148,9 @@ Song song với cơ chế nuôi nick (Loại đăng trống + tick Nuôi = chỉ
 
 **Acc "chỉ comment" không còn là một lựa chọn phải tự đặt.** Khi máy phát hiện
 Facebook gỡ bài, nó chuyển acc sang trạng thái `Spam` và cho **nghỉ đăng +
-comment 3 tiếng** (nuôi nick vẫn chạy) rồi tự bật lại. Xem
-[Dính spam](#dính-spam--nghỉ-đăng-và-comment-3-tiếng-rồi-tự-chạy-lại).
+comment**, rồi **thăm dò lại mỗi 60 phút** cho tới khi đăng được (nuôi nick vẫn
+chạy suốt). Xem
+[Dính spam](#dính-spam--nghỉ-rồi-thăm-dò-lại-mỗi-60-phút).
 
 > **Đã bỏ loại đăng `C_*`.** Giữ song song với trạng thái `Spam` thì cùng một
 > tình huống có hai nguồn sự thật — đúng lỗi đã mắc với hai cột `comment_bai` /
@@ -410,7 +411,7 @@ Chạy lại đúng 766 phiên đó: tắt 1 acc (đúng acc đã chết), cho n
 hai chạy tiếp, không đụng 7 acc khoẻ, cứu 86/766 slot (11%). **Sửa ngưỡng thì nên
 chạy lại phép đo đó trước.**
 
-### Dính spam — nghỉ đăng và comment 3 tiếng rồi tự chạy lại
+### Dính spam — nghỉ, rồi thăm dò lại mỗi 60 phút
 Sau khi đăng xong, phiên quay lại trang chủ và đọc dialog **"Sự việc"** Facebook
 tự bật khi vừa gỡ nội dung của nick. Đặt ở cuối phiên vì Facebook đẩy thông báo
 gỡ bài về trong vài chục giây sau khi đăng — dò ở đầu phiên chỉ thấy vụ hôm qua.
@@ -422,14 +423,31 @@ Nhận ra thì:
 | Trạng thái acc | → `Spam` (đỏ, có toast), kèm mốc hết nghỉ |
 | Slot **đăng bài** + **comment** còn lại hôm nay | → `Nghỉ Spam` |
 | **Nuôi nick** | **vẫn chạy** — lướt feed / xem story là hành vi người thật, không phải thứ bị gỡ bài |
-| Sau `NGHI_SPAM_GIO` = **3 tiếng** | acc tự về `Active`, mọi slot `Nghỉ Spam` tự về `Chờ` |
+| Sau `THAM_DO_PHUT` = **60 phút** | mở lại slot để chạy **một phiên thăm dò** — trạng thái vẫn là `Spam` |
+| Thăm dò **được** | acc về `Active`, mọi slot `Nghỉ Spam` về `Chờ` |
+| Thăm dò **hỏng** | nghỉ thêm 60 phút rồi dò lại, lặp cho tới khi được |
 
 **Dừng cả comment, không chỉ đăng.** Facebook gỡ bài nghĩa là nó đang soi nick
 ngay lúc đó, nên ngưng luôn hai việc vừa bị phạt. Nuôi nick thì giữ — nó không
-phải thứ khiến bài bị gỡ, và giữ nick sống thay vì im lìm trọn 3 tiếng.
+phải thứ khiến bài bị gỡ, và giữ nick sống thay vì im lìm suốt thời gian nghỉ.
 
-Không cần làm gì để bật lại — `hoi_sinh_het_nghi_spam()` chạy mỗi vòng lặp
-scheduler (60s) nên chậm nhất là muộn 1 phút so với mốc.
+Không cần làm gì để bật lại — `mo_duong_tham_do()` chạy mỗi vòng lặp scheduler
+(60s) nên chậm nhất là muộn 1 phút so với mốc.
+
+> **Vì sao thăm dò chứ không nghỉ cứng.** Đo trên acc `Thao Ngan` ngày 18/08: bị
+> chặn đăng lúc 22:32, tới 00:51 đã đăng lại được 9 nhóm — Facebook thả sau chưa
+> tới 90 phút, mà mốc nghỉ cứng 3 tiếng bắt nó nằm không thêm ~84 phút vô ích.
+> Nhưng cũng không rút cứng xuống 90 phút: lần chặn trước của chính acc đó kéo
+> dài tới ~6 tiếng. Độ dài mỗi lần chặn không đoán được, nên hỏi Facebook mỗi
+> tiếng một câu là cách rẻ nhất — sai thì chỉ mất đúng một phiên.
+
+> **Phiên thăm dò hỏng KHÔNG tính vào lịch sử sức khoẻ.** Nó hỏng là chuyện dự
+> kiến; để nó dồn vào cửa sổ trượt 20 phiên thì acc bị "tắt hẳn" oan chỉ vì đang
+> chờ Facebook thả.
+
+> **Phải trả slot về `Chờ` mới thăm dò được.** Mọi slot của acc đang là
+> `Nghỉ Spam` mà scheduler chỉ bốc dòng `Chờ` — quên bước này thì phiên thăm dò
+> không bao giờ chạy và acc kẹt vĩnh viễn. Có assertion canh riêng.
 
 > **Trả slot đã lỡ về `Chờ` KHÔNG gây dồn bài.** Scheduler chỉ chạy dòng nằm
 > trong cửa sổ `WINDOW_MINUTES` (3 phút) sau giờ hẹn, nên slot lỡ trong lúc nghỉ
@@ -517,5 +535,5 @@ nội dung — mà đó đúng là ba chỗ phép kiểm được gọi nhiều 
 
 ## Test
 ```
-python test_basic.py   # 447 assertion, chạy trên DB tạm — không đụng data thật
+python test_basic.py   # 453 assertion, chạy trên DB tạm — không đụng data thật
 ```
