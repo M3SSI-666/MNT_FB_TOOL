@@ -469,6 +469,36 @@ scheduler (60s) nên chậm nhất là muộn 1 phút so với mốc.
 - **Bật lại về `Active` xoá sạch lịch sử phiên** — không thì phiên hỏng kế tiếp
   chạm lại ngưỡng ngay, nhìn như nút bật không ăn.
 
+## Nhận biết cookie chết — `fb_common.chua_dang_nhap`
+Dò **ô mật khẩu trên DOM**, không so chuỗi trong URL. Đo bằng trình duyệt sạch,
+không tiêm cookie:
+
+| Trang | `"login" in page.url` | dò ô mật khẩu |
+|---|---|---|
+| `facebook.com/` | ❌ trượt | ✅ bắt |
+| `facebook.com/groups/<slug>/` | ❌ trượt | ✅ bắt |
+| `facebook.com/groups/<id>/posts/<id>/` | ❌ trượt | ✅ bắt |
+| `facebook.com/notifications` | ✅ bắt | ✅ bắt |
+
+Ba trang đầu **xem được khi chưa đăng nhập** nên Facebook giữ nguyên URL, chỉ đổi
+nội dung — mà đó đúng là ba chỗ phép kiểm được gọi nhiều nhất.
+
+> **Hai hậu quả thật đã xảy ra.**
+>
+> Acc `Anh Nguyen The` bị đánh **"Hỏng 16/20 phiên"** trong khi nó chỉ chết `xs`:
+> cookie chết đi qua mọi chốt kiểm, phiên chạy tới bước mở composer rồi báo
+> "Không mở được composer" — tính là lỗi đăng bài. Đổi cookie xong nó đăng lại
+> 9 nhóm ngay lần đầu.
+>
+> **Mất dữ liệu ở phiên comment:** mở link bài khi đã đăng xuất thì không thấy ô
+> bình luận, `comment_bai` kết luận "link chết" và **xoá link khỏi danh sách 300**.
+> Đo trên 3 link thật: phép cũ trượt cả 3. Log ngày 13/08 có 3 link bị xoá đúng
+> lúc acc đó đang đăng xuất — link lành, xoá oan.
+
+> `nuoi_nick` là chỗ nặng nhất vì nó chỉ có **đúng một** chốt kiểm và chốt đó nằm
+> sau trang gốc. Nick chết cookie chạy trọn phiên nuôi trên trang landing — lướt
+> không, like không — rồi báo `✅ nuôi xong`. Thành công giả, hoàn toàn im lặng.
+
 ## Mã lỗi trạng thái lịch
 - **Cookie hết hạn** → tài khoản bị đăng xuất, cần lấy lại `xs` (account tự bị đánh dấu).
 - **Lỗi mạng/tạm thời** → đã tự thử lại 3 lần (cách nhau ~30s rồi ~60s) mà vẫn hỏng.
@@ -487,5 +517,5 @@ scheduler (60s) nên chậm nhất là muộn 1 phút so với mốc.
 
 ## Test
 ```
-python test_basic.py   # 433 assertion, chạy trên DB tạm — không đụng data thật
+python test_basic.py   # 447 assertion, chạy trên DB tạm — không đụng data thật
 ```

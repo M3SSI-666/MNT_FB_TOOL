@@ -228,6 +228,41 @@ async def jwait(page, base_ms: int, pct: float = 0.3):
     await page.wait_for_timeout(jitter_ms(base_ms, pct))
 
 
+async def chua_dang_nhap(page) -> bool:
+    """
+    True nếu trang đang ở trạng thái CHƯA đăng nhập (cookie chết / bị checkpoint).
+
+    Dò Ô MẬT KHẨU trên DOM, không so chuỗi trong URL. Bản cũ dùng
+    `"login" in page.url` và phép đó VÔ DỤNG ở đúng hai chỗ nó được gọi nhiều
+    nhất — đã đo bằng trình duyệt sạch, không tiêm cookie:
+
+        facebook.com/                 URL không đổi  → ❌ không bắt được
+        facebook.com/groups/<slug>/   URL không đổi  → ❌ không bắt được
+        facebook.com/notifications    → login.php    → ✅ bắt được
+
+    Hai trang đầu XEM ĐƯỢC khi chưa đăng nhập nên Facebook giữ nguyên URL, chỉ
+    đổi nội dung. Cả hai đều hiện ô mật khẩu, nên dò DOM bắt được cả ba.
+
+    Hậu quả thật của lỗ này: cookie chết đi qua mọi chốt kiểm, phiên chạy tiếp
+    tới bước mở composer rồi báo "Không mở được composer" — bị tính là lỗi đăng
+    bài. Acc 'Anh Nguyen The' vì thế bị đánh "Hỏng 16/20 phiên" trong khi nó chỉ
+    cần thay `xs`; đổi cookie xong đăng lại 9 nhóm ngay lần đầu.
+
+    Nặng nhất là `nuoi_nick`: nó chỉ có ĐÚNG MỘT chốt kiểm và chốt đó nằm sau
+    trang gốc, nên nick chết cookie chạy trọn phiên nuôi trên trang landing —
+    lướt không, like không — rồi báo `✅ nuôi xong`. Thành công giả, im lặng.
+    """
+    try:
+        if await page.evaluate(
+                "() => !!document.querySelector('input[type=\"password\"], "
+                "input[name=\"pass\"], input[name=\"email\"]')"):
+            return True
+    except Exception:
+        pass        # trang chưa dựng xong / bị điều hướng giữa lúc đọc
+    url = page.url or ""
+    return "login" in url or "checkpoint" in url
+
+
 async def dismiss_anon_dialog(page, wait_ms: int = 0) -> bool:
     """
     Đóng popup 'Anonymous post' / 'Bài viết ẩn danh' nếu xuất hiện.

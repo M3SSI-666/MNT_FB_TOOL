@@ -34,7 +34,7 @@ from collections import defaultdict
 from utils import logger, CookieDeadError
 from config import HEADLESS
 from cookie_exporter import load_cookie
-from fb_common import (browser_launch_kwargs, find_profile_dir, human_delay,
+from fb_common import (chua_dang_nhap, browser_launch_kwargs, find_profile_dir, human_delay,
                        jwait, view_stories, browse_and_like,
                        dong_dialog_canh_bao, bat_dau_canh_dialog)
 
@@ -290,7 +290,7 @@ async def _open_context(p, acc_name: str, c_user: str, headless: bool = None):
 
     await page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=30000)
     await human_delay(2000, 3000)
-    if "login" in page.url or "checkpoint" in page.url:
+    if await chua_dang_nhap(page):
         await ctx.close()
         raise CookieDeadError(acc_name)
 

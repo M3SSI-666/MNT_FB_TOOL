@@ -46,7 +46,7 @@ from cookie_exporter import load_cookie
 from storage import prepare_images_for_post as smart_download, cleanup_temp
 from config import HEADLESS
 from utils import logger, jitter_ms, CookieDeadError
-from fb_common import (dong_dialog_canh_bao, cho_composer_dong,
+from fb_common import (chua_dang_nhap, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
@@ -438,7 +438,7 @@ async def _run_page_via(
         await page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=30000)
         await _human_delay(2000, 3000)
 
-        if "login" in page.url or "checkpoint" in page.url:
+        if await chua_dang_nhap(page):
             logger.error(f"  ❌ [{acc_name}] Cookie hết hạn!")
             await ctx.close()
             raise CookieDeadError(acc_name)
@@ -472,7 +472,7 @@ async def _run_page_via(
         await page.goto(group_url, wait_until="domcontentloaded", timeout=30000)
         await _human_delay(3000, 5000)
 
-        if "login" in page.url or "checkpoint" in page.url:
+        if await chua_dang_nhap(page):
             logger.error(f"  ❌ Bị redirect về login sau switch!")
             await ctx.close()
             raise CookieDeadError(acc_name)
@@ -966,7 +966,7 @@ async def _run_page_wall(
         logger.info(f"  [1/5] 🔐 Login acc cá nhân...")
         await page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=30000)
         await _human_delay(2000, 3000)
-        if "login" in page.url or "checkpoint" in page.url:
+        if await chua_dang_nhap(page):
             logger.error(f"  ❌ [{acc_name}] Cookie hết hạn!")
             await ctx.close()
             raise CookieDeadError(acc_name)
@@ -987,7 +987,7 @@ async def _run_page_wall(
             wait_until="domcontentloaded", timeout=30000,
         )
         await _human_delay(3000, 5000)
-        if "login" in page.url or "checkpoint" in page.url:
+        if await chua_dang_nhap(page):
             logger.error(f"  ❌ Bị redirect về login sau switch!")
             await ctx.close()
             raise CookieDeadError(acc_name)

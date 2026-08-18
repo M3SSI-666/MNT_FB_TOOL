@@ -1353,6 +1353,56 @@ with db._conn() as _c:
 db.delete_account(_sid)
 db.xoa_canh_bao()
 
+# ── Nhận biết CHƯA ĐĂNG NHẬP (cookie chết) ─────────────────────────────────
+# Bản cũ dùng `"login" in page.url`. Đã đo bằng trình duyệt sạch, không tiêm
+# cookie: trang gốc, URL nhóm và URL BÀI VIẾT đều KHÔNG chuyển hướng khi chưa
+# đăng nhập — Facebook giữ nguyên URL, chỉ đổi nội dung. Chỉ /notifications mới
+# chuyển. Nên phép cũ trượt ở đúng ba chỗ nó được gọi nhiều nhất.
+#
+# Hậu quả nặng nhất là MẤT DỮ LIỆU: mở link bài khi đã đăng xuất thì không thấy
+# ô bình luận, comment_bai kết luận "link chết" và XOÁ link khỏi danh sách 300.
+# Đo trên 3 link thật: phép cũ trượt cả 3, phép mới bắt cả 3.
+import asyncio as _aio
+from fb_common import chua_dang_nhap as _cdn
+
+
+class _PageGia:
+    """Trang giả: `co_form` mô phỏng ô mật khẩu trên DOM, `url` là địa chỉ."""
+    def __init__(self, co_form, url="https://www.facebook.com/", no_loi=False):
+        self._f, self.url, self._no_loi = co_form, url, no_loi
+
+    async def evaluate(self, _js):
+        if self._no_loi:
+            raise RuntimeError("trang đang điều hướng")
+        return self._f
+
+
+_k = lambda p: _aio.run(_cdn(p))
+check("có ô mật khẩu -> chưa đăng nhập",  _k(_PageGia(True)) is True)
+check("không có ô -> đã đăng nhập",       _k(_PageGia(False)) is False)
+# Trang gốc / URL nhóm / URL bài viết giữ nguyên URL — đây là ca phép cũ trượt.
+for _u in ("https://www.facebook.com/",
+           "https://www.facebook.com/groups/bohoa/",
+           "https://www.facebook.com/groups/123/posts/456/"):
+    check(f"URL không đổi vẫn bắt được ({_u.split('/')[3] or 'gốc'})",
+          _k(_PageGia(True, _u)) is True)
+# Vẫn giữ phép so URL làm lớp phụ, cho ca /notifications đã chuyển hướng.
+check("login.php -> bắt được kể cả không đọc được DOM",
+      _k(_PageGia(False, "https://www.facebook.com/login.php?next=x")) is True)
+check("checkpoint -> bắt được",
+      _k(_PageGia(False, "https://www.facebook.com/checkpoint/123")) is True)
+# Đọc DOM lỗi (trang đang điều hướng) thì lùi về so URL, không được nổ.
+check("đọc DOM lỗi -> lùi về so URL",
+      _k(_PageGia(False, "https://www.facebook.com/login.php", no_loi=True)) is True)
+check("đọc DOM lỗi + URL sạch -> coi như đã vào",
+      _k(_PageGia(False, "https://www.facebook.com/", no_loi=True)) is False)
+
+# Không còn file nào dùng phép so URL trần.
+for _f in ("comment_bai.py", "nuoi_nick.py", "via_poster.py",
+           "join_groups_runner.py", "page_via_poster.py"):
+    check(f"{_f}: đã bỏ phép so URL trần",
+          '"login" in page.url' not in Path(_f).read_text(encoding="utf-8"))
+
 # ── Thư viện câu comment mẫu (comment_mau.txt) ─────────────────────────────
 _cm = server.app.test_client().get("/api/comment/cau-mau").get_json()
 check("endpoint câu mẫu chạy",          _cm.get("ok") is True)

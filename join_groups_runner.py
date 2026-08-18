@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from cookie_exporter import load_cookie
 from utils import logger
+from fb_common import chua_dang_nhap
 from db import _conn
 
 # Đọc runtime — không dùng config.py để env var có hiệu lực ngay
@@ -252,7 +253,7 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
         # Login check
         await page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=30000)
         await _human_delay(2000, 3000)
-        if "login" in page.url or "checkpoint" in page.url:
+        if await chua_dang_nhap(page):
             logger.error(f"  ❌ Cookie hết hạn!")
             _update_status("Lỗi - cookie hết hạn")
             await ctx.close()

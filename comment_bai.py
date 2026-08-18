@@ -43,7 +43,7 @@ from playwright.async_api import async_playwright
 from config import HEADLESS
 from utils import logger, CookieDeadError
 from cookie_exporter import load_cookie
-from fb_common import (browser_launch_kwargs, find_profile_dir, human_delay,
+from fb_common import (chua_dang_nhap, browser_launch_kwargs, find_profile_dir, human_delay,
                        dong_dialog_canh_bao, bat_dau_canh_dialog,
                        view_stories, browse_and_like)
 from nuoi_nick import pick_messages, is_messaging_restricted
@@ -169,7 +169,7 @@ async def _open_context(p, acc_name: str, c_user: str, headless: bool = None):
     await page.goto("https://www.facebook.com/", wait_until="domcontentloaded",
                     timeout=30000)
     await human_delay(2000, 3000)
-    if "login" in page.url or "checkpoint" in page.url:
+    if await chua_dang_nhap(page):
         await ctx.close()
         raise CookieDeadError(acc_name)
 
@@ -301,7 +301,7 @@ async def _comment_mot_bai(page, url: str, cau: str) -> None:
     # Dialog cảnh báo che mất ô bình luận y như che composer khi đăng bài.
     await dong_dialog_canh_bao(page)
 
-    if "login" in page.url or "checkpoint" in page.url:
+    if await chua_dang_nhap(page):
         raise CookieDeadError("bị đá về trang đăng nhập khi mở bài viết")
 
     # Bị chặn thì dừng NGAY, không gõ gì. Cùng lý do với nuôi nick: cố thao tác
