@@ -535,5 +535,5 @@ nội dung — mà đó đúng là ba chỗ phép kiểm được gọi nhiều 
 
 ## Test
 ```
-python test_basic.py   # 453 assertion, chạy trên DB tạm — không đụng data thật
+python test_basic.py   # 455 assertion, chạy trên DB tạm — không đụng data thật
 ```

@@ -376,36 +376,25 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
         logger.warning(f"  ⏭️  Chưa có thư viện câu cho loại '{loai}' — bỏ phiên")
         return {"da_comment": 0, "loi": 0, "bo_qua": "thiếu thư viện câu"}
 
-    # LUÔN ưu tiên bài chính chủ, không có công tắc: bài của Page nào thì Page
-    # đó comment là hợp lý nhất. Không có bài của mình thì lùi về chung kho —
-    # bài của Page anh em cũng là bài của mình, comment vào vẫn đẩy lên được.
-    page_uid  = _lay_page_uid(page_name)
-    chinh_chu = bool(page_uid)
-
-    bai = db.boc_bai_de_comment(loai, st["comment_so_bai"],
-                                page=page_uid if chinh_chu else "")
-
-    # Kho chưa có bài nào của Page này (Page mới, hoặc bài của nó đã bị đẩy ra
-    # khỏi cửa sổ 300) → LÙI VỀ dùng chung kho thay vì bỏ phiên. Bỏ phiên là
-    # phí nguyên một slot, trong khi comment vào bài của Page anh em vẫn đẩy
-    # được bài lên — tất cả đều là bài của mình.
-    dung_chung = False
-    if not bai and chinh_chu:
-        bai = db.boc_bai_de_comment(loai, st["comment_so_bai"])
-        dung_chung = bool(bai)
-        if dung_chung:
-            logger.info(f"  ↩️  Page chưa có bài nào trong kho '{loai}' — "
-                        f"lùi về dùng chung kho (bài của mọi Page)")
+    # Bài chính chủ đi trước, rồi LẤP ĐẦY bằng bài khác cùng hạng mục cho đủ số
+    # bài đã cài đặt. `page` là thứ tự ưu tiên chứ không phải bộ lọc cứng.
+    #
+    # Trước đây lọc cứng nên acc yếu — chỉ đăng chéo được vào 1 nhóm, cả kho chỉ
+    # có 1 link của nó — mỗi phiên comment đúng 1 bài thay vì 10. Nhánh lùi về
+    # kho chung chỉ chạy khi có ĐÚNG 0 link chính chủ nên không cứu được ca đó.
+    page_uid = _lay_page_uid(page_name)
+    bai = db.boc_bai_de_comment(loai, st["comment_so_bai"], page=page_uid)
 
     if not bai:
         logger.warning(f"  ⏭️  Bỏ phiên — chưa có link nào trong danh sách '{loai}'")
         return {"da_comment": 0, "loi": 0, "bo_qua": "danh sách trống"}
 
     cau_ds = pick_messages(pool, len(bai))     # không lặp câu ở hai bài liền nhau
-    nguon = ("chung kho" if dung_chung else
-             ("chỉ bài chính chủ" if chinh_chu else "chung kho"))
-    logger.info(f"  💬 Phiên comment: {len(bai)} bài | thư viện {len(pool)} câu "
-                f"| nguồn: {nguon}")
+    n_minh = sum(1 for b in bai if page_uid and (b.get("page") or "") == page_uid)
+    nguon = (f"{n_minh} bài chính chủ + {len(bai) - n_minh} bài cùng hạng mục"
+             if page_uid else "chung kho")
+    logger.info(f"  💬 Phiên comment: {len(bai)}/{st['comment_so_bai']} bài | "
+                f"thư viện {len(pool)} câu | {nguon}")
 
     ok_n, loi_n = 0, 0
     chet = []                                  # link chết gặp trong phiên này

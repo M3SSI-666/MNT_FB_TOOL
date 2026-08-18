@@ -1330,28 +1330,45 @@ def boc_bai_de_comment(loai: str, so_bai: int, page: str = "") -> list[dict]:
        thì mỗi phiên đều bốc trúng đúng một bài cũ nhất của mỗi nhóm, dội đi dội
        lại cho tới khi nó bị đẩy khỏi cửa sổ — đúng kiểu lặp cần tránh.
 
-    `page`: chỉ lấy bài do CHÍNH Page đó đăng ("comment vào bài chính chủ").
-    Bỏ trống = lấy mọi bài của hạng mục. Link cũ chưa gắn Page (cột rỗng) bị
-    loại khi có lọc — thà bốc ít còn hơn comment nhầm bài của Page khác.
+    3. **Bài chính chủ đi trước, rồi LẤP ĐẦY bằng bài khác cùng hạng mục.**
+       `page` là thứ tự ưu tiên, KHÔNG phải bộ lọc cứng.
+
+       Trước đây nó lọc cứng, và điều đó làm hỏng đúng các acc yếu: acc chỉ đăng
+       chéo được vào 1 nhóm thì cả danh sách chỉ có 1 link của nó, nên mỗi phiên
+       comment đúng 1 bài thay vì 10 — mất 90% công suất của phiên. Cơ chế lùi
+       về kho chung cũ chỉ chạy khi có ĐÚNG 0 link chính chủ, nên trường hợp
+       "có 1 link" rơi vào kẽ hở.
+
+       Nay: lấy hết bài chính chủ trước, thiếu bao nhiêu thì lấy tiếp bài của
+       Page khác trong CÙNG hạng mục cho đủ `so_bai`. Acc yếu có 1 link vẫn
+       comment đủ 10 bài: 1 của mình + 9 của hạng mục.
+
+    `page`: UID Page ưu tiên. Bỏ trống = không ưu tiên ai, chỉ xét luật 1–2.
     """
     n = max(0, int(so_bai or 0))
     if n == 0:
         return []
 
     ds = get_comment_posts(loai)
-    if page:
-        ds = [r for r in ds if (r.get("page") or "") == page]
 
-    # Trong mỗi nhóm, lấy đúng một ứng viên: ít comment nhất, rồi cũ nhất.
+    # Trong mỗi nhóm lấy đúng MỘT ứng viên. Khoá xếp hạng gồm ba bậc, xét theo
+    # đúng thứ tự này: chính chủ trước → ít comment nhất → cũ nhất.
+    # Đặt "chính chủ" lên bậc đầu để nhóm nào có cả bài của mình lẫn bài Page
+    # khác thì bài của mình được chọn làm đại diện nhóm đó.
+    def khoa(r):
+        cua_minh = bool(page) and (r.get("page") or "") == page
+        return (0 if cua_minh else 1,
+                int(r.get("so_lan") or 0),
+                int(r.get("order_idx") or 0))
+
     ung_vien = {}
     for r in ds:
         nhom = (r.get("nhom") or "").strip() or f"__le_{r['id']}"
-        khoa = (int(r.get("so_lan") or 0), int(r.get("order_idx") or 0))
-        if nhom not in ung_vien or khoa < ung_vien[nhom][0]:
-            ung_vien[nhom] = (khoa, r)
+        k = khoa(r)
+        if nhom not in ung_vien or k < ung_vien[nhom][0]:
+            ung_vien[nhom] = (k, r)
 
-    ds = sorted(ung_vien.values(), key=lambda x: x[0])
-    return [r for _, r in ds[:n]]
+    return [r for _, r in sorted(ung_vien.values(), key=lambda x: x[0])[:n]]
 
 
 def ghi_nhan_comment(post_id: int, ok: bool, ghi_chu: str = "", chet: bool = False):

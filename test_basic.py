@@ -932,26 +932,40 @@ db.them_comment_posts("ban", [_lk("gA", 1), _lk("gB", 2)], page="PAGE_1")
 db.them_comment_posts("ban", [_lk("gC", 3), _lk("gD", 4)], page="PAGE_2")
 check("lưu được Page của từng link",
       {r["page"] for r in db.get_comment_posts("ban")} == {"PAGE_1", "PAGE_2"})
-check("lọc theo Page 1 -> 2 bài",
-      len(db.boc_bai_de_comment("ban", 9, page="PAGE_1")) == 2)
-check("lọc theo Page 2 -> 2 bài",
-      len(db.boc_bai_de_comment("ban", 9, page="PAGE_2")) == 2)
-check("không lọc -> lấy cả 4",         len(db.boc_bai_de_comment("ban", 9)) == 4)
-check("Page lạ -> không bài nào",      db.boc_bai_de_comment("ban", 9, page="PAGE_9") == [])
-check("bài lấy ra đúng Page yêu cầu",
-      all(r["page"] == "PAGE_1" for r in db.boc_bai_de_comment("ban", 9, page="PAGE_1")))
-# Link cũ chưa gắn Page phải bị loại khi có lọc — thà bốc ít còn hơn comment
-# nhầm vào bài của Page khác.
-db.them_comment_posts("ban", [_lk("gE", 5)])
-check("link chưa gắn Page bị loại khi lọc",
-      len(db.boc_bai_de_comment("ban", 9, page="PAGE_1")) == 2)
-check("không lọc thì vẫn lấy link đó", len(db.boc_bai_de_comment("ban", 9)) == 5)
+# `page` là THỨ TỰ ƯU TIÊN, không phải bộ lọc cứng: bài chính chủ đi trước rồi
+# LẤP ĐẦY bằng bài cùng hạng mục cho đủ số bài đã cài đặt.
+_b1 = db.boc_bai_de_comment("ban", 9, page="PAGE_1")
+check("ưu tiên Page 1 vẫn lấy đủ 4 bài", len(_b1) == 4)
+check("2 bài đầu là của Page 1",
+      [r["page"] for r in _b1[:2]] == ["PAGE_1", "PAGE_1"])
+check("2 bài sau là Page khác",
+      all(r["page"] != "PAGE_1" for r in _b1[2:]))
+check("không ưu tiên ai -> vẫn lấy cả 4", len(db.boc_bai_de_comment("ban", 9)) == 4)
+# Page chưa có bài nào trong kho: KHÔNG bỏ phiên, lấy hết bài của hạng mục.
+check("Page lạ -> vẫn lấy đủ bài hạng mục",
+      len(db.boc_bai_de_comment("ban", 9, page="PAGE_9")) == 4)
 
-# Page chưa có bài nào trong kho -> phiên KHÔNG được bỏ, mà lùi về dùng chung
-# kho. Bỏ phiên là phí nguyên một slot, trong khi bài của Page anh em cũng là
-# bài của mình, comment vào vẫn đẩy lên được.
-check("Page lạ: lọc riêng -> rỗng",
-      db.boc_bai_de_comment("ban", 9, page="PAGE_MOI") == [])
+# ĐÂY LÀ CA ĐÃ HỎNG: acc yếu chỉ đăng chéo được vào 1 nhóm nên cả kho chỉ có 1
+# link của nó. Lọc cứng thì mỗi phiên comment đúng 1 bài thay vì 10 — mất 90%
+# công suất. Nay phải lấy 1 của mình + phần còn lại của hạng mục.
+db.xoa_het_comment_posts("ban")
+db.them_comment_posts("ban", [_lk("yeu", 1)], page="PAGE_YEU")
+db.them_comment_posts("ban", [_lk(f"kho{i}", i) for i in range(2, 13)], page="PAGE_KHAC")
+_by = db.boc_bai_de_comment("ban", 10, page="PAGE_YEU")
+check("acc yếu 1 link -> vẫn đủ 10 bài", len(_by) == 10)
+check("acc yếu: bài đầu là của chính nó", _by[0]["page"] == "PAGE_YEU")
+check("acc yếu: 9 bài sau của hạng mục",
+      sum(1 for r in _by[1:] if r["page"] == "PAGE_KHAC") == 9)
+check("acc yếu: vẫn 1 link mỗi nhóm",
+      len({r["nhom"] for r in _by}) == len(_by))
+
+# Dựng lại dữ liệu cho các assertion phía dưới.
+db.xoa_het_comment_posts("ban")
+db.them_comment_posts("ban", [_lk("gA", 1), _lk("gB", 2)], page="PAGE_1")
+db.them_comment_posts("ban", [_lk("gC", 3), _lk("gD", 4)], page="PAGE_2")
+db.them_comment_posts("ban", [_lk("gE", 5)])
+check("link chưa gắn Page vẫn được dùng",
+      len(db.boc_bai_de_comment("ban", 9, page="PAGE_1")) == 5)
 check("Page lạ: lùi về chung kho -> có bài",
       len(db.boc_bai_de_comment("ban", 9)) == 5)
 check("lùi về chung kho vẫn giữ 1 link/nhóm",
