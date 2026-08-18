@@ -142,7 +142,10 @@ def _attempt_post(item: dict) -> str:
     tu_khoa   = item.get("tu_khoa", "")
     mode      = (item.get("mode", "Hybrid") or "Hybrid").upper()
 
-    ct = get_content_by_code(ma_ct)
+    # PHẢI truyền loại: mã content chỉ duy nhất trong một mảng, không duy nhất
+    # toàn bảng. Thiếu nó thì lịch Bán lấy content của Thuê (13 mã đang trùng),
+    # và sửa content Bán sẽ không ăn — hỏng im lặng.
+    ct = get_content_by_code(ma_ct, LOAI)
     if not ct:
         raise Exception(f"Không tìm thấy mã content '{ma_ct}'")
     content  = ct.get("noi_dung", "").strip()

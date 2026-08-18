@@ -929,8 +929,29 @@ def reorder_content(ordered_ids: list[int]):
             con.execute("UPDATE content SET order_idx=? WHERE id=?", (idx, cid))
 
 
-def get_content_by_code(ma_content: str) -> dict | None:
+def get_content_by_code(ma_content: str, loai: str = None) -> dict | None:
+    """
+    Tra content theo mã. `loai` là BẮT BUỘC trên thực tế dù có giá trị mặc định.
+
+    Mã content chỉ duy nhất TRONG một loại, không duy nhất toàn bảng: sao content
+    từ mảng này sang mảng khác là thao tác thường ngày, và người dùng giữ nguyên
+    mã cho dễ đối chiếu. Hiện có 13 mã trùng giữa `thue` và `ban` (C3–C10, X1–X5).
+
+    Bản đầu không lọc loại nên `LIMIT 1` luôn trả về dòng có id nhỏ hơn — lịch
+    Bán lấy content của Thuê, mọi lần, mà không báo gì. Nội dung đang giống nhau
+    nên chưa lộ, nhưng sửa content Bán thì sửa xong KHÔNG ăn: lịch vẫn đọc bản
+    của Thuê. Đúng kiểu hỏng im lặng khó lần ra nhất.
+
+    Có `loai` mà không tìm ra thì lùi về tra toàn bảng — lịch cũ có thể trỏ tới
+    content đã được chuyển sang mảng khác, thà lấy đúng nội dung còn hơn chết.
+    """
     with _conn() as con:
+        if loai:
+            r = con.execute(
+                "SELECT * FROM content WHERE ma_content=? AND loai=? LIMIT 1",
+                (ma_content, loai)).fetchone()
+            if r:
+                return dict(r)
         r = con.execute(
             "SELECT * FROM content WHERE ma_content=? LIMIT 1", (ma_content,)
         ).fetchone()

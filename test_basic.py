@@ -1456,6 +1456,39 @@ for _f in ("comment_bai.py", "nuoi_nick.py", "via_poster.py",
     check(f"{_f}: đã bỏ phép so URL trần",
           '"login" in page.url' not in Path(_f).read_text(encoding="utf-8"))
 
+# ── Tra content phải theo ĐÚNG mảng ────────────────────────────────────────
+# Mã content chỉ duy nhất TRONG một mảng, không duy nhất toàn bảng: sao content
+# từ mảng này sang mảng khác là thao tác thường ngày và người dùng giữ nguyên mã
+# cho dễ đối chiếu. Trên DB thật đang có 13 mã trùng giữa `thue` và `ban`.
+#
+# Không lọc loại thì `LIMIT 1` luôn trả dòng id nhỏ hơn — lịch Bán lấy content
+# của Thuê, mọi lần, không báo gì. Đo trên dữ liệu thật: cả 13 mã trùng đều có
+# BỘ ẢNH KHÁC NHAU (upload sinh tên uuid mới), 3 mã còn khác cả nội dung.
+_ct_t = db.upsert_content({"loai": "thue", "ma_content": "DUP1",
+                           "noi_dung": "bản THUÊ", "link_anh": "/media/thue.jpg",
+                           "su_dung": "Có"})
+_ct_b = db.upsert_content({"loai": "ban", "ma_content": "DUP1",
+                           "noi_dung": "bản BÁN", "link_anh": "/media/ban.jpg",
+                           "su_dung": "Có"})
+check("cùng mã ở 2 mảng -> 2 dòng khác nhau", _ct_t != _ct_b)
+check("tra theo mảng thuê -> đúng bản thuê",
+      db.get_content_by_code("DUP1", "thue")["noi_dung"] == "bản THUÊ")
+check("tra theo mảng bán -> đúng bản bán",
+      db.get_content_by_code("DUP1", "ban")["noi_dung"] == "bản BÁN")
+check("tra theo mảng bán -> đúng ẢNH của bán",
+      db.get_content_by_code("DUP1", "ban")["link_anh"] == "/media/ban.jpg")
+# Mã chỉ có ở một mảng: hỏi mảng khác vẫn phải ra, vì lịch cũ có thể trỏ tới
+# content đã được chuyển mảng — thà lấy đúng nội dung còn hơn chết.
+db.upsert_content({"loai": "homestay", "ma_content": "SOLO1",
+                   "noi_dung": "chỉ homestay", "su_dung": "Có"})
+check("mã chỉ có 1 mảng -> hỏi mảng khác vẫn ra",
+      db.get_content_by_code("SOLO1", "ban")["noi_dung"] == "chỉ homestay")
+check("mã không tồn tại -> None",  db.get_content_by_code("KHONG_CO", "ban") is None)
+for _i in (_ct_t, _ct_b):
+    db.delete_content(_i)
+with db._conn() as _c:
+    _c.execute("DELETE FROM content WHERE ma_content='SOLO1'")
+
 # ── Thư viện câu comment mẫu (comment_mau.txt) ─────────────────────────────
 _cm = server.app.test_client().get("/api/comment/cau-mau").get_json()
 check("endpoint câu mẫu chạy",          _cm.get("ok") is True)
