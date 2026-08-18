@@ -134,39 +134,51 @@ dỡ, cho acc comment vào các bài cũ còn sống để đẩy chúng lên.
    một link bài viết, link trùng tự bỏ).
 2. **⚙️ Cài đặt comment** → nhập **thư viện câu** cho từng loại. Không có câu
    thì phiên tự bỏ qua.
-3. Bảng **Tài khoản** → đặt cột **Loại đăng** thành `C_*` hoặc `X_*` (xem bảng dưới).
+3. Bảng **Tài khoản** → đặt cột **Loại đăng** thành `X_*` (xem bảng dưới).
 4. **Gen lịch** lại. Slot bị chuyển hiện badge 💬 Comment.
 
-### Hai cách cho acc đi comment
+### Cách cho acc đi comment
 | Cột **Loại đăng** | Acc làm gì |
 |---|---|
-| **C_Home** / **C_Thuê** / **C_Bán** | **Chỉ comment, không đăng bài.** Vào đúng lịch của mảng đó, mọi slot đều là phiên comment. Dùng cho acc bị dỡ bài. |
 | **X_Home** / **X_Thuê** / **X_Bán** | **Vừa đăng vừa comment** theo tỉ lệ đặt ở *⚙️ Cài đặt comment* (mặc định 75% đăng / 25% comment). Ưu tiên comment vào bài của chính Page mình. |
 | Homestay / Thuê / Bán | Chỉ đăng bài, không comment. |
+| (để trống) | Không vào lịch đăng nào. |
 
 Song song với cơ chế nuôi nick (Loại đăng trống + tick Nuôi = chỉ nuôi).
 
-> Chỉ có **ba** cách dùng một acc: đăng, chỉ comment, đăng + comment — và cả ba
-> đều nằm gọn trong cột *Loại đăng*. Bản đầu còn thêm cột tick **Comment** + cột
-> **Chu kỳ CM**; hai cột đó **đã bị xoá** vì cùng một acc có hai nguồn sự thật
-> mâu thuẫn nhau. Tài liệu hay ảnh chụp cũ nhắc tới chúng thì bỏ qua.
+**Acc "chỉ comment" không còn là một lựa chọn phải tự đặt.** Khi máy phát hiện
+Facebook gỡ bài, nó chuyển acc sang trạng thái `Spam`; từ đó acc **không đăng
+nữa nhưng vẫn comment**, và Gen lịch tự cho nó toàn slot comment. Đúng việc mà
+`C_Home` / `C_Thuê` / `C_Bán` từng làm, nhưng tự động.
 
-**Acc `C_*` tick thêm Nuôi thì vẫn được nuôi bình thường**: cứ mỗi *Chu kỳ (p)*
-lại hy sinh một phiên comment để đi nuôi, y như acc đăng bài hy sinh một slot
-đăng. Ví dụ acc `C_Home` nghỉ 12p + chu kỳ nuôi 150p, khung 05:00–23:00 cho ra
-83 phiên comment + 7 phiên nuôi (`06:33 · 09:09 · 11:45 · 14:21 · 16:57 · 19:33
-· 22:09`).
+> **Đã bỏ loại đăng `C_*`.** Giữ song song với trạng thái `Spam` thì cùng một
+> tình huống có hai nguồn sự thật — đúng lỗi đã mắc với hai cột `comment_bai` /
+> `comment_interval` trước đây. Migration tự đổi acc `C_Home` → `X_Home` (và
+> tương tự), vì để nguyên thì acc không khớp `LOAI_LICH_MAP` nữa và **rơi khỏi
+> Gen lịch mà không báo gì**.
+>
+> Lưu ý tỉ lệ comment là **một thông số CHUNG** cho mọi acc `X_`, không riêng
+> từng acc — đặt 100% thì tất cả acc X_ thành chỉ-comment. Muốn đúng một acc
+> chỉ comment thì để trạng thái `Spam` lo, đừng vặn tỉ lệ.
+
+**Acc dính spam tick thêm Nuôi thì vẫn được nuôi bình thường**: cứ mỗi *Chu kỳ
+(p)* lại hy sinh một phiên comment để đi nuôi, y như acc đăng bài hy sinh một
+slot đăng.
 
 > **Thứ tự ba bước chuyển slot trong Gen lịch là mấu chốt**, đừng đảo:
-> `1. nuôi nick → 2. comment theo chu kỳ → 3. quét nốt slot còn lại của acc C_*`
+> `1. nuôi nick → 2. comment theo tỉ lệ → 3. quét nốt slot còn lại của acc Spam`
 >
 > Cả hai hàm `plan_*` chỉ đụng slot đang là `dang_bai`. Nếu quét bước 3 trước
-> thì acc `C_*` bị khoá hết thành `comment` và **không bao giờ được nuôi** —
-> hỏng im lặng, lịch trông vẫn bình thường. Có assertion canh riêng cái bẫy này.
+> thì acc Spam bị khoá hết thành `comment` và **không bao giờ được nuôi** — hỏng
+> im lặng, lịch trông vẫn bình thường. Có assertion canh riêng cái bẫy này.
 
-> Lọc acc theo lịch phải so khớp **chính xác**, không dùng `in`: chuỗi `"C_Thuê"`
-> chứa `"Thuê"` và `"C_Bán"` chứa `"Bán"`, so kiểu chuỗi con sẽ kéo acc chỉ
-> comment vào nhóm đăng bài — hỏng im lặng, không báo lỗi gì.
+> `accounts_theo_lich` nhận **cả `Active` lẫn `Spam`**. Lọc cứng `Active` thì acc
+> vừa bị đánh spam biến mất khỏi Gen — không còn slot nào, kể cả slot comment —
+> trong khi comment là việc duy nhất nó còn làm được.
+
+> Lọc acc theo lịch phải so khớp **chính xác**, không dùng `in`: chuỗi `"X_Thuê"`
+> chứa `"Thuê"` và `"X_Bán"` chứa `"Bán"`, so kiểu chuỗi con sẽ kéo acc hỗn hợp
+> vào nhóm chỉ đăng bài — hỏng im lặng, không báo lỗi gì.
 
 ### Phủ đều khung giờ — [xep_lich.py](xep_lich.py)
 **Một phiên comment tính ngang một phiên đăng bài.** Cột *Nghỉ (p)* quyết định
@@ -431,5 +443,5 @@ Bật lại: sửa cột Trạng thái về `Active`.
 
 ## Test
 ```
-python test_basic.py   # 408 assertion, chạy trên DB tạm — không đụng data thật
+python test_basic.py   # 410 assertion, chạy trên DB tạm — không đụng data thật
 ```

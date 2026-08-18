@@ -27,17 +27,21 @@ BUSY_TIMEOUT_SEC = 15
 #
 #   Homestay / Thuê / Bán  → chỉ đăng bài
 #   X_Home / X_Thuê / X_Bán → vừa đăng vừa comment, theo tỉ lệ (mặc định 75/25)
-#   C_Home / C_Thuê / C_Bán → chỉ comment, không đăng (acc bị dỡ bài)
 #   (để trống)             → không vào lịch đăng nào
+#
+# Từng có thêm C_Home / C_Thuê / C_Bán nghĩa là "chỉ comment, không đăng", dành
+# cho acc bị Facebook dỡ bài. Đã bỏ vì trạng thái `Spam` làm đúng việc đó mà
+# KHÔNG cần người ngồi đổi cột: acc bị gỡ bài thì máy tự chuyển sang Spam, và
+# Gen lịch tự cho nó toàn slot comment. Giữ cả hai đường thì lại thành hai nguồn
+# sự thật cho cùng một tình huống — đúng lỗi đã mắc với `comment_bai` trước đây.
 LOAI_DANG_OPTIONS = ("", "Homestay", "Thuê", "Bán",
-                     "X_Home", "X_Thuê", "X_Bán",
-                     "C_Home", "C_Thuê", "C_Bán")
+                     "X_Home", "X_Thuê", "X_Bán")
 
-# loại lịch  →  (chỉ đăng, vừa đăng vừa comment, chỉ comment)
+# loại lịch  →  (chỉ đăng, vừa đăng vừa comment)
 LOAI_LICH_MAP = {
-    "homestay": ("Homestay", "X_Home", "C_Home"),
-    "thue":     ("Thuê",     "X_Thuê", "C_Thuê"),
-    "ban":      ("Bán",      "X_Bán",  "C_Bán"),
+    "homestay": ("Homestay", "X_Home"),
+    "thue":     ("Thuê",     "X_Thuê"),
+    "ban":      ("Bán",      "X_Bán"),
 }
 
 # Bao nhiêu phần trăm slot của acc "X_" là phiên comment. 25 = 75% đăng, 25%
@@ -67,9 +71,15 @@ TT_LICH_X_TU_DONG = "X😴"
 TT_LICH_NGHI_SPAM = "Nghỉ Spam"
 
 
-def la_loai_comment(loai_dang: str) -> bool:
-    """Acc CHỈ đi comment, không đăng bài (C_*)."""
-    return (loai_dang or "").strip().upper().startswith("C_")
+def acc_chi_comment(acc: dict) -> bool:
+    """
+    Acc chỉ được đi comment, không đăng bài — vì đang dính spam.
+
+    Thay cho loại đăng "C_*" đã bỏ. Khác biệt quan trọng: đây là TRẠNG THÁI do
+    máy tự đặt khi phát hiện Facebook gỡ bài, không phải lựa chọn người dùng
+    phải nhớ bật/tắt. Acc khỏi spam thì sửa Trạng thái về Active là đăng lại.
+    """
+    return (acc.get("trang_thai") or "") == TRANG_THAI_SPAM
 
 
 def la_loai_hon_hop(loai_dang: str) -> bool:
@@ -79,18 +89,28 @@ def la_loai_hon_hop(loai_dang: str) -> bool:
 
 def khop_loai_lich(loai_dang: str, loai_lich: str) -> bool:
     """
-    Acc thuộc lịch nào. So khớp CHÍNH XÁC, không dùng `in`: "C_Thuê" chứa chuỗi
-    con "Thuê" và "C_Bán" chứa "Bán", nên so kiểu substring sẽ kéo nhầm acc chỉ
-    comment vào nhóm đăng bài.
+    Acc thuộc lịch nào. So khớp CHÍNH XÁC, không dùng `in`: "X_Thuê" chứa chuỗi
+    con "Thuê" và "X_Bán" chứa "Bán", nên so kiểu substring sẽ kéo nhầm acc
+    hỗn hợp vào nhóm chỉ đăng bài.
     """
     v = (loai_dang or "").strip()
     return v in LOAI_LICH_MAP.get(loai_lich, ())
 
 
-def accounts_theo_lich(loai_lich: str, trang_thai: str = "Active") -> list[dict]:
-    """Mọi acc thuộc một lịch — gồm cả acc đăng bài lẫn acc chỉ comment."""
-    return [a for a in get_accounts(trang_thai=trang_thai)
-            if khop_loai_lich(a.get("loai_dang"), loai_lich)]
+def accounts_theo_lich(loai_lich: str, trang_thai: str = None) -> list[dict]:
+    """
+    Mọi acc thuộc một lịch.
+
+    Mặc định nhận cả 'Active' lẫn 'Spam'. Lọc cứng 'Active' thì acc vừa bị đánh
+    spam sẽ biến mất khỏi Gen lịch — không còn slot nào, kể cả slot comment —
+    trong khi comment chính là việc duy nhất acc đó còn làm được.
+    """
+    if trang_thai:
+        nguon = get_accounts(trang_thai=trang_thai)
+    else:
+        nguon = [a for a in get_accounts()
+                 if (a.get("trang_thai") or "") in ("Active", TRANG_THAI_SPAM)]
+    return [a for a in nguon if khop_loai_lich(a.get("loai_dang"), loai_lich)]
 
 
 def _conn():
@@ -289,6 +309,16 @@ def init_db():
         # Cảnh báo chưa được xem — giao diện đọc rồi xoá. Scheduler chạy ở tiến
         # trình riêng nên không đẩy thẳng toast lên web được, phải qua DB.
         _add_col("accounts", "canh_bao_moi",  "canh_bao_moi TEXT DEFAULT ''")
+        # ── Migration: bỏ loại đăng "C_*" (chỉ comment) ─────────────────
+        # Việc đó nay do trạng thái `Spam` đảm nhiệm, tự động. Phải ĐỔI dữ liệu
+        # chứ không chỉ bỏ khỏi LOAI_DANG_OPTIONS: acc còn mang "C_Home" sẽ
+        # không khớp LOAI_LICH_MAP nữa nên rơi khỏi Gen lịch mà không báo gì —
+        # đúng kiểu hỏng im lặng khó lần ra nhất.
+        for _cu, _moi in (("C_Home", "X_Home"), ("C_Thuê", "X_Thuê"),
+                          ("C_Bán", "X_Bán")):
+            con.execute("UPDATE accounts SET loai_dang=? WHERE loai_dang=?",
+                        (_moi, _cu))
+
         # Số vụ Facebook gỡ bài đo được lần gần nhất. -1 = CHƯA từng đo.
         # Mặc định phải là -1 chứ không phải 0: để 0 thì ngay phiên đầu sau khi
         # bật tính năng, mọi acc có sẵn vi phạm cũ đều bị đánh spam cùng lúc.
@@ -552,16 +582,19 @@ def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool) -> tuple[bool, in
     return vua_dinh, so_cu
 
 
-def danh_dau_spam(ten_acc: str, chi_tiet: str = "") -> int:
+def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None) -> int:
     """
     Chuyển acc sang trạng thái 'Spam' và dừng phần ĐĂNG BÀI còn lại hôm nay.
 
     Chỉ đụng slot `dang_bai` đang 'Chờ'. Slot comment và slot nuôi giữ nguyên:
     acc bị gỡ bài vẫn comment được, và nuôi là thứ có cơ gỡ nó ra.
 
+    `gio` (HH:MM) chỉ để test đặt mốc cố định — bỏ trống thì lấy giờ hiện tại.
+    Không có nó thì test phải bám đồng hồ thật và hỏng khi chạy lúc gần nửa đêm.
+
     Trả số slot đã chuyển sang 'Nghỉ Spam'.
     """
-    gio = datetime.now().strftime("%H:%M")
+    gio = gio or datetime.now().strftime("%H:%M")
     with _conn() as con:
         r = con.execute("SELECT id FROM accounts WHERE ten_acc=? LIMIT 1",
                         (ten_acc,)).fetchone()

@@ -644,8 +644,8 @@ async function loadAccounts(){
         const box=document.getElementById("acc-summary");
         if(box){
             const total=res.data.length, active=res.data.filter(r=>r.trang_thai==="Active").length;
-            // So khớp CHÍNH XÁC: "C_Thuê" chứa chuỗi con "Thuê" và "C_Bán" chứa
-            // "Bán", dùng includes() sẽ đếm nhầm acc chỉ comment vào nhóm đăng bài.
+            // So khớp CHÍNH XÁC: "X_Thuê" chứa chuỗi con "Thuê" và "X_Bán" chứa
+            // "Bán", dùng includes() sẽ đếm nhầm acc hỗn hợp vào nhóm chỉ đăng.
             const dem=v=>res.data.filter(r=>(r.loai_dang||"").trim()===v).length;
             const ban=dem("Bán"), thue=dem("Thuê"), hs=dem("Homestay");
             const hong=res.data.filter(r=>r.trang_thai===TRANG_THAI_HONG).length;
@@ -819,7 +819,7 @@ async function startAccEdit(td){
 // Loại đăng — tiền tố "C_" nghĩa là acc CHỈ ĐI COMMENT cho mảng đó, không
 // đăng bài. Dùng cho acc bị Facebook dỡ bài nhưng vẫn comment được.
 // Danh sách phải khớp LOAI_DANG_OPTIONS trong db.py.
-const LOAI_DANG_OPTIONS = ["","Homestay","Thuê","Bán","X_Home","X_Thuê","X_Bán","C_Home","C_Thuê","C_Bán"];
+const LOAI_DANG_OPTIONS = ["","Homestay","Thuê","Bán","X_Home","X_Thuê","X_Bán"];
 // Mỗi loại đăng MỘT màu riêng. Bản trước gom cả 3 loại "X_" vào một màu hồng và
 // cả 3 loại "C_" vào một màu tím, nên nhìn bảng không tách được X_Home với
 // X_Thuê — mà đó mới là thứ cần phân biệt khi soi acc nào đang chạy mảng nào.
@@ -828,20 +828,17 @@ const LOAI_DANG_OPTIONS = ["","Homestay","Thuê","Bán","X_Home","X_Thuê","X_B�
 //   · tương phản trên nền bảng (#1e293b) đều ≥ 5.2 — ngưỡng WCAG cho chữ thường
 //     là 4.5, ô này lại còn in đậm
 //   · khoảng cách Lab ΔE giữa hai màu gần nhau nhất = 41.4; dưới ~25 là dễ nhầm
-//     ở cỡ chữ 12px. Bộ cũ chỉ đạt 22.2 giữa Thuê và C_Thuê.
+//     ở cỡ chữ 12px. Bộ cũ chỉ đạt 22.2 giữa Thuê và biến thể của nó.
 //   · trong số các bộ cùng đạt ΔE 41.4, chọn cách gán đưa mỗi biến thể về gần
 //     sắc màu của mảng gốc nhất, để vẫn liếc ra được "đây là nhóm homestay".
 // Đổi màu thì nên chạy lại phép đo đó trước.
 function mauLoaiDang(v){
     if(v==="Homestay") return "#34d399";   // xanh ngọc
     if(v==="X_Home")   return "#22d3ee";   // xanh cyan
-    if(v==="C_Home")   return "#84cc16";   // xanh lá mạ
     if(v==="Thuê")     return "#60a5fa";   // xanh dương
     if(v==="X_Thuê")   return "#c084fc";   // tím
-    if(v==="C_Thuê")   return "#f5d0fe";   // hồng phấn
     if(v==="Bán")      return "#fbbf24";   // vàng hổ phách
     if(v==="X_Bán")    return "#f87171";   // đỏ san hô
-    if(v==="C_Bán")    return "#f97316";   // cam
     return "var(--text-secondary)";
 }
 
@@ -2386,7 +2383,7 @@ function _renderGenAccs(accs, contents){
         const defC = contents[Math.floor(i * nc / n) % nc] || "";
         // Acc chỉ comment không dùng content lẫn mode — vẫn render <select> ẩn
         // để runGen đọc theo chỉ số i không bị lệch, nhưng không bày ra cho rối.
-        const oCmt = acc.chi_comment;          // C_* — ẩn ô Content/Mode
+        const oCmt = acc.chi_comment;          // đang dính spam — ẩn ô Content/Mode
         const oMix = acc.hon_hop;              // X_* — vẫn đăng bài nên giữ nguyên ô
         return `
         <div style="background:var(--bg-hover);border:1px solid ${oCmt?"#c084fc55":"var(--border)"};border-radius:var(--radius-sm);padding:12px;margin-bottom:8px">

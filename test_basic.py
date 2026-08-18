@@ -771,36 +771,40 @@ check("khung giờ ngược -> lịch rỗng", _xl.phan_bo_lich(_accs, _E, _S) =
 check("nghỉ = 0 không làm chia 0",    len(_xl.phan_bo_lich([{"ten": "A", "nghi": 0}], _S, _S + 60)) > 0)
 check("gen 2 lần ra kết quả giống nhau", _xl.phan_bo_lich(_mix, _S, _E) == _ra2)
 
-# ── Loại đăng: 7 lựa chọn, C_ = chỉ đi comment ─────────────────────────────
-check("có đúng 10 lựa chọn",          len(db.LOAI_DANG_OPTIONS) == 10)
+# ── Loại đăng: 7 lựa chọn (đã bỏ C_ = chỉ comment) ─────────────────────────
+# C_Home / C_Thuê / C_Bán từng là "chỉ comment, không đăng". Nay việc đó do
+# TRẠNG THÁI `Spam` đảm nhiệm và máy tự đặt, nên bỏ đi cho khỏi hai nguồn sự
+# thật cho cùng một tình huống.
+check("có đúng 7 lựa chọn",           len(db.LOAI_DANG_OPTIONS) == 7)
+check("không còn lựa chọn C_ nào",
+      not any(str(v).startswith("C_") for v in db.LOAI_DANG_OPTIONS))
 check("nhận diện loại hỗn hợp X_",
       all(db.la_loai_hon_hop(v) for v in ("X_Home", "X_Thuê", "X_Bán")))
-check("X_ KHÔNG phải chỉ-comment",
-      not any(db.la_loai_comment(v) for v in ("X_Home", "X_Thuê", "X_Bán")))
-check("C_ KHÔNG phải hỗn hợp",
-      not any(db.la_loai_hon_hop(v) for v in ("C_Home", "C_Thuê", "C_Bán")))
+check("loại chỉ đăng KHÔNG phải hỗn hợp",
+      not any(db.la_loai_hon_hop(v) for v in ("", "Homestay", "Thuê", "Bán")))
 check("X_Home -> lịch homestay",      db.khop_loai_lich("X_Home", "homestay"))
 check("X_Thuê KHÔNG lọt lịch bán",    not db.khop_loai_lich("X_Thuê", "ban"))
-check("nhận diện loại chỉ comment",
-      all(db.la_loai_comment(v) for v in ("C_Home", "C_Thuê", "C_Bán")))
-check("loại đăng bài KHÔNG phải comment",
-      not any(db.la_loai_comment(v) for v in ("", "Homestay", "Thuê", "Bán")))
 
-# Khớp lịch phải CHÍNH XÁC: "C_Thuê" chứa chuỗi con "Thuê", "C_Bán" chứa "Bán".
+# "Chỉ comment" nay đọc từ trạng thái acc, không từ loại đăng.
+check("acc Spam -> chỉ comment",      db.acc_chi_comment({"trang_thai": db.TRANG_THAI_SPAM}))
+check("acc Active -> KHÔNG chỉ comment", not db.acc_chi_comment({"trang_thai": "Active"}))
+check("acc thiếu trạng thái -> không", not db.acc_chi_comment({}))
+
+# Khớp lịch phải CHÍNH XÁC: "X_Thuê" chứa chuỗi con "Thuê", "X_Bán" chứa "Bán".
 check("Homestay -> lịch homestay",    db.khop_loai_lich("Homestay", "homestay"))
-check("C_Home  -> lịch homestay",     db.khop_loai_lich("C_Home", "homestay"))
-check("C_Thuê KHÔNG lọt vào lịch bán", not db.khop_loai_lich("C_Thuê", "ban"))
-check("C_Thuê -> đúng lịch thuê",     db.khop_loai_lich("C_Thuê", "thue"))
-check("C_Bán  -> đúng lịch bán",      db.khop_loai_lich("C_Bán", "ban"))
+check("X_Bán  -> đúng lịch bán",      db.khop_loai_lich("X_Bán", "ban"))
 check("Thuê KHÔNG lọt vào lịch homestay", not db.khop_loai_lich("Thuê", "homestay"))
 check("để trống -> không vào lịch nào",
       not any(db.khop_loai_lich("", l) for l in ("homestay", "thue", "ban")))
+# Loại C_ cũ nay là giá trị KHÔNG hợp lệ, không được khớp lịch nào.
+check("C_Home cũ không còn khớp lịch",
+      not any(db.khop_loai_lich("C_Home", l) for l in ("homestay", "thue", "ban")))
 
 for _v in db.LOAI_DANG_OPTIONS:
     db.update_account_field(_acc_id, "loai_dang", _v)
 check("lưu được cả 7 giá trị hợp lệ",
       db.get_account_by_id(_acc_id)["loai_dang"] == db.LOAI_DANG_OPTIONS[-1])
-for _xau in ("C_home", "homestay", "Comment", "C_Nha", "Homestay,Thuê"):
+for _xau in ("C_Home", "C_home", "homestay", "Comment", "C_Nha", "Homestay,Thuê"):
     try:
         db.update_account_field(_acc_id, "loai_dang", _xau)
         check(f"chặn loại đăng sai '{_xau}'", False)
@@ -1206,9 +1210,11 @@ check("số vụ giảm -> không",            _sk.co_vu_moi(12, 9) is False)
 # ── Spam: tầng DB ──────────────────────────────────────────────────────────
 _sid = db.upsert_account({"ten_acc": "SPAM Test", "trang_thai": "Active",
                           "loai_dang": "Homestay", "ten_page": "P"})
-from datetime import datetime as _dt
-_gio_sau = f"{min(23, _dt.now().hour + 1):02d}:00"
-_gio_truoc = "00:01"
+# Mốc giờ CỐ ĐỊNH, không lấy từ đồng hồ thật: bản đầu dùng "giờ hiện tại + 1"
+# nên chạy test lúc 23 giờ là hỏng — min(23, 24) ra 23:00, không còn ở tương lai.
+_GIO_MOC  = "12:00"
+_gio_sau   = "13:00"
+_gio_truoc = "11:00"
 with db._conn() as _c:
     for _hd, _g in (("dang_bai", _gio_sau), ("dang_bai", _gio_truoc),
                     ("comment", _gio_sau), ("nuoi_nick", _gio_sau)):
@@ -1223,7 +1229,7 @@ check("đo lại cùng số -> không dính",   _moi2 is False and _cu2 == 12)
 _moi3, _cu3 = db.ghi_nhan_vi_pham("SPAM Test", 15, True)
 check("số vụ tăng -> vừa dính spam",    _moi3 is True and _cu3 == 12)
 
-_n_slot = db.danh_dau_spam("SPAM Test", "3 bài mới bị gỡ")
+_n_slot = db.danh_dau_spam("SPAM Test", "3 bài mới bị gỡ", gio=_GIO_MOC)
 check("chuyển trạng thái sang Spam",
       db.get_accounts()[0] is not None and any(
           a["ten_acc"] == "SPAM Test" and a["trang_thai"] == db.TRANG_THAI_SPAM
@@ -1249,6 +1255,20 @@ check("có sinh cảnh báo mức error",     any(c["ten_acc"] == "SPAM Test" an
 
 db.update_account_field(_sid, "trang_thai", "Active")
 check("bật lại -> đăng bài được",       db.acc_duoc_chay("SPAM Test", "dang_bai")[0] is True)
+
+# Acc dính spam PHẢI còn trong Gen lịch. Đây là chỗ thay cho loại đăng "C_*" đã
+# bỏ: lọc cứng 'Active' thì acc vừa bị đánh spam biến mất khỏi Gen — không còn
+# slot nào, kể cả slot comment — trong khi comment là việc duy nhất nó còn làm
+# được. Bước 3 của Gen sẽ quét mọi slot còn lại của nó thành comment.
+db.update_account_field(_sid, "loai_dang", "X_Home")
+with db._conn() as _c:
+    _c.execute("UPDATE accounts SET trang_thai=? WHERE id=?", (db.TRANG_THAI_SPAM, _sid))
+_ds = [a["ten_acc"] for a in db.accounts_theo_lich("homestay")]
+check("acc Spam vẫn vào Gen lịch",      "SPAM Test" in _ds)
+check("lọc 'Active' thì loại acc Spam",
+      "SPAM Test" not in [a["ten_acc"] for a in db.accounts_theo_lich("homestay", "Active")])
+with db._conn() as _c:
+    _c.execute("UPDATE accounts SET trang_thai='Active' WHERE id=?", (_sid,))
 with db._conn() as _c:
     _sv = _c.execute("SELECT so_vi_pham FROM accounts WHERE id=?", (_sid,)).fetchone()[0]
 # Số vụ phải GIỮ: xoá về -1 thì lần dính kế tiếp bị bỏ lỡ vì coi như chưa đo.
