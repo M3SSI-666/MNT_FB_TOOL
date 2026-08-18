@@ -500,9 +500,9 @@ def acc_duoc_chay(ten_acc: str, hoat_dong: str = "dang_bai") -> tuple[bool, str]
     Facebook từ chối. Nuôi nick vẫn chạy, vì xem story / lướt feed chính là thứ
     có cơ gỡ acc ra, cắt nốt là tự bịt đường hồi phục.
 
-    Nghỉ vì DÍNH SPAM thì chặn TẤT, kể cả nuôi. Facebook vừa gỡ bài nghĩa là nó
-    đang soi nick ngay lúc đó; mọi thao tác tự động lúc này đều làm nặng thêm.
-    Nằm im hết 3 tiếng rồi quay lại là an toàn nhất.
+    Nghỉ vì DÍNH SPAM chặn ĐĂNG và COMMENT — hai việc vừa khiến Facebook gỡ
+    bài. Nuôi nick VẪN chạy: xem story / lướt feed là hành vi người thật, không
+    phải thứ bị phạt, và giữ nick sống thay vì im lìm trọn 3 tiếng.
 
     Tắt hẳn cũng chặn tất: acc đó đang chờ người xử lý, mà `trang_thai` lúc này
     là 'Hỏng' nên `get_account_by_name` cũng không tìm ra nó nữa — cho phiên nuôi
@@ -518,8 +518,11 @@ def acc_duoc_chay(ten_acc: str, hoat_dong: str = "dang_bai") -> tuple[bool, str]
         return False, "acc đã bị tắt do hỏng"
     if tt == TRANG_THAI_SPAM:
         den = _moc_nghi(r["nghi_den"])
-        if den:
-            return False, f"nghỉ hẳn vì dính spam, tới {den:%H:%M}"
+        # Nuôi nick vẫn chạy suốt thời gian nghỉ: xem story / lướt feed là hành
+        # vi người thật, nó không phải thứ khiến Facebook gỡ bài, và giữ nick
+        # sống thay vì im lìm cả 3 tiếng.
+        if den and hoat_dong != "nuoi_nick":
+            return False, f"nghỉ vì dính spam, tới {den:%H:%M}"
         # Hết giờ nghỉ mà chưa được hồi sinh (scheduler chưa kịp quét) — cho
         # chạy luôn chứ đừng bắt đợi thêm một vòng lặp.
         return True, ""
@@ -596,16 +599,15 @@ def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool) -> tuple[bool, in
 
 def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None) -> tuple[int, object]:
     """
-    Cho acc NGHỈ HẲN vì Facebook vừa gỡ bài: không đăng, không comment, không nuôi.
+    Cho acc nghỉ ĐĂNG và COMMENT vì Facebook vừa gỡ bài. Nuôi nick vẫn chạy.
 
-    Facebook gỡ bài nghĩa là nó đang soi nick ngay lúc đó. Mọi thao tác tự động
-    lúc này chỉ làm nặng thêm, nên nằm im trọn `SK.NGHI_SPAM_GIO` tiếng rồi quay
-    lại. Hết giờ thì `hoi_sinh_het_nghi_spam` tự bật lại và trả lịch về 'Chờ' —
-    không cần người can thiệp.
+    Facebook gỡ bài nghĩa là nó đang soi nick ngay lúc đó, nên dừng hai việc vừa
+    bị phạt trong `SK.NGHI_SPAM_GIO` tiếng. Nuôi thì giữ: xem story / lướt feed
+    là hành vi người thật, không phải thứ bị gỡ bài. Hết giờ thì
+    `hoi_sinh_het_nghi_spam` tự bật lại và trả lịch về 'Chờ'.
 
-    Đánh 'Nghỉ Spam' cho MỌI slot còn lại hôm nay (đăng lẫn comment), chỉ chừa
-    slot đã qua giờ. Slot nuôi cũng bị chặn nhưng qua `acc_duoc_chay` chứ không
-    đổi trạng thái, để nuôi tự chạy lại ngay khi hết giờ nghỉ.
+    Đánh 'Nghỉ Spam' cho MỌI slot đăng và comment còn lại hôm nay, chỉ chừa slot
+    đã qua giờ. Slot nuôi không đụng tới.
 
     `gio` (HH:MM) chỉ để test đặt mốc cố định — bỏ trống thì lấy giờ hiện tại.
 

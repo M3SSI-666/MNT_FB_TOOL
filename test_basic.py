@@ -1236,8 +1236,8 @@ check("chuyển trạng thái sang Spam",
           for a in db.get_accounts()))
 check("nghỉ đúng 3 tiếng",
       abs((_moc_spam - _dt.now()).total_seconds() / 3600 - _sk.NGHI_SPAM_GIO) < 0.02)
-# FB gỡ bài = nick đang bị soi ngay lúc đó, nên NGHỈ HẲN: dừng cả đăng lẫn
-# comment. Khác nghỉ-vì-lỗi-liên-tiếp (chỉ chặn đăng/comment, vẫn nuôi).
+# FB gỡ bài -> dừng ĐĂNG và COMMENT, hai việc vừa bị phạt. Nuôi nick VẪN chạy:
+# lướt feed / xem story là hành vi người thật, không phải thứ bị gỡ bài.
 check("dừng cả slot đăng lẫn comment",  _n_slot == 2)
 with db._conn() as _c:
     _rows = {(r["hoat_dong"], r["gio_dang"]): r["trang_thai"] for r in _c.execute(
@@ -1245,13 +1245,12 @@ with db._conn() as _c:
 check("slot đăng sắp tới -> Nghỉ Spam", _rows[("dang_bai", _gio_sau)] == db.TT_LICH_NGHI_SPAM)
 check("slot comment -> Nghỉ Spam",      _rows[("comment", _gio_sau)] == db.TT_LICH_NGHI_SPAM)
 check("slot đăng đã qua giờ -> để yên", _rows[("dang_bai", _gio_truoc)] == "Chờ")
-# Slot nuôi KHÔNG đổi trạng thái — nó bị chặn qua acc_duoc_chay, để hết giờ nghỉ
-# là tự chạy lại ngay mà không cần đợi hồi sinh trả trạng thái về.
+# Slot nuôi không bị đụng tới — nuôi vẫn chạy suốt thời gian nghỉ.
 check("slot nuôi giữ nguyên trạng thái", _rows[("nuoi_nick", _gio_sau)] == "Chờ")
 
 check("spam chặn ĐĂNG BÀI",             db.acc_duoc_chay("SPAM Test", "dang_bai")[0] is False)
 check("spam chặn CẢ comment",           db.acc_duoc_chay("SPAM Test", "comment")[0] is False)
-check("spam chặn CẢ nuôi nick",         db.acc_duoc_chay("SPAM Test", "nuoi_nick")[0] is False)
+check("spam VẪN cho nuôi nick",         db.acc_duoc_chay("SPAM Test", "nuoi_nick")[0] is True)
 
 # ── Hết 3 tiếng thì tự bật lại, lịch về 'Chờ' ──────────────────────────────
 check("chưa hết giờ -> chưa hồi sinh",  db.hoi_sinh_het_nghi_spam() == [])

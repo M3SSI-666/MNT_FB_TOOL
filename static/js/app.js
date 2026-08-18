@@ -559,7 +559,7 @@ function _trangThaiAcc(r){
                                  +`${String(t.getMinutes()).padStart(2,"0")}`:"";
         return {nhan:`🚫 Spam${den}`, mau:"var(--danger)", dam:true,
                 chiTiet:`Facebook đã gỡ ${r.so_vi_pham>0?r.so_vi_pham+" bài":"bài"} của nick này. `
-                       +`Nghỉ hẳn — không đăng, không comment, không nuôi. `
+                       +`Nghỉ đăng và comment; nuôi nick vẫn chạy. `
                        +`Hết giờ tự chạy lại, không cần làm gì.`};
     }
     if(val==="Cookie hết hạn")

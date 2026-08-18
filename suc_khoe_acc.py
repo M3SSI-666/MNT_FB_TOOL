@@ -32,8 +32,8 @@ NGHI_GIO   = 3
 
 # Nghỉ bao lâu khi Facebook GỠ BÀI. Khác `NGHI_GIO` ở trên về bản chất: đó là
 # nghỉ vì lỗi liên tiếp (đoán là bị chặn), còn đây là Facebook đã nói thẳng nó
-# vừa gỡ nội dung. Nghỉ HẲN — không đăng, không comment, không nuôi — vì lúc đó
-# nick đang bị soi, mọi thao tác tự động đều làm nặng thêm.
+# vừa gỡ nội dung. Dừng ĐĂNG và COMMENT — hai việc vừa bị phạt — nhưng vẫn nuôi
+# nick, vì lướt feed / xem story là hành vi người thật, không phải thứ bị gỡ.
 NGHI_SPAM_GIO = 3
 
 # Cửa sổ trượt để quyết định tắt hẳn. 20 phiên ≈ nửa ngày chạy của một acc.

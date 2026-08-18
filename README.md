@@ -147,9 +147,9 @@ dỡ, cho acc comment vào các bài cũ còn sống để đẩy chúng lên.
 Song song với cơ chế nuôi nick (Loại đăng trống + tick Nuôi = chỉ nuôi).
 
 **Acc "chỉ comment" không còn là một lựa chọn phải tự đặt.** Khi máy phát hiện
-Facebook gỡ bài, nó chuyển acc sang trạng thái `Spam` và cho **nghỉ hẳn 3 tiếng**
-— không đăng, không comment, không nuôi — rồi tự bật lại. Xem
-[Dính spam](#dính-spam--nghỉ-hẳn-3-tiếng-rồi-tự-chạy-lại).
+Facebook gỡ bài, nó chuyển acc sang trạng thái `Spam` và cho **nghỉ đăng +
+comment 3 tiếng** (nuôi nick vẫn chạy) rồi tự bật lại. Xem
+[Dính spam](#dính-spam--nghỉ-đăng-và-comment-3-tiếng-rồi-tự-chạy-lại).
 
 > **Đã bỏ loại đăng `C_*`.** Giữ song song với trạng thái `Spam` thì cùng một
 > tình huống có hai nguồn sự thật — đúng lỗi đã mắc với hai cột `comment_bai` /
@@ -375,7 +375,7 @@ Chạy lại đúng 766 phiên đó: tắt 1 acc (đúng acc đã chết), cho n
 hai chạy tiếp, không đụng 7 acc khoẻ, cứu 86/766 slot (11%). **Sửa ngưỡng thì nên
 chạy lại phép đo đó trước.**
 
-### Dính spam — nghỉ hẳn 3 tiếng rồi tự chạy lại
+### Dính spam — nghỉ đăng và comment 3 tiếng rồi tự chạy lại
 Sau khi đăng xong, phiên quay lại trang chủ và đọc dialog **"Sự việc"** Facebook
 tự bật khi vừa gỡ nội dung của nick. Đặt ở cuối phiên vì Facebook đẩy thông báo
 gỡ bài về trong vài chục giây sau khi đăng — dò ở đầu phiên chỉ thấy vụ hôm qua.
@@ -386,12 +386,12 @@ Nhận ra thì:
 |---|---|
 | Trạng thái acc | → `Spam` (đỏ, có toast), kèm mốc hết nghỉ |
 | Slot **đăng bài** + **comment** còn lại hôm nay | → `Nghỉ Spam` |
-| **Nuôi nick** | cũng bị chặn, nhưng qua `acc_duoc_chay` chứ không đổi trạng thái slot |
+| **Nuôi nick** | **vẫn chạy** — lướt feed / xem story là hành vi người thật, không phải thứ bị gỡ bài |
 | Sau `NGHI_SPAM_GIO` = **3 tiếng** | acc tự về `Active`, mọi slot `Nghỉ Spam` tự về `Chờ` |
 
-**Nghỉ HẲN, không chừa comment.** Facebook gỡ bài nghĩa là nó đang soi nick ngay
-lúc đó; mọi thao tác tự động lúc này đều làm nặng thêm. Khác với nghỉ-vì-lỗi-
-liên-tiếp (chỉ chặn đăng và comment, vẫn cho nuôi).
+**Dừng cả comment, không chỉ đăng.** Facebook gỡ bài nghĩa là nó đang soi nick
+ngay lúc đó, nên ngưng luôn hai việc vừa bị phạt. Nuôi nick thì giữ — nó không
+phải thứ khiến bài bị gỡ, và giữ nick sống thay vì im lìm trọn 3 tiếng.
 
 Không cần làm gì để bật lại — `hoi_sinh_het_nghi_spam()` chạy mỗi vòng lặp
 scheduler (60s) nên chậm nhất là muộn 1 phút so với mốc.
