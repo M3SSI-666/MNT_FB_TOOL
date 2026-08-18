@@ -844,7 +844,11 @@ async def _run_page_via(
         if _link_moi and loai_comment:
             try:
                 import db as _db
-                _n = _db.them_comment_posts(loai_comment, _link_moi, page=page_uid)
+                # Ghi kèm ACC: bài bị Facebook gỡ thì biết ngay acc nào đăng,
+                # khỏi suy luận. page_uid không thay được — 10/10 Page đang có
+                # 2 acc cùng đăng nên nó chỉ thu hẹp còn "một trong hai".
+                _n = _db.them_comment_posts(loai_comment, _link_moi,
+                                            page=page_uid, acc=acc_name)
                 logger.info(f"  💾 Lưu vào danh sách comment '{loai_comment}': "
                             f"+{_n} link mới (bỏ {len(_link_moi) - _n} link trùng), "
                             f"tổng {len(_db.get_comment_posts(loai_comment))}/"

@@ -398,6 +398,7 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
 
     ok_n, loi_n = 0, 0
     chet = []                                  # link chết gặp trong phiên này
+    chet_theo_acc = {}                         # acc đã đăng các bài chết đó
     async with async_playwright() as p:
         ctx, page = await _open_context(p, acc_name, c_user, headless)
         try:
@@ -413,11 +414,16 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
                                 f"→ ...{b['url'][-32:]}")
                 except BaiDaChet as e:
                     # Không tính là lỗi hệ thống: bài cũ bị xoá là chuyện bình
-                    # thường. Đánh dấu để người dùng lọc ra và bỏ khỏi danh sách.
-                    db.ghi_nhan_comment(b["id"], False, chet=True)   # xoá ngay
+                    # thường. Xoá khỏi danh sách, nhưng GHI LẠI acc đã đăng bài
+                    # đó — bài bị Facebook gỡ là tín hiệu spam, mà tín hiệu ấy
+                    # chỉ dùng được khi biết nó của acc nào.
+                    _xoa = db.ghi_nhan_comment(b["id"], False, chet=True)
                     chet.append(b["url"])
+                    _cua = (_xoa or {}).get("acc") or "?"
                     logger.warning(f"    💀 [{i}/{len(bai)}] LINK CHẾT: {e} "
-                                   f"→ {b['url']}")
+                                   f"→ bài do '{_cua}' đăng → {b['url']}")
+                    if _cua != "?":
+                        chet_theo_acc[_cua] = chet_theo_acc.get(_cua, 0) + 1
                 except CommentRestricted as e:
                     db.ghi_nhan_comment(b["id"], False, "bị chặn")
                     logger.error(f"    ⛔ Dừng phiên: {e} "
@@ -458,8 +464,15 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
         logger.warning(f"  💀 {len(chet)} link chết — ĐÃ XOÁ khỏi danh sách:")
         for u in chet:
             logger.warning(f"       {u}")
+        # Bài bị gỡ là tín hiệu spam, nhưng chỉ dùng được khi biết nó của ACC
+        # nào. Trước đây link chỉ gắn Page, mà 10/10 Page có 2 acc cùng đăng nên
+        # tín hiệu này luôn dừng ở "một trong hai".
+        if chet_theo_acc:
+            tk = " · ".join(f"{a}: {n}" for a, n in
+                            sorted(chet_theo_acc.items(), key=lambda x: -x[1]))
+            logger.warning(f"  📌 Bài bị gỡ thuộc về — {tk}")
     return {"da_comment": ok_n, "loi": loi_n, "link_chet": len(chet),
-            "tong_bai": len(bai)}
+            "tong_bai": len(bai), "chet_theo_acc": chet_theo_acc}
 
 
 async def _chay_co_han(*a, **kw) -> dict:

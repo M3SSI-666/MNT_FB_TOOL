@@ -280,6 +280,11 @@ def init_db():
         _add_col("comment_posts", "nhom", "nhom TEXT DEFAULT ''")
         # Page nào đã đăng bài này — để acc "X_" chỉ comment vào bài chính chủ.
         _add_col("comment_posts", "page", "page TEXT DEFAULT ''")
+        # ACC nào đã chạy phiên đăng ra bài này. Cột `page` KHÔNG thay được nó:
+        # đo trên dữ liệu thật, 10/10 Page đều có 2 acc cùng đăng, nên biết Page
+        # chỉ thu hẹp còn "một trong hai". Bài bị Facebook gỡ mà không biết acc
+        # nào đăng thì tín hiệu đó vô dụng.
+        _add_col("comment_posts", "acc", "acc TEXT DEFAULT ''")
         for r in con.execute("SELECT id, url FROM comment_posts "
                              "WHERE COALESCE(nhom,'') = ''").fetchall():
             con.execute("UPDATE comment_posts SET nhom=? WHERE id=?",
@@ -1289,7 +1294,7 @@ def get_comment_posts(loai: str = None) -> list[dict]:
 
 
 def them_comment_posts(loai: str, urls: list[str], gioi_han: int = None,
-                       page: str = "") -> int:
+                       page: str = "", acc: str = "") -> int:
     """
     Thêm URL vào cuối danh sách, BỎ QUA url đã có, rồi cắt bớt link cũ nhất cho
     danh sách không vượt `gioi_han`.
@@ -1299,6 +1304,10 @@ def them_comment_posts(loai: str, urls: list[str], gioi_han: int = None,
 
     `order_idx` tăng dần theo thứ tự thêm vào, và đó chính là "tuổi" của link —
     nhỏ hơn = vào trước = cũ hơn. Cắt bớt thì cắt từ nhỏ nhất.
+
+    `acc`: acc đã chạy phiên đăng ra bài này. Ghi lại để khi bài bị Facebook gỡ,
+    biết NGAY acc nào — khỏi suy luận. `page` không thay được: 10/10 Page đang có
+    2 acc cùng đăng nên nó chỉ thu hẹp còn "một trong hai".
     """
     gioi_han = GIOI_HAN_LINK if gioi_han is None else gioi_han
     with _conn() as con:
@@ -1311,9 +1320,9 @@ def them_comment_posts(loai: str, urls: list[str], gioi_han: int = None,
             u = (u or "").strip()
             if not u or u in da_co:
                 continue
-            con.execute("INSERT INTO comment_posts(loai,url,nhom,page,order_idx) "
-                        "VALUES(?,?,?,?,?)",
-                        (loai, u, tach_nhom_tu_url(u), page, idx))
+            con.execute("INSERT INTO comment_posts(loai,url,nhom,page,acc,order_idx) "
+                        "VALUES(?,?,?,?,?,?)",
+                        (loai, u, tach_nhom_tu_url(u), page, acc, idx))
             da_co.add(u)
             idx  += 1
             them += 1
@@ -1413,11 +1422,18 @@ def ghi_nhan_comment(post_id: int, ok: bool, ghi_chu: str = "", chet: bool = Fal
     `chet=True`: bài đã bị xoá / đổi phạm vi → **XOÁ NGAY khỏi danh sách**.
     Đo thật cho thấy 20–30% bài bị gỡ; để chúng nằm lại chờ bị đẩy ra thì chừng
     ấy chỗ trong cửa sổ là rác, và mỗi lần bốc trúng là mất một lượt comment.
+
+    Trả về `{"acc":…, "page":…, "url":…}` của dòng vừa xoá khi `chet=True` — đọc
+    TRƯỚC khi xoá, để nơi gọi biết bài đó do acc nào đăng. Không đọc trước thì
+    dòng biến mất và tín hiệu mất theo.
     """
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     with _conn() as con:
         if chet:
+            r = con.execute("SELECT acc, page, url FROM comment_posts WHERE id=?",
+                            (post_id,)).fetchone()
             con.execute("DELETE FROM comment_posts WHERE id=?", (post_id,))
+            return dict(r) if r else None
         elif ok:
             con.execute("UPDATE comment_posts SET lan_cuoi=?, so_lan=so_lan+1, "
                         "trang_thai=? WHERE id=?",

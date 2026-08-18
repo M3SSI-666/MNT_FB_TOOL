@@ -1456,6 +1456,34 @@ for _f in ("comment_bai.py", "nuoi_nick.py", "via_poster.py",
     check(f"{_f}: đã bỏ phép so URL trần",
           '"login" in page.url' not in Path(_f).read_text(encoding="utf-8"))
 
+# ── Link comment ghi kèm ACC đã đăng ───────────────────────────────────────
+# Cột `page` KHÔNG thay được cột `acc`: đo trên dữ liệu thật, 10/10 Page đều có
+# 2 acc cùng đăng, nên bài bị Facebook gỡ chỉ truy được tới "một trong hai".
+# Acc nào chạy phiên đăng ra bài đó chính là acc bị soi — ghi thẳng, khỏi suy luận.
+db.xoa_het_comment_posts("ban")
+db.them_comment_posts("ban", [_lk("gAA", 1)], page="PG1", acc="Acc Một")
+db.them_comment_posts("ban", [_lk("gBB", 2)], page="PG1", acc="Acc Hai")
+_ds_acc = {r["url"]: r["acc"] for r in db.get_comment_posts("ban")}
+check("lưu được acc của từng link",     set(_ds_acc.values()) == {"Acc Một", "Acc Hai"})
+check("cùng Page vẫn phân biệt được acc",
+      len({r["page"] for r in db.get_comment_posts("ban")}) == 1
+      and len({r["acc"] for r in db.get_comment_posts("ban")}) == 2)
+
+# Xoá link chết phải TRẢ VỀ acc đã đăng — đọc trước khi xoá, không thì dòng biến
+# mất và tín hiệu mất theo.
+_id_chet = [r["id"] for r in db.get_comment_posts("ban") if r["acc"] == "Acc Hai"][0]
+_ket = db.ghi_nhan_comment(_id_chet, False, chet=True)
+check("xoá link chết -> trả về acc",    (_ket or {}).get("acc") == "Acc Hai")
+check("xoá link chết -> trả về page",   (_ket or {}).get("page") == "PG1")
+check("link chết đã bị xoá thật",
+      all(r["id"] != _id_chet for r in db.get_comment_posts("ban")))
+# Link cũ chưa có acc (thu trước khi thêm cột) không được làm vỡ luồng.
+db.them_comment_posts("ban", [_lk("gCC", 3)], page="PG1")
+_id_cu = [r["id"] for r in db.get_comment_posts("ban") if not r["acc"]][0]
+check("link cũ không có acc -> vẫn xoá được",
+      (db.ghi_nhan_comment(_id_cu, False, chet=True) or {}).get("acc") == "")
+db.xoa_het_comment_posts("ban")
+
 # ── Tra content phải theo ĐÚNG mảng ────────────────────────────────────────
 # Mã content chỉ duy nhất TRONG một mảng, không duy nhất toàn bảng: sao content
 # từ mảng này sang mảng khác là thao tác thường ngày và người dùng giữ nguyên mã

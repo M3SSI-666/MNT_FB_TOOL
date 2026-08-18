@@ -320,6 +320,25 @@ mình được chọn làm đại diện nhóm đó.
 Đo trên dữ liệu thật: lịch homestay 5 Page (Page ít nhất chỉ 10 link) và lịch
 thuê 3 Page — **mọi Page đều lấy đủ 10 bài mỗi phiên**.
 
+### Link chết — ghi kèm ACC đã đăng
+Mỗi link lưu cả `page` lẫn **`acc`** — acc đã chạy phiên đăng ra bài đó. Bài bị
+Facebook gỡ là một tín hiệu spam độc lập với dialog "Sự việc", nhưng chỉ dùng
+được khi biết nó của acc nào.
+
+> **Cột `page` không thay được `acc`.** Đo trên dữ liệu thật: **10/10 Page đều có
+> 2 acc cùng đăng**, nên link chết chỉ truy được tới "một trong hai", không bao
+> giờ ra đúng một cái.
+
+Phát hiện link chết thì log ghi thẳng acc, và cuối phiên có dòng tổng kết:
+
+```
+💀 [3/10] LINK CHẾT: bài đã bị xoá → bài do 'Thao Ngan' đăng → https://…
+📌 Bài bị gỡ thuộc về — Thao Ngan: 2 · Huỳnh Như: 1
+```
+
+Link thu **trước** khi có cột này không mang acc (cột rỗng) — luồng vẫn chạy
+bình thường, chỉ là không quy được trách nhiệm.
+
 ### Link chết
 Bài cũ bị xoá hoặc đổi phạm vi hiển thị là chuyện bình thường theo thời gian.
 Hệ thống nhận ra và đánh dấu riêng — **không** gộp vào lỗi thường, vì link chết
@@ -555,5 +574,5 @@ nội dung — mà đó đúng là ba chỗ phép kiểm được gọi nhiều 
 
 ## Test
 ```
-python test_basic.py   # 463 assertion, chạy trên DB tạm — không đụng data thật
+python test_basic.py   # 469 assertion, chạy trên DB tạm — không đụng data thật
 ```
