@@ -211,8 +211,43 @@ lượt sớm nhất. Kết quả: đăng và comment **đan xen**, rải đều
 Form **Gen lịch** hiện sẵn số liệu trước khi bấm: lực đăng, lực comment, tổng
 lực và trung bình bao nhiêu phút lại có một phiên nổ.
 
-Nuôi nick chuyển slot trước, comment theo chu kỳ lấp vào slot đăng còn lại; hai
-loại phiên không rơi sát nhau (dùng chung danh sách mốc giờ `da_dat`).
+Nuôi nick chuyển slot trước, comment lấp vào slot đăng còn lại; hai loại phiên
+không rơi sát nhau (dùng chung danh sách mốc giờ `da_dat`).
+
+### Chia phiên comment — `chuyen_slot_theo_ti_le`
+**Đếm tổng rồi chia đều trên toàn trục**, không cộng dồn theo từng acc:
+
+1. Đếm `N` = tổng slot đăng đổi được (slot nuôi đã chiếm thì bỏ qua).
+2. `K = làm tròn(N × tỉ lệ / 100)` — tổng số phiên comment.
+3. Chia `K` cho từng acc theo **phần dư lớn nhất**, để acc đăng nhiều thì comment
+   nhiều và tổng vẫn khớp tỉ lệ.
+4. Vị trí lý tưởng của phiên thứ *j* là `(2j+1)·N / 2K` (điểm giữa khoảng thứ *j*).
+   Chọn slot **gần nhất** còn trống mà acc của nó chưa hết hạn mức, kèm ràng buộc
+   **giãn cách tối thiểu** `max(2, nhịp/2)`.
+
+> **Bản cũ cộng dồn theo từng acc và đã hỏng thật.** Mỗi acc một bộ tích luỹ
+> riêng, lệch pha `k × 100 / n`. Cách đó chỉ tách được lần đổi *đầu tiên* trong
+> dãy riêng của mỗi acc, không kiểm soát khoảng cách trên trục chung. Chỉ cần một
+> slot nuôi nick chen vào là pha xê dịch và các acc đụng nhau.
+>
+> Đo trên đúng lịch homestay (3 acc xoay vòng 4 phút, tỉ lệ 25%, 1 slot nuôi):
+>
+> ```
+> cũ :  ..N....CCC.........CCC.........CCC.........CC    gap 1,1,10,1,1,10…
+> mới:  .CN...C...C..C...C...C..C...C...C..C...C....C    gap 5,4,3,4,4,3,4…
+> ```
+>
+> 7 lần dính liền nhau → **0**. Chia đều 4/4/4 cho ba acc.
+
+> **Làm tròn phải trên TỔNG, không trên từng acc.** Làm tròn rời rạc thì 5 acc ×
+> 12 slot × 20% = 2.4 mỗi acc → xuống 2, tổng ra 10 thay vì 12: tỉ lệ tụt từ 20%
+> xuống 16.7%.
+
+> **Có ca không tồn tại cách chia hoàn hảo.** Khi nhịp lý tưởng `100/tỉ lệ` trùng
+> số acc — 5 acc + 20% → nhịp 5 — mọi vị trí lý tưởng rơi vào **cùng một acc**
+> (slot cách nhau 5 thuộc một acc trong vòng xoay 5). Lúc đó ràng buộc giãn cách
+> tối thiểu là thứ giữ cho lịch không dính cụm, đổi lại khoảng cách dao động
+> 3–6 thay vì đúng 5. Dải thực dùng 10–33% không có ca nào dính.
 
 ### Một phiên diễn ra thế nào
 **Giống hệt luồng đăng bài bằng Page**, chỉ khác ở bước cuối: thay vì mở
@@ -452,5 +487,5 @@ scheduler (60s) nên chậm nhất là muộn 1 phút so với mốc.
 
 ## Test
 ```
-python test_basic.py   # 420 assertion, chạy trên DB tạm — không đụng data thật
+python test_basic.py   # 433 assertion, chạy trên DB tạm — không đụng data thật
 ```

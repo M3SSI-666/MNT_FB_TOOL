@@ -102,28 +102,35 @@ def phan_bo_lich(accs, start_min: int, end_min: int,
 def chuyen_slot_theo_ti_le(schedule: list, accs, ti_le: int,
                            hoat_dong: str = "comment") -> int:
     """
-    Với acc trong `accs`, đổi `ti_le` % số slot đăng của acc đó sang `hoat_dong`.
-    Dùng cho loại đăng "X_*": mặc định 25 → 75% đăng bài, 25% comment.
-
-    Rải đều bằng bộ tích luỹ (Bresenham): mỗi slot cộng `ti_le`, chạm 100 thì
-    đổi slot đó rồi trừ 100. Tính bằng SỐ NGUYÊN nên không trôi số như cộng dồn
-    số thực qua vài trăm slot.
-
-    LỆCH PHA GIỮA CÁC ACC — chỗ này mới là mấu chốt
-    ────────────────────────────────────────────────
-    Nếu mọi acc đều bắt đầu tích luỹ từ 0 thì acc nào cũng đổi đúng slot thứ 4
-    CỦA RIÊNG NÓ. Mà lịch xoay vòng đều giữa các acc, nên slot thứ 4 của cả 4
-    acc rơi liền kề nhau → dính thành cụm:
-
-        ............CCCC........      ← 4 phiên comment liên tiếp
-
-    Cho acc thứ k khởi điểm ở `k × 100 / n` thì mỗi acc chạm ngưỡng ở một nhịp
-    khác nhau, và các phiên comment rải đều xen kẽ giữa các slot đăng:
-
-        ...C..C..C..C..C..C.....
+    Đổi `ti_le` % slot đăng của các acc trong `accs` sang `hoat_dong`, rải đều
+    trên TOÀN TRỤC thời gian. Dùng cho loại đăng "X_*": 25 → 75% đăng, 25% comment.
 
     Chỉ đụng slot đang là 'dang_bai' — slot đã bị nuôi nick chiếm thì giữ nguyên,
     nên phải gọi SAU bước chuyển nuôi.
+
+    CÁCH LÀM: đếm tổng rồi chia đều, KHÔNG cộng dồn theo từng acc
+    ─────────────────────────────────────────────────────────────
+    1. Đếm N = tổng slot đăng đổi được, và n_a = số slot của từng acc.
+    2. Hạn mức mỗi acc  k_a = làm tròn(n_a × ti_le / 100)  → giữ công bằng: acc
+       đăng nhiều thì comment nhiều, không để một acc gánh hết.
+    3. K = Σ k_a. Vị trí lý tưởng của phiên comment thứ j là (2j+1)·N / 2K —
+       chia trục thành K khoảng đều nhau rồi lấy điểm giữa mỗi khoảng.
+    4. Với từng vị trí lý tưởng, tìm slot GẦN NHẤT còn trống mà acc của nó chưa
+       hết hạn mức. Dò ra hai phía nên khi vị trí lý tưởng trúng acc đã hết hạn
+       mức thì vẫn đặt được cạnh đó, không mất phiên nào.
+
+    VÌ SAO PHẢI LÀM TOÀN CỤC — bản cũ cộng dồn theo acc đã hỏng thật
+    ────────────────────────────────────────────────────────────────
+    Bản trước cho mỗi acc một bộ tích luỹ riêng, lệch pha nhau `k × 100 / n`. Nó
+    chỉ tách được lần đổi ĐẦU TIÊN trong dãy riêng của mỗi acc, không kiểm soát
+    được khoảng cách trên trục chung. Chỉ cần một slot nuôi nick chen vào là pha
+    của acc đó xê dịch, và các acc đụng nhau:
+
+        ..N....CCC.........CCC.........CCC.........CC     ← bản cũ
+
+    Đo trên đúng lịch homestay của người dùng (3 acc xoay vòng 4 phút, tỉ lệ 25%,
+    1 slot nuôi): 11 phiên comment, 7 lần dính liền nhau, khoảng cách nhảy
+    1-1-10-1-1-10. Cách chia toàn cục cho ra khoảng cách đều 4 hoặc 5.
 
     Sửa `schedule` tại chỗ, trả về số slot đã đổi.
     """
@@ -132,29 +139,88 @@ def chuyen_slot_theo_ti_le(schedule: list, accs, ti_le: int,
         return 0
     accs = set(accs)
 
-    # Thứ tự XUẤT HIỆN trong lịch, không phải thứ tự bảng chữ cái — đó chính là
-    # thứ tự xoay vòng, nên lệch pha theo nó mới tách được các acc kề nhau.
-    thu_tu = []
-    for row in schedule:
+    # Danh sách slot đổi được, giữ đúng thứ tự thời gian của lịch.
+    vi_tri, chu = [], []
+    for i, row in enumerate(schedule):
         ten = row.get("ten_acc")
-        if ten in accs and ten not in thu_tu:
+        if ten in accs and (row.get("hoat_dong") or "dang_bai") == "dang_bai":
+            vi_tri.append(i)
+            chu.append(ten)
+    N = len(vi_tri)
+    if N == 0:
+        return 0
+
+    # Tổng số phiên comment cần có — làm tròn nửa lên, tính bằng số nguyên.
+    K = (N * ti_le + 50) // 100
+    if K == 0:
+        return 0
+
+    # Chia K cho từng acc theo PHẦN DƯ LỚN NHẤT, không làm tròn từng acc rời rạc.
+    # Làm tròn rời rạc thì tổng bị lệch: 5 acc × 12 slot × 20% = 2.4 mỗi acc, làm
+    # tròn xuống 2 nên tổng ra 10 thay vì 12 — tụt tỉ lệ từ 20% xuống 16.7%.
+    dem, thu_tu = {}, []
+    for ten in chu:
+        if ten not in dem:
+            dem[ten] = 0
             thu_tu.append(ten)
-    n = len(thu_tu) or 1
+        dem[ten] += 1
+    han = {ten: (n_a * ti_le) // 100 for ten, n_a in dem.items()}
+    du  = {ten: (n_a * ti_le) % 100 for ten, n_a in dem.items()}
+    con = K - sum(han.values())
+    # Ưu tiên acc có phần dư lớn nhất; dư bằng nhau thì theo thứ tự xuất hiện
+    # trong lịch để kết quả tất định, gọi lại hai lần ra y hệt.
+    uu_tien = sorted(thu_tu, key=lambda t: (-du[t], thu_tu.index(t)))
+    i = 0
+    while con > 0 and uu_tien:
+        ten = uu_tien[i % len(uu_tien)]
+        if han[ten] < dem[ten]:        # không vượt số slot acc đó có
+            han[ten] += 1
+            con -= 1
+        i += 1
+        if i > len(uu_tien) * 2:       # mọi acc đã đầy, không chia tiếp được
+            break
+    K -= con                            # phần không chia được thì bỏ
 
-    tich_luy = {ten: (i * 100) // n for i, ten in enumerate(thu_tu)}
+    # Khoảng cách tối thiểu mong muốn giữa hai phiên comment. Bằng nửa nhịp lý
+    # tưởng — đủ chặt để không dính cụm, đủ lỏng để luôn tìm được chỗ.
+    #
+    # Vì sao cần chặn riêng thay vì tin vào vị trí lý tưởng: khi nhịp lý tưởng
+    # (100/ti_le) TRÙNG số acc — ví dụ 5 acc, tỉ lệ 20% → nhịp 5 — thì mọi vị trí
+    # lý tưởng rơi đúng vào cùng MỘT acc (các slot cách nhau 5 đều thuộc một acc
+    # trong vòng xoay 5). Acc đó hết hạn mức là thuật toán phải dò sang bên cạnh
+    # và sinh ra hai phiên liền kề. Ca đó không có cách chia hoàn hảo nào cả —
+    # nhưng dính LIỀN NHAU thì chặn được, và đó mới là thứ nhìn thấy trên lịch.
+    khoang_min = max(2, (N // K) // 2)
 
+    da_dung = [False] * N
     doi = 0
-    for row in schedule:
-        ten = row.get("ten_acc")
-        if ten not in tich_luy:
-            continue
-        if (row.get("hoat_dong") or "dang_bai") != "dang_bai":
-            continue
-        tich_luy[ten] += ti_le
-        if tich_luy[ten] >= 100:
-            tich_luy[ten] -= 100
-            row["hoat_dong"] = hoat_dong
-            doi += 1
+    for j in range(K):
+        # Điểm giữa khoảng thứ j khi chia N slot thành K phần đều nhau.
+        p = ((2 * j + 1) * N) // (2 * K)
+        chon = -1
+        # Thử với ràng buộc giãn cách trước; không được thì nới dần rồi mới thả.
+        for gap in range(khoang_min, 0, -1):
+            for d in range(N):
+                for q in ((p + d), (p - d)) if d else (p,):
+                    if not (0 <= q < N) or da_dung[q]:
+                        continue
+                    if han.get(chu[q], 0) <= 0:
+                        continue
+                    if any(da_dung[k] for k in
+                           range(max(0, q - gap + 1), min(N, q + gap))):
+                        continue
+                    chon = q
+                    break
+                if chon >= 0:
+                    break
+            if chon >= 0:
+                break
+        if chon < 0:
+            break                      # hết slot hợp lệ
+        da_dung[chon] = True
+        han[chu[chon]] -= 1
+        schedule[vi_tri[chon]]["hoat_dong"] = hoat_dong
+        doi += 1
     return doi
 
 

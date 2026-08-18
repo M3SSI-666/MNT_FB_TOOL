@@ -869,6 +869,54 @@ _vd = [i for i, r in enumerate(_sd) if r.get("hoat_dong") == "comment"]
 check("thứ tự acc đảo ngược vẫn rải đều",
       all(_vd[i+1] - _vd[i] > 1 for i in range(len(_vd) - 1)))
 
+# CÓ SLOT NUÔI NICK CHEN VÀO — đây là ca bộ test cũ bỏ sót, và là đúng cái người
+# dùng nhìn thấy trên lịch homestay. Bản cũ cộng dồn theo từng acc: slot nuôi làm
+# xê dịch pha của acc đó, các acc đụng nhau và ra "..N....CCC.........CCC...".
+# Đo trên lịch thật (3 acc xoay vòng 4 phút, 25%, 1 slot nuôi): 7 lần dính liền.
+for _nuoi_tai in (2, 5, 11):
+    _ACC3 = ["N1", "N2", "N3"]
+    _sn = [{"ten_acc": _ACC3[i % 3], "gio_dang": f"{5 + i // 15:02d}:{(i % 15) * 4:02d}",
+            "hoat_dong": "nuoi_nick" if i == _nuoi_tai else "dang_bai"}
+           for i in range(45)]
+    _xl.chuyen_slot_theo_ti_le(_sn, set(_ACC3), 25)
+    _vn = [i for i, r in enumerate(_sn) if r.get("hoat_dong") == "comment"]
+    _gn = [_vn[i+1] - _vn[i] for i in range(len(_vn) - 1)]
+    check(f"có slot nuôi ở vị trí {_nuoi_tai}: comment không dính cụm",
+          all(x > 1 for x in _gn))
+    # Chia đều cho các acc, không để một acc gánh hết phần comment.
+    _dem_acc = Counter(_sn[i]["ten_acc"] for i in _vn)
+    check(f"có slot nuôi ở vị trí {_nuoi_tai}: chia đều cho 3 acc",
+          max(_dem_acc.values()) - min(_dem_acc.values()) <= 1)
+
+# Nhịp lý tưởng TRÙNG số acc: 5 acc + tỉ lệ 20% → 100/20 = 5 = số acc, nên mọi
+# vị trí lý tưởng rơi vào cùng MỘT acc (slot cách nhau 5 thuộc một acc trong vòng
+# xoay 5). Không có cách chia hoàn hảo, nhưng vẫn phải không dính liền nhau.
+_ACC5 = [chr(70 + i) for i in range(5)]
+_s5 = [{"ten_acc": _ACC5[i % 5], "gio_dang": "05:00"} for i in range(120)]
+_xl.chuyen_slot_theo_ti_le(_s5, set(_ACC5), 20)
+_v5 = [i for i, r in enumerate(_s5) if r.get("hoat_dong") == "comment"]
+check("nhịp trùng số acc: vẫn không dính cụm",
+      all(_v5[i+1] - _v5[i] > 1 for i in range(len(_v5) - 1)))
+check("nhịp trùng số acc: vẫn đúng tỉ lệ", len(_v5) == 24)
+
+# Tỉ lệ phải CHÍNH XÁC trên tổng, không làm tròn rời rạc từng acc. Làm tròn từng
+# acc thì 5 acc × 12 slot × 20% = 2.4 → xuống 2, tổng ra 10 thay vì 12 (16.7%).
+for _na, _tl2, _mong in ((5, 20, 24), (4, 25, 30), (3, 25, 30), (7, 15, 18)):
+    _tn = [chr(80 + i) for i in range(_na)]
+    _st = [{"ten_acc": _tn[i % _na], "gio_dang": "05:00"} for i in range(120)]
+    _xl.chuyen_slot_theo_ti_le(_st, set(_tn), _tl2)
+    check(f"{_na} acc / {_tl2}%: đúng {_mong}/120 slot",
+          sum(1 for r in _st if r.get("hoat_dong") == "comment") == _mong)
+
+# Gọi hai lần trên cùng dữ liệu phải ra y hệt — phần dư chia theo thứ tự xuất
+# hiện nên không phụ thuộc thứ tự lặp của dict.
+_sr1 = [{"ten_acc": ["Z", "Y", "X"][i % 3], "gio_dang": "05:00"} for i in range(50)]
+_sr2 = [dict(r) for r in _sr1]
+_xl.chuyen_slot_theo_ti_le(_sr1, {"X", "Y", "Z"}, 25)
+_xl.chuyen_slot_theo_ti_le(_sr2, {"X", "Y", "Z"}, 25)
+check("chạy 2 lần ra kết quả giống nhau",
+      [r.get("hoat_dong") for r in _sr1] == [r.get("hoat_dong") for r in _sr2])
+
 _sx2 = [{"ten_acc": "X1", "gio_dang": "05:00"} for _ in range(100)]
 check("tỉ lệ 0 -> không đổi slot nào",  _xl.chuyen_slot_theo_ti_le(_sx2, {"X1"}, 0) == 0)
 check("tỉ lệ 100 -> đổi hết",           _xl.chuyen_slot_theo_ti_le(_sx2, {"X1"}, 100) == 100)
