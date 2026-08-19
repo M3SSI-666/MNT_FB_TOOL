@@ -556,6 +556,37 @@ nội dung — mà đó đúng là ba chỗ phép kiểm được gọi nhiều 
 > sau trang gốc. Nick chết cookie chạy trọn phiên nuôi trên trang landing — lướt
 > không, like không — rồi báo `✅ nuôi xong`. Thành công giả, hoàn toàn im lặng.
 
+## Tham gia nhóm
+Acc cá nhân → chuyển sang Page → tham gia các nhóm trong tag **UID Nhóm**, đứng
+tên Page chứ không phải acc.
+
+**Lọc trước, vào sau.** Sau khi chuyển sang Page, mở **một lần**
+`facebook.com/groups/joins/`, cuộn tới khi số nhóm thôi tăng, bóc mọi id/slug rồi
+đối chiếu với tag. Chỉ mở trang những nhóm chưa tham gia.
+
+> Đối chiếu chấp nhận **cả uid lẫn slug**: tag có 54/58 uid số nhưng vài cái là
+> slug chữ (`lucnhare24h`), mà link Facebook trả về có thể dùng dạng còn lại.
+
+> Phải đọc **sau** khi chuyển sang Page — trang này trả về nhóm của chủ thể đang
+> hoạt động, đọc trước thì ra nhóm của acc cá nhân.
+
+Đo hai phiên thật cùng ngày, mỗi phiên ~9 phút, cùng tag 58 nhóm:
+
+| | trước khi lọc | sau khi lọc |
+|---|---|---|
+| Tham gia nhóm mới | 4 | **10** |
+| "Đã là thành viên" (mở trang mới biết) | 5 | **0** |
+| Nhóm bỏ qua không cần mở | 0 | **38** |
+
+> **Danh sách thiếu thì vô hại**, nhóm không nằm trong đó vẫn được vào thăm như
+> cũ. Chiều nguy hiểm là nhóm chưa vào mà bị bỏ qua — không xảy ra được, vì nguồn
+> dữ liệu chính là "nhóm bạn đã tham gia".
+
+Form *Tạo lịch nhanh* chỉ còn **một** ô delay. Ô "delay đã join / bỏ qua" đã bỏ:
+sau khi lọc, nhánh đó chỉ còn nổ cho nhóm chờ duyệt và lỗi tải trang, chiếm 3%
+thời gian chờ (10 giây trên 320). Để cứng 5 giây. Ô còn lại mới đáng giữ — tham
+gia nhóm dồn dập là hành vi dễ bị chặn nhất trong cả phần mềm.
+
 ## Mã lỗi trạng thái lịch
 - **Cookie hết hạn** → tài khoản bị đăng xuất, cần lấy lại `xs` (account tự bị đánh dấu).
 - **Lỗi mạng/tạm thời** → đã tự thử lại 3 lần (cách nhau ~30s rồi ~60s) mà vẫn hỏng.

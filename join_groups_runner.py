@@ -9,7 +9,7 @@ Playwright tự động:
   5. Ghi kết quả vào db
 """
 
-import os, sys, asyncio, random, json, sqlite3, time
+import os, sys, asyncio, random, json, re, sqlite3, time
 from pathlib import Path
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -31,23 +31,26 @@ async def _human_delay(min_ms=600, max_ms=1800):
     await asyncio.sleep(random.randint(min_ms, max_ms) / 1000)
 
 
-def _find_profile_dir(acc_name: str) -> str:
-    import unicodedata
-    def remove_accents(s):
-        return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
-    root       = Path(__file__).parent / "profiles"
-    exact_name = acc_name.replace(" ", "_")
-    exact_path = root / exact_name
-    if exact_path.exists(): return str(exact_path)
-    if root.exists():
-        for folder in root.iterdir():
-            if folder.name.lower() == exact_name.lower(): return str(folder)
-    acc_na = remove_accents(acc_name).replace(" ", "_").lower()
-    if root.exists():
-        for folder in root.iterdir():
-            if remove_accents(folder.name).lower() == acc_na: return str(folder)
-    exact_path.mkdir(parents=True, exist_ok=True)
-    return str(exact_path)
+def _c_user_cua(acc_name: str) -> str:
+    """c_user của acc — cần để tìm ĐÚNG profile và dựng cookie mới nhất từ DB."""
+    with _conn() as con:
+        r = con.execute("SELECT c_user FROM accounts WHERE ten_acc=? LIMIT 1",
+                        (acc_name,)).fetchone()
+    return (r[0] if r else "") or ""
+
+
+def _find_profile_dir(acc_name: str, c_user: str = "") -> str:
+    """
+    Dùng chung hàm của fb_common thay vì giữ bản sao riêng.
+
+    Bản sao cũ ở đây chỉ dò `Xuan_Khoa` (khớp chính xác / bỏ dấu / không phân
+    biệt hoa thường), KHÔNG biết dạng `{Tên}_{c_user}` mà poster thật sự tạo ra.
+    Kết quả: nó tạo mới một thư mục TRẮNG rồi chạy phiên tham gia nhóm trên đó —
+    mất phiên đăng nhập bền, dễ vấp checkpoint hơn hẳn. Đúng lỗi mà
+    fb_common.find_profile_dir đã được vá và có assertion canh riêng.
+    """
+    from fb_common import find_profile_dir
+    return find_profile_dir(acc_name, c_user or _c_user_cua(acc_name))
 
 
 async def _switch_to_page(page, ctx, page_uid: str):
@@ -118,6 +121,74 @@ _JOIN_SELS = [
     'a[role="button"]:has-text("Tham gia nhóm")',
     '[data-testid="group-join-button"]',
 ]
+
+
+# Bóc mọi id/slug nhóm từ link trên trang. Nhận cả UID số lẫn slug chữ vì tag
+# đang có cả hai dạng (54/58 là số, còn lại như "lucnhare24h").
+_JS_BOC_NHOM = r"""() => {
+  const ra = new Set();
+  for (const a of document.querySelectorAll('a[href*="/groups/"]')) {
+    const m = (a.href || '').match(/\/groups\/([0-9A-Za-z._-]+)/);
+    if (!m) continue;
+    const g = m[1];
+    if (['joins','feed','discover','create','search','browse'].includes(g)) continue;
+    ra.add(g);
+  }
+  return [...ra];
+}"""
+
+
+def _dinh_danh_nhom(uid: str, link_url: str) -> set:
+    """
+    Mọi cách gọi tên một nhóm, để đối chiếu không phụ thuộc dạng lưu.
+
+    Tag UID có cả uid số lẫn slug chữ, mà link Facebook trả về có thể dùng dạng
+    còn lại — so một dạng thôi là bỏ sót.
+    """
+    ra = {(uid or "").strip()}
+    m = re.search(r"/groups/([0-9A-Za-z._-]+)", link_url or "")
+    if m:
+        ra.add(m.group(1))
+    return {x for x in ra if x}
+
+
+async def _lay_nhom_da_vao(page) -> set:
+    """
+    Đọc danh sách nhóm Page đang đứng tên ĐÃ tham gia, từ trang `groups/joins`.
+
+    Gọi SAU khi đã chuyển sang Page — trang này trả về nhóm của chủ thể đang
+    hoạt động, nên đọc trước lúc switch sẽ ra nhóm của acc cá nhân.
+
+    Dò thật ba trang: `groups/joins` cho 40 định danh (38 khớp tag), còn
+    `groups/` và `groups/feed` chỉ ra 22 — chúng là thanh bên newsfeed, không
+    phải danh sách đầy đủ.
+
+    Cuộn tới khi số nhóm thôi tăng, tối đa `so_cuon` lượt, chứ không cuộn cứng
+    một số lần: Page ít nhóm thì xong sớm, Page nhiều nhóm mới cuộn lâu.
+    """
+    await page.goto("https://www.facebook.com/groups/joins/",
+                    wait_until="domcontentloaded", timeout=60000)
+    await page.wait_for_timeout(4000)
+
+    da_thay, yen = set(), 0
+    for _ in range(20):
+        try:
+            da_thay |= set(await page.evaluate(_JS_BOC_NHOM))
+        except Exception:
+            pass
+        truoc = len(da_thay)
+        await page.mouse.wheel(0, 2500)
+        await page.wait_for_timeout(1200)
+        try:
+            da_thay |= set(await page.evaluate(_JS_BOC_NHOM))
+        except Exception:
+            pass
+        yen = yen + 1 if len(da_thay) == truoc else 0
+        if yen >= 3:                      # ba lượt liền không thêm được gì
+            break
+
+    logger.info(f"  📋 Page đã tham gia {len(da_thay)} nhóm (đọc từ groups/joins)")
+    return da_thay
 
 
 async def _join_one_group(page, uid: str, ten_nhom: str, link_url: str) -> str:
@@ -237,7 +308,9 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
 
         # Inject cookies
-        cookie_data = load_cookie(acc_name)
+        # Kèm c_user để load_cookie dựng từ DB — cột xs trong DB là nguồn
+        # mới nhất, file JSON có thể cũ hơn.
+        cookie_data = load_cookie(acc_name, _c_user_cua(acc_name))
         if cookie_data:
             cookies = []
             for n, k in [("c_user","c_user"),("xs","xs")]:
@@ -262,6 +335,35 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
         # Switch sang Page
         logger.info(f"  🔄 Switch sang Page {page_uid}...")
         await _switch_to_page(page, ctx, page_uid)
+
+        # ── Bỏ qua nhóm Page ĐÃ tham gia, không mở từng trang để hỏi lại ──
+        # Đo thật trên Page 'Bồ Công Anh': phiên cũ mở 30 trang nhóm trong 10
+        # phút chỉ để phát hiện cả 30 đều "đã là thành viên" — ~20 giây mỗi nhóm
+        # đổi lấy không gì. Đọc danh sách một lần rồi lọc thì 30 lượt truy cập đó
+        # biến mất; ít thao tác tự động hơn cũng đỡ bị soi hơn.
+        #
+        # Danh sách THIẾU thì vô hại: nhóm không có trong đó vẫn được vào thăm
+        # như cũ. Chiều nguy hiểm là nhóm CHƯA vào mà lại nằm trong danh sách —
+        # không xảy ra được, vì nguồn của nó chính là "nhóm bạn đã tham gia".
+        try:
+            da_vao = await _lay_nhom_da_vao(page)
+        except Exception as e:
+            logger.warning(f"  ⚠️  Không đọc được danh sách nhóm đã tham gia: {e}")
+            da_vao = set()
+
+        if da_vao:
+            con_lai, bo_qua = [], 0
+            for g in groups:
+                if _dinh_danh_nhom(g["uid"], g["link_url"]) & da_vao:
+                    bo_qua += 1
+                else:
+                    con_lai.append(g)
+            stats["da_join"] += bo_qua
+            results += [{"uid": g["uid"], "ten": g["ten_nhom"], "result": "da_join"}
+                        for g in groups if g not in con_lai]
+            logger.info(f"  ⏭️  Bỏ qua {bo_qua} nhóm Page đã tham gia — "
+                        f"còn {len(con_lai)}/{total} nhóm cần vào")
+            groups = con_lai
 
         # Duyệt từng nhóm
         for i, g in enumerate(groups, 1):

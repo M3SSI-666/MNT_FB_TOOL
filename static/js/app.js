@@ -242,18 +242,20 @@ async function loadJoinSchedules() {
     }
 }
 
-function _delayPanel(dNew, dSkip) {
+// Chỉ còn MỘT ô. Ô "delay đã join / bỏ qua" đã bỏ khỏi form vì phiên nay lọc
+// sẵn nhóm đã tham gia trước khi chạy — đo hai phiên thật cùng ngày: phiên
+// trước khi lọc gặp 5 lần "đã là thành viên", phiên sau lọc gặp 0 lần. Nhánh đó
+// giờ chỉ còn nổ cho nhóm chờ duyệt và lỗi tải trang, chiếm 3% thời gian chờ
+// (10 giây trên 320 giây). Không đáng để cân nhắc mỗi lần tạo lịch → để cứng.
+function _delayPanel(dNew) {
     return `
-    <div style="display:flex;gap:10px">
-        <div class="field-group" style="flex:1">
-            <label>Delay mới tham gia (giây)</label>
-            <input id="js-delay-new" type="number" min="5" max="600" value="${dNew}"
-                   style="width:100%" title="Chờ N giây sau khi vừa join nhóm mới">
-        </div>
-        <div class="field-group" style="flex:1">
-            <label>Delay đã join / bỏ qua (giây)</label>
-            <input id="js-delay-skip" type="number" min="1" max="60" value="${dSkip}"
-                   style="width:100%" title="Chờ N giây khi nhóm đã là thành viên rồi">
+    <div class="field-group">
+        <label>Delay mới tham gia (giây)</label>
+        <input id="js-delay-new" type="number" min="5" max="600" value="${dNew}"
+               style="width:100%" title="Chờ N giây sau khi vừa join nhóm mới">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+            Tham gia nhóm dồn dập là hành vi dễ bị chặn nhất — đây là ô đáng giữ.
+            Nhóm đã tham gia được lọc sẵn nên không còn tốn thời gian ghé lại.
         </div>
     </div>`;
 }
@@ -261,14 +263,13 @@ function _delayPanel(dNew, dSkip) {
 function openQuickJoinSchedule() {
     API.settings().then(setRes => {
         const dNew  = setRes.data?.join_delay_new  || "30";
-        const dSkip = setRes.data?.join_delay_skip || "5";
         openModal("⚡ Tạo lịch nhanh — Tham gia nhóm", `
             <div style="display:flex;flex-direction:column;gap:12px">
                 <div style="font-size:13px;color:var(--text-secondary);background:var(--bg-hover);padding:10px 12px;border-radius:var(--radius-sm);line-height:1.6">
                     Tự động tạo <strong>1 lịch / tài khoản Active có Page</strong>.<br>
                     Bỏ qua acc đã có lịch rồi.
                 </div>
-                ${_delayPanel(dNew, dSkip)}
+                ${_delayPanel(dNew)}
                 <div style="font-size:11px;color:var(--text-muted)">
                     Chế độ Chrome (ẩn/hiện): toggle ở tab <strong>Hành động</strong>
                 </div>
@@ -282,9 +283,8 @@ function openQuickJoinSchedule() {
 
 async function saveQuickJoinSchedule() {
     const dNew  = parseInt(document.getElementById("js-delay-new")?.value  || "30");
-    const dSkip = parseInt(document.getElementById("js-delay-skip")?.value || "5");
     try {
-        const r = await API.joinGenQuick({delay_new: dNew, delay_skip: dSkip});
+        const r = await API.joinGenQuick({delay_new: dNew});
         if(r.ok) {
             Toast.success(`✅ Đã tạo ${r.created} lịch mới (bỏ qua ${r.skipped} đã có)`);
             closeModal(); loadJoinSchedules();
@@ -297,7 +297,6 @@ function openAddJoinSchedule() {
         const accs  = (accRes.data||[]).filter(a => a.trang_thai === "Active");
         const pages = pRes.data || [];
         const dNew  = setRes.data?.join_delay_new  || "30";
-        const dSkip = setRes.data?.join_delay_skip || "5";
         openModal("+ Thêm lịch tham gia nhóm", `
             <div style="display:flex;flex-direction:column;gap:12px">
                 <div class="field-group">
@@ -316,7 +315,7 @@ function openAddJoinSchedule() {
                     <label>Giờ chạy (HH:MM) — để trống = chạy thủ công</label>
                     <input id="js-gio" type="text" placeholder="VD: 02:00">
                 </div>
-                ${_delayPanel(dNew, dSkip)}
+                ${_delayPanel(dNew)}
             </div>
             <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px">
                 <button onclick="closeModal()" class="btn btn-ghost">Huỷ</button>
@@ -327,8 +326,7 @@ function openAddJoinSchedule() {
 
 async function saveJoinSchedule() {
     const dNew  = parseInt(document.getElementById("js-delay-new")?.value  || "30");
-    const dSkip = parseInt(document.getElementById("js-delay-skip")?.value || "5");
-    await API.saveSettings({join_delay_new: String(dNew), join_delay_skip: String(dSkip)}).catch(()=>{});
+    await API.saveSettings({join_delay_new: String(dNew)}).catch(()=>{});
     const data = {
         ten_acc:  document.getElementById("js-acc")?.value||"",
         ten_page: document.getElementById("js-page")?.value||"",
@@ -359,12 +357,11 @@ async function runJoin(id) {
     const headless  = isJoinHeadless();
     const settings  = await API.settings().catch(()=>({data:{}}));
     const dNew      = parseInt(settings.data?.join_delay_new  || "30");
-    const dSkip     = parseInt(settings.data?.join_delay_skip || "5");
     const modeLabel = headless ? "ẩn Chrome" : "hiển thị Chrome";
     try {
-        const r = await API.joinRun(id, headless, dNew, dSkip);
+        const r = await API.joinRun(id, headless, dNew);
         if(r.ok) {
-            Toast.success(`▶ Khởi động (${modeLabel} | mới join: ${dNew}s | bỏ qua: ${dSkip}s)`);
+            Toast.success(`▶ Khởi động (${modeLabel} | mới join: ${dNew}s)`);
             loadJoinSchedules();
         } else Toast.error(r.error);
     } catch(e) { Toast.error(e.message); }
