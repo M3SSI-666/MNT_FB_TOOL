@@ -80,13 +80,22 @@ if /i not "!OK!"=="y" (
 :: --- 1. Ghi version.txt (khong xuong dong de .bat doc sach) ---
 <nul set /p "=!MOI!" > version.txt
 
-:: --- 2. Commit rieng ---
+:: --- 2. Commit rieng, NEU co gi de commit ---
+:: version.txt co the da mang dung so nay tu truoc (vd lan phat hanh dau tien,
+:: so duoc dat trong mot commit khac). Luc do khong co gi de commit, va do la
+:: chuyen BINH THUONG - chi con thieu moi tag. Ban dau coi day la loi nen lan
+:: phat hanh dau tien luon that bai.
 git add version.txt
-git commit -q -m "Phat hanh v!MOI!"
+git diff --cached --quiet
 if errorlevel 1 (
-    echo   [LOI] Commit that bai.
-    pause
-    exit /b 1
+    git commit -q -m "Phat hanh v!MOI!"
+    if errorlevel 1 (
+        echo   [LOI] Commit that bai.
+        pause
+        exit /b 1
+    )
+) else (
+    echo   version.txt da mang so !MOI! tu truoc - chi gan tag.
 )
 
 :: --- 3. Tag + day len ---
