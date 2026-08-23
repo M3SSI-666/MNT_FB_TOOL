@@ -1777,6 +1777,21 @@ check("quên gắn khoá công khai → chặn", _pd.dung_duoc(_that, _BG, "") i
 # Máy chủ dựng sau phần này. Nếu mặc định là bắt buộc thì ngay lúc cập nhật
 # code, mọi máy đang chạy đều bị khoá ngoài — kể cả máy của chính mình — mà
 # chưa có chỗ nào để xin duyệt.
+# Cloudflare CHẶN THẲNG User-Agent mặc định của Python bằng lỗi 403. Đã đo trên
+# máy chủ thật: mặc định → 403, đặt bất kỳ tên nào khác → 200. Thiếu dòng đặt
+# tên là cổng chặn khoá TOÀN BỘ máy khách, kể cả máy đã được duyệt, vì lượt hỏi
+# nào cũng hỏng. Đây là loại lỗi chỉ lộ ra khi gọi máy chủ thật.
+check("có gửi User-Agent khi gọi máy chủ",
+      "User-Agent" in Path("phe_duyet.py").read_text(encoding="utf-8"))
+check("User-Agent mang tên phần mềm", _pd._ten_goi().startswith("MNT-FB-AutoPost/"))
+check("User-Agent không phải mặc định của Python",
+      "urllib" not in _pd._ten_goi().lower() and "python" not in _pd._ten_goi().lower())
+
+# Tạm GỠ khoá ra để kiểm, thay vì tin vào giá trị đang có: khoá thật đã gắn rồi
+# nên assertion kiểu "bat_buoc() is False" giờ luôn sai — mà điều cần canh không
+# phải giá trị hiện tại, mà là "hễ khoá rỗng thì cổng phải tắt".
+_khoa_that = _pd.KHOA_CONG_KHAI
+_pd.KHOA_CONG_KHAI = ""
 check("chưa gắn khoá → không bắt buộc duyệt", _pd.bat_buoc() is False)
 _tt = _pd.trang_thai_hien_tai()
 check("chưa gắn khoá → cho vào bình thường", _tt["cho_vao"] is True)
@@ -1784,6 +1799,8 @@ check("chưa gắn khoá → không gọi máy chủ", _tt["nguon"] == "chua_bat
 _j = server.app.test_client().get("/api/phe-duyet/status").get_json()
 check("/api/phe-duyet/status: bat_buoc=False khi chưa gắn khoá",
       _j["bat_buoc"] is False and _j["cho_vao"] is True)
+_pd.KHOA_CONG_KHAI = _khoa_that
+check("gắn khoá vào → cổng chặn bật", _pd.bat_buoc() is True)
 # Kiểm đầu vào form đăng ký
 for _than, _mong in [({}, "họ tên"), ({"ten": "  "}, "họ tên"),
                      ({"ten": "A"}, "điện thoại")]:

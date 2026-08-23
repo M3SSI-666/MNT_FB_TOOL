@@ -38,10 +38,10 @@ from ma_may import ma_may
 # và moi được là tự ký được "đã duyệt" cho chính mình.
 #
 # Đổi lại bằng khoá thật sau khi dựng máy chủ và sinh cặp khoá.
-KHOA_CONG_KHAI = ""
+KHOA_CONG_KHAI = "+gRkh2MJ2dJf+0he0jD/PoWG9FpxTX7aqU135NQS5i4="
 
 # Đổi sang địa chỉ máy chủ thật khi dựng xong.
-MAY_CHU = "https://mnt-phe-duyet.example.workers.dev"
+MAY_CHU = "https://mnt-phe-duyet.mnt-tools.workers.dev"
 
 # Nhớ kết quả trong bao lâu. 7 ngày: đủ để qua một kỳ nghỉ hay một tuần mạng
 # chập chờn, mà cắt quyền vẫn có hiệu lực trong vòng một tuần.
@@ -53,17 +53,36 @@ BI_CAT    = "bi_cat"
 CHUA_DANG_KY = "chua_dang_ky"
 
 
+def _ten_goi():
+    """Chuỗi tự giới thiệu gửi kèm mỗi lượt gọi.
+
+    BẮT BUỘC phải có. Cloudflare chặn thẳng User-Agent mặc định của Python
+    ("Python-urllib/3.x") bằng lỗi 403 — đã đo trên máy chủ thật: mặc định
+    403, đặt bất kỳ tên nào khác thì 200. Thiếu dòng này là cổng chặn khoá
+    TOÀN BỘ máy khách, kể cả máy đã được duyệt, vì lượt hỏi nào cũng hỏng.
+
+    Đặt đúng tên phần mềm chứ không giả làm trình duyệt: nó là sự thật, và sau
+    này nhìn log máy chủ còn biết lượt gọi đến từ đâu.
+    """
+    try:
+        from config import VERSION
+    except Exception:
+        VERSION = "0.0.0"
+    return f"MNT-FB-AutoPost/{VERSION}"
+
+
 def _goi(duong_dan, du_lieu=None, giay=12):
     """Gọi một đường dẫn trên máy chủ. Trả (ok, dữ liệu) — không ném lỗi ra
     ngoài, vì mọi chỗ gọi đều phải xử lý được trường hợp mất mạng."""
     url = MAY_CHU.rstrip("/") + duong_dan
+    dau = {"User-Agent": _ten_goi()}
     try:
         if du_lieu is None:
-            req = urllib.request.Request(url, method="GET")
+            req = urllib.request.Request(url, method="GET", headers=dau)
         else:
             req = urllib.request.Request(
                 url, data=json.dumps(du_lieu).encode("utf-8"),
-                headers={"Content-Type": "application/json"}, method="POST")
+                headers={**dau, "Content-Type": "application/json"}, method="POST")
         with urllib.request.urlopen(req, timeout=giay) as r:
             return True, json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:

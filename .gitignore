@@ -38,3 +38,6 @@ backup/
 
 # Cài đặt cục bộ của Claude Code — không đẩy lên repo
 .claude/
+
+# Ket qua phe duyet da nho lai — rieng cua tung may, khong len git.
+phe_duyet.json
