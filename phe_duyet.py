@@ -22,12 +22,23 @@ CẮT QUYỀN CÓ ĐỘ TRỄ
     chỉ chọn được con số.
 """
 
+import base64
 import json
 import time
 import urllib.error
 import urllib.request
 
 from ma_may import ma_may
+
+# Khoá CÔNG KHAI của máy chủ, dạng base64. Nằm trong phần mềm cũng không sao:
+# nó chỉ KIỂM được chữ ký chứ không TẠO được. Khoá riêng nằm ở máy chủ.
+#
+# Vì sao Ed25519 mà không phải HMAC: HMAC cần cả hai bên giữ CÙNG một khoá bí
+# mật. Khoá đó nằm trong phần mềm trên máy khách thì sớm muộn cũng bị moi ra,
+# và moi được là tự ký được "đã duyệt" cho chính mình.
+#
+# Đổi lại bằng khoá thật sau khi dựng máy chủ và sinh cặp khoá.
+KHOA_CONG_KHAI = ""
 
 # Đổi sang địa chỉ máy chủ thật khi dựng xong.
 MAY_CHU = "https://mnt-phe-duyet.example.workers.dev"
@@ -102,6 +113,51 @@ def ghi_nho(goi_tin):
         return True
     except Exception:
         return False
+
+
+def chu_ky_dung(goi_tin, khoa_cong_khai=None):
+    """Chữ ký của máy chủ trên gói tin này có thật không.
+
+    Không có bước này thì cả cơ chế vô nghĩa: ai cũng tự tạo được một file
+    phe_duyet.json ghi "da_duyet" rồi dùng thoải mái.
+
+    Chữ ký phủ đúng ba phần `mã máy | trạng thái | thời điểm`, nên sửa bất kỳ
+    phần nào — đổi "bi_cat" thành "da_duyet", hay đẩy thời điểm về tương lai để
+    kéo dài hạn — đều làm chữ ký hỏng.
+    """
+    kck = KHOA_CONG_KHAI if khoa_cong_khai is None else khoa_cong_khai
+    if not kck:
+        # Chưa gắn khoá (giai đoạn dựng). Trả False chứ KHÔNG trả True: thiếu
+        # khoá mà cho qua thì lỡ quên gắn là mở toang cho tất cả.
+        return False
+    if not isinstance(goi_tin, dict):
+        return False
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+        khoa = Ed25519PublicKey.from_public_bytes(base64.b64decode(kck))
+        noi = "{}|{}|{}".format(goi_tin.get("ma_may", ""),
+                                goi_tin.get("trang_thai", ""),
+                                goi_tin.get("luc", ""))
+        khoa.verify(base64.b64decode(goi_tin.get("chu_ky", "")), noi.encode("utf-8"))
+        return True
+    except Exception:
+        # Chữ ký sai, thiếu, hỏng dạng base64, hay thiếu thư viện — đều là
+        # không tin được.
+        return False
+
+
+def dung_duoc(goi_tin, bay_gio=None, khoa_cong_khai=None):
+    """Gói tin nhớ lại có cho mở phần mềm không.
+
+    Phải qua CẢ HAI cửa: chữ ký thật, và còn trong hạn. Thiếu một là chặn.
+    Gói tin cũng phải đúng của MÁY NÀY — không thì chép gói tin của máy đã được
+    duyệt sang máy khác là dùng được.
+    """
+    if not chu_ky_dung(goi_tin, khoa_cong_khai):
+        return False
+    if goi_tin.get("ma_may") != ma_may():
+        return False
+    return con_han(goi_tin, bay_gio=bay_gio)
 
 
 def con_han(goi_tin, bay_gio=None):

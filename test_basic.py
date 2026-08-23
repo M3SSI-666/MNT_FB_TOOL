@@ -1715,6 +1715,42 @@ for _ten, _goi, _mong in [
 check("kết quả duyệt nằm dưới DATA_ROOT",
       str(_pd._duong_dan_nho()).startswith(str(_cfg.DATA_ROOT)))
 
+# ── Chữ ký của máy chủ ─────────────────────────────────────────────────────
+# Không có bước kiểm chữ ký thì cả cơ chế vô nghĩa: ai cũng tự tạo được một
+# file phe_duyet.json ghi "da_duyet" rồi dùng thoải mái. Dựng cặp khoá thật
+# rồi thử đủ các kiểu giả mạo — đây là phần quyết định ai vào được phần mềm.
+import base64 as _b64
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey as _Ed
+_rieng = _Ed.generate()
+_KCK   = _b64.b64encode(_rieng.public_key().public_bytes_raw()).decode()
+_MAY   = _mm.ma_may()
+
+def _ky_thu(ma, tt, luc, khoa=None):
+    k = khoa or _rieng
+    return {"ma_may": ma, "trang_thai": tt, "luc": luc,
+            "chu_ky": _b64.b64encode(k.sign(f"{ma}|{tt}|{luc}".encode())).decode()}
+
+_that = _ky_thu(_MAY, _pd.DA_DUYET, _BG)
+check("gói tin thật từ máy chủ → cho vào", _pd.dung_duoc(_that, _BG, _KCK) is True)
+
+_khac = _Ed.generate()
+for _ten, _g in [
+    ("tự viết da_duyet, không ký", {"ma_may": _MAY, "trang_thai": _pd.DA_DUYET, "luc": _BG}),
+    ("sửa bi_cat thành da_duyet",  {**_ky_thu(_MAY, _pd.BI_CAT, _BG), "trang_thai": _pd.DA_DUYET}),
+    ("đẩy thời điểm về tương lai", {**_that, "luc": _BG + 999999}),
+    ("chép gói của máy khác",      _ky_thu("AAAA-BBBB-CCCC", _pd.DA_DUYET, _BG)),
+    ("chữ ký của khoá khác",       _ky_thu(_MAY, _pd.DA_DUYET, _BG, _khac)),
+    ("chữ ký rác",                 {**_that, "chu_ky": "khong-phai-base64!!"}),
+    ("thiếu chữ ký",               {k: v for k, v in _that.items() if k != "chu_ky"}),
+]:
+    check(f"giả mạo — {_ten} → chặn", _pd.dung_duoc(_g, _BG, _KCK) is False)
+
+# Thiếu khoá công khai phải CHẶN chứ không cho qua: lỡ quên gắn khoá lúc phát
+# hành mà mặc định cho qua thì mở toang cho tất cả, và không ai phát hiện ra.
+check("quên gắn khoá công khai → chặn", _pd.dung_duoc(_that, _BG, "") is False)
+check("chữ ký thật nhưng hết hạn → chặn",
+      _pd.dung_duoc(_ky_thu(_MAY, _pd.DA_DUYET, _BG - 9 * _NGAY), _BG, _KCK) is False)
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Tải Chromium lần chạy đầu
 # ───────────────────────────────────────────────────────────────────────────
