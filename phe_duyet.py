@@ -93,8 +93,20 @@ def dang_ky(ten, dien_thoai, email="", ghi_chu=""):
 
 
 def hoi_may_chu():
-    """Hỏi trạng thái hiện tại. Trả (ok, dữ liệu)."""
-    return _goi("/kiem-tra?ma_may=" + ma_may())
+    """Hỏi trạng thái hiện tại. Trả (ok, dữ liệu).
+
+    Gửi kèm số phiên bản để bảng quản lý biết máy nào đang chạy bản nào — thấy
+    được ai chưa cập nhật mà không phải đi hỏi từng người.
+
+    Chính lượt gọi này cũng là thứ cho máy chủ biết máy nào CÒN ĐANG DÙNG: mỗi
+    lần hỏi, máy chủ ghi lại mốc thời gian.
+    """
+    from urllib.parse import quote
+    try:
+        from config import VERSION
+    except Exception:
+        VERSION = ""
+    return _goi(f"/kiem-tra?ma_may={ma_may()}&phien_ban={quote(VERSION)}")
 
 
 def _duong_dan_nho():

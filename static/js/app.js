@@ -2497,7 +2497,8 @@ async function loadLogs(){
 // Chỉ chạy khi máy chủ báo bat_buoc=true, tức là đã gắn khoá công khai. Chưa
 // gắn thì phần mềm hoạt động y như trước, không thấy màn hình này bao giờ.
 
-let _duyetHen = null;
+let _duyetHen = null;          // nhịp dày, dùng khi đang bị chặn
+let _duyetHenDaiHan = null;    // nhịp thưa, dùng khi đã được vào
 
 async function _duyetKiem(){
     let j;
@@ -2511,6 +2512,13 @@ async function _duyetKiem(){
     if(!j.bat_buoc || j.cho_vao){
         lop.style.display = "none";
         if(_duyetHen){ clearInterval(_duyetHen); _duyetHen = null; }
+        // Được vào rồi vẫn hỏi lại đều đặn, vì hai lý do:
+        //   - máy chủ mới biết máy này CÒN ĐANG DÙNG, để hiện trong bảng quản lý
+        //   - thu hồi quyền có hiệu lực trong vòng 30 phút, thay vì phải đợi
+        //     hết hạn nhớ 7 ngày
+        if(j.bat_buoc && !_duyetHenDaiHan){
+            _duyetHenDaiHan = setInterval(_duyetKiem, 30*60*1000);
+        }
         return;
     }
 
