@@ -1586,6 +1586,25 @@ check("app.js đổ version vào ô đó",
       'app-version' in Path("static/js/app.js").read_text(encoding="utf-8"))
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Ghi chú phát hành
+# ───────────────────────────────────────────────────────────────────────────
+# Nút Cập nhật trong phần mềm đọc CHANGELOG.md để hiện danh sách bản cho khách
+# chọn. Không có ghi chú thì khách chỉ thấy "v1.0.4" — không có cơ sở nào để
+# chọn, mà chọn lùi nhầm là mất tính năng. PHAT_HANH.bat cũng chặn phát hành
+# khi chưa có mục cho số sắp phát hành; các assertion dưới đây canh phần còn
+# lại: dạng tiêu đề đúng, và bản đang chạy phải nằm đầu danh sách.
+_cl = Path("CHANGELOG.md")
+check("có file CHANGELOG.md", _cl.exists())
+_muc = _re_v.findall(r"(?m)^## v(\d+\.\d+\.\d+) ", _cl.read_text(encoding="utf-8"))
+check("CHANGELOG có ít nhất một bản", len(_muc) > 0)
+check("CHANGELOG không có mục trùng", len(_muc) == len(set(_muc)))
+# Mới nhất nằm trên cùng — danh sách trong giao diện đọc theo đúng thứ tự này.
+check("bản đang chạy nằm đầu CHANGELOG", bool(_muc) and _muc[0] == _cfg.VERSION)
+_khoa = lambda v: tuple(int(x) for x in v.split("."))
+check("CHANGELOG xếp từ mới xuống cũ",
+      _muc == sorted(_muc, key=_khoa, reverse=True))
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Cú pháp file .bat
 # ───────────────────────────────────────────────────────────────────────────
 # Hai lỗi dưới đây đều KHÔNG hiện ra khi đọc code, và cmd chỉ báo bằng một câu
