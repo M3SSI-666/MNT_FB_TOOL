@@ -10,6 +10,16 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v1.2.1 — 23/08/2026
+
+Thêm đường thoát khi không cập nhật được.
+
+- `KHOI_PHUC.bat` kéo thẳng bản mới nhất từ GitHub, **không đi qua**
+  `UPDATE.bat`. Dùng khi bấm `UPDATE.bat` mà nó báo lỗi hoặc không làm gì.
+- File tự chứa: tự tìm git, không gọi file nào khác trong thư mục, nên chạy
+  được cả trên máy đang kẹt ở bản rất cũ.
+- Vẫn sao lưu dữ liệu trước, và dừng lại nếu sao lưu thất bại.
+
 ## v1.2.0 — 23/08/2026
 
 Cập nhật ngay trong phần mềm, không cần mở file nào nữa.
