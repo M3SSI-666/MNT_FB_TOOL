@@ -40,7 +40,31 @@ def _doc_version() -> str:
 
 VERSION = _doc_version()
 
-DATA_ROOT  = Path(os.environ.get("MNT_DATA_DIR", "").strip() or BASE_DIR)
+# Nơi để dữ liệu, theo thứ tự ưu tiên:
+#   1. MNT_DATA_DIR   — đặt tay, dùng khi thử nghiệm hoặc muốn để ổ khác
+#   2. %LOCALAPPDATA% — khi đây là BẢN CÀI (có file dấu .ban_cai)
+#   3. BASE_DIR       — khi chạy thẳng từ mã nguồn, y hệt từ trước tới nay
+#
+# Vì sao nhận biết bằng FILE DẤU chứ không bằng biến môi trường: lối tắt trên
+# Desktop không đặt được biến môi trường, mà đặt biến ở mức người dùng thì có
+# máy phải đăng xuất mới ăn. File dấu do bộ cài đặt xuống, đọc được ngay.
+#
+# Vì sao bản cài phải để dữ liệu chỗ khác: gỡ phần mềm ra cài lại thì thư mục
+# cài bị xoá sạch — dữ liệu để trong đó là mất tài khoản, cookie, lịch, content.
+_DAU_BAN_CAI = BASE_DIR / ".ban_cai"
+
+def _goc_du_lieu() -> Path:
+    tay = os.environ.get("MNT_DATA_DIR", "").strip()
+    if tay:
+        return Path(tay)
+    if _DAU_BAN_CAI.exists():
+        local = os.environ.get("LOCALAPPDATA", "").strip()
+        if local:
+            return Path(local) / "MNT FB AutoPost"
+    return BASE_DIR
+
+
+DATA_ROOT  = _goc_du_lieu()
 
 DATA_DIR   = DATA_ROOT / "data"
 MEDIA_DIR  = DATA_DIR / "media"
