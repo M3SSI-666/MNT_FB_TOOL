@@ -10,6 +10,18 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v1.3.0 — 23/08/2026
+
+Bản đầu tiên cài được bằng `setup.exe` — không cần cài Python hay git.
+
+- Python và git đi kèm ngay trong bản cài. Máy mới chỉ cần bấm đúp file cài,
+  không phải chuẩn bị gì trước.
+- **Màn hình chuẩn bị lần chạy đầu**: phần mềm tự tải Chromium (khoảng 680 MB,
+  chỉ một lần) và hiện thanh tiến độ, thay vì để bạn ngồi nhìn cửa sổ đen.
+- Dữ liệu của bản cài để riêng ở `%LOCALAPPDATA%\MNT FB AutoPost`, nên gỡ phần
+  mềm ra cài lại **không mất** tài khoản, cookie, lịch, content.
+- Sửa lỗi khiến dữ liệu luôn bị tạo cạnh mã nguồn dù đã đặt nơi để khác.
+
 ## v1.2.1 — 23/08/2026
 
 Thêm đường thoát khi không cập nhật được.
