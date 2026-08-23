@@ -1548,6 +1548,34 @@ for _ten, _p in (("DB", _cfg.DB_PATH), ("logs", _cfg.LOG_DIR),
                  ("cookies", _cfg.COOKIES_DIR), ("profiles", _cfg.PROFILES_DIR)):
     check(f"{_ten} nằm dưới DATA_ROOT", str(_p).startswith(str(_cfg.DATA_ROOT)))
 
+# Các assertion trên chỉ hỏi config xem NÓ tính ra gì — mà config tính đúng từ
+# đầu. Thứ thực sự mở database là db.DB_PATH, và nó tự tính lấy:
+#
+#     DB_PATH = Path(__file__).parent / "data" / "app.db"
+#
+# nên database luôn nằm cạnh mã nguồn bất kể MNT_DATA_DIR đặt gì. Cả phần tách
+# dữ liệu chỉ đúng trên giấy suốt từ GĐ1, và bài kiểm không thấy vì nó soi
+# nhầm đối tượng. Lộ ra khi chạy thử bản đóng gói thật.
+# Soi MÃ NGUỒN chứ không so giá trị lúc chạy: dòng 24 của chính file này gán
+# `db.DB_PATH = _tmp` để các assertion về DB chạy trên file tạm, nên so sánh
+# lúc chạy thì bao giờ cũng lệch, không nói lên điều gì.
+check("db.py lấy DB_PATH từ config",
+      "from config import DB_PATH" in Path("db.py").read_text(encoding="utf-8"))
+
+# Quét thẳng mã nguồn: không module nào được tự dựng đường dẫn tới thư mục dữ
+# liệu từ __file__ của chính nó. Đây mới là assertion bắt được lỗi trên.
+import re as _re_p
+_MAU_TU_TINH = _re_p.compile(
+    r'(?:Path\(__file__\)\.parent|os\.path\.dirname\([^)]*__file__[^)]*\))'
+    r'\s*/?\s*,?\s*["\'](?:data|cookies|profiles|logs)["\']')
+for _f in sorted(Path(".").glob("*.py")):
+    if _f.name in ("config.py", "test_basic.py"):
+        continue          # config.py LÀ nơi được phép tính; test thì không chạy thật
+    _nd = _f.read_text(encoding="utf-8")
+    _hit = _MAU_TU_TINH.search(_nd)
+    check(f"{_f.name}: không tự dựng đường dẫn dữ liệu"
+          + (f" — {_hit.group(0)[:44]}" if _hit else ""), not _hit)
+
 # Không file nào được tự tính đường dẫn dữ liệu từ __file__ của chính nó nữa —
 # đó là lý do trước đây không dời được, và là gốc của lỗi profile trắng trong
 # join_groups_runner (bản sao trôi khác bản gốc).

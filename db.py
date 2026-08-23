@@ -9,7 +9,15 @@ import re
 from pathlib import Path
 from datetime import datetime, timedelta
 
-DB_PATH = Path(__file__).parent / "data" / "app.db"
+# Lấy từ config chứ KHÔNG tự tính từ __file__. Dòng cũ dựng đường dẫn bằng
+# thư mục chứa chính file này ghép với "data/app.db",
+# tức là database luôn nằm cạnh mã nguồn, bất kể MNT_DATA_DIR đặt gì. Cả phần
+# tách dữ liệu khỏi mã nguồn vì thế mới chỉ đúng trên giấy: config tính ra
+# đường dẫn mới, còn db.py vẫn mở file cũ. Lộ ra khi chạy thử bản đóng gói —
+# config báo %LOCALAPPDATA% nhưng app tạo database ngay trong thư mục cài.
+#
+# Chuyện này quan trọng với bản cài đặt: gỡ phần mềm là xoá sạch thư mục cài.
+from config import DB_PATH
 
 
 # 4 tiến trình scheduler × MAX_WORKERS luồng cùng ghi vào một file SQLite.
