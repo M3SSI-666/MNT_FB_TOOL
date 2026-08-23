@@ -11,7 +11,25 @@
 ::  Hai cai cuoi co hien cua so den nhung van chay duoc.
 :: ============================================================
 
+:: BAN CAI DAT: Python di kem nam ngay trong thu muc, o python\. Phai uu tien
+:: no truoc moi thu khac. Ca diem cua ban cai la khach KHONG phai cai Python,
+:: nen tim Python cua he thong la tim mot thu khong ton tai - hoac te hon, tim
+:: thay mot ban Python khac khong co thu vien nao cua phan mem nay.
+:: Dat DAU NHAY KEP vao trong bien luon. Thu muc cai mac dinh la
+::   %LOCALAPPDATA%\Programs\MNT FB AutoPost
+:: co dau cach, nen "start "" %PYW% ..." khong co nhay kep se dut doi o chu
+:: "MNT" va Windows di tim mot chuong trinh ten "C:\...\MNT".
+:: Khong dung set "PYW=..." o day duoc: kieu do se an mat cap nhay kep.
+:: Cac nhanh duoi khong can nhay kep, va "py -3" thi TUYET DOI khong duoc boc
+:: nhay kep vi no la hai tu.
 set "PYW="
+set "PY="
+if exist "%~dp0python\pythonw.exe" (
+    set PYW="%~dp0python\pythonw.exe"
+    set PY="%~dp0python\python.exe"
+    goto :TIM_XONG
+)
+
 where pythonw >nul 2>&1 && set "PYW=pythonw"
 if not defined PYW ( where pyw    >nul 2>&1 && set "PYW=pyw" )
 if not defined PYW ( where python >nul 2>&1 && set "PYW=python" )
@@ -43,4 +61,6 @@ if not defined PYW (
     pause
     exit /b 1
 )
+
+:TIM_XONG
 exit /b 0

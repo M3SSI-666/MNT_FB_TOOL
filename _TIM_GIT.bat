@@ -21,6 +21,15 @@
 ::  Installer) khong bao gio update duoc.
 :: ============================================================
 
+:: --- [0] BAN CAI DAT: git di kem nam ngay trong thu muc, o git\cmd\ ---
+:: Uu tien no truoc moi thu khac. Ca diem cua ban cai la khach KHONG phai cai
+:: git; di tim git cua he thong roi doi winget cai la quay lai dung cai loi da
+:: lam may ve tinh khong cap nhat duoc.
+if exist "%~dp0git\cmd\git.exe" (
+    set "PATH=%~dp0git\cmd;%PATH%"
+    exit /b 0
+)
+
 :: --- [1] Dung duoc luon chua? ---
 where git >nul 2>&1 && exit /b 0
 
