@@ -75,13 +75,19 @@ def _goi(duong_dan, du_lieu=None, giay=12):
         return False, {"loi": f"không gọi được máy chủ: {e}"}
 
 
-def dang_ky(ten, dien_thoai, ghi_chu=""):
+def dang_ky(ten, dien_thoai, email="", ghi_chu=""):
     """Gửi đăng ký lên máy chủ. Gọi lại nhiều lần không sao — máy chủ ghi đè
-    theo mã máy chứ không tạo bản ghi mới."""
+    theo mã máy chứ không tạo bản ghi mới.
+
+    Lấy cả email lẫn số điện thoại vì việc thu hồi làm theo NGƯỜI: một người
+    có thể cài trên hai ba máy, cắt theo mã máy thì phải cắt từng cái và sót
+    một cái là họ vẫn dùng được.
+    """
     return _goi("/dang-ky", {
         "ma_may":     ma_may(),
         "ten":        (ten or "").strip()[:80],
         "dien_thoai": (dien_thoai or "").strip()[:30],
+        "email":      (email or "").strip().lower()[:120],
         "ghi_chu":    (ghi_chu or "").strip()[:200],
     })
 
