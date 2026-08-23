@@ -62,6 +62,29 @@ def da_co():
         return any(goc.glob("chromium-*/chrome-win/chrome.exe"))
 
 
+def _lenh_tai():
+    """Câu lệnh tải Chromium.
+
+    Cách cũ là `sys.executable -m playwright install chromium`. Nó chỉ đúng khi
+    chạy thẳng từ mã nguồn: sau khi biên dịch, `sys.executable` là server.exe
+    chứ không phải python.exe, và server.exe không hiểu cờ `-m`.
+
+    Gọi thẳng driver của playwright thì đúng trong CẢ HAI trường hợp — đó cũng
+    chính là thứ mà `-m playwright` chạy bên dưới. Driver đi kèm ngay trong gói
+    nên luôn có mặt.
+    """
+    try:
+        from playwright._impl._driver import compute_driver_executable
+        d = compute_driver_executable()
+        if isinstance(d, (list, tuple)) and len(d) >= 2:
+            return [str(d[0]), str(d[1]), "install", "chromium"]
+        return [str(d), "install", "chromium"]
+    except Exception:
+        # Không hỏi được driver thì quay về cách cũ; ít ra bản chạy thẳng từ mã
+        # nguồn vẫn tải được.
+        return [sys.executable, "-m", "playwright", "install", "chromium"]
+
+
 class TienTrinh:
     """Trạng thái một lượt tải, để giao diện hỏi."""
 
@@ -91,7 +114,7 @@ class TienTrinh:
     def _chay(self, cwd):
         try:
             p = subprocess.Popen(
-                [sys.executable, "-m", "playwright", "install", "chromium"],
+                _lenh_tai(),
                 cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, encoding="utf-8", errors="replace", bufsize=1,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)

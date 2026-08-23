@@ -76,6 +76,27 @@ def api_ping():
 # Khách bấm nút Cập nhật → xem danh sách bản → chọn. Toàn bộ việc tải và thay
 # code do UPDATE.bat làm, ở đây chỉ hỏi git xem có những bản nào rồi gọi nó.
 
+# ── Chạy tiến trình con: bản chạy thẳng và bản đã biên dịch khác nhau ──────
+# Chạy thẳng từ mã nguồn thì `sys.executable` là python.exe và scheduler.py nằm
+# cạnh đó, nên gọi "python scheduler.py homestay" là xong.
+#
+# Sau khi biên dịch bằng Nuitka thì CẢ HAI VẾ đều sai: `sys.executable` trở
+# thành server.exe, còn scheduler.py thì không còn tồn tại — mọi module đã nằm
+# trong exe. Gọi kiểu cũ cho ra WinError 2, và bấm nút Chạy là lỗi 500.
+#
+# Cách chung cho cả hai: khi đã biên dịch thì gọi lại CHÍNH server.exe kèm một
+# cờ, rồi ở chỗ khởi động nhận cờ đó mà chạy đúng việc.
+DA_BIEN_DICH = "__compiled__" in globals()
+
+
+def _lenh_con(ten_file_py, *tham_so):
+    """Câu lệnh để khởi chạy một tiến trình con của phần mềm."""
+    if DA_BIEN_DICH:
+        # server.exe --lam scheduler homestay
+        return [sys.executable, "--lam", Path(ten_file_py).stem, *tham_so]
+    return [sys.executable, "-X", "utf8", ten_file_py, *tham_so]
+
+
 def _git(*args, timeout=90):
     """Chạy một lệnh git trong thư mục mã nguồn. Trả (ok, chữ ra)."""
     try:
@@ -391,7 +412,7 @@ def run_start(loai):
                 "HEADLESS":              "true" if headless else "false"}
     # Truyền `loai` cả qua dòng lệnh (không chỉ biến môi trường) để lúc cần còn
     # nhận ra runner nào là của loại nào mà diệt đúng cái mồ côi.
-    proc  = subprocess.Popen([sys.executable, "-X", "utf8", "scheduler.py", loai],
+    proc  = subprocess.Popen(_lenh_con("scheduler.py", loai),
                              cwd=str(BASE_DIR), creationflags=flags, env=env)
     (BASE_DIR / cfg["pid_file"]).write_text(str(proc.pid))
     return jsonify({"ok": True, "pid": proc.pid})
@@ -2003,7 +2024,7 @@ def api_join_run(sched_id):
                       "SCHEDULER_LOG_FILE": JOIN_LOG_FILE}
         with _conn() as con:
             con.execute("UPDATE join_schedules SET trang_thai='Đang chạy', moi_join=0, da_join=0, loi=0, tong_nhom=0 WHERE id=?", (sched_id,))
-        proc = subprocess.Popen([sys.executable, "-X", "utf8", "join_groups_worker.py"],
+        proc = subprocess.Popen(_lenh_con("join_groups_worker.py"),
                                 cwd=str(BASE_DIR), creationflags=flags, env=env)
         _join_pid_file(sched_id).write_text(str(proc.pid))
         return jsonify({"ok": True, "pid": proc.pid})
@@ -2081,6 +2102,29 @@ def _serve():
 
 if __name__ == "__main__":
     import threading
+
+    # ── "server.exe --lam <việc>" : chạy một tiến trình con, không phải server ──
+    # Bản đã biên dịch không còn file .py nào để gọi, nên tiến trình con được
+    # khởi chạy bằng CHÍNH file exe này kèm cờ --lam. Phải xử lý TRƯỚC mọi thứ
+    # khác: _kill_all_runners() bên dưới sẽ diệt sạch runner, mà chính ta đang
+    # được khởi chạy để LÀM runner.
+    if "--lam" in sys.argv:
+        _i = sys.argv.index("--lam")
+        _viec = sys.argv[_i + 1] if _i + 1 < len(sys.argv) else ""
+        # Bỏ cờ đi để tiến trình con thấy tham số y như lúc chạy bằng python.
+        sys.argv = [sys.argv[0]] + sys.argv[_i + 2:]
+        if _viec == "scheduler":
+            import scheduler
+            scheduler.main()
+            sys.exit(0)
+        if _viec == "join_groups_worker":
+            # Module này làm việc ngay lúc import, không có main() — import
+            # xong là nó đã chạy hết rồi.
+            import join_groups_worker  # noqa: F401
+            sys.exit(0)
+        print(f"[LỖI] Không biết việc {_viec!r}", file=sys.stderr)
+        sys.exit(2)
+
     _kill_all_runners()
 
     # --browser  : mở bằng trình duyệt mặc định (chế độ web cũ, để debug)
