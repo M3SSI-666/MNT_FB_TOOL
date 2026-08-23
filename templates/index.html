@@ -300,6 +300,30 @@
 <!-- Toast -->
 <div id="toast-container"></div>
 
+<!-- Màn hình tải Chromium lần chạy đầu.
+     Máy vừa cài xong chưa có Chromium (683 MB, không nằm trong file cài).
+     Che hẳn màn hình vì chưa có nó thì không làm được gì cả. -->
+<div id="chromium-overlay"
+    style="display:none;position:fixed;inset:0;background:var(--bg-primary);z-index:900;
+           align-items:center;justify-content:center">
+    <div style="width:460px;max-width:92vw;text-align:center;padding:28px">
+        <div style="font-size:40px;margin-bottom:14px">📥</div>
+        <div style="font-size:17px;font-weight:700;margin-bottom:6px">
+            Đang chuẩn bị lần chạy đầu</div>
+        <div style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-bottom:20px">
+            Phần mềm cần tải trình duyệt Chromium về máy — khoảng <b>680 MB</b>,
+            chỉ một lần duy nhất. Những lần sau mở là dùng được ngay.<br>
+            Đừng tắt cửa sổ này.</div>
+        <div style="height:8px;background:var(--bg-tertiary,#1e293b);border-radius:99px;overflow:hidden">
+            <div id="chromium-thanh"
+                 style="height:100%;width:0%;background:var(--accent);transition:width .4s"></div>
+        </div>
+        <div id="chromium-phantram" style="margin-top:10px;font-size:13px;font-weight:700">0%</div>
+        <div id="chromium-dong" style="margin-top:6px;font-size:11px;color:var(--text-muted);
+             white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+    </div>
+</div>
+
 <!-- Modal overlay -->
 <div id="modal-overlay" onclick="closeModal()"
     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500"></div>

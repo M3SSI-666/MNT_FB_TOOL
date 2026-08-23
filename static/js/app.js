@@ -2493,6 +2493,42 @@ async function loadLogs(){
     }catch(e){ if(joinBox) joinBox.textContent="Lỗi: "+e.message; }
 }
 
+// ── Chromium: lần chạy đầu ────────────────────────────────────
+// Máy vừa cài xong chưa có Chromium. Che màn hình và tải, vì chưa có nó thì
+// không đăng bài / comment / nuôi nick được — cho vào app cũng chẳng làm gì.
+
+let _chromiumHen = null;
+
+async function _chromiumKiem(){
+    let j;
+    try{
+        j = await (await fetch("/api/chromium/status", {cache:"no-store"})).json();
+    }catch(e){ return; }
+
+    const lop = document.getElementById("chromium-overlay");
+    if(!lop) return;
+
+    if(j.da_co){
+        lop.style.display = "none";
+        if(_chromiumHen){ clearInterval(_chromiumHen); _chromiumHen = null; }
+        return;
+    }
+
+    lop.style.display = "flex";
+    const pt = j.phan_tram || 0;
+    document.getElementById("chromium-thanh").style.width = pt + "%";
+    document.getElementById("chromium-phantram").textContent =
+        j.loi ? "Có lỗi" : (pt + "%");
+    document.getElementById("chromium-dong").textContent =
+        j.loi ? j.loi : (j.dong_cuoi || "");
+
+    // Chưa ai bắt đầu thì bắt đầu, rồi hỏi tiến độ mỗi 2 giây.
+    if(!j.dang_chay && !j.loi){
+        await fetch("/api/chromium/install", {method:"POST"});
+    }
+    if(!_chromiumHen) _chromiumHen = setInterval(_chromiumKiem, 2000);
+}
+
 // ── Cập nhật phiên bản ────────────────────────────────────────
 // Bấm số phiên bản dưới logo → hiện các bản đã phát hành để chọn.
 // Việc tải và thay code do UPDATE.bat làm; ở đây chỉ hỏi và gọi.
@@ -2650,6 +2686,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
     // mỗi lượt là một lần fetch git qua mạng, mà bản mới thì hàng tuần mới có.
     _doBanMoi();
     setInterval(_doBanMoi, 6*60*60*1000);
+    _chromiumKiem();
 });
 
 // Chỉ để bật cái chấm cạnh số phiên bản. Khách không phải tự đi mở bảng ra xem

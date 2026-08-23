@@ -1631,6 +1631,28 @@ check("đang ở bản mới nhất thì không mời gì",
       _cn.ban_moi_nhat(_cn.danh_sach_ban(["v1.1.0"], _cl_text, "1.1.0")) is None)
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Tải Chromium lần chạy đầu
+# ───────────────────────────────────────────────────────────────────────────
+# Chromium 683 MB không nằm trong file cài nên máy vừa cài xong phải tải về.
+# Phần dễ sai là đọc tiến độ từ chữ playwright in ra — mẫu thật, không bịa.
+import chromium_tai as _ct
+check("dòng không có phần trăm → None",
+      _ct.doc_phan_tram("Downloading Chromium 141.0.7390.37 (playwright build v1223)") is None)
+check("đọc được 0%",   _ct.doc_phan_tram("|                    | 0% of 139.2 MiB") == 0)
+check("đọc được 42%",  _ct.doc_phan_tram("|■■■■■■■■            | 42% of 139.2 MiB") == 42)
+check("đọc được 100%", _ct.doc_phan_tram("|■■■■■■■■■■■■■■■■■■■■| 100% of 139.2 MiB") == 100)
+check("dòng rỗng → None", _ct.doc_phan_tram("") is None)
+check("số vô lý bị bỏ qua", _ct.doc_phan_tram("tai 999% cua gi do") is None)
+# Playwright tải nhiều gói nối tiếp, mỗi gói đếm lại từ 0% — thanh tiến độ tụt
+# về 0 trông như treo. Chỉ cho phép tiến, không lùi.
+_tt = _ct.TienTrinh()
+_tt.phan_tram = 60
+_tt.phan_tram = max(_tt.phan_tram, 5)
+check("thanh tiến độ không tụt lùi", _tt.phan_tram == 60)
+check("giao diện có màn hình tải Chromium",
+      'id="chromium-overlay"' in Path("templates/index.html").read_text(encoding="utf-8"))
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Cú pháp file .bat
 # ───────────────────────────────────────────────────────────────────────────
 # Hai lỗi dưới đây đều KHÔNG hiện ra khi đọc code, và cmd chỉ báo bằng một câu

@@ -18,6 +18,7 @@ os.chdir(str(BASE_DIR))
 
 from config import VERSION, PORT, LOG_DIR, MEDIA_DIR
 import capnhat
+import chromium_tai
 import db
 from db import (
     init_db,
@@ -156,6 +157,34 @@ def api_update():
     except Exception as e:
         return jsonify({"ok": False, "error": f"Không chạy được UPDATE.bat: {e}"})
     return jsonify({"ok": True, "version": xin})
+
+
+# ── Chromium: tải lần chạy đầu ────────────────────────────────
+# Chromium nặng 683 MB nên không nằm trong file cài. Máy vừa cài xong chưa có
+# nó, và mọi việc — đăng bài, comment, nuôi nick — đều cần. Trước đây việc tải
+# nằm trong INSTALL.bat, chạy trong cửa sổ đen không phản hồi gì.
+
+# Hỏi playwright một lần lúc khởi động rồi nhớ lấy: mỗi lần hỏi là một lần bật
+# tiến trình node, không thể hỏi mỗi giây theo nhịp giao diện được.
+_CHROMIUM_DA_CO = None
+
+
+@app.route("/api/chromium/status")
+def api_chromium_status():
+    global _CHROMIUM_DA_CO
+    tt = chromium_tai.tien_trinh.trang_thai()
+    if _CHROMIUM_DA_CO is None or tt["xong"]:
+        _CHROMIUM_DA_CO = chromium_tai.da_co()
+    return jsonify({"ok": True, "da_co": _CHROMIUM_DA_CO, **tt})
+
+
+@app.route("/api/chromium/install", methods=["POST"])
+def api_chromium_install():
+    if chromium_tai.da_co():
+        return jsonify({"ok": True, "msg": "Chromium đã có sẵn."})
+    if not chromium_tai.tien_trinh.bat_dau(cwd=str(BASE_DIR)):
+        return jsonify({"ok": True, "msg": "Đang tải rồi."})
+    return jsonify({"ok": True})
 
 
 # ── Serve media files ─────────────────────────────────────────
