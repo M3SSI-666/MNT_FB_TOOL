@@ -1659,6 +1659,33 @@ check("đang ở bản mới nhất thì không mời gì",
       _cn.ban_moi_nhat(_cn.danh_sach_ban(["v1.1.0"], _cl_text, "1.1.0")) is None)
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Mã máy (dùng cho đăng ký và phê duyệt)
+# ───────────────────────────────────────────────────────────────────────────
+# Con số này phải ỔN ĐỊNH: nó mà đổi thì khách đang dùng bình thường bỗng bị
+# chặn và phải xin duyệt lại từ đầu.
+import ma_may as _mm
+import subprocess as _sp
+_m = _mm.ma_may()
+check("mã máy đúng dạng ABCD-EFGH-JKMN", _mm.hop_le(_m))
+check("gọi lại vẫn ra mã đó", _mm.ma_may() == _m)
+# Tiến trình khác phải ra cùng kết quả — nếu không thì cài lại phần mềm hay
+# chạy runner ở tiến trình riêng là mất quyền.
+_r = _sp.run([sys.executable, "-X", "utf8", "-c",
+              "import ma_may; print(ma_may.ma_may())"],
+             capture_output=True, text=True, cwd=str(Path(".").resolve()))
+check("tiến trình khác ra cùng mã máy", _r.stdout.strip() == _m)
+# Không được mang số định danh thật của máy đi
+_guid = _mm._guid_windows()
+check("không lộ MachineGuid của máy",
+      not _guid or _guid.lower().replace("-", "") not in _m.lower().replace("-", ""))
+# Bỏ các ký tự dễ đọc nhầm khi đánh vần qua điện thoại
+for _c in "01258OILSBZ":
+    check(f"mã máy không chứa ký tự dễ nhầm {_c!r}", _c not in _m)
+for _xau in ("", "ABCD", "ABCD-EFGH-JKMN-XXXX", "0OI1-LLLL-SSSS"):
+    check(f"chặn mã sai dạng {_xau!r}", not _mm.hop_le(_xau))
+check("chấp nhận cả chữ thường", _mm.hop_le(_m.lower()))
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Tải Chromium lần chạy đầu
 # ───────────────────────────────────────────────────────────────────────────
 # Chromium 683 MB không nằm trong file cài nên máy vừa cài xong phải tải về.
