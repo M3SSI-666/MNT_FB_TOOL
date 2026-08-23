@@ -110,7 +110,7 @@ if errorlevel 1 (
 
 echo.
 echo ============================================================
-echo   XONG! Da phat hanh v!MOI!
+echo   XONG^! Da phat hanh v!MOI!
 echo ============================================================
 echo.
 echo   Quay ve ban nay bat ky luc nao:  git checkout v!MOI!
