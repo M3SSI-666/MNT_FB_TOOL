@@ -89,12 +89,46 @@ def api_ping():
 DA_BIEN_DICH = "__compiled__" in globals()
 
 
+def _exe_dang_chay():
+    """Đường dẫn tới chương trình đang chạy.
+
+    KHÔNG dùng thẳng `sys.executable` khi đã biên dịch: Nuitka đặt nó thành
+    "<thư mục gói>\\python.exe" — một file KHÔNG hề tồn tại trong gói. Truyền
+    nó cho Popen thì Windows báo WinError 2, và đó chính là lý do nút Chạy
+    runner trả lỗi 500 dù phần nhận cờ --lam vẫn chạy tốt.
+
+    sys.argv[0] mới là đường dẫn thật của file exe.
+    """
+    for ung_vien in (sys.executable, sys.argv[0]):
+        if ung_vien and os.path.isfile(ung_vien):
+            return os.path.abspath(ung_vien)
+    return sys.executable
+
+
 def _lenh_con(ten_file_py, *tham_so):
     """Câu lệnh để khởi chạy một tiến trình con của phần mềm."""
     if DA_BIEN_DICH:
         # server.exe --lam scheduler homestay
-        return [sys.executable, "--lam", Path(ten_file_py).stem, *tham_so]
+        return [_exe_dang_chay(), "--lam", Path(ten_file_py).stem, *tham_so]
     return [sys.executable, "-X", "utf8", ten_file_py, *tham_so]
+
+
+# Tên tiến trình cần soi khi đi tìm runner mồ côi.
+_TEN_TIEN_TRINH = ([os.path.basename(_exe_dang_chay())] if DA_BIEN_DICH
+                   else ["python.exe", "pythonw.exe"])
+
+
+def _dau_hieu(ten_file_py, *them):
+    """Chuỗi để nhận ra một runner trong dòng lệnh của nó.
+
+    Hai bản chạy ra hai dòng lệnh khác hẳn nhau:
+        chạy thẳng   ... python.exe -X utf8 scheduler.py homestay
+        đã biên dịch ... server.exe --lam scheduler homestay
+    Dò nhầm chuỗi thì không tìm ra runner nào để diệt.
+    """
+    goc = Path(ten_file_py).stem
+    return ((f"--lam {goc}", *them) if DA_BIEN_DICH
+            else (f"{goc}.py", *them))
 
 
 def _git(*args, timeout=90):
@@ -287,8 +321,12 @@ def _find_python_pids(*needles) -> list:
     if sys.platform != "win32":
         return []
     dk = " -and ".join(f"$_.CommandLine -like '*{n}*'" for n in needles)
+    # Bản đã biên dịch chạy runner bằng chính file exe, tên tiến trình không
+    # còn là python.exe. Lọc sai tên thì không tìm ra runner mồ côi nào, và hậu
+    # quả đúng như ghi chú dưới: hai runner cùng chạy trên một profile Chrome.
+    ten_tt = " OR ".join(f"Name='{t}'" for t in _TEN_TIEN_TRINH)
     ps = ("Get-CimInstance Win32_Process "
-          "-Filter \"Name='python.exe' OR Name='pythonw.exe'\" | "
+          f"-Filter \"{ten_tt}\" | "
           f"Where-Object {{ {dk} }} | ForEach-Object {{ $_.ProcessId }}")
     try:
         r = subprocess.run(
@@ -344,13 +382,13 @@ def _kill_all_runners():
             pf.unlink(missing_ok=True)
 
     # Bước 2: quét mọi scheduler.py mồ côi (không còn pid file)
-    for pid in _kill_pids(_find_python_pids("scheduler.py")):
+    for pid in _kill_pids(_find_python_pids(*_dau_hieu("scheduler.py"))):
         logger.info(f"  Đã diệt scheduler mồ côi PID {pid}")
 
 
 def _kill_join_workers():
     """Kill mọi tiến trình join_groups_worker.py đang chạy."""
-    for pid in _kill_pids(_find_python_pids("join_groups_worker")):
+    for pid in _kill_pids(_find_python_pids(*_dau_hieu("join_groups_worker"))):
         logger.info(f"  Đã diệt join worker PID {pid}")
 
 
@@ -442,7 +480,7 @@ def run_stop(loai):
     # Khớp cụm LIỀN "scheduler.py <loai>" đúng như lúc khởi chạy, thay vì hai
     # chuỗi rời — rời rạc thì một tiến trình python bất kỳ nhắc tới cả hai chữ
     # cũng bị tính là runner.
-    killed += _kill_pids(_find_python_pids(f"scheduler.py {RUNNER_LOAI_MAP[loai]}"))
+    killed += _kill_pids(_find_python_pids(*_dau_hieu("scheduler.py", RUNNER_LOAI_MAP[loai])))
     return jsonify({"ok": True, "killed": killed})
 
 

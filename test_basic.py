@@ -1659,6 +1659,30 @@ check("đang ở bản mới nhất thì không mời gì",
       _cn.ban_moi_nhat(_cn.danh_sach_ban(["v1.1.0"], _cl_text, "1.1.0")) is None)
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Khởi chạy tiến trình con: bản chạy thẳng và bản đã biên dịch
+# ───────────────────────────────────────────────────────────────────────────
+# Hai bản chạy ra hai dòng lệnh khác hẳn nhau, và cả hai đều phải đúng:
+#     chạy thẳng   python.exe -X utf8 scheduler.py homestay
+#     đã biên dịch server.exe  --lam scheduler homestay
+# Sai chỗ này thì bấm nút Chạy runner là lỗi 500 — đã xảy ra thật khi thử bản
+# biên dịch đầu tiên.
+check("chạy thẳng: lệnh runner gọi đúng file .py",
+      server._lenh_con("scheduler.py", "homestay")[1:] == ["-X", "utf8", "scheduler.py", "homestay"])
+check("chạy thẳng: dấu hiệu runner là tên file .py",
+      server._dau_hieu("scheduler.py", "homestay") == ("scheduler.py", "homestay"))
+check("chạy thẳng: soi tiến trình python",
+      server._TEN_TIEN_TRINH == ["python.exe", "pythonw.exe"])
+# Lệnh khởi chạy và dấu hiệu đi tìm PHẢI khớp nhau, không thì khởi chạy được
+# nhưng không bao giờ tìm ra để diệt — hai runner cùng chạy trên một profile.
+_lenh = " ".join(server._lenh_con("scheduler.py", "homestay"))
+check("lệnh khởi chạy chứa đúng dấu hiệu đi tìm",
+      all(d in _lenh for d in server._dau_hieu("scheduler.py", "homestay")))
+# _exe_dang_chay phải trả về một file CÓ THẬT. Nuitka đặt sys.executable thành
+# "<gói>\python.exe" — file không hề tồn tại — nên dùng thẳng nó là WinError 2.
+check("_exe_dang_chay trỏ vào file có thật",
+      Path(server._exe_dang_chay()).is_file())
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Mã máy (dùng cho đăng ký và phê duyệt)
 # ───────────────────────────────────────────────────────────────────────────
 # Con số này phải ỔN ĐỊNH: nó mà đổi thì khách đang dùng bình thường bỗng bị
