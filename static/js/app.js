@@ -2493,6 +2493,129 @@ async function loadLogs(){
     }catch(e){ if(joinBox) joinBox.textContent="Lỗi: "+e.message; }
 }
 
+// ── Cập nhật phiên bản ────────────────────────────────────────
+// Bấm số phiên bản dưới logo → hiện các bản đã phát hành để chọn.
+// Việc tải và thay code do UPDATE.bat làm; ở đây chỉ hỏi và gọi.
+
+function _thoat(s){
+    return String(s||"").replace(/[&<>"']/g, c => (
+        {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+// Ghi chú viết bằng markdown cho người đọc. Không kéo cả thư viện markdown về
+// chỉ để hiện vài dòng — bỏ các dấu **, > và - đầu dòng là đủ sạch để đọc.
+function _ghiChuGon(s){
+    return _thoat(String(s||"")
+        .replace(/\*\*/g, "")
+        .replace(/^>\s?/gm, "")
+        .replace(/^-\s/gm, "• ")
+        .trim());
+}
+
+async function moBangCapNhat(){
+    openModal("Phiên bản", `<div style="color:var(--text-muted);font-size:13px">
+        Đang hỏi GitHub xem có bản nào…</div>`);
+    let j;
+    try{
+        j = await (await fetch("/api/versions", {cache:"no-store"})).json();
+    }catch(e){
+        document.getElementById("modal-body").innerHTML =
+            `<div style="color:var(--danger)">Không hỏi được danh sách bản: ${_thoat(e.message)}</div>`;
+        return;
+    }
+    if(!j.ok){
+        document.getElementById("modal-body").innerHTML =
+            `<div style="color:var(--danger)">${_thoat(j.error||"Không lấy được danh sách bản.")}</div>`;
+        return;
+    }
+
+    const moi = j.ban_moi;
+    let html = "";
+
+    if(j.canh_bao){
+        html += `<div style="background:var(--danger-light);color:var(--danger);
+            padding:8px 10px;border-radius:var(--radius-sm);font-size:12px;margin-bottom:12px">
+            ${_thoat(j.canh_bao)}</div>`;
+    }
+
+    // Việc chính, để riêng lên trên: hoặc mời cập nhật, hoặc báo đã mới nhất.
+    if(moi){
+        html += `<div style="margin-bottom:6px;font-size:13px">
+            Có bản mới: <b>${_thoat(moi.tag)}</b>
+            <span style="color:var(--text-muted)">${_thoat(moi.ngay)}</span></div>
+            <button onclick="chayCapNhat('${_thoat(moi.tag)}', false)"
+                style="width:100%;background:var(--accent);color:#fff;padding:10px;
+                       border-radius:var(--radius-sm);font-weight:700">
+                Cập nhật lên ${_thoat(moi.tag)}</button>`;
+        if(moi.ghi_chu){
+            html += `<div class="ban-ghichu" style="margin-top:10px">${_ghiChuGon(moi.ghi_chu)}</div>`;
+        }
+    }else{
+        html += `<div style="font-size:13px">Bạn đang dùng bản mới nhất —
+            <b>v${_thoat(j.hien_tai)}</b>.</div>`;
+    }
+
+    html += `<div style="margin:16px 0 8px;font-size:12px;color:var(--text-muted);
+        border-top:1px solid var(--border);padding-top:12px">
+        Dữ liệu của bạn — tài khoản, page, content, UID nhóm — không bị đụng tới
+        dù cập nhật hay lùi bản. Phần mềm tự sao lưu trước mỗi lần cập nhật.</div>`;
+
+    html += `<details><summary style="cursor:pointer;font-size:13px;padding:4px 0">
+        Tất cả các bản (${j.versions.length})</summary>
+        <div class="ban-list" style="margin-top:10px">`;
+    for(const m of j.versions){
+        const dangChay = m.huong === "dang_chay";
+        let nut = "";
+        if(dangChay){
+            nut = `<span style="color:var(--accent);font-size:11px">đang dùng</span>`;
+        }else if(m.huong === "moi"){
+            nut = `<button onclick="chayCapNhat('${_thoat(m.tag)}', false)"
+                     style="background:var(--accent);color:#fff">Cập nhật</button>`;
+        }else{
+            nut = `<button onclick="chayCapNhat('${_thoat(m.tag)}', true)"
+                     style="background:transparent;color:var(--text-muted);
+                            border:1px solid var(--border)">Lùi về</button>`;
+        }
+        html += `<div class="ban-item${dangChay?" dang-chay":""}">
+            <div class="ban-head"><span>${_thoat(m.tag)}</span>
+                <span class="ngay">${_thoat(m.ngay)}</span></div>
+            ${m.ghi_chu ? `<div class="ban-ghichu">${_ghiChuGon(m.ghi_chu)}</div>` : ""}
+            <div style="margin-top:8px">${nut}</div>
+        </div>`;
+    }
+    html += `</div></details>`;
+    document.getElementById("modal-body").innerHTML = html;
+}
+
+async function chayCapNhat(tag, laLui){
+    // Lùi bản là mất những gì đã sửa sau đó — hỏi lại cho chắc.
+    if(laLui && !confirm(
+        `Lùi về ${tag}?\n\n`+
+        `Bản này CŨ HƠN bản đang chạy, nên mọi sửa lỗi và tính năng thêm sau đó `+
+        `sẽ mất. Dữ liệu của bạn vẫn giữ nguyên.`)) return;
+
+    document.getElementById("modal-body").innerHTML =
+        `<div style="font-size:13px;line-height:1.7">
+            Đang cập nhật lên <b>${_thoat(tag)}</b>…<br>
+            <span style="color:var(--text-muted)">
+            Một cửa sổ đen sẽ hiện lên để bạn theo dõi. Phần mềm tự tắt rồi mở
+            lại, trang này sẽ tự nạp lại. Đừng tắt cửa sổ đó giữa chừng.</span>
+        </div>`;
+    try{
+        const j = await (await fetch("/api/update", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({version: tag})
+        })).json();
+        if(!j.ok){
+            document.getElementById("modal-body").innerHTML =
+                `<div style="color:var(--danger)">${_thoat(j.error||"Không chạy được.")}</div>`;
+        }
+    }catch(e){
+        // Server bị UPDATE.bat tắt ngay giữa lượt gọi là chuyện BÌNH THƯỜNG,
+        // không phải lỗi. Nhịp heartbeat sẽ tự nạp lại trang khi server sống dậy.
+    }
+}
+
 // ── Tự reload khi server restart ──────────────────────────────
 // Mỗi lần server khởi động, /api/ping trả boot id mới. Tab đang mở phát hiện
 // boot id đổi → tự location.reload() thành bản mới. Nhờ vậy RESTART không cần
@@ -2523,4 +2646,18 @@ document.addEventListener("DOMContentLoaded", ()=>{
     setInterval(loadCanhBaoAcc,10000);
     _heartbeat();
     setInterval(_heartbeat, 2000);
+    // Dò bản mới: mỗi lần mở app một lần, rồi mỗi 6 tiếng. Không dò dày hơn vì
+    // mỗi lượt là một lần fetch git qua mạng, mà bản mới thì hàng tuần mới có.
+    _doBanMoi();
+    setInterval(_doBanMoi, 6*60*60*1000);
 });
+
+// Chỉ để bật cái chấm cạnh số phiên bản. Khách không phải tự đi mở bảng ra xem
+// mới biết có bản mới.
+async function _doBanMoi(){
+    try{
+        const j = await (await fetch("/api/versions", {cache:"no-store"})).json();
+        const el = document.getElementById("app-version-cham");
+        if(el) el.classList.toggle("co-ban-moi", !!(j.ok && j.ban_moi));
+    }catch(e){ /* không mạng — để nguyên, lần sau dò lại */ }
+}

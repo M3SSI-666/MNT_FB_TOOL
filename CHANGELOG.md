@@ -10,6 +10,16 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v1.2.0 — 23/08/2026
+
+Cập nhật ngay trong phần mềm, không cần mở file nào nữa.
+
+- Bấm vào số phiên bản dưới logo để xem **mọi bản đã phát hành**, mỗi bản kèm
+  ghi chú nói rõ nó sửa gì.
+- Có bản mới thì hiện một **chấm nhỏ** cạnh số phiên bản, khỏi phải tự đi tìm.
+- Chọn bản nào thì phần mềm tự tắt, cập nhật, rồi mở lại — trang tự nạp lại.
+- Lùi về bản cũ được, nhưng sẽ hỏi lại vì lùi là mất những gì đã sửa sau đó.
+
 ## v1.1.0 — 23/08/2026
 
 Máy khách giờ chỉ còn phần để **dùng và cập nhật**.

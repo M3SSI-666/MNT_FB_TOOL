@@ -17,6 +17,7 @@ sys.path.insert(0, str(BASE_DIR))
 os.chdir(str(BASE_DIR))
 
 from config import VERSION, PORT, LOG_DIR, MEDIA_DIR
+import capnhat
 import db
 from db import (
     init_db,
@@ -69,6 +70,93 @@ def api_ping():
     # Gắn kèm VERSION vào đây thay vì thêm endpoint mới: giao diện đã thăm dò
     # /api/ping mỗi 2 giây sẵn rồi, thêm một khoá vào không tốn lượt gọi nào.
     return jsonify({"ok": True, "boot": APP_BOOT_ID, "version": VERSION})
+
+# ── Cập nhật phiên bản ────────────────────────────────────────
+# Khách bấm nút Cập nhật → xem danh sách bản → chọn. Toàn bộ việc tải và thay
+# code do UPDATE.bat làm, ở đây chỉ hỏi git xem có những bản nào rồi gọi nó.
+
+def _git(*args, timeout=90):
+    """Chạy một lệnh git trong thư mục mã nguồn. Trả (ok, chữ ra)."""
+    try:
+        r = subprocess.run(["git", *args], cwd=str(BASE_DIR), capture_output=True,
+                           text=True, encoding="utf-8", errors="replace",
+                           timeout=timeout,
+                           creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+        return r.returncode == 0, (r.stdout or "").strip()
+    except Exception as e:
+        return False, str(e)
+
+
+@app.route("/api/versions")
+def api_versions():
+    # Phải fetch: danh sách tag trên máy khách chỉ có tới bản họ đang cài, nên
+    # không fetch thì không đời nào thấy được bản mới hơn.
+    ok_fetch, loi_fetch = _git("fetch", "--tags", "--force", "origin")
+    ok_tag, ra = _git("tag")
+    if not ok_tag:
+        return jsonify({"ok": False, "error": "Thư mục này chưa phải kho code git.",
+                        "versions": [], "hien_tai": VERSION})
+
+    tags = [t.strip() for t in ra.splitlines() if t.strip()]
+    # CHANGELOG phải lấy từ tag MỚI NHẤT, không đọc file trên đĩa: file trên đĩa
+    # là của bản đang cài nên không biết gì về các bản mới hơn.
+    changelog = ""
+    for t in sorted([t for t in tags if t.startswith("v")],
+                    key=lambda t: capnhat.kieu_so(t[1:]) if t[1:].count(".") == 2 else (0, 0, 0),
+                    reverse=True):
+        ok, noi_dung = _git("show", f"{t}:CHANGELOG.md")
+        if ok and noi_dung:
+            changelog = noi_dung
+            break
+
+    ds = capnhat.danh_sach_ban(tags, changelog, VERSION)
+    moi = capnhat.ban_moi_nhat(ds)
+    return jsonify({
+        "ok":       True,
+        "hien_tai": VERSION,
+        "versions": ds,
+        "ban_moi":  moi,
+        # Không fetch được thì danh sách vẫn hiện, nhưng phải nói rõ là nó cũ.
+        "canh_bao": "" if ok_fetch else
+                    "Không kết nối được GitHub — danh sách dưới đây có thể thiếu bản mới.",
+    })
+
+
+@app.route("/api/update", methods=["POST"])
+def api_update():
+    xin = (request.json or {}).get("version", "").strip()
+
+    # KHÔNG đưa chuỗi khách gửi thẳng vào lệnh chạy. Chỉ chấp nhận đúng một
+    # phiên bản có thật trong danh sách tag; sai một ly là mở cửa cho người ta
+    # nhét lệnh khác vào.
+    ok_tag, ra = _git("tag")
+    tags = {t.strip() for t in ra.splitlines() if t.strip()} if ok_tag else set()
+    if xin:
+        if not xin.startswith("v"):
+            xin = "v" + xin
+        if xin not in tags:
+            return jsonify({"ok": False, "error": f"Không có bản {xin}."})
+    else:
+        ds = capnhat.danh_sach_ban(sorted(tags), "", VERSION)
+        if not ds:
+            return jsonify({"ok": False, "error": "Kho code chưa có bản phát hành nào."})
+        xin = ds[0]["tag"]
+
+    bat = BASE_DIR / "UPDATE.bat"
+    if not bat.exists():
+        return jsonify({"ok": False, "error": "Không tìm thấy UPDATE.bat."})
+
+    # Mở cửa sổ riêng để khách nhìn thấy tiến trình. UPDATE.bat sẽ tắt server
+    # này ở bước [2] — nó tắt theo cổng 8080 và không dùng /T, nên cửa sổ vừa
+    # mở không bị kéo theo. Xong việc nó tự bật lại server, tab đang mở phát
+    # hiện boot id đổi rồi tự nạp lại thành bản mới.
+    try:
+        subprocess.Popen(["cmd", "/c", str(bat), xin], cwd=str(BASE_DIR),
+                         creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == "win32" else 0)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Không chạy được UPDATE.bat: {e}"})
+    return jsonify({"ok": True, "version": xin})
+
 
 # ── Serve media files ─────────────────────────────────────────
 @app.route("/media/<path:filename>")

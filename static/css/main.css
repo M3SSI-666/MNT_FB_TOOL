@@ -61,6 +61,42 @@ select option:disabled { color: var(--text-muted); }
     color: var(--text-muted);
     line-height: 1;
 }
+/* Số phiên bản bấm được → mở bảng chọn bản cập nhật. */
+#app-version-btn { cursor: pointer; }
+#app-version-btn:hover #app-version { color: var(--accent); }
+/* Chấm báo có bản mới. Chỉ hiện khi JS gắn class, nên máy đang ở bản mới nhất
+   không thấy gì cả. */
+#app-version-cham.co-ban-moi::after {
+    content: "";
+    display: inline-block;
+    width: 6px; height: 6px;
+    margin-left: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    vertical-align: middle;
+}
+
+/* ── Bảng chọn bản cập nhật ──────────────────────────────────── */
+.ban-list { display: flex; flex-direction: column; gap: 8px; }
+.ban-item {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+}
+.ban-item.dang-chay { border-color: var(--accent); }
+.ban-head {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 700; font-size: 13px;
+}
+.ban-head .ngay { font-weight: 400; color: var(--text-muted); font-size: 11px; margin-left: auto; }
+.ban-ghichu {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    line-height: 1.55;
+}
+.ban-item button { font-size: 12px; padding: 4px 10px; border-radius: var(--radius-sm); }
 
 .sidebar-nav {
     flex: 1;

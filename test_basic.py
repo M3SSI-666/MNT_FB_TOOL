@@ -1598,11 +1598,37 @@ check("có file CHANGELOG.md", _cl.exists())
 _muc = _re_v.findall(r"(?m)^## v(\d+\.\d+\.\d+) ", _cl.read_text(encoding="utf-8"))
 check("CHANGELOG có ít nhất một bản", len(_muc) > 0)
 check("CHANGELOG không có mục trùng", len(_muc) == len(set(_muc)))
-# Mới nhất nằm trên cùng — danh sách trong giao diện đọc theo đúng thứ tự này.
-check("bản đang chạy nằm đầu CHANGELOG", bool(_muc) and _muc[0] == _cfg.VERSION)
+# KHÔNG bắt bản đang chạy phải nằm đầu: quy trình là viết ghi chú TRƯỚC rồi mới
+# phát hành, nên lúc chạy bài kiểm thì mục trên cùng chính là bản sắp ra, còn
+# version.txt vẫn mang số cũ. Bắt "phải nằm đầu" là tự khoá mình lại, không bao
+# giờ phát hành được bản nào nữa.
+check("bản đang chạy có mục trong CHANGELOG", _cfg.VERSION in _muc)
 _khoa = lambda v: tuple(int(x) for x in v.split("."))
 check("CHANGELOG xếp từ mới xuống cũ",
       _muc == sorted(_muc, key=_khoa, reverse=True))
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Chọn phiên bản để cập nhật
+# ───────────────────────────────────────────────────────────────────────────
+import capnhat as _cn
+_cl_text = _cl.read_text(encoding="utf-8")
+_g = _cn.doc_ghi_chu(_cl_text)
+check("bóc được ghi chú mọi bản trong CHANGELOG", set(_g) == set(_muc))
+check("ghi chú có ngày",   all(_g[v]["ngay"] for v in _g))
+check("ghi chú có nội dung", all(_g[v]["ghi_chu"] for v in _g))
+# Bẫy kinh điển: xếp theo chữ cái thì '1.9.0' đứng SAU '1.10.0'.
+check("xếp theo số chứ không theo chữ cái",
+      [m["tag"] for m in _cn.danh_sach_ban(["v1.9.0", "v1.10.0", "v1.2.0"], "", "1.9.0")]
+      == ["v1.10.0", "v1.9.0", "v1.2.0"])
+check("tag không đúng dạng bị bỏ qua",
+      [m["tag"] for m in _cn.danh_sach_ban(["v1.1.0", "beta", "v2.0"], "", "1.1.0")]
+      == ["v1.1.0"])
+_ds = _cn.danh_sach_ban(["v1.1.0", "v1.0.5", "v1.0.3"], _cl_text, "1.0.5")
+check("phân đúng mới / đang chạy / cũ",
+      [m["huong"] for m in _ds] == ["moi", "dang_chay", "cu"])
+check("mời đúng bản mới nhất", _cn.ban_moi_nhat(_ds)["tag"] == "v1.1.0")
+check("đang ở bản mới nhất thì không mời gì",
+      _cn.ban_moi_nhat(_cn.danh_sach_ban(["v1.1.0"], _cl_text, "1.1.0")) is None)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Cú pháp file .bat
