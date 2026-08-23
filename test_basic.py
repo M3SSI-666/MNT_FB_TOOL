@@ -1772,6 +1772,26 @@ for _ten, _g in [
 # Thiếu khoá công khai phải CHẶN chứ không cho qua: lỡ quên gắn khoá lúc phát
 # hành mà mặc định cho qua thì mở toang cho tất cả, và không ai phát hiện ra.
 check("quên gắn khoá công khai → chặn", _pd.dung_duoc(_that, _BG, "") is False)
+
+# ── Cổng chặn phải TỰ TẮT khi chưa gắn khoá ────────────────────────────────
+# Máy chủ dựng sau phần này. Nếu mặc định là bắt buộc thì ngay lúc cập nhật
+# code, mọi máy đang chạy đều bị khoá ngoài — kể cả máy của chính mình — mà
+# chưa có chỗ nào để xin duyệt.
+check("chưa gắn khoá → không bắt buộc duyệt", _pd.bat_buoc() is False)
+_tt = _pd.trang_thai_hien_tai()
+check("chưa gắn khoá → cho vào bình thường", _tt["cho_vao"] is True)
+check("chưa gắn khoá → không gọi máy chủ", _tt["nguon"] == "chua_bat")
+_j = server.app.test_client().get("/api/phe-duyet/status").get_json()
+check("/api/phe-duyet/status: bat_buoc=False khi chưa gắn khoá",
+      _j["bat_buoc"] is False and _j["cho_vao"] is True)
+# Kiểm đầu vào form đăng ký
+for _than, _mong in [({}, "họ tên"), ({"ten": "  "}, "họ tên"),
+                     ({"ten": "A"}, "điện thoại")]:
+    _r = server.app.test_client().post("/api/phe-duyet/dang-ky", json=_than).get_json()
+    check(f"đăng ký thiếu {_mong} → báo lỗi",
+          _r["ok"] is False and _mong.lower() in _r["error"].lower())
+check("giao diện có màn hình đăng ký",
+      'id="duyet-overlay"' in Path("templates/index.html").read_text(encoding="utf-8"))
 check("chữ ký thật nhưng hết hạn → chặn",
       _pd.dung_duoc(_ky_thu(_MAY, _pd.DA_DUYET, _BG - 9 * _NGAY), _BG, _KCK) is False)
 

@@ -121,6 +121,56 @@ def ghi_nho(goi_tin):
         return False
 
 
+def bat_buoc():
+    """Có bắt buộc phải được duyệt mới dùng được phần mềm không.
+
+    Chừng nào chưa gắn khoá công khai thì KHÔNG bắt buộc — phần mềm chạy y như
+    trước. Cần thiết vì máy chủ dựng sau phần này: nếu để mặc định là bắt buộc
+    thì ngay lúc cập nhật code, mọi máy đang chạy đều bị khoá ngoài, kể cả máy
+    của chính mình, mà chưa có chỗ nào để xin duyệt.
+
+    Gắn khoá công khai vào là cổng chặn tự bật.
+    """
+    return bool(KHOA_CONG_KHAI)
+
+
+def trang_thai_hien_tai(bay_gio=None):
+    """Máy này có được phép dùng phần mềm không.
+
+    Trả về dict: {cho_vao, trang_thai, nguon, thong_bao}
+
+    Thứ tự: hỏi máy chủ trước; hỏi được thì tin máy chủ và nhớ lại. Không hỏi
+    được — mất mạng, máy chủ chết — thì lùi về kết quả đã nhớ. Nhớ mà hết hạn
+    hoặc chữ ký sai thì mới chặn.
+    """
+    if not bat_buoc():
+        return {"cho_vao": True, "trang_thai": DA_DUYET, "nguon": "chua_bat",
+                "thong_bao": ""}
+
+    ok, d = hoi_may_chu()
+    if ok and isinstance(d, dict) and d.get("ok"):
+        goi = {"ma_may": d.get("ma_may"), "trang_thai": d.get("trang_thai"),
+               "luc": d.get("luc"), "chu_ky": d.get("chu_ky")}
+        # Chỉ nhớ khi chữ ký thật. Nhớ bừa thì lần sau mất mạng là tin vào một
+        # gói tin không rõ nguồn gốc.
+        if chu_ky_dung(goi):
+            ghi_nho(goi)
+            return {"cho_vao": goi["trang_thai"] == DA_DUYET,
+                    "trang_thai": goi["trang_thai"], "nguon": "may_chu",
+                    "thong_bao": ""}
+        return {"cho_vao": False, "trang_thai": "chu_ky_sai", "nguon": "may_chu",
+                "thong_bao": "Máy chủ trả về dữ liệu không hợp lệ."}
+
+    nho = doc_nho()
+    if dung_duoc(nho, bay_gio=bay_gio):
+        return {"cho_vao": True, "trang_thai": DA_DUYET, "nguon": "nho_lai",
+                "thong_bao": "Không kết nối được máy chủ — đang dùng kết quả đã lưu."}
+    return {"cho_vao": False,
+            "trang_thai": (nho or {}).get("trang_thai", CHUA_DANG_KY),
+            "nguon": "nho_lai",
+            "thong_bao": d.get("loi", "") if isinstance(d, dict) else ""}
+
+
 def chu_ky_dung(goi_tin, khoa_cong_khai=None):
     """Chữ ký của máy chủ trên gói tin này có thật không.
 

@@ -300,6 +300,53 @@
 <!-- Toast -->
 <div id="toast-container"></div>
 
+<!-- Màn hình đăng ký / chờ duyệt.
+     Che hẳn màn hình vì chưa được duyệt thì không cho dùng gì.
+     Chỉ hiện khi đã gắn khoá công khai — xem phe_duyet.bat_buoc(). -->
+<div id="duyet-overlay"
+    style="display:none;position:fixed;inset:0;background:var(--bg-primary);z-index:950;
+           align-items:center;justify-content:center;overflow-y:auto">
+    <div style="width:440px;max-width:92vw;padding:28px">
+        <div style="text-align:center;margin-bottom:20px">
+            <div style="font-size:38px;margin-bottom:10px" id="duyet-icon">🔑</div>
+            <div style="font-size:17px;font-weight:700" id="duyet-tieu-de">Đăng ký sử dụng</div>
+            <div style="font-size:13px;color:var(--text-muted);margin-top:6px;line-height:1.6"
+                 id="duyet-mo-ta">Điền thông tin rồi gửi. Chủ phần mềm duyệt xong là bạn dùng được.</div>
+        </div>
+
+        <div style="background:var(--bg-secondary);border:1px solid var(--border);
+                    border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:16px">
+            <div style="font-size:11px;color:var(--text-muted)">Mã máy của bạn</div>
+            <div style="font-family:monospace;font-size:17px;font-weight:700;letter-spacing:1px"
+                 id="duyet-ma-may">…</div>
+        </div>
+
+        <div id="duyet-form">
+            <label style="font-size:12px;color:var(--text-muted)">Họ tên</label>
+            <input id="duyet-ten" placeholder="Nguyễn Văn A" style="width:100%;margin:4px 0 12px;
+                   padding:9px;background:var(--bg-secondary);color:var(--text-primary);
+                   border:1px solid var(--border);border-radius:var(--radius-sm)">
+
+            <label style="font-size:12px;color:var(--text-muted)">Số điện thoại</label>
+            <input id="duyet-dt" placeholder="09xx xxx xxx" style="width:100%;margin:4px 0 12px;
+                   padding:9px;background:var(--bg-secondary);color:var(--text-primary);
+                   border:1px solid var(--border);border-radius:var(--radius-sm)">
+
+            <label style="font-size:12px;color:var(--text-muted)">Gmail</label>
+            <input id="duyet-email" placeholder="ten@gmail.com" style="width:100%;margin:4px 0 16px;
+                   padding:9px;background:var(--bg-secondary);color:var(--text-primary);
+                   border:1px solid var(--border);border-radius:var(--radius-sm)">
+
+            <button id="duyet-gui" onclick="guiDangKy()"
+                style="width:100%;background:var(--accent);color:#fff;padding:11px;
+                       border-radius:var(--radius-sm);font-weight:700">Gửi đăng ký</button>
+        </div>
+
+        <div id="duyet-loi" style="margin-top:12px;font-size:12px;color:var(--danger);
+             text-align:center;min-height:16px"></div>
+    </div>
+</div>
+
 <!-- Màn hình tải Chromium lần chạy đầu.
      Máy vừa cài xong chưa có Chromium (683 MB, không nằm trong file cài).
      Che hẳn màn hình vì chưa có nó thì không làm được gì cả. -->
