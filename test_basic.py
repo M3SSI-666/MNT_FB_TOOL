@@ -1585,6 +1585,49 @@ check("giao diện có ô hiện version",
 check("app.js đổ version vào ô đó",
       'app-version' in Path("static/js/app.js").read_text(encoding="utf-8"))
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Cú pháp file .bat
+# ───────────────────────────────────────────────────────────────────────────
+# Hai lỗi dưới đây đều KHÔNG hiện ra khi đọc code, và cmd chỉ báo bằng một câu
+# vô nghĩa kiểu "KHONG was unexpected at this time" rồi chết ngay dòng đầu.
+# UPDATE.bat đã dính lỗi thứ nhất và hỏng trên MỌI máy suốt từ 01/08 đến
+# 23/08/2026 mà không ai biết, vì không có gì kiểm nó.
+#
+#   1. `::` bên trong khối `( )`
+#      cmd coi `::` là nhãn, mà nhãn không được nằm trong ngoặc. Dùng `rem`.
+#      Điểm ác: cmd phân tích TRỌN khối trước khi xét điều kiện, nên dù không
+#      bao giờ bước vào khối đó thì lỗi vẫn nổ.
+#
+#   2. dấu `(` `)` chưa escape trong `echo` bên trong khối `( )`
+#      dấu `)` đóng khối sớm. Phải viết `^(` và `^)`.
+import glob as _glob, re as _re_b
+
+def _soi_bat(duong_dan):
+    """Trả về danh sách (số dòng, lý do) cho một file .bat."""
+    dong = Path(duong_dan).read_text(encoding="utf-8", errors="replace").split("\n")
+    sau, loi = 0, []
+    for i, ln in enumerate(dong, 1):
+        s = ln.strip()
+        la_chu_thich = s.startswith("::") or s.lower().startswith("rem ")
+        if sau > 0 and s.startswith("::"):
+            loi.append((i, ":: trong khối ( )"))
+        if sau > 0 and _re_b.match(r"(?i)echo\b", s) and not la_chu_thich:
+            ngoai_nhay = _re_b.sub(r'"[^"]*"', "", s)   # trong "..." thì an toàn
+            if _re_b.search(r"(?<!\^)[()]", ngoai_nhay):
+                loi.append((i, "ngoặc chưa escape trong echo"))
+        if not la_chu_thich:
+            sau = max(0, sau + ln.count("(") - ln.count(")"))
+    return loi
+
+_bat = sorted(_glob.glob("*.bat"))
+check("có tìm thấy file .bat để kiểm", len(_bat) > 0)
+for _f in _bat:
+    _loi = _soi_bat(_f)
+    _ten = f"{_f} không có lỗi cú pháp khối"
+    if _loi:   # nêu rõ dòng nào, để sửa được ngay mà không phải dò lại
+        _ten += " — " + "; ".join(f"dòng {i}: {ly}" for i, ly in _loi)
+    check(_ten, not _loi)
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:

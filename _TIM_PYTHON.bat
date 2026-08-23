@@ -17,6 +17,14 @@ if not defined PYW ( where pyw    >nul 2>&1 && set "PYW=pyw" )
 if not defined PYW ( where python >nul 2>&1 && set "PYW=python" )
 if not defined PYW ( where py     >nul 2>&1 && set "PYW=py -3" )
 
+:: PY = ban CO cua so den. Dung cho viec phai CHO CHAY XONG roi doc ket qua,
+:: nhu chay bai kiem trong PHAT_HANH.bat. Khong dung PYW o do duoc: pythonw la
+:: chuong trinh dang GUI, cmd goi xong la tra ve ngay khong doi, nen errorlevel
+:: luon bang 0 - cong chan se luon "qua" du bai kiem truot.
+set "PY="
+where python >nul 2>&1 && set "PY=python"
+if not defined PY ( where py >nul 2>&1 && set "PY=py -3" )
+
 if not defined PYW (
     echo.
     echo ============================================================

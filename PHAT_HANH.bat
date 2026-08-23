@@ -69,6 +69,28 @@ if not "!BAN!"=="0" (
     exit /b 1
 )
 
+:: --- Chan phat hanh khi bai kiem chua qua ---
+:: v1.0.1 phat hanh ra mot UPDATE.bat hong cu phap, chet ngay dong dau tren moi
+:: may. No lot duoc vi khong co gi kiem truoc luc phat hanh - chi doc code bang
+:: mat, ma loai loi do khong nhin ra duoc. Gio bai kiem phai qua thi moi gan tag.
+echo   Dang chay bai kiem...
+call "%~dp0_TIM_PYTHON.bat"
+if errorlevel 1 (
+    echo   [LOI] Khong tim thay Python de chay bai kiem.
+    pause
+    exit /b 1
+)
+%PY% -X utf8 test_basic.py > "%TEMP%\mnt_kiem.txt" 2>&1
+if errorlevel 1 (
+    echo   [LOI] Bai kiem KHONG qua - khong phat hanh.
+    echo.
+    findstr /c:"FAIL" "%TEMP%\mnt_kiem.txt"
+    echo.
+    pause
+    exit /b 1
+)
+for /f "delims=" %%l in ('findstr /c:"passed" "%TEMP%\mnt_kiem.txt"') do echo   [OK] %%l
+
 echo.
 echo   Se phat hanh: !CU!  ==^>  !MOI!
 set /p "OK=  Dung khong? (y/n): "
