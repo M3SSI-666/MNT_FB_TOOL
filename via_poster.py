@@ -32,7 +32,7 @@ import unicodedata
 from cookie_exporter import load_cookie
 from config import HEADLESS
 from utils import logger, jitter_ms, CookieDeadError
-from fb_common import (chua_dang_nhap, dong_dialog_canh_bao, cho_composer_dong,
+from fb_common import (chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
@@ -47,18 +47,11 @@ _UA = (
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _find_profile_dir(acc_name: str, c_user: str = "") -> str:
-    """
-    Trả về thư mục Chrome profile cho acc.
-    Luôn dùng format {name}_{c_user} để đảm bảo mỗi acc một profile riêng,
-    kể cả khi nhiều acc có cùng tên.
-    """
-    root       = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
-    exact_name = acc_name.replace(" ", "_")
-    folder     = f"{exact_name}_{c_user}" if c_user else exact_name
-    path       = os.path.join(root, folder)
-    os.makedirs(path, exist_ok=True)
-    return path
+# Vỏ mỏng gọi sang fb_common — TRƯỚC ĐÂY LÀ BẢN SAO NGUYÊN VĂN.
+# Ba file cùng giữ một hàm giống hệt nhau từng dòng, nên mỗi lần sửa phải nhớ
+# sửa cả ba; thực tế bản trong join_groups_runner đã trôi khác và chạy trên
+# thư mục profile trắng suốt không biết bao lâu.
+_find_profile_dir = find_profile_dir
 
 
 async def _human_delay(min_ms: int = 800, max_ms: int = 2000):

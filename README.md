@@ -57,6 +57,25 @@ App Installer **không bao giờ update được**.
 > kể cả trong cùng mạng LAN — chạm được cổng 8080. Vì vậy cũng không cần mật
 > khẩu hay đăng nhập.
 
+## Nơi để dữ liệu
+Mã nguồn và dữ liệu **tách rời**, quyết định bằng biến môi trường `MNT_DATA_DIR`:
+
+| | code | dữ liệu |
+|---|---|---|
+| Chạy từ mã nguồn (mặc định) | thư mục dự án | **cùng thư mục** — y hệt trước |
+| Cài bằng `setup.exe` (sắp tới) | `C:\Program Files\…` chỉ đọc | `%LOCALAPPDATA%\…` |
+
+`config.DATA_ROOT` là nguồn duy nhất; `data/` `logs/` `cookies/` `profiles/` đều
+dẫn xuất từ nó.
+
+> **Bắt buộc phải tách để đóng gói được**: `profiles/` là **2,1 GB ghi liên tục**,
+> mà Windows không cho ghi vào Program Files. Tách rồi thì còn được hai thứ nữa —
+> xoá code cài lại không mất dữ liệu, và sao lưu chỉ cần chép một thư mục.
+
+> Trước đây `cookies/` và `profiles/` được **mỗi file tự tính từ `__file__` của
+> chính nó** — 7 chỗ trong 4 file — nên không có cách nào dời đi. Nay tất cả đọc
+> từ `config`. Có assertion canh việc này không tái diễn.
+
 ## Cấu trúc
 | File | Vai trò |
 |------|---------|
@@ -605,5 +624,5 @@ gia nhóm dồn dập là hành vi dễ bị chặn nhất trong cả phần m�
 
 ## Test
 ```
-python test_basic.py   # 469 assertion, chạy trên DB tạm — không đụng data thật
+python test_basic.py   # 486 assertion, chạy trên DB tạm — không đụng data thật
 ```

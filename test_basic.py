@@ -1538,6 +1538,34 @@ for _a, _b in (("homestay", "thue"), ("homestay", "ban"), ("thue", "ban")):
 check("không lẫn dòng ghi chú",         not any(x.startswith("#") for v in _pool.values() for x in v))
 check("không lẫn dòng tiêu đề loại",    not any(x.startswith("[") for v in _pool.values() for x in v))
 
+# ── Tách dữ liệu khỏi code (điều kiện để đóng gói setup.exe) ───────────────
+# Chạy từ mã nguồn thì DATA_ROOT = BASE_DIR, y hệt trước. Cài bằng setup.exe thì
+# code nằm ở Program Files (chỉ đọc) còn MNT_DATA_DIR trỏ sang %LOCALAPPDATA%.
+# Bắt buộc phải tách vì profiles/ là 2,1 GB ghi liên tục.
+import config as _cfg
+check("mặc định DATA_ROOT = BASE_DIR",  _cfg.DATA_ROOT == _cfg.BASE_DIR)
+for _ten, _p in (("DB", _cfg.DB_PATH), ("logs", _cfg.LOG_DIR),
+                 ("cookies", _cfg.COOKIES_DIR), ("profiles", _cfg.PROFILES_DIR)):
+    check(f"{_ten} nằm dưới DATA_ROOT", str(_p).startswith(str(_cfg.DATA_ROOT)))
+
+# Không file nào được tự tính đường dẫn dữ liệu từ __file__ của chính nó nữa —
+# đó là lý do trước đây không dời được, và là gốc của lỗi profile trắng trong
+# join_groups_runner (bản sao trôi khác bản gốc).
+for _f in ("fb_common.py", "cookie_exporter.py", "page_via_poster.py",
+           "via_poster.py", "join_groups_runner.py"):
+    _nd = Path(_f).read_text(encoding="utf-8")
+    check(f"{_f}: không tự tính profiles/",
+          'abspath(__file__)), "profiles"' not in _nd)
+    check(f"{_f}: không tự tính cookies/",
+          'abspath(__file__)), "cookies"' not in _nd)
+
+# Ba bản sao find_profile_dir đã gộp về một. Giữ bản sao thì sửa một chỗ phải
+# nhớ sửa cả ba — thực tế bản trong join_groups_runner đã trôi và chạy trên
+# thư mục profile TRẮNG suốt không biết bao lâu.
+import fb_common as _fbc, page_via_poster as _pvp, via_poster as _vp
+check("page_via_poster dùng chung hàm", _pvp._find_profile_dir is _fbc.find_profile_dir)
+check("via_poster dùng chung hàm",      _vp._find_profile_dir is _fbc.find_profile_dir)
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:

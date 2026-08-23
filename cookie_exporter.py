@@ -14,8 +14,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from utils import logger
 
-COOKIES_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies")
-PROFILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
+# Lấy từ config để dời được sang %LOCALAPPDATA% khi cài bằng setup.exe.
+from config import COOKIES_DIR as _CK, PROFILES_DIR as _PF
+COOKIES_DIR  = str(_CK)
+PROFILES_DIR = str(_PF)
 
 
 def _safe_filename(name: str) -> str:

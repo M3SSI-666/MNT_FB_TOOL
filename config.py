@@ -5,11 +5,27 @@ config.py — Cấu hình MNT_FB (không cần Google Cloud, không cần API ke
 import os
 from pathlib import Path
 
+# BASE_DIR = nơi để MÃ NGUỒN. DATA_ROOT = nơi để DỮ LIỆU. Hai thứ này tách
+# nhau ra được, và đó là điều kiện để đóng gói thành bộ cài:
+#
+#   chạy từ mã nguồn (như hiện nay)  → DATA_ROOT = BASE_DIR, y hệt trước
+#   cài bằng setup.exe               → code ở Program Files (chỉ đọc),
+#                                       MNT_DATA_DIR trỏ sang %LOCALAPPDATA%
+#
+# Bắt buộc phải tách vì `profiles/` là 2,1 GB ghi liên tục — Windows không cho
+# ghi vào Program Files. Ngoài ra tách rồi thì xoá code cài lại cũng không mất
+# dữ liệu, và sao lưu chỉ cần chép một thư mục.
 BASE_DIR   = Path(__file__).parent
-DATA_DIR   = BASE_DIR / "data"
+DATA_ROOT  = Path(os.environ.get("MNT_DATA_DIR", "").strip() or BASE_DIR)
+
+DATA_DIR   = DATA_ROOT / "data"
 MEDIA_DIR  = DATA_DIR / "media"
-LOG_DIR    = BASE_DIR / "logs"
+LOG_DIR    = DATA_ROOT / "logs"
 DB_PATH    = DATA_DIR / "app.db"
+# Cookie và profile trình duyệt — trước đây mỗi file tự tính từ __file__ của
+# CHÍNH NÓ (7 chỗ, 4 file), nên không có cách nào dời chúng đi nơi khác.
+COOKIES_DIR  = DATA_ROOT / "cookies"
+PROFILES_DIR = DATA_ROOT / "profiles"
 
 # Log files per runner
 LOG_FILES = {
@@ -40,7 +56,7 @@ CONTENT_MEDIA_DIRS = {
 }
 
 # Đảm bảo tất cả thư mục tồn tại
-for _d in [DATA_DIR, MEDIA_DIR, LOG_DIR,
+for _d in [DATA_DIR, MEDIA_DIR, LOG_DIR, COOKIES_DIR, PROFILES_DIR,
            MEDIA_DIR / "content" / "homestay",
            MEDIA_DIR / "content" / "thue",
            MEDIA_DIR / "content" / "ban",

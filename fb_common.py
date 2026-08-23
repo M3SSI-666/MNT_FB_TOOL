@@ -19,6 +19,7 @@ import asyncio
 import random
 
 from utils import logger, jitter_ms
+from config import PROFILES_DIR
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 UA = (
@@ -61,7 +62,7 @@ def find_profile_dir(acc_name: str, c_user: str = "") -> str:
     Luôn dùng format {name}_{c_user} để đảm bảo mỗi acc một profile riêng,
     kể cả khi nhiều acc có cùng tên.
     """
-    root       = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
+    root       = str(PROFILES_DIR)
     exact_name = acc_name.replace(" ", "_")
     folder     = f"{exact_name}_{c_user}" if c_user else exact_name
     path       = os.path.join(root, folder)
@@ -134,7 +135,7 @@ def don_cache_profile(profile_dir: str, nguong_mb: float = 200) -> float:
 
 
 def _thu_muc_profiles() -> str:
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
+    return str(PROFILES_DIR)
 
 
 def loc_profile_tu_cmdline(text: str, goc_profiles: str) -> set:
@@ -199,7 +200,7 @@ def don_cache_tat_ca(nguong_mb: float = 200) -> float:
     dùng (không đăng, không nuôi) thì chẳng phiên nào chạm tới, cache cũ nằm lại
     mãi. Bỏ qua profile đang mở để không làm hỏng phiên đang chạy.
     """
-    goc = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
+    goc = str(PROFILES_DIR)
     if not os.path.isdir(goc):
         return 0.0
 
