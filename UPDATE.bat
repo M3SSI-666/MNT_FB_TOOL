@@ -80,7 +80,7 @@ if not exist ".git" (
 :: Toan bo viec tim va cai git nam trong _TIM_GIT.bat (xem giai thich trong do).
 :: Ban cu chi thu moi "git --version" roi doi hoi winget, thieu winget la bo
 :: cuoc — nen may khong co winget khong bao gio update duoc.
-echo [1/5] Kiem tra git...
+echo [1/6] Kiem tra git...
 call "%~dp0_TIM_GIT.bat"
 if errorlevel 1 (
     pause
@@ -100,7 +100,7 @@ echo [OK] git san sang.
 echo.
 
 :: --- [2] Tat app dang chay (giong RESTART.bat) ---
-echo [2/5] Dang tat app dang chay...
+echo [2/6] Dang tat app dang chay...
 :: Kill Flask server (:8080) - KHONG dung /T de tranh diet chrome.exe con
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8080 ^| findstr LISTENING 2^>nul') do (
     taskkill /F /PID %%a >nul 2>&1
@@ -110,23 +110,82 @@ powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | 
 ping -n 3 127.0.0.1 >nul
 echo.
 
-:: --- [3] Tai code moi nhat ---
-echo [3/5] Dang tai code moi nhat tu GitHub...
-:: Bo qua thay doi cuc bo cua file da theo doi (vd client lo sua) de pull khong ket.
-:: data/ cookies/ profiles/ nam trong .gitignore nen git KHONG dong vao -> an toan.
-git fetch origin >nul 2>&1
-for /f %%b in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set BRANCH=%%b
-if "!BRANCH!"=="" set BRANCH=main
-git reset --hard "origin/!BRANCH!"
+:: --- [3a] SAO LUU DU LIEU truoc khi dong vao code ---
+:: Migration cua phan mem nay co XOA that (accounts.comment_bai,
+:: comment_posts.nhom_url, content.link_anh_hook) va co DOI that
+:: (loai_dang C_Home -> X_Home). Chung chi chay MOT CHIEU, khong co duong nguoc.
+:: Nen ban sao nay la thu duy nhat cuu duoc du lieu khi mot ban cap nhat hong,
+:: hoac khi phai lui ve ban cu.
+echo [3/6] Sao luu du lieu...
+set "SAOLUU=%LOCALAPPDATA%\MNT FB AutoPost\backup"
+if not exist "!SAOLUU!" mkdir "!SAOLUU!" >nul 2>&1
+for /f "tokens=1-6 delims=/: " %%a in ("%date% %time%") do set "DAU=%%c%%b%%a_%%d%%e"
+set "DAU=!DAU: =0!"
+if exist "data\app.db" (
+    copy /y "data\app.db" "!SAOLUU!\app_!DAU!.db" >nul 2>&1
+    if errorlevel 1 (
+        echo [LOI] Khong sao luu duoc du lieu - DUNG LAI de khong lam mat gi.
+        echo       Kiem tra quyen ghi vao: !SAOLUU!
+        pause
+        exit /b 1
+    )
+    echo [OK] Da sao luu: !SAOLUU!\app_!DAU!.db
+) else (
+    echo      (chua co du lieu - bo qua sao luu)
+)
+:: Giu 10 ban gan nhat, xoa bot cho khoi phinh o dia.
+for /f "skip=10 delims=" %%f in ('dir /b /o-d "!SAOLUU!\app_*.db" 2^>nul') do del "!SAOLUU!\%%f" >nul 2>&1
+echo.
+
+:: --- [3b] Tai code theo TAG PHAT HANH ---
+:: KHONG dung dau nhanh main: dau main la commit MOI NHAT tac gia vua day len,
+:: co the la code dang sua do. Tag la diem da duoc chu dong tuyen bo phat hanh.
+::
+::   UPDATE.bat            -> len tag moi nhat
+::   UPDATE.bat v1.0.1     -> ghim ve dung ban do
+echo [4/6] Dang tai code tu GitHub...
+git fetch --tags --force origin >nul 2>&1
 if errorlevel 1 (
-    echo [LOI] Tai code that bai. Kiem tra ket noi mang roi thu lai.
+    echo [LOI] Khong tai duoc tu GitHub. Kiem tra ket noi mang roi thu lai.
+    pause
+    exit /b 1
+)
+
+set "DICH=%~1"
+if "!DICH!"=="" (
+    :: Tag moi nhat theo NGAY TAO, khong phai theo thu tu chu cai:
+    :: sap theo chu cai thi v1.10.0 dung truoc v1.9.0.
+    for /f "delims=" %%t in ('git tag --sort^=-creatordate 2^>nul') do (
+        if "!DICH!"=="" set "DICH=%%t"
+    )
+)
+if "!DICH!"=="" (
+    echo [LOI] Kho code chua co ban phat hanh nao ^(chua gan tag^).
+    echo       Lien he nguoi cung cap phan mem.
+    pause
+    exit /b 1
+)
+
+git rev-parse "!DICH!" >nul 2>&1
+if errorlevel 1 (
+    echo [LOI] Khong tim thay phien ban "!DICH!".
+    echo       Cac ban dang co:
+    git tag --sort^=-creatordate
+    pause
+    exit /b 1
+)
+
+echo      Cap nhat len: !DICH!
+git reset --hard "!DICH!"
+if errorlevel 1 (
+    echo [LOI] Dat code ve ban "!DICH!" that bai.
     pause
     exit /b 1
 )
 echo.
 
 :: --- [4] Cai them thu vien neu doi ---
-echo [4/5] Kiem tra thu vien Python...
+echo [5/6] Kiem tra thu vien Python...
 pip install -r requirements.txt --disable-pip-version-check -q
 if errorlevel 1 (
     echo [Chu y] Cai thu vien co van de - app van co the chay voi thu vien cu.
@@ -134,7 +193,7 @@ if errorlevel 1 (
 echo.
 
 :: --- [5] Mo lai app ---
-echo [5/5] Dang mo lai app...
+echo [6/6] Dang mo lai app...
 call "%~dp0_TIM_PYTHON.bat"
 if errorlevel 1 exit /b 1
 start "" %PYW% -X utf8 server.py
@@ -143,9 +202,9 @@ echo.
 echo ============================================================
 if exist "version.txt" (
     set /p VER=<version.txt
-    echo  XONG! Da cap nhat len phien ban: !VER!
+    echo  HOAN TAT - da cap nhat len phien ban: !VER!
 ) else (
-    echo  XONG! Da cap nhat phien ban moi nhat.
+    echo  HOAN TAT - da cap nhat phien ban moi nhat.
 )
 echo  Du lieu cua ban duoc giu nguyen.
 echo ============================================================
