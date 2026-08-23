@@ -1,7 +1,34 @@
 @echo off
 setlocal enabledelayedexpansion
-cd /d "%~dp0"
 chcp 65001 >nul
+
+:: --- [-1] TU CHAY LAI TU BAN SAO TAM ---
+:: Buoc [4] chay "git reset --hard", ma lenh do GHI DE chinh file UPDATE.bat
+:: nay trong luc no dang chay. Cmd doc file .bat theo VI TRI BYTE: no chay xong
+:: mot dong thi ghi nho da doc den byte thu bao nhieu, roi mo lai file doc tiep
+:: tu do. File bi thay bang ban khac do dai -> byte do roi vao giua mot dong
+:: khac -> cmd chay phai nua cau lenh. Loi kieu nay khong doan truoc duoc va no
+:: xay ra o dung giua chung cua ban cap nhat.
+::
+:: Cach tranh: chep minh sang %TEMP% roi chay ban sao do. git reset chi dong
+:: vao file trong thu muc cai dat, khong ai dong vao ban sao trong %TEMP%.
+:: MNT_UPDATE_DIR vua danh dau "dang chay ban sao" vua cho biet thu muc that.
+if not defined MNT_UPDATE_DIR (
+    set "MNT_UPDATE_DIR=%~dp0"
+    set "BANSAO=%TEMP%\mnt_update_%RANDOM%%RANDOM%.bat"
+    copy /y "%~f0" "!BANSAO!" >nul 2>&1
+    if errorlevel 1 (
+        echo [LOI] Khong tao duoc ban sao tam trong %TEMP%.
+        echo       Kiem tra o dia con trong khong roi bam lai UPDATE.bat.
+        pause
+        exit /b 1
+    )
+    call "!BANSAO!" %*
+    set "MA=!errorlevel!"
+    del "!BANSAO!" >nul 2>&1
+    exit /b !MA!
+)
+cd /d "%MNT_UPDATE_DIR%"
 
 :: ============================================================
 ::  MNT FB AutoPost - CAP NHAT phien ban moi nhat
@@ -31,10 +58,10 @@ set "REPO_URL=https://github.com/M3SSI-666/MNT_FB_TOOL.git"
 :: keo code moi nhat tu GitHub ve. Du lieu ca nhan (data\ cookies\ profiles\...)
 :: nam trong .gitignore nen reset --hard KHONG dong toi -> an toan.
 if not exist ".git" (
-    echo [0/5] Chua phai thu muc git - dang gan git va lay code moi...
+    echo [0/6] Chua phai thu muc git - dang gan git va lay code moi...
 
     rem Phai co git truoc da. _TIM_GIT.bat co san trong goi ZIP.
-    call "%~dp0_TIM_GIT.bat"
+    call "%MNT_UPDATE_DIR%_TIM_GIT.bat"
     if errorlevel 1 (
         pause
         exit /b 1
@@ -81,7 +108,7 @@ if not exist ".git" (
 :: Ban cu chi thu moi "git --version" roi doi hoi winget, thieu winget la bo
 :: cuoc — nen may khong co winget khong bao gio update duoc.
 echo [1/6] Kiem tra git...
-call "%~dp0_TIM_GIT.bat"
+call "%MNT_UPDATE_DIR%_TIM_GIT.bat"
 if errorlevel 1 (
     pause
     exit /b 1
@@ -119,8 +146,12 @@ echo.
 echo [3/6] Sao luu du lieu...
 set "SAOLUU=%LOCALAPPDATA%\MNT FB AutoPost\backup"
 if not exist "!SAOLUU!" mkdir "!SAOLUU!" >nul 2>&1
-for /f "tokens=1-6 delims=/: " %%a in ("%date% %time%") do set "DAU=%%c%%b%%a_%%d%%e"
-set "DAU=!DAU: =0!"
+rem Lay moc thoi gian qua PowerShell chu khong qua %date%: %date% doi dang theo
+rem vung cua may. Tren may nay no cho ra "Sun 08/23/2026" nen cach cat chuoi cu
+rem de ten file thanh "app_2308Sun_202617.db" - vua kho doc vua khong sap xep
+rem duoc. Get-Date -Format cho ra dung mot dang tren moi may.
+for /f "delims=" %%d in ('powershell -NoProfile -NonInteractive -Command "Get-Date -Format yyyyMMdd_HHmmss" 2^>nul') do set "DAU=%%d"
+if "!DAU!"=="" set "DAU=khong_ro_gio"
 if exist "data\app.db" (
     copy /y "data\app.db" "!SAOLUU!\app_!DAU!.db" >nul 2>&1
     if errorlevel 1 (
@@ -194,7 +225,7 @@ echo.
 
 :: --- [5] Mo lai app ---
 echo [6/6] Dang mo lai app...
-call "%~dp0_TIM_PYTHON.bat"
+call "%MNT_UPDATE_DIR%_TIM_PYTHON.bat"
 if errorlevel 1 exit /b 1
 start "" %PYW% -X utf8 server.py
 
@@ -211,4 +242,4 @@ echo ============================================================
 echo.
 echo  (Cua so nay tu dong dong sau 5 giay)
 ping -n 6 127.0.0.1 >nul
-exit
+exit /b 0
