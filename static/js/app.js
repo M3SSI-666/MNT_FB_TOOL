@@ -2502,6 +2502,12 @@ async function _heartbeat(){
     try{
         const r = await fetch("/api/ping", {cache:"no-store"});
         const j = await r.json();
+        // Nhịp này vốn để phát hiện server restart; tiện thể đổ luôn số phiên
+        // bản vào sidebar, khỏi thêm một lượt gọi riêng.
+        if(j.version){
+            const el = document.getElementById("app-version");
+            if(el && el.textContent !== "v"+j.version) el.textContent = "v"+j.version;
+        }
         if(_bootId === null){ _bootId = j.boot; }
         else if(j.boot && j.boot !== _bootId){ location.reload(); }
     }catch(e){ /* server đang restart — bỏ qua, thử lại lần sau */ }

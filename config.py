@@ -16,6 +16,30 @@ from pathlib import Path
 # ghi vào Program Files. Ngoài ra tách rồi thì xoá code cài lại cũng không mất
 # dữ liệu, và sao lưu chỉ cần chép một thư mục.
 BASE_DIR   = Path(__file__).parent
+
+# ── Số phiên bản: MỘT nguồn duy nhất ────────────────────────────────────
+# Để trong file text chứ không phải hằng số Python, vì có ba bên cùng cần đọc:
+#   config.VERSION      → hiện trên giao diện, trả qua /api/ping
+#   UPDATE.bat          → in ra sau khi cập nhật
+#   Inno Setup (sắp có) → tên file setup.exe + mục trong Apps & features
+# File text là dạng duy nhất cả ba đọc được mà không phải chạy Python.
+#
+# Quy ước MAJOR.MINOR.PATCH:
+#   PATCH  sửa lỗi, không đổi cách dùng
+#   MINOR  thêm tính năng, dữ liệu cũ vẫn chạy
+#   MAJOR  đổi cách dùng hoặc dữ liệu cũ cần chuyển đổi
+# Mỗi lần phát hành thì gắn git tag `v<VERSION>` để quay về được.
+def _doc_version() -> str:
+    f = BASE_DIR / "version.txt"
+    try:
+        v = f.read_text(encoding="utf-8").strip()
+    except OSError:
+        return "0.0.0"          # thiếu file thì vẫn chạy, chỉ là không biết bản nào
+    return v or "0.0.0"
+
+
+VERSION = _doc_version()
+
 DATA_ROOT  = Path(os.environ.get("MNT_DATA_DIR", "").strip() or BASE_DIR)
 
 DATA_DIR   = DATA_ROOT / "data"

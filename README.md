@@ -57,6 +57,33 @@ App Installer **không bao giờ update được**.
 > kể cả trong cùng mạng LAN — chạm được cổng 8080. Vì vậy cũng không cần mật
 > khẩu hay đăng nhập.
 
+## Phiên bản và phát hành
+Số phiên bản có **một nguồn duy nhất**: [`version.txt`](version.txt). Ba bên cùng
+đọc nó mà chỉ một bên chạy được Python, nên phải là file text:
+
+| Ai đọc | Dùng làm gì |
+|---|---|
+| `config.VERSION` | hiện dưới logo, trả qua `/api/ping` |
+| `UPDATE.bat` | in ra sau khi cập nhật |
+| Inno Setup *(sắp có)* | tên `setup.exe` + mục trong *Apps & features* |
+
+**Quy ước `MAJOR.MINOR.PATCH`:** `PATCH` sửa lỗi · `MINOR` thêm tính năng, dữ liệu
+cũ vẫn chạy · `MAJOR` đổi cách dùng hoặc dữ liệu cần chuyển đổi.
+
+Phát hành bằng **`PHAT_HANH.bat`** — ghi số mới, commit riêng file đó, gắn tag
+`v<số>`, đẩy lên. Hai chốt chặn:
+
+> **Từ chối nếu còn thay đổi chưa commit.** Tag lúc đó trỏ vào trạng thái *khác*
+> với thứ đang chạy trên máy, nên quay về tag sẽ ra một bản khác.
+
+> **Từ chối nếu tag đã tồn tại.** Đẩy trùng tag lên GitHub sẽ hỏng.
+
+Tag là thứ cho phép **quay về bản cũ bất kỳ** — `git checkout v1.0.0`. Không có
+tag thì "khách chọn version nào" không thực hiện được vì không có mốc nào để dừng.
+
+> `version.txt` **không được có ký tự xuống dòng**: `set /p` trong `.bat` đọc cả
+> nó vào biến, làm tên file setup và tag git dính ký tự rác. Có assertion canh.
+
 ## Nơi để dữ liệu
 Mã nguồn và dữ liệu **tách rời**, quyết định bằng biến môi trường `MNT_DATA_DIR`:
 
@@ -624,5 +651,5 @@ gia nhóm dồn dập là hành vi dễ bị chặn nhất trong cả phần m�
 
 ## Test
 ```
-python test_basic.py   # 486 assertion, chạy trên DB tạm — không đụng data thật
+python test_basic.py   # 493 assertion, chạy trên DB tạm — không đụng data thật
 ```

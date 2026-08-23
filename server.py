@@ -16,7 +16,7 @@ BASE_DIR = Path(__file__).parent
 sys.path.insert(0, str(BASE_DIR))
 os.chdir(str(BASE_DIR))
 
-from config import PORT, LOG_DIR, MEDIA_DIR
+from config import VERSION, PORT, LOG_DIR, MEDIA_DIR
 import db
 from db import (
     init_db,
@@ -66,7 +66,9 @@ APP_BOOT_ID = str(time.time())
 
 @app.route("/api/ping")
 def api_ping():
-    return jsonify({"ok": True, "boot": APP_BOOT_ID})
+    # Gắn kèm VERSION vào đây thay vì thêm endpoint mới: giao diện đã thăm dò
+    # /api/ping mỗi 2 giây sẵn rồi, thêm một khoá vào không tốn lượt gọi nào.
+    return jsonify({"ok": True, "boot": APP_BOOT_ID, "version": VERSION})
 
 # ── Serve media files ─────────────────────────────────────────
 @app.route("/media/<path:filename>")

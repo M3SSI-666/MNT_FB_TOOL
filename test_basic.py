@@ -1566,6 +1566,25 @@ import fb_common as _fbc, page_via_poster as _pvp, via_poster as _vp
 check("page_via_poster dùng chung hàm", _pvp._find_profile_dir is _fbc.find_profile_dir)
 check("via_poster dùng chung hàm",      _vp._find_profile_dir is _fbc.find_profile_dir)
 
+# ── Số phiên bản: một nguồn duy nhất ───────────────────────────────────────
+# Để trong file text vì có ba bên cùng đọc mà chỉ một bên chạy được Python:
+# config.VERSION, UPDATE.bat, và Inno Setup khi đóng gói.
+import re as _re_v
+check("có file version.txt",            Path("version.txt").exists())
+check("config đọc được version",        _cfg.VERSION == Path("version.txt").read_text(encoding="utf-8").strip())
+check("đúng dạng MAJOR.MINOR.PATCH",    bool(_re_v.fullmatch(r"\d+\.\d+\.\d+", _cfg.VERSION)))
+# version.txt KHÔNG được có ký tự xuống dòng: `set /p` trong .bat đọc cả nó vào
+# biến, khiến tên file setup.exe và tag git dính ký tự rác.
+check("version.txt không có xuống dòng",
+      chr(10) not in Path("version.txt").read_text(encoding="utf-8"))
+check("/api/ping trả về version",
+      server.app.test_client().get("/api/ping").get_json().get("version") == _cfg.VERSION)
+# Giao diện có chỗ để hiện, và app.js có đổ số vào chỗ đó.
+check("giao diện có ô hiện version",
+      'id="app-version"' in Path("templates/index.html").read_text(encoding="utf-8"))
+check("app.js đổ version vào ô đó",
+      'app-version' in Path("static/js/app.js").read_text(encoding="utf-8"))
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:
