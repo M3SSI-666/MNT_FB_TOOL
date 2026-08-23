@@ -33,7 +33,7 @@ set "REPO_URL=https://github.com/M3SSI-666/MNT_FB_TOOL.git"
 if not exist ".git" (
     echo [0/5] Chua phai thu muc git - dang gan git va lay code moi...
 
-    :: Phai co git truoc da. _TIM_GIT.bat co san trong goi ZIP.
+    rem Phai co git truoc da. _TIM_GIT.bat co san trong goi ZIP.
     call "%~dp0_TIM_GIT.bat"
     if errorlevel 1 (
         pause
@@ -46,10 +46,10 @@ if not exist ".git" (
         exit /b 1
     )
 
-    :: Khoi tao repo tai cho. git init KHONG xoa file dang co - chi tao .git\.
+    rem Khoi tao repo tai cho. git init KHONG xoa file dang co - chi tao .git\.
     git init >nul 2>&1
     git remote add origin "%REPO_URL%" >nul 2>&1
-    :: Neu remote da ton tai (lan truoc chay do giua chung) thi cap nhat lai URL.
+    rem Neu remote da ton tai (lan truoc chay do giua chung) thi cap nhat lai URL.
     git remote set-url origin "%REPO_URL%" >nul 2>&1
 
     echo       Dang tai code moi nhat tu GitHub...
@@ -59,18 +59,18 @@ if not exist ".git" (
         pause
         exit /b 1
     )
-    :: reset --hard: ghi de file CODE bang ban GitHub. File bi .gitignore
-    :: (data\ cookies\ profiles\ backup\ logs\) KHONG bi dong toi.
+    rem reset --hard: ghi de file CODE bang ban GitHub. File bi .gitignore
+    rem (data\ cookies\ profiles\ backup\ logs\) KHONG bi dong toi.
     git reset --hard origin/main
     if errorlevel 1 (
         echo [LOI] Khong dat duoc code ve ban GitHub. Chup man hinh nay va lien he ho tro.
         pause
         exit /b 1
     )
-    :: QUAN TRONG: git init tao nhanh mac dinh ten "master", nhung repo tren
-    :: GitHub dung "main". Neu de nguyen, lan UPDATE sau buoc [3] doc ten nhanh
-    :: ra "master" roi "git reset --hard origin/master" -> LOI unknown revision.
-    :: Tao han nhanh "main" bam vao origin/main de cac lan sau chay tron.
+    rem QUAN TRONG: git init tao nhanh mac dinh ten "master", nhung repo tren
+    rem GitHub dung "main". Neu de nguyen, lan UPDATE sau buoc [3] doc ten nhanh
+    rem ra "master" roi "git reset --hard origin/master" -> LOI unknown revision.
+    rem Tao han nhanh "main" bam vao origin/main de cac lan sau chay tron.
     git checkout -B main --track origin/main >nul 2>&1
     echo [OK] Da gan git xong. Tiep tuc cap nhat binh thuong.
     echo.
@@ -131,7 +131,7 @@ if exist "data\app.db" (
     )
     echo [OK] Da sao luu: !SAOLUU!\app_!DAU!.db
 ) else (
-    echo      (chua co du lieu - bo qua sao luu)
+    echo      ^(chua co du lieu - bo qua sao luu^)
 )
 :: Giu 10 ban gan nhat, xoa bot cho khoi phinh o dia.
 for /f "skip=10 delims=" %%f in ('dir /b /o-d "!SAOLUU!\app_*.db" 2^>nul') do del "!SAOLUU!\%%f" >nul 2>&1
@@ -153,8 +153,8 @@ if errorlevel 1 (
 
 set "DICH=%~1"
 if "!DICH!"=="" (
-    :: Tag moi nhat theo NGAY TAO, khong phai theo thu tu chu cai:
-    :: sap theo chu cai thi v1.10.0 dung truoc v1.9.0.
+    rem Tag moi nhat theo NGAY TAO, khong phai theo thu tu chu cai:
+    rem sap theo chu cai thi v1.10.0 dung truoc v1.9.0.
     for /f "delims=" %%t in ('git tag --sort^=-creatordate 2^>nul') do (
         if "!DICH!"=="" set "DICH=%%t"
     )
@@ -170,7 +170,7 @@ git rev-parse "!DICH!" >nul 2>&1
 if errorlevel 1 (
     echo [LOI] Khong tim thay phien ban "!DICH!".
     echo       Cac ban dang co:
-    git tag --sort^=-creatordate
+    git tag --sort=-creatordate
     pause
     exit /b 1
 )
