@@ -71,7 +71,11 @@ Số phiên bản có **một nguồn duy nhất**: [`version.txt`](version.txt)
 cũ vẫn chạy · `MAJOR` đổi cách dùng hoặc dữ liệu cần chuyển đổi.
 
 Phát hành bằng **`PHAT_HANH.bat`** — ghi số mới, commit riêng file đó, gắn tag
-`v<số>`, đẩy lên. Hai chốt chặn:
+`v<số>`, đẩy lên. Ba chốt chặn:
+
+> **Từ chối nếu bài kiểm không qua.** `v1.0.1` phát hành ra một `UPDATE.bat`
+> hỏng cú pháp, chết ngay dòng đầu trên mọi máy, và lọt được suốt ba tuần vì
+> không có gì kiểm trước lúc phát hành.
 
 > **Từ chối nếu còn thay đổi chưa commit.** Tag lúc đó trỏ vào trạng thái *khác*
 > với thứ đang chạy trên máy, nên quay về tag sẽ ra một bản khác.
@@ -83,6 +87,23 @@ tag thì "khách chọn version nào" không thực hiện được vì không c
 
 > `version.txt` **không được có ký tự xuống dòng**: `set /p` trong `.bat` đọc cả
 > nó vào biến, làm tên file setup và tag git dính ký tự rác. Có assertion canh.
+
+### Công cụ phát hành nằm ngoài mã nguồn
+`PHAT_HANH.bat`, `PUSH.bat`, `DONG_GOI.bat` **không nằm trong repo** — chúng ở
+thư mục `MNT_FB_dev` cạnh bên. Lý do: máy khách cập nhật bằng `git reset --hard
+<tag>`, tức là nhận **đúng nội dung của commit được gắn tag**. File nào có trong
+commit đó thì mọi máy khách đều có. Khách chỉ cần dùng và cập nhật, không cần —
+và không nên có — công cụ đẩy code hay gắn tag.
+
+Ba file đó tự tìm đường về mã nguồn qua `_TIM_REPO.bat`: ưu tiên biến môi trường
+`MNT_REPO`, không có thì lấy thư mục `MNT_FB_dist` cạnh bên. Nhận ra đúng thư
+mục bằng dấu hiệu có `version.txt`.
+
+> Gỡ file khỏi repo **không phải là biện pháp bảo mật** — nó chỉ dọn dẹp. Thứ
+> thật sự chặn máy khách đẩy code là **không có thông tin đăng nhập GitHub trên
+> máy đó**, cộng với quyền trên GitHub. Đã đo: repo để public nên `git fetch`
+> chạy được mà không cần đăng nhập (cập nhật vẫn hoạt động), còn `git push`
+> không có đăng nhập thì dừng ở `unable to get password from user`.
 
 ## Nơi để dữ liệu
 Mã nguồn và dữ liệu **tách rời**, quyết định bằng biến môi trường `MNT_DATA_DIR`:

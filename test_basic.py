@@ -1620,6 +1620,14 @@ def _soi_bat(duong_dan):
     return loi
 
 _bat = sorted(_glob.glob("*.bat"))
+# Công cụ phát hành (PHAT_HANH / PUSH / DONG_GOI) đã dọn ra thư mục MNT_FB_dev
+# cạnh bên, để máy khách không nhận được chúng khi cập nhật. Nhưng chúng vẫn là
+# file .bat và vẫn dính được đúng lớp lỗi trên — mà PHAT_HANH.bat lại là thứ
+# tuyệt đối không được hỏng. Nên kiểm luôn nếu thư mục đó có mặt; trên máy khách
+# không có nó thì bỏ qua.
+_dev = Path("..") / "MNT_FB_dev"
+if _dev.is_dir():
+    _bat += sorted(str(p) for p in _dev.glob("*.bat"))
 check("có tìm thấy file .bat để kiểm", len(_bat) > 0)
 for _f in _bat:
     _loi = _soi_bat(_f)
