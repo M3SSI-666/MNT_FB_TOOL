@@ -1686,6 +1686,36 @@ for _xau in ("", "ABCD", "ABCD-EFGH-JKMN-XXXX", "0OI1-LLLL-SSSS"):
 check("chấp nhận cả chữ thường", _mm.hop_le(_m.lower()))
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Phê duyệt: hạn dùng của kết quả nhớ lại
+# ───────────────────────────────────────────────────────────────────────────
+# Mất mạng mà chặn ngay là phá hỏng công việc của khách vì sự cố không phải
+# lỗi họ. Nên kết quả duyệt được nhớ vài ngày. Chỗ này quyết định ai vào được
+# phần mềm, nên mọi ngả phải kiểm hết — nhất là ngả người dùng VẶN ĐỒNG HỒ.
+import phe_duyet as _pd
+_BG = 1_800_000_000.0
+_NGAY = 86400.0
+for _ten, _goi, _mong in [
+    ("vừa hỏi xong",         {"trang_thai": _pd.DA_DUYET, "luc": _BG},                 True),
+    ("6 ngày trước",         {"trang_thai": _pd.DA_DUYET, "luc": _BG - 6*_NGAY},       True),
+    ("7 ngày kém 1 giây",    {"trang_thai": _pd.DA_DUYET, "luc": _BG - 7*_NGAY + 1},   True),
+    ("quá 7 ngày",           {"trang_thai": _pd.DA_DUYET, "luc": _BG - 8*_NGAY},       False),
+    ("bị cắt",               {"trang_thai": _pd.BI_CAT,   "luc": _BG},                 False),
+    ("chờ duyệt",            {"trang_thai": _pd.CHO_DUYET,"luc": _BG},                 False),
+    # Vặn đồng hồ lùi là cách dễ nhất để kéo dài hạn vô tận.
+    ("đồng hồ vặn lùi",      {"trang_thai": _pd.DA_DUYET, "luc": _BG + _NGAY},         False),
+    ("thiếu mốc thời gian",  {"trang_thai": _pd.DA_DUYET},                             False),
+    ("mốc là chữ",           {"trang_thai": _pd.DA_DUYET, "luc": "hôm qua"},           False),
+    ("không phải dict",      "da_duyet",                                               False),
+    ("rỗng",                 None,                                                     False),
+]:
+    check(f"hạn dùng — {_ten} → {'cho qua' if _mong else 'chặn'}",
+          _pd.con_han(_goi, bay_gio=_BG) is _mong)
+# Kết quả nhớ phải để cạnh DỮ LIỆU, không cạnh mã nguồn: bản cài xoá sạch thư
+# mục mã nguồn mỗi lần cập nhật, để đó là mỗi lần cập nhật lại phải xin duyệt.
+check("kết quả duyệt nằm dưới DATA_ROOT",
+      str(_pd._duong_dan_nho()).startswith(str(_cfg.DATA_ROOT)))
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Tải Chromium lần chạy đầu
 # ───────────────────────────────────────────────────────────────────────────
 # Chromium 683 MB không nằm trong file cài nên máy vừa cài xong phải tải về.
