@@ -338,6 +338,14 @@ def _run_commenting(item: dict):
             if kq.get("loi"):
                 phu += f" · {kq['loi']} lỗi"
             _update_status(sid, f"💬 {done} · {ok}/{tong} bài{phu}")
+            # Comment cũng là PHIÊN NHỬ: acc đang Spam mà comment trót lọt
+            # nghĩa là Facebook đã thả, thả luôn cho đăng bài lại. Không có
+            # dòng này thì acc chỉ thoát Spam khi gặp đúng một slot ĐĂNG BÀI —
+            # nick nào lịch toàn comment sẽ kẹt Spam vĩnh viễn.
+            # Chỉ gọi khi đang Spam: với acc bình thường, lịch sử sức khoẻ chỉ
+            # tính phiên đăng bài, trộn comment vào là đổi luôn ngưỡng nghỉ.
+            if ok and db.acc_dang_spam(get_account_by_name(acc_name) or {}):
+                _bao_suc_khoe(stt, acc_name, *db.ghi_nhan_phien_dang(acc_name, True))
         logger.info(f"✅ STT {stt} comment xong: {kq}")
     except CookieDeadError:
         ts2 = datetime.now().strftime("%H:%M")
@@ -352,6 +360,10 @@ def _run_commenting(item: dict):
         if type(e).__name__ == "CommentRestricted":
             _update_status(sid, f"❌ {ts2} BỊ CHẶN COMMENT")
             logger.error(f"⛔ STT {stt}: acc '{acc_name}' bị chặn comment — {e}")
+            # Phiên nhử bằng comment mà bị chặn = vẫn chưa được thả. Nghỉ thêm
+            # một tiếng rồi nhử lại, y như phiên đăng bài hỏng.
+            if db.acc_dang_spam(get_account_by_name(acc_name) or {}):
+                _bao_suc_khoe(stt, acc_name, *db.ghi_nhan_phien_dang(acc_name, False))
         else:
             _update_status(sid, f"❌ {ts2} Comment lỗi: {label}")
             logger.error(f"❌ STT {stt} comment lỗi [{cat}]: {e}")
@@ -359,10 +371,7 @@ def _run_commenting(item: dict):
 
 def _bao_suc_khoe(stt, acc_name: str, hanh_dong: str, ly_do: str):
     """In ra log quyết định của bộ theo dõi sức khoẻ acc."""
-    if hanh_dong == "tat":
-        logger.error(f"🚫 STT {stt}: ĐÃ TẮT acc '{acc_name}' — {ly_do}. "
-                     f"Bật lại ở tab Tài khoản (Trạng thái → Active).")
-    elif hanh_dong == "nghi":
+    if hanh_dong == "nghi":
         logger.warning(f"😴 STT {stt}: cho acc '{acc_name}' nghỉ — {ly_do}")
 
 

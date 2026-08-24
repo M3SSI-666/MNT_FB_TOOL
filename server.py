@@ -42,7 +42,7 @@ from db import (
     get_comment_posts, them_comment_posts, update_comment_post_field,
     delete_comment_post, xoa_het_comment_posts,
     # loại đăng
-    LOAI_DANG_OPTIONS, LOAI_LICH_MAP, acc_chi_comment, la_loai_hon_hop,
+    LOAI_DANG_OPTIONS, LOAI_LICH_MAP, acc_dang_spam, la_loai_hon_hop,
     TI_LE_COMMENT_MAC_DINH, accounts_theo_lich,
     # settings
     get_setting, set_setting, get_all_settings,
@@ -1577,15 +1577,17 @@ def api_schedule_gen(loai):
         acc_names = {r["ten_acc"] for r in schedule}
         accs_db   = [a for a in get_accounts() if a["ten_acc"] in acc_names]
 
-        chi_cmt = {a["ten_acc"] for a in accs_db
-                   if acc_chi_comment(a)}
-
-        # ── Thứ tự ba bước dưới đây là có chủ đích ──
-        # Cả hai hàm chuyển slot chỉ đụng slot đang là 'dang_bai'. Vì vậy nuôi
-        # nick phải chạy TRƯỚC, rồi mới quét nốt slot còn lại của acc đang dính
-        # spam thành comment. Làm ngược lại thì acc đó bị khoá hết slot thành
-        # 'comment' và KHÔNG BAO GIỜ được nuôi — trong khi acc dính spam càng
-        # cần nuôi, đó là thứ có cơ gỡ nó ra.
+        # KHÔNG còn xử lý riêng acc đang dính spam ở đây. Trước đây mọi slot
+        # còn lại của acc spam bị đổi thành 'comment', vì mô hình cũ cho rằng
+        # acc spam vẫn comment được. Sai: bị spam thì Facebook gỡ cả comment.
+        #
+        # Và tai hại hơn: Gen lịch chạy MỘT LẦN cho cả ngày, còn acc spam thì
+        # thường được thả sau một tiếng. Đổi cứng cả ngày thành comment nghĩa
+        # là acc dính spam lúc 8h, được thả lúc 9h, vẫn mất sạch slot đăng bài
+        # của 15 tiếng còn lại.
+        #
+        # Giờ lịch cứ gen bình thường; việc đổi sang nuôi nick do scheduler làm
+        # lúc slot tới giờ, và chỉ trong lúc acc còn đang nghỉ.
 
         # 1. Nuôi nick — áp cho MỌI acc tick Nuôi, kể cả acc đang dính spam.
         warm_accs = {a["ten_acc"]: a.get("nuoi_interval")
@@ -1607,14 +1609,6 @@ def api_schedule_gen(loai):
                             or TI_LE_COMMENT_MAC_DINH)
                 n_cmt += chuyen_slot_theo_ti_le(schedule, hon_hop, ti_le)
 
-        # 3. Acc đang dính SPAM: mọi slot CÒN LẠI thành comment (slot đã bị nuôi
-        #    chiếm ở bước 1 thì giữ nguyên là phiên nuôi). Đây là thứ thay cho
-        #    loại đăng "C_*" đã bỏ — nhưng tự động, không cần người đổi cột.
-        for r in schedule:
-            if r["ten_acc"] in chi_cmt and \
-                    (r.get("hoat_dong") or "dang_bai") == "dang_bai":
-                r["hoat_dong"] = "comment"
-                n_cmt += 1
     except Exception as e:
         logger.warning(f"Chuyển slot nuôi/comment: bỏ qua ({e})")
 
@@ -1815,7 +1809,7 @@ def api_schedule_gen_data(loai):
             "luc_dang": round(60 / nghi, 2),
             # Acc C_* chỉ đi comment — form gen ẩn ô Content/Mode cho họ, và
             # bảng lịch hiện badge 💬 thay vì mã content.
-            "chi_comment": acc_chi_comment(a),
+            "chi_comment": acc_dang_spam(a),
             "hon_hop":     la_loai_hon_hop(a.get("loai_dang")),
         })
 

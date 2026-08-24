@@ -786,9 +786,9 @@ check("X_Home -> lịch homestay",      db.khop_loai_lich("X_Home", "homestay"))
 check("X_Thuê KHÔNG lọt lịch bán",    not db.khop_loai_lich("X_Thuê", "ban"))
 
 # "Chỉ comment" nay đọc từ trạng thái acc, không từ loại đăng.
-check("acc Spam -> chỉ comment",      db.acc_chi_comment({"trang_thai": db.TRANG_THAI_SPAM}))
-check("acc Active -> KHÔNG chỉ comment", not db.acc_chi_comment({"trang_thai": "Active"}))
-check("acc thiếu trạng thái -> không", not db.acc_chi_comment({}))
+check("acc Spam -> chỉ comment",      db.acc_dang_spam({"trang_thai": db.TRANG_THAI_SPAM}))
+check("acc Active -> KHÔNG chỉ comment", not db.acc_dang_spam({"trang_thai": "Active"}))
+check("acc thiếu trạng thái -> không", not db.acc_dang_spam({}))
 
 # Khớp lịch phải CHÍNH XÁC: "X_Thuê" chứa chuỗi con "Thuê", "X_Bán" chứa "Bán".
 check("Homestay -> lịch homestay",    db.khop_loai_lich("Homestay", "homestay"))

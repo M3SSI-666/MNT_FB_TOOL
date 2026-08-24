@@ -86,13 +86,16 @@ TT_LICH_X_TU_DONG = "X😴"
 TT_LICH_NGHI_SPAM = "Nghỉ Spam"
 
 
-def acc_chi_comment(acc: dict) -> bool:
+def acc_dang_spam(acc: dict) -> bool:
     """
-    Acc chỉ được đi comment, không đăng bài — vì đang dính spam.
+    Acc đang ở trạng thái Spam — Facebook vừa gỡ bài của nó.
 
-    Thay cho loại đăng "C_*" đã bỏ. Khác biệt quan trọng: đây là TRẠNG THÁI do
-    máy tự đặt khi phát hiện Facebook gỡ bài, không phải lựa chọn người dùng
-    phải nhớ bật/tắt. Acc khỏi spam thì sửa Trạng thái về Active là đăng lại.
+    TÊN CŨ là `acc_chi_comment`, và tên đó nay SAI: hồi đó acc spam còn được đi
+    comment, giờ bị chặn cả comment vì spam thì comment cũng bị gỡ như đăng bài.
+    Trong giờ nghỉ nó chỉ nuôi nick; hết giờ mới được chạy một phiên nhử.
+
+    Đây là TRẠNG THÁI do máy tự đặt khi phát hiện Facebook gỡ bài, không phải
+    lựa chọn người dùng phải nhớ bật/tắt.
     """
     return (acc.get("trang_thai") or "") == TRANG_THAI_SPAM
 
