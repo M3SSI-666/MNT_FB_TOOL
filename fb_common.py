@@ -418,6 +418,49 @@ async def _thu_dong(page, dlg, buoc: int, cho_escape: bool = True) -> None:
             pass
 
 
+async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
+    """Sau mỗi phiên đăng bài / comment: xem Facebook có vừa gỡ gì không.
+
+    Trả True nếu VỪA dính spam (có vụ mới so với lần đo trước).
+
+    Đặt ở đây để cả bốn đường — đăng Hybrid, đăng VIA, đăng tường Page, và đi
+    comment — dùng chung MỘT bản. Trước đây chỉ đường Hybrid có kiểm, ba đường
+    kia không; acc bị gỡ trong phiên comment hay phiên đăng VIA thì không ai
+    biết. Chép ra bốn chỗ thì sớm muộn bốn chỗ trôi khác nhau.
+
+    HAI ĐIỀU QUAN TRỌNG, đừng rút gọn:
+
+    1. Phải chờ vài chục giây SAU khi đăng. Facebook gỡ bài rồi mới đổ thông
+       báo về, dò sớm quá chỉ thấy vụ của hôm trước.
+    2. KHÔNG tin "thấy dialog = vừa dính". Dialog hiện lại y nguyên nhiều ngày
+       sau đó. Phải so SỐ VỤ với lần đo trước mới biết có vụ mới.
+    """
+    try:
+        import suc_khoe_acc as _sk
+        import db as _db
+        await page.goto("https://www.facebook.com/",
+                        wait_until="domcontentloaded", timeout=30000)
+        await asyncio.sleep(random.uniform(4, 6))
+        txt = await dong_dialog_canh_bao(page)
+        vp = _sk.doc_vi_pham(txt)
+        if not vp:
+            logger.info("  ✅ Không thấy cảnh báo gỡ bài")
+            return False
+        moi, cu = _db.ghi_nhan_vi_pham(acc_name, vp["so"], vp["spam"])
+        logger.warning(f"  ⚠️  FB đã gỡ {vp['so']} bài của '{acc_name}'"
+                       f" (lần đo trước: {'chưa đo' if cu < 0 else cu})")
+        if moi:
+            n, moc = _db.danh_dau_spam(acc_name, f"{vp['so'] - cu} bài mới bị gỡ")
+            logger.error(
+                f"  🚫 '{acc_name}' DÍNH SPAM sau {sau_viec} — nghỉ đăng và "
+                f"comment, {n} slot còn lại chuyển sang nuôi nick, nhử lại lúc "
+                f"{moc:%H:%M}")
+        return bool(moi)
+    except Exception as e:
+        logger.warning(f"  ⚠️  Không dò được cảnh báo spam: {e}")
+        return False
+
+
 async def dong_dialog_canh_bao(page, so_lan: int = 3, cho_escape: bool = True) -> str:
     """
     Đóng dialog cảnh báo vi phạm nếu đang mở. Trả về nội dung cảnh báo (rút

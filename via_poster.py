@@ -32,7 +32,7 @@ import unicodedata
 from cookie_exporter import load_cookie
 from config import HEADLESS
 from utils import logger, jitter_ms, CookieDeadError
-from fb_common import (chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
+from fb_common import (kiem_vi_pham, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
@@ -640,6 +640,10 @@ async def _run_crosspost(
         cooldown_sec = random.randint(15, 30)
         logger.info(f"  [6/6] 📜 Cooldown {cooldown_sec}s...")
         await _browse_and_like(page, duration_sec=cooldown_sec, max_likes=0)
+
+        # Facebook gỡ bài rồi mới đổ thông báo về — cooldown ở trên vừa hay là
+        # quãng chờ cần thiết, nên dò ngay sau đó.
+        await kiem_vi_pham(page, acc_name, "phiên đăng VIA")
 
         logger.info(f"  ✅ Đóng Chrome")
         await ctx.close()

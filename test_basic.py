@@ -1946,6 +1946,37 @@ check("giao diện có màn hình tải Chromium",
       'id="chromium-overlay"' in Path("templates/index.html").read_text(encoding="utf-8"))
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Dò spam phải có ở MỌI phiên đăng bài và comment
+# ───────────────────────────────────────────────────────────────────────────
+# Bị spam thì Facebook gỡ cả bài lẫn comment. Nhưng trước đây chỉ luồng đăng
+# Hybrid có bước dò; ba luồng còn lại — đăng VIA, đăng tường Page, đi comment —
+# không có. Acc bị gỡ trong ba luồng đó thì KHÔNG AI BIẾT, và cả cơ chế nghỉ /
+# nhử / thả không bao giờ khởi động.
+import ast as _ast
+_LUONG = [
+    ("page_via_poster.py", "_run_page_via",   "đăng Hybrid"),
+    ("page_via_poster.py", "_run_page_wall",  "đăng tường Page"),
+    ("via_poster.py",      "_run_crosspost",  "đăng VIA"),
+    ("comment_bai.py",     "_ket_phien",      "đi comment"),
+]
+for _f, _ham, _mo_ta in _LUONG:
+    _src = Path(_f).read_text(encoding="utf-8")
+    _cay = _ast.parse(_src)
+    _than = ""
+    for _n in _ast.walk(_cay):
+        if isinstance(_n, (_ast.FunctionDef, _ast.AsyncFunctionDef)) and _n.name == _ham:
+            _than = _ast.get_source_segment(_src, _n) or ""
+    check(f"luồng {_mo_ta} có dò spam", "kiem_vi_pham" in _than)
+
+# Một bản dùng chung, không chép ra bốn chỗ — chép thì sớm muộn bốn chỗ trôi
+# khác nhau, và chỗ nào trôi sai thì im lặng bỏ sót spam.
+check("hàm dò spam nằm ở fb_common",
+      "async def kiem_vi_pham" in Path("fb_common.py").read_text(encoding="utf-8"))
+for _f in ("page_via_poster.py", "via_poster.py", "comment_bai.py"):
+    check(f"{_f} không tự chép lại phần dò",
+          "ghi_nhan_vi_pham" not in Path(_f).read_text(encoding="utf-8"))
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Cú pháp file .bat
 # ───────────────────────────────────────────────────────────────────────────
 # Hai lỗi dưới đây đều KHÔNG hiện ra khi đọc code, và cmd chỉ báo bằng một câu

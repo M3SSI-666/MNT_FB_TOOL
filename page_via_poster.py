@@ -46,7 +46,7 @@ from cookie_exporter import load_cookie
 from storage import prepare_images_for_post as smart_download, cleanup_temp
 from config import HEADLESS
 from utils import logger, jitter_ms, CookieDeadError
-from fb_common import (chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
+from fb_common import (kiem_vi_pham, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
@@ -857,29 +857,7 @@ async def _run_page_via(
         #
         # Không tin "thấy dialog = vừa dính": dialog hiện lại y nguyên nhiều
         # ngày sau đó. Phải so SỐ VỤ với lần đo trước mới biết có vụ mới.
-        try:
-            import suc_khoe_acc as _sk
-            import db as _db2
-            await page.goto("https://www.facebook.com/",
-                            wait_until="domcontentloaded", timeout=30000)
-            await _human_delay(4000, 6000)
-            _txt = await dong_dialog_canh_bao(page)
-            _vp = _sk.doc_vi_pham(_txt)
-            if _vp:
-                _moi, _cu = _db2.ghi_nhan_vi_pham(acc_name, _vp["so"], _vp["spam"])
-                logger.warning(f"  ⚠️  FB đã gỡ {_vp['so']} bài của '{acc_name}'"
-                               f" (lần đo trước: {'chưa đo' if _cu < 0 else _cu})")
-                if _moi:
-                    _n, _moc = _db2.danh_dau_spam(
-                        acc_name, f"{_vp['so'] - _cu} bài mới bị gỡ")
-                    logger.error(
-                        f"  🚫 '{acc_name}' DÍNH SPAM — nghỉ đăng và comment, "
-                        f"thăm dò lại lúc {_moc:%H:%M} (nuôi nick vẫn chạy), "
-                        f"dừng {_n} slot còn lại.")
-            else:
-                logger.info("  ✅ Không thấy cảnh báo gỡ bài")
-        except Exception as e:
-            logger.warning(f"  ⚠️  Không dò được cảnh báo spam: {e}")
+        await kiem_vi_pham(page, acc_name, "phiên đăng Hybrid")
 
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 7 — Scroll 15-30s + like tối đa 1 bài (đang là Page) rồi đóng Chrome
@@ -1157,6 +1135,10 @@ async def _run_page_wall(
 
         # Cooldown nhẹ rồi đóng — đang là Page, like tối đa 1 bài
         await _browse_and_like(page, duration_sec=random.randint(10, 20), max_likes=1)
+
+        # Đăng tường Page cũng bị gỡ như đăng nhóm. Dò sau cooldown vì Facebook
+        # cần vài chục giây mới đổ thông báo về.
+        await kiem_vi_pham(page, acc_name, "phiên đăng tường Page")
         logger.info(f"  ✅ Đóng Chrome")
         await ctx.close()
         return True

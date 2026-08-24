@@ -43,7 +43,7 @@ from playwright.async_api import async_playwright
 from config import HEADLESS
 from utils import logger, CookieDeadError
 from cookie_exporter import load_cookie
-from fb_common import (chua_dang_nhap, browser_launch_kwargs, find_profile_dir, human_delay,
+from fb_common import (kiem_vi_pham, chua_dang_nhap, browser_launch_kwargs, find_profile_dir, human_delay,
                        dong_dialog_canh_bao, bat_dau_canh_dialog,
                        view_stories, browse_and_like)
 from nuoi_nick import pick_messages, is_messaging_restricted
@@ -268,7 +268,7 @@ async def _khoi_dong(page, ctx, page_uid: str = "") -> bool:
         return False
 
 
-async def _ket_phien(page) -> None:
+async def _ket_phien(page, acc_name: str = "") -> None:
     """
     Kết phiên y hệt bước [7/7] của luồng đăng bài: lướt newsfeed rồi like 1 bài
     trước khi đóng trình duyệt.
@@ -284,6 +284,9 @@ async def _ket_phien(page) -> None:
         await human_delay(1500, 2500)
         await dong_dialog_canh_bao(page)
         await browse_and_like(page, duration_sec=giay, max_likes=KET_LIKE)
+        # Comment bị gỡ cũng là dính spam, y như bài đăng bị gỡ. Dò SAU khi
+        # lướt feed vì Facebook cần vài chục giây mới đổ thông báo về.
+        await kiem_vi_pham(page, acc_name, "phiên comment")
     except Exception as e:
         logger.warning(f"    ⚠️  Kết phiên không trọn vẹn: {e}")
 
@@ -450,7 +453,7 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
             # Chỉ kết phiên tử tế khi đã comment được ít nhất một bài. Đang bị
             # chặn mà còn nán lại lướt + like là làm acc bị soi thêm.
             if ok_n:
-                await _ket_phien(page)
+                await _ket_phien(page, acc_name)
         finally:
             try:
                 await ctx.close()
