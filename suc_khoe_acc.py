@@ -42,9 +42,15 @@ CHUOI_NGHI = 5
 # tiếng một câu là cách rẻ nhất — sai thì chỉ mất đúng một phiên.
 THAM_DO_PHUT = 60
 
-# Cửa sổ trượt để quyết định tắt hẳn. 20 phiên ≈ nửa ngày chạy của một acc.
-CUA_SO     = 20
-NGUONG_TAT = 0.80
+# Cửa sổ trượt: giữ lại bao nhiêu phiên gần nhất trong lịch sử.
+#
+# Trước đây còn dùng để TỰ TẮT HẲN acc khi hỏng ≥ 80% trong cửa sổ này. Đã bỏ:
+# acc bị Facebook chặn là chuyện bình thường và tự hết sau vài tiếng, tắt hẳn
+# thì mất luôn một nick còn sống chỉ vì một đợt chặn dài. Giờ acc hỏng nhiều
+# thì cứ nghỉ rồi thăm dò lại mỗi tiếng, không bao giờ bị loại bỏ.
+#
+# Cửa sổ vẫn giữ để lịch sử không phình vô hạn và để nhìn ra xu hướng.
+CUA_SO = 20
 
 KY_TU_OK   = "o"
 KY_TU_LOI  = "x"
@@ -160,17 +166,15 @@ def danh_gia(lich_su: str) -> tuple[str, str]:
     """
     Quyết định phải làm gì với acc, dựa trên lịch sử phiên ĐĂNG BÀI.
 
-    Trả `(hanh_dong, ly_do)` với hanh_dong ∈ {"", "nghi", "tat"}.
-    "tat" được xét trước vì nó là kết luận nặng hơn và bao trùm.
+    Trả `(hanh_dong, ly_do)` với hanh_dong ∈ {"", "nghi"}.
+
+    KHÔNG còn kết luận "tắt hẳn". Trước đây hỏng ≥ 80% trong 20 phiên gần nhất
+    là acc bị tự tắt và coi như chết. Bỏ đi vì: bị Facebook chặn là chuyện bình
+    thường, và chặn thì tự hết sau vài tiếng — tắt hẳn là mất luôn một nick còn
+    sống chỉ vì một đợt chặn dài. Giờ acc hỏng nhiều thì cứ nghỉ rồi thăm dò lại
+    mỗi tiếng, không bao giờ bị loại bỏ.
     """
     lich_su = lich_su or ""
-
-    # Chỉ kết luận "chết" khi cửa sổ đã đầy. Thiếu bước này thì acc mới chạy 5
-    # phiên hỏng cả 5 sẽ ra tỉ lệ 100% và bị tắt ngay, trong khi 5 phiên chưa đủ
-    # để phân biệt acc chết với acc gặp một đợt chặn tạm.
-    if _so_phien(lich_su) >= CUA_SO and ti_le_hong(lich_su) >= NGUONG_TAT:
-        hong = lich_su.count(KY_TU_LOI)
-        return "tat", f"hỏng {hong}/{_so_phien(lich_su)} phiên gần nhất"
 
     # Phiên ĐẦU TIÊN sau khi nghỉ dậy chính là phiên THĂM DÒ. Hỏng thì nghỉ lại
     # ngay, không đợi gom đủ 5 lỗi nữa.

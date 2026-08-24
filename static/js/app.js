@@ -531,9 +531,11 @@ const ACC_FIELDS = [
 let _accData=[];
 
 // ── Sức khoẻ acc (xem suc_khoe_acc.py) ────────────────────────────────
-const TRANG_THAI_HONG="Hỏng";
+const TRANG_THAI_DUNG="Dừng";
 const TRANG_THAI_SPAM="Spam";
-const TRANG_THAI_OPTIONS=["Active","Tạm dừng","Cookie hết hạn",TRANG_THAI_HONG,TRANG_THAI_SPAM];
+// ĐÃ BỎ "Hỏng" (máy tự tắt hẳn khi hỏng nhiều). Bị chặn là chuyện bình thường và
+// tự hết sau vài tiếng — tắt hẳn là mất luôn một nick còn sống.
+const TRANG_THAI_OPTIONS=["Active",TRANG_THAI_DUNG,"Cookie hết hạn",TRANG_THAI_SPAM];
 
 function _dangNghi(r){
     if(!r.nghi_den) return false;
@@ -547,9 +549,10 @@ function _trangThaiAcc(r){
     const ls=r.lich_su_phien||"";
     const hong=ls?`${(ls.match(/x/g)||[]).length}/${ls.length} phiên gần nhất hỏng`
                  :"chưa có phiên nào";
-    if(val===TRANG_THAI_HONG)
-        return {nhan:"❌ Hỏng", mau:"var(--danger)", dam:true,
-                chiTiet:`Máy tự tắt. Sửa ô này về Active để bật lại.`};
+    if(val===TRANG_THAI_DUNG)
+        return {nhan:"⏸ Dừng", mau:"var(--text-muted)", dam:true,
+                chiTiet:"Bạn cho nick này nghỉ. Không đăng, không comment, "
+                        +"không nuôi nick. Sửa ô này về Active để chạy lại."};
     if(val===TRANG_THAI_SPAM){
         const t=r.nghi_den?new Date(r.nghi_den):null;
         const den=(t&&!isNaN(t))?` tới ${String(t.getHours()).padStart(2,"0")}:`
@@ -651,13 +654,13 @@ async function loadAccounts(){
             // "Bán", dùng includes() sẽ đếm nhầm acc hỗn hợp vào nhóm chỉ đăng.
             const dem=v=>res.data.filter(r=>(r.loai_dang||"").trim()===v).length;
             const ban=dem("Bán"), thue=dem("Thuê"), hs=dem("Homestay");
-            const hong=res.data.filter(r=>r.trang_thai===TRANG_THAI_HONG).length;
+            const dung=res.data.filter(r=>r.trang_thai===TRANG_THAI_DUNG).length;
             const nghi=res.data.filter(r=>_dangNghi(r)).length;
             const o=[{l:"Tổng",v:total},{l:"Active",v:active},{l:"Bán",v:ban},{l:"Thuê",v:thue},{l:"Homestay",v:hs}];
             // Chỉ chiếm chỗ khi thực sự có acc hỏng/nghỉ — bình thường thanh này
             // giữ nguyên như cũ, không đẻ thêm hai ô số 0 nhìn như báo động giả.
             if(nghi) o.push({l:"Nghỉ tạm",v:nghi,c:"var(--warning)"});
-            if(hong) o.push({l:"⚠️ Hỏng",v:hong,c:"var(--danger)"});
+            if(dung) o.push({l:"⏸ Dừng",v:dung,c:"var(--text-muted)"});
             box.innerHTML=o
                 .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1;min-width:80px"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px;${s.c?"color:"+s.c:""}">${s.v}</div></div>`).join("");
         }
@@ -1315,7 +1318,7 @@ async function loadContent(loai){
         const res=await API.content(loai);
         const total=res.data.length, active=res.data.filter(r=>r.su_dung==="Có").length;
         const box=document.getElementById("content-summary");
-        if(box) box.innerHTML=[{l:"Tổng",v:total},{l:"Đang dùng",v:active,c:"var(--success)"},{l:"Tạm dừng",v:total-active}]
+        if(box) box.innerHTML=[{l:"Tổng",v:total},{l:"Đang dùng",v:active,c:"var(--success)"},{l:"Dừng",v:total-active}]
             .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px;${s.c?"color:"+s.c:""}">${s.v}</div></div>`).join("");
 
         if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="7" class="empty">Chưa có content</td></tr>`; return; }

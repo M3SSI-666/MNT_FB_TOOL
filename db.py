@@ -60,12 +60,19 @@ TI_LE_COMMENT_MAC_DINH = 25
 # Đặt vào chính cột trang_thai chứ không thêm cột cờ riêng: mọi chỗ đang lọc
 # `trang_thai='Active'` — Gen lịch, get_account_by_name — nhờ đó tự động loại
 # acc hỏng mà không phải sửa gì thêm.
-TRANG_THAI_HONG = "Hỏng"
-# Acc bị Facebook gỡ bài vì spam. KHÁC "Hỏng": acc spam vẫn comment được — đó
-# là cả tiền đề của tính năng đi comment — nên nó chỉ bị chặn ĐĂNG BÀI.
+# Bạn chủ động cho nick nghỉ. Chặn MỌI hoạt động, kể cả nuôi nick.
+TRANG_THAI_DUNG = "Dừng"
+
+# Acc bị Facebook gỡ bài vì spam. Chặn đăng bài VÀ comment — bị spam thì cả hai
+# đều bị gỡ như nhau. Nhưng slot của chúng KHÔNG bỏ không: chuyển thành phiên
+# nuôi nick, vì xem story / lướt feed là hành vi người thật, không phải thứ bị gỡ.
 TRANG_THAI_SPAM = "Spam"
-TRANG_THAI_OPTIONS = ("Active", "Tạm dừng", "Cookie hết hạn",
-                      TRANG_THAI_HONG, TRANG_THAI_SPAM)
+
+# ĐÃ BỎ trạng thái "Hỏng" (tự tắt hẳn khi hỏng ≥ 80% trong 20 phiên). Bị chặn là
+# chuyện bình thường và tự hết sau vài tiếng — tắt hẳn là mất luôn một nick còn
+# sống chỉ vì một đợt chặn dài. Acc hỏng nhiều giờ chỉ nghỉ rồi thăm dò lại.
+TRANG_THAI_OPTIONS = ("Active", TRANG_THAI_DUNG, "Cookie hết hạn",
+                      TRANG_THAI_SPAM)
 
 # Trạng thái slot lịch do MÁY tự tắt vì acc nghỉ/chết/cookie hết hạn. Phải KHÁC
 # "X" thủ công: "X" người dùng tự tắt được giữ qua ngày (reset_schedules_to_wait
@@ -150,7 +157,7 @@ def init_db():
             c_user          TEXT DEFAULT '',
             xs              TEXT DEFAULT '',
             refresh         TEXT DEFAULT '',        -- Yes / Done / ''
-            trang_thai      TEXT DEFAULT 'Active',  -- Active / Tạm dừng
+            trang_thai      TEXT DEFAULT 'Active',  -- Active / Dừng / Spam / Cookie hết hạn
             email_khoiphuc  TEXT DEFAULT '',
             pass_khoiphuc   TEXT DEFAULT '',
             twofa           TEXT DEFAULT '',
@@ -331,6 +338,22 @@ def init_db():
                           ("C_Bán", "X_Bán")):
             con.execute("UPDATE accounts SET loai_dang=? WHERE loai_dang=?",
                         (_moi, _cu))
+
+        # ── Migration: bỏ trạng thái "Hỏng", đổi "Tạm dừng" → "Dừng" ────
+        # Phải ĐỔI dữ liệu chứ không chỉ bỏ khỏi TRANG_THAI_OPTIONS: acc còn
+        # mang giá trị cũ sẽ không khớp lựa chọn nào, giao diện hiện ô trắng, và
+        # acc "Hỏng" thì nằm im vĩnh viễn vì không chỗ nào bật lại nó nữa.
+        #
+        # "Hỏng" → "Dừng" chứ không → "Active": acc bị máy tắt là vì hỏng thật
+        # nhiều phiên; thả thẳng về chạy là đâm đầu vào đúng chỗ vừa ngã. Để
+        # "Dừng" cho bạn nhìn thấy và tự quyết.
+        for _cu, _moi in (("Hỏng", TRANG_THAI_DUNG), ("Tạm dừng", TRANG_THAI_DUNG)):
+            con.execute("UPDATE accounts SET trang_thai=? WHERE trang_thai=?",
+                        (_moi, _cu))
+        # Slot lịch từng bị đánh 'Nghỉ Spam' nay không còn ai đánh nữa — trả về
+        # 'Chờ' để chúng chạy lại (và tự đổi sang nuôi nick nếu acc còn spam).
+        con.execute("UPDATE schedules SET trang_thai='Chờ' WHERE trang_thai=?",
+                    (TT_LICH_NGHI_SPAM,))
 
         # Số vụ Facebook gỡ bài đo được lần gần nhất. -1 = CHƯA từng đo.
         # Mặc định phải là -1 chứ không phải 0: để 0 thì ngay phiên đầu sau khi
@@ -527,8 +550,11 @@ def acc_duoc_chay(ten_acc: str, hoat_dong: str = "dang_bai") -> tuple[bool, str]
     if not r:
         return True, ""
     tt = r["trang_thai"] or ""
-    if tt == TRANG_THAI_HONG:
-        return False, "acc đã bị tắt do hỏng"
+    if tt == TRANG_THAI_DUNG:
+        # Bạn chủ động cho nghỉ thì nghỉ hẳn, kể cả nuôi nick. Trước đây trạng
+        # thái này KHÔNG chặn gì cả: nó chỉ bị loại khỏi Gen lịch, nên slot đã
+        # gen từ trước vẫn chạy tiếp — đặt "Dừng" mà nick vẫn đăng bài.
+        return False, "bạn đã cho nick này dừng"
     if tt == TRANG_THAI_SPAM:
         den = _moc_nghi(r["nghi_den"])
         # Nuôi nick vẫn chạy suốt thời gian nghỉ: xem story / lướt feed là hành
@@ -552,7 +578,7 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool) -> tuple[str, str]:
     """
     Ghi kết quả một phiên đăng bài và áp quyết định của `suc_khoe_acc.danh_gia`.
 
-    Trả `(hanh_dong, ly_do)` để nơi gọi ghi log; hanh_dong ∈ {"", "nghi", "tat"}.
+    Trả `(hanh_dong, ly_do)` để nơi gọi ghi log; hanh_dong ∈ {"", "nghi"}.
     """
     import suc_khoe_acc as sk
     with _conn() as con:
@@ -577,12 +603,7 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool) -> tuple[str, str]:
         con.execute("UPDATE accounts SET lich_su_phien=? WHERE id=?", (moi, r["id"]))
 
         hanh_dong, ly_do = sk.danh_gia(moi)
-        if hanh_dong == "tat":
-            con.execute(
-                "UPDATE accounts SET trang_thai=?, nghi_den='', canh_bao_moi=? "
-                "WHERE id=?",
-                (TRANG_THAI_HONG, f"Đã tắt '{ten_acc}' — {ly_do}", r["id"]))
-        elif hanh_dong == "nghi":
+        if hanh_dong == "nghi":
             moc = datetime.now() + timedelta(minutes=sk.THAM_DO_PHUT)
             # Ghi dấu ngắt chứ không xoá lịch sử. Dấu ngắt có HAI việc: cắt
             # chuỗi lỗi liên tiếp, và đánh mốc để `danh_gia` nhận ra phiên kế
@@ -600,7 +621,7 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool) -> tuple[str, str]:
             # xem nó còn hiệu lực hay không.
             con.execute("UPDATE accounts SET nghi_den='' WHERE id=? "
                         "AND COALESCE(nghi_den,'') != ''", (r["id"],))
-        if hanh_dong in ("nghi", "tat"):
+        if hanh_dong == "nghi":
             # Đánh 'X😴' các slot còn lại hôm nay để nhìn bảng lịch là biết ngay
             # acc này nghỉ — không phải đợi từng slot tới giờ mới đổi thành 😴.
             # Dùng chung `con` đang mở (đừng gọi hàm mở _conn() lần nữa = khoá lồng).
@@ -665,13 +686,36 @@ def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None) -> tuple[in
              f"'{ten_acc}' dính spam — nghỉ, thăm dò lại lúc {moc:%H:%M}"
              + (f": {chi_tiet}" if chi_tiet else ""),
              r["id"]))
+        # KHÔNG đánh dấu để slot nằm không nữa. Giữ nguyên 'Chờ' để chúng vẫn
+        # tới giờ và chạy — scheduler thấy acc đang Spam thì đổi sang phiên NUÔI
+        # NICK. Bị spam thì đăng bài lẫn comment đều bị gỡ như nhau, nhưng xem
+        # story / lướt feed thì không, nên thay vì để nick im lìm cả tiếng thì
+        # cho nó cư xử như người thật.
+        #
+        # Trước đây các slot này bị đánh 'Nghỉ Spam' và scheduler chỉ bốc dòng
+        # 'Chờ', nên chúng biến mất hẳn — mỗi lần dính spam là mất trắng số slot
+        # còn lại của ngày.
         n = con.execute(
-            "UPDATE schedules SET trang_thai=?, "
-            "updated_at=datetime('now','localtime') "
+            "SELECT COUNT(*) c FROM schedules "
             "WHERE ten_acc=? AND trang_thai='Chờ' AND gio_dang > ? "
             "AND COALESCE(hoat_dong,'dang_bai') IN ('dang_bai','comment')",
-            (TT_LICH_NGHI_SPAM, ten_acc, gio)).rowcount
+            (ten_acc, gio)).fetchone()["c"]
     return n, moc
+
+
+def acc_dang_spam_nghi(ten_acc: str) -> bool:
+    """Acc đang dính spam VÀ còn trong giờ nghỉ.
+
+    Scheduler hỏi để biết có nên đổi slot đăng/comment sang phiên nuôi nick
+    không. Phải kèm điều kiện "còn trong giờ nghỉ": hết giờ thì slot đó chính
+    là PHIÊN THĂM DÒ, phải để nó đăng thật mới biết Facebook đã thả chưa.
+    """
+    with _conn() as con:
+        r = con.execute("SELECT trang_thai, nghi_den FROM accounts "
+                        "WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
+    if not r or (r["trang_thai"] or "") != TRANG_THAI_SPAM:
+        return False
+    return _moc_nghi(r["nghi_den"]) is not None
 
 
 def het_spam(ten_acc: str) -> int:
@@ -722,8 +766,11 @@ def mo_duong_tham_do() -> list[dict]:
                 "updated_at=datetime('now','localtime') "
                 "WHERE ten_acc=? AND trang_thai IN (?,?)",
                 (r["ten_acc"], TT_LICH_NGHI_SPAM, TT_LICH_X_TU_DONG)).rowcount
-            if n:
-                ra.append({"ten_acc": r["ten_acc"], "so_slot": n})
+            # Báo cả khi n == 0. Với acc dính spam thì slot đăng/comment nay
+            # KHÔNG còn bị đánh dấu nữa (chúng ở nguyên 'Chờ' và chạy nuôi nick
+            # thay), nên không có gì để đổi — nhưng acc VẪN vừa hết giờ nghỉ và
+            # đó chính là điều nơi gọi cần biết để ghi log và chạy phiên thăm dò.
+            ra.append({"ten_acc": r["ten_acc"], "so_slot": n})
     return ra
 
 
@@ -733,7 +780,7 @@ def lay_canh_bao() -> list[dict]:
         rows = con.execute(
             "SELECT ten_acc, trang_thai, canh_bao_moi FROM accounts "
             "WHERE COALESCE(canh_bao_moi,'') != ''").fetchall()
-    nang = (TRANG_THAI_HONG, TRANG_THAI_SPAM)
+    nang = (TRANG_THAI_SPAM,)
     return [{"ten_acc": r["ten_acc"], "noi_dung": r["canh_bao_moi"],
              "muc": "error" if (r["trang_thai"] or "") in nang else "info"}
             for r in rows]

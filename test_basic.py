@@ -1158,12 +1158,15 @@ check("4 lỗi liên tiếp chưa nghỉ",      _sk.danh_gia("x" * 4)[0] == "")
 check("5 lỗi liên tiếp -> nghỉ",        _sk.danh_gia("x" * 5)[0] == "nghi")
 check("acc khoẻ xen lỗi lẻ -> yên",     _sk.danh_gia("ooxooxoooxoo")[0] == "")
 
-# Cửa sổ chưa đầy thì KHÔNG được kết luận chết: 5 lỗi đầu đời của một acc mới
-# cũng ra tỉ lệ 100%, mà 5 phiên chưa phân biệt được chặn tạm với chết hẳn.
-check("5/5 hỏng chưa đủ để tắt",        _sk.danh_gia("x" * 5)[0] == "nghi")
-check("20/20 hỏng -> tắt",              _sk.danh_gia("x" * 20)[0] == "tat")
-check("16/20 hỏng -> tắt",              _sk.danh_gia("x" * 16 + "o" * 4)[0] == "tat")
-check("15/20 hỏng -> chưa tắt",         _sk.danh_gia("x" * 15 + "o" * 5)[0] != "tat")
+# KHÔNG còn kết luận "tắt hẳn". Bị Facebook chặn là chuyện bình thường và tự
+# hết sau vài tiếng — tắt hẳn là mất luôn một nick còn sống chỉ vì một đợt chặn
+# dài. Hỏng bao nhiêu cũng chỉ nghỉ rồi thăm dò lại mỗi tiếng.
+for _n in (5, 16, 20, 40):
+    check(f"{_n}/{_n} hỏng vẫn chỉ NGHỈ, không tắt",
+          _sk.danh_gia("x" * _n)[0] == "nghi")
+check("không còn hành động 'tat' nào",
+      "tat" not in {_sk.danh_gia(_x)[0]
+                    for _x in ("x"*20, "x"*16+"o"*4, "ooxx"*10, "-x", "")})
 check("cửa sổ giữ đúng 20 phiên",       _sk.them_ket_qua("o" * 25, False).count("o") == 19)
 
 # Dấu ngắt: cắt chuỗi lỗi nhưng KHÔNG xoá cửa sổ. Bản đầu xoá sạch lịch sử lúc
@@ -1192,9 +1195,7 @@ for _ in range(30):
     _hd, _ = _sk.danh_gia(_ls)
     if _hd == "nghi":
         _ls = _sk.danh_dau_nghi(_ls)
-    elif _hd == "tat":
-        break
-check("hỏng liên tục rồi cũng bị tắt",  _hd == "tat")
+check("hỏng liên tục mãi vẫn không bị tắt", _hd in ("", "nghi"))
 
 # ── Sức khoẻ acc: tầng DB ──────────────────────────────────────────────────
 _aid = db.upsert_account({"ten_acc": "SK Test", "trang_thai": "Active",
@@ -1225,16 +1226,23 @@ for _ in range(40):
     with db._conn() as _c:
         _c.execute("UPDATE accounts SET nghi_den='' WHERE id=?", (_aid,))
     _hd, _ = db.ghi_nhan_phien_dang("SK Test", False)
-    if _hd == "tat":
-        break
-check("hỏng đủ lâu -> tắt hẳn",         _hd == "tat")
-check("bị tắt thì không chạy",          db.acc_duoc_chay("SK Test")[0] is False)
-# Tắt hẳn chặn tất, kể cả nuôi: trang_thai='Hỏng' làm get_account_by_name không
-# tìm ra acc nữa, cho phiên nuôi chạy tiếp chỉ đổ lỗi vô nghĩa vào log.
-check("bị tắt thì nuôi cũng dừng",      db.acc_duoc_chay("SK Test", "nuoi_nick")[0] is False)
-check("tắt = trang_thai Hỏng",          db.get_account_by_name("SK Test") is None)
-check("cảnh báo tắt ở mức error",       any(c["muc"] == "error"
-                                            for c in db.lay_canh_bao()))
+check("hỏng 40 phiên vẫn KHÔNG bị tắt hẳn",
+      (db.get_accounts() and
+       next(a["trang_thai"] for a in db.get_accounts() if a["ten_acc"] == "SK Test")
+       != "Hỏng"))
+check("acc hỏng nhiều vẫn còn trong danh sách",
+      db.get_account_by_name("SK Test") is not None)
+
+# "Dừng" là trạng thái DUY NHẤT bạn tự đặt, và nó chặn TẤT — kể cả nuôi nick.
+# Trước đây "Tạm dừng" không chặn gì: nó chỉ bị loại khỏi Gen lịch, nên slot đã
+# gen từ trước vẫn chạy tiếp — đặt dừng mà nick vẫn đăng bài.
+db.update_account_field(_aid, "trang_thai", db.TRANG_THAI_DUNG)
+check("Dừng -> chặn đăng bài",   db.acc_duoc_chay("SK Test")[0] is False)
+check("Dừng -> chặn comment",    db.acc_duoc_chay("SK Test", "comment")[0] is False)
+check("Dừng -> chặn cả nuôi nick",
+      db.acc_duoc_chay("SK Test", "nuoi_nick")[0] is False)
+db.update_account_field(_aid, "trang_thai", "Active")
+check("bật lại Active -> chạy được", db.acc_duoc_chay("SK Test")[0] is True)
 
 # Bật lại về Active phải xoá sạch lịch sử — không thì phiên hỏng kế tiếp lập tức
 # chạm lại ngưỡng và acc bị tắt lại ngay, nhìn như nút bật không ăn.
@@ -1314,9 +1322,18 @@ check("dừng cả slot đăng lẫn comment",  _n_slot == 2)
 with db._conn() as _c:
     _rows = {(r["hoat_dong"], r["gio_dang"]): r["trang_thai"] for r in _c.execute(
         "SELECT hoat_dong,gio_dang,trang_thai FROM schedules WHERE ten_acc='SPAM Test'")}
-check("slot đăng sắp tới -> Nghỉ Spam", _rows[("dang_bai", _gio_sau)] == db.TT_LICH_NGHI_SPAM)
-check("slot comment -> Nghỉ Spam",      _rows[("comment", _gio_sau)] == db.TT_LICH_NGHI_SPAM)
+# Slot đăng/comment GIỮ NGUYÊN 'Chờ' — chúng vẫn tới giờ và vẫn chạy, chỉ là
+# scheduler đổi sang phiên NUÔI NICK. Trước đây chúng bị đánh 'Nghỉ Spam' mà
+# scheduler chỉ bốc dòng 'Chờ', nên biến mất hẳn: mỗi lần dính spam là mất
+# trắng số slot còn lại của ngày.
+check("slot đăng vẫn ở Chờ để chạy nuôi thay",
+      _rows[("dang_bai", _gio_sau)] == "Chờ")
+check("slot comment vẫn ở Chờ để chạy nuôi thay",
+      _rows[("comment", _gio_sau)] == "Chờ")
 check("slot đăng đã qua giờ -> để yên", _rows[("dang_bai", _gio_truoc)] == "Chờ")
+# Scheduler hỏi hàm này để biết có đổi sang nuôi nick không.
+check("đang spam và còn trong giờ nghỉ -> đổi sang nuôi",
+      db.acc_dang_spam_nghi("SPAM Test") is True)
 # Slot nuôi không bị đụng tới — nuôi vẫn chạy suốt thời gian nghỉ.
 check("slot nuôi giữ nguyên trạng thái", _rows[("nuoi_nick", _gio_sau)] == "Chờ")
 
@@ -1333,7 +1350,11 @@ check("chưa hết giờ -> chưa mở đường",  db.mo_duong_tham_do() == [])
 with db._conn() as _c: _c.execute("UPDATE accounts SET nghi_den=? WHERE id=?",
     ((_dt.now() - _td(minutes=1)).isoformat(timespec="seconds"), _sid))
 _hs = db.mo_duong_tham_do()
-check("hết giờ -> mở đường thăm dò",    len(_hs) == 1 and _hs[0]["so_slot"] == 2)
+check("hết giờ -> mở đường thăm dò",    len(_hs) == 1)
+# Hết giờ nghỉ thì slot kế tiếp là PHIÊN THĂM DÒ — phải để nó ĐĂNG THẬT mới biết
+# Facebook đã thả chưa. Đổi sang nuôi nick lúc này là không bao giờ dò được.
+check("hết giờ nghỉ -> KHÔNG đổi sang nuôi nữa",
+      db.acc_dang_spam_nghi("SPAM Test") is False)
 # Mắt xích dễ quên nhất: không trả slot về 'Chờ' thì phiên thăm dò không bao giờ
 # chạy được, vì scheduler chỉ bốc dòng 'Chờ'.
 with db._conn() as _c:
