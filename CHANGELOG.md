@@ -10,6 +10,48 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.0.0 — 25/08/2026
+
+> ⚠ **Bản này cần bạn duyệt máy trước khi dùng được.** Mỗi máy cài lên sẽ hiện
+> màn hình đăng ký; chủ phần mềm duyệt xong thì máy đó mới chạy. Máy đang chạy
+> mà cập nhật lên bản này cũng phải đăng ký một lần.
+
+**Đăng ký và phê duyệt**
+
+- Mở phần mềm lần đầu → điền họ tên, số điện thoại, Gmail → chờ duyệt. Được
+  duyệt thì màn hình tự tắt, không cần khởi động lại.
+- Chủ phần mềm có **bảng quản lý**: xem ai đang dùng, máy nào, bản nào, duyệt
+  hoặc cắt quyền. Cắt được theo từng máy hoặc theo cả người.
+- Mất mạng vẫn dùng được tới 7 ngày bằng kết quả đã lưu.
+
+**Trạng thái tài khoản — gọn lại còn 4**
+
+- Bỏ trạng thái **Hỏng**. Trước đây hỏng nhiều phiên là nick bị tự tắt hẳn; bị
+  Facebook chặn là chuyện bình thường và tự hết sau vài tiếng, tắt hẳn là mất
+  luôn một nick còn sống. Nick cũ đang ở "Hỏng" chuyển thành **Dừng**.
+- **Tạm dừng** đổi tên thành **Dừng**, và giờ nó dừng thật — trước đây đặt dừng
+  mà nick vẫn chạy hết lịch đã gen từ trước.
+
+**Nick dính spam giờ không nằm không**
+
+- Trong một tiếng nghỉ, slot đăng bài và comment **chuyển thành phiên nuôi
+  nick** thay vì bỏ trống. Trước đây mỗi lần dính spam là mất trắng số slot còn
+  lại của ngày.
+- Hết một tiếng, slot kế tiếp **đăng thử một bài**. Được thì chạy lại bình
+  thường; không được thì nuôi nick thêm một tiếng rồi thử lại — lặp cho tới khi
+  đăng được.
+- **Dò spam sau mọi phiên**, không chỉ phiên đăng nhóm. Trước đây đăng tường
+  Page, đăng chế độ VIA và đi comment đều không dò — nick bị gỡ bài trong ba
+  trường hợp đó thì không ai biết.
+- Gen lịch không còn khoá cứng cả ngày của nick spam thành comment. Nick dính
+  spam lúc 8h, được thả lúc 9h, trước đây vẫn mất sạch slot đăng của 15 tiếng.
+
+**Sửa nhỏ**
+
+- Tab Page: cột **Loại đăng** thêm lựa chọn trống. Để trống thì Gen lịch bỏ qua
+  Page đó — dùng khi tạm không muốn đăng mà chưa muốn xoá.
+- Tham gia nhóm: nghỉ **15 giây** sau khi vừa vào một nhóm mới.
+
 ## v1.3.0 — 23/08/2026
 
 Bản đầu tiên cài được bằng `setup.exe` — không cần cài Python hay git.
