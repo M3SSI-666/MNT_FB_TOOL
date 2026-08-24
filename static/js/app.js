@@ -823,6 +823,14 @@ async function startAccEdit(td){
 // đăng bài. Dùng cho acc bị Facebook dỡ bài nhưng vẫn comment được.
 // Danh sách phải khớp LOAI_DANG_OPTIONS trong db.py.
 const LOAI_DANG_OPTIONS = ["","Homestay","Thuê","Bán","X_Home","X_Thuê","X_Bán"];
+
+// Loại đăng của PAGE. Khác LOAI_DANG_OPTIONS ở trên — cái đó là của tài khoản.
+// Ô trống ở đầu là có chủ ý: Page để trống thì gen lịch BỎ QUA nó, dùng khi
+// tạm không muốn đăng lên Page đó mà chưa muốn xoá khỏi danh sách.
+// Một danh sách dùng chung cho cả bảng lẫn form thêm/sửa — trước đây chép cứng
+// ở hai chỗ, sửa một chỗ là lệch ngay.
+const LOAI_PAGE_OPTIONS = ["","Homestay","Thuê","Bán"];
+const LOAI_PAGE_TRONG   = "—";        // chữ hiện ra cho ô trống
 // Mỗi loại đăng MỘT màu riêng. Bản trước gom cả 3 loại "X_" vào một màu hồng và
 // cả 3 loại "C_" vào một màu tím, nên nhìn bảng không tách được X_Home với
 // X_Thuê — mà đó mới là thứ cần phân biệt khi soi acc nào đang chạy mảng nào.
@@ -1041,15 +1049,23 @@ function startPageEdit(td){
     const id=td.dataset.id, field=td.dataset.field, val=td.dataset.val||"";
     let inp;
     if(field==="loai_page"){
-        // Dropdown 3 lựa chọn (Homestay / Thuê / Bán)
+        // Bốn lựa chọn: — (không đăng) / Homestay / Thuê / Bán.
+        // Ô trống LUÔN có mặt, không chỉ khi giá trị đang sai như bản trước —
+        // không thì chọn một loại rồi là không bao giờ bỏ chọn lại được.
         inp=document.createElement("select");
         inp.style.cssText="background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-weight:600;cursor:pointer";
-        const opts=["Homestay","Thuê","Bán"];
         const mkOpt=(v,t)=>{ const op=document.createElement("option"); op.value=v; op.textContent=t; op.style.cssText="background:var(--bg-card);color:var(--text-primary)"; return op; };
-        if(!opts.includes(val)){
-            const b=mkOpt("","—"); b.selected=true; inp.appendChild(b);
+        const hienTai=(val==="-"?"":val);   // bảng hiện ô trống bằng dấu "-"
+        LOAI_PAGE_OPTIONS.forEach(o=>{
+            const op=mkOpt(o, o||LOAI_PAGE_TRONG);
+            if(o===hienTai) op.selected=true;
+            inp.appendChild(op);
+        });
+        // Giá trị lạ còn sót từ dữ liệu cũ thì giữ lại trong danh sách, để mở
+        // ô ra rồi đóng lại không âm thầm xoá mất nó.
+        if(hienTai && !LOAI_PAGE_OPTIONS.includes(hienTai)){
+            const op=mkOpt(hienTai,hienTai); op.selected=true; inp.appendChild(op);
         }
-        opts.forEach(o=>{ const op=mkOpt(o,o); if(o===val) op.selected=true; inp.appendChild(op); });
     } else {
         inp=document.createElement("input"); inp.type="text"; inp.value=val==="-"?"":val;
     }
@@ -1081,7 +1097,7 @@ function openPageForm(data={}){
             ${f("ten_page","Tên Page")} ${f("acc_quan_ly","Acc quản lý")}
             ${f("page_uid","Page UID")}
             <div class="field-group"><label>Loại đăng</label><select id="pf_loai_page">
-                ${["Homestay","Thuê","Bán"].map(o=>`<option value="${o}" ${data.loai_page===o?"selected":""}>${o}</option>`).join("")}
+                ${LOAI_PAGE_OPTIONS.map(o=>`<option value="${o}" ${(data.loai_page||"")===o?"selected":""}>${o||LOAI_PAGE_TRONG+" (không đăng)"}</option>`).join("")}
             </select></div>
             ${f("bai_dang_toi_da","Bài đăng tối đa")}
             <div class="field-group" style="grid-column:1/-1">${f("link_page","Link Page")}</div>

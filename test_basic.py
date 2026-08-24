@@ -1614,6 +1614,29 @@ check("app.js đổ version vào ô đó",
       'app-version' in Path("static/js/app.js").read_text(encoding="utf-8"))
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Loại đăng của Page: phải có lựa chọn TRỐNG
+# ───────────────────────────────────────────────────────────────────────────
+# Page để trống loại đăng thì gen lịch BỎ QUA nó — dùng khi tạm không muốn đăng
+# lên Page đó mà chưa muốn xoá khỏi danh sách. Trước đây ô trống chỉ hiện ra
+# khi giá trị đang sai, nên chọn một loại rồi là không bao giờ bỏ chọn lại được.
+_ajs = Path("static/js/app.js").read_text(encoding="utf-8")
+check("có danh sách loại đăng riêng cho Page", "LOAI_PAGE_OPTIONS" in _ajs)
+_m_lp = _re_v.search(r'const LOAI_PAGE_OPTIONS\s*=\s*\[([^\]]*)\]', _ajs)
+check("danh sách loại đăng Page đọc được", bool(_m_lp))
+if _m_lp:
+    _lp = [x.strip().strip('"').strip("'") for x in _m_lp.group(1).split(",")]
+    check("lựa chọn TRỐNG nằm đầu danh sách", _lp and _lp[0] == "")
+    check("đủ 4 lựa chọn: trống + 3 loại", len(_lp) == 4)
+    check("có đủ Homestay / Thuê / Bán",
+          {"Homestay", "Thuê", "Bán"}.issubset(set(_lp)))
+# Hai chỗ (bảng và form Thêm/Sửa) phải dùng CHUNG một danh sách. Trước đây chép
+# cứng ở cả hai, sửa một chỗ là lệch ngay.
+check("không còn chỗ nào chép cứng 3 loại của Page",
+      '["Homestay","Thuê","Bán"]' not in _ajs)
+check("form Thêm/Sửa Page dùng danh sách chung",
+      _ajs.count("LOAI_PAGE_OPTIONS") >= 3)   # khai báo + bảng + form
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Ghi chú phát hành
 # ───────────────────────────────────────────────────────────────────────────
 # Nút Cập nhật trong phần mềm đọc CHANGELOG.md để hiện danh sách bản cho khách
