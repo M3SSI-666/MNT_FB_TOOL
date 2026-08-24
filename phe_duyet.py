@@ -38,7 +38,13 @@ from ma_may import ma_may
 # và moi được là tự ký được "đã duyệt" cho chính mình.
 #
 # Đổi lại bằng khoá thật sau khi dựng máy chủ và sinh cặp khoá.
-KHOA_CONG_KHAI = "+gRkh2MJ2dJf+0he0jD/PoWG9FpxTX7aqU135NQS5i4="
+# ĐANG TẮT. Để rỗng thì bat_buoc() trả False và phần mềm chạy y như chưa từng
+# có tính năng này: không màn hình đăng ký, không gọi máy chủ, không chặn ai.
+#
+# Máy chủ đã dựng xong và chạy được (đã kiểm), khoá công khai cất ở
+# MNT_FB_dev/may_chu_phe_duyet/_bi_mat/khoa_cong_khai.txt. Khi nào muốn bật thì
+# dán khoá đó vào đây rồi phát hành — không phải sửa gì thêm.
+KHOA_CONG_KHAI = ""
 
 # Đổi sang địa chỉ máy chủ thật khi dựng xong.
 MAY_CHU = "https://mnt-phe-duyet.mnt-tools.workers.dev"

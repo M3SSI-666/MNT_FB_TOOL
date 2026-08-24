@@ -1910,8 +1910,13 @@ check("chưa gắn khoá → không gọi máy chủ", _tt["nguon"] == "chua_bat
 _j = server.app.test_client().get("/api/phe-duyet/status").get_json()
 check("/api/phe-duyet/status: bat_buoc=False khi chưa gắn khoá",
       _j["bat_buoc"] is False and _j["cho_vao"] is True)
-_pd.KHOA_CONG_KHAI = _khoa_that
+# Chiều ngược lại: HỄ có khoá là cổng bật. Dùng khoá giả chứ không khôi phục
+# "khoá thật" — khoá thật hiện đang RỖNG vì cổng chặn đang tắt, nên khôi phục
+# nó thì assertion này luôn sai. Điều cần canh là mối quan hệ có-khoá → bật,
+# không phải giá trị đang có.
+_pd.KHOA_CONG_KHAI = "khoa-gia-chi-de-kiem"
 check("gắn khoá vào → cổng chặn bật", _pd.bat_buoc() is True)
+_pd.KHOA_CONG_KHAI = _khoa_that
 # Kiểm đầu vào form đăng ký
 for _than, _mong in [({}, "họ tên"), ({"ten": "  "}, "họ tên"),
                      ({"ten": "A"}, "điện thoại")]:

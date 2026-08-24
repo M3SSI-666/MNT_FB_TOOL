@@ -10,19 +10,20 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.0.1 — 25/08/2026
+
+**Tắt cổng đăng ký.** Bản `v2.0.0` bật nó lên, khiến mọi máy cập nhật đều phải
+xin duyệt mới chạy được. Chưa cần tới việc đó, nên bản này tắt đi: phần mềm chạy
+y như chưa từng có tính năng ấy — không màn hình đăng ký, không gọi máy chủ,
+không chặn ai.
+
+Mọi thay đổi cốt lõi của `v2.0.0` bên dưới vẫn còn nguyên.
+
+> Nếu bạn đang ở `v2.0.0` và bị hỏi đăng ký: cập nhật lên bản này là hết.
+
 ## v2.0.0 — 25/08/2026
 
-> ⚠ **Bản này cần bạn duyệt máy trước khi dùng được.** Mỗi máy cài lên sẽ hiện
-> màn hình đăng ký; chủ phần mềm duyệt xong thì máy đó mới chạy. Máy đang chạy
-> mà cập nhật lên bản này cũng phải đăng ký một lần.
-
-**Đăng ký và phê duyệt**
-
-- Mở phần mềm lần đầu → điền họ tên, số điện thoại, Gmail → chờ duyệt. Được
-  duyệt thì màn hình tự tắt, không cần khởi động lại.
-- Chủ phần mềm có **bảng quản lý**: xem ai đang dùng, máy nào, bản nào, duyệt
-  hoặc cắt quyền. Cắt được theo từng máy hoặc theo cả người.
-- Mất mạng vẫn dùng được tới 7 ngày bằng kết quả đã lưu.
+> ⚠ Bản này bật cổng đăng ký — **đã tắt lại ở `v2.0.1`**. Đừng dùng bản này.
 
 **Trạng thái tài khoản — gọn lại còn 4**
 
