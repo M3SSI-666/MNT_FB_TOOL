@@ -262,7 +262,7 @@ function _delayPanel(dNew) {
 
 function openQuickJoinSchedule() {
     API.settings().then(setRes => {
-        const dNew  = setRes.data?.join_delay_new  || "30";
+        const dNew  = setRes.data?.join_delay_new  || String(JOIN_NGHI_MOI_MAC_DINH);
         openModal("⚡ Tạo lịch nhanh — Tham gia nhóm", `
             <div style="display:flex;flex-direction:column;gap:12px">
                 <div style="font-size:13px;color:var(--text-secondary);background:var(--bg-hover);padding:10px 12px;border-radius:var(--radius-sm);line-height:1.6">
@@ -282,7 +282,7 @@ function openQuickJoinSchedule() {
 }
 
 async function saveQuickJoinSchedule() {
-    const dNew  = parseInt(document.getElementById("js-delay-new")?.value  || "30");
+    const dNew  = parseInt(document.getElementById("js-delay-new")?.value  || String(JOIN_NGHI_MOI_MAC_DINH));
     try {
         const r = await API.joinGenQuick({delay_new: dNew});
         if(r.ok) {
@@ -296,7 +296,7 @@ function openAddJoinSchedule() {
     Promise.all([API.accounts(), API.pages(), API.settings()]).then(([accRes, pRes, setRes]) => {
         const accs  = (accRes.data||[]).filter(a => a.trang_thai === "Active");
         const pages = pRes.data || [];
-        const dNew  = setRes.data?.join_delay_new  || "30";
+        const dNew  = setRes.data?.join_delay_new  || String(JOIN_NGHI_MOI_MAC_DINH);
         openModal("+ Thêm lịch tham gia nhóm", `
             <div style="display:flex;flex-direction:column;gap:12px">
                 <div class="field-group">
@@ -325,7 +325,7 @@ function openAddJoinSchedule() {
 }
 
 async function saveJoinSchedule() {
-    const dNew  = parseInt(document.getElementById("js-delay-new")?.value  || "30");
+    const dNew  = parseInt(document.getElementById("js-delay-new")?.value  || String(JOIN_NGHI_MOI_MAC_DINH));
     await API.saveSettings({join_delay_new: String(dNew)}).catch(()=>{});
     const data = {
         ten_acc:  document.getElementById("js-acc")?.value||"",
@@ -356,7 +356,7 @@ function updateJoinHeadlessLabel() {
 async function runJoin(id) {
     const headless  = isJoinHeadless();
     const settings  = await API.settings().catch(()=>({data:{}}));
-    const dNew      = parseInt(settings.data?.join_delay_new  || "30");
+    const dNew      = parseInt(settings.data?.join_delay_new  || String(JOIN_NGHI_MOI_MAC_DINH));
     const modeLabel = headless ? "ẩn Chrome" : "hiển thị Chrome";
     try {
         const r = await API.joinRun(id, headless, dNew);
@@ -832,6 +832,9 @@ const LOAI_DANG_OPTIONS = ["","Homestay","Thuê","Bán","X_Home","X_Thuê","X_B�
 // tạm không muốn đăng lên Page đó mà chưa muốn xoá khỏi danh sách.
 // Một danh sách dùng chung cho cả bảng lẫn form thêm/sửa — trước đây chép cứng
 // ở hai chỗ, sửa một chỗ là lệch ngay.
+// Phải KHỚP db.JOIN_NGHI_MOI_MAC_DINH — có assertion canh hai bên không lệch.
+const JOIN_NGHI_MOI_MAC_DINH = 15;
+
 const LOAI_PAGE_OPTIONS = ["","Homestay","Thuê","Bán"];
 const LOAI_PAGE_TRONG   = "—";        // chữ hiện ra cho ô trống
 // Mỗi loại đăng MỘT màu riêng. Bản trước gom cả 3 loại "X_" vào một màu hồng và

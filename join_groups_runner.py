@@ -22,8 +22,9 @@ from db import _conn
 
 # Đọc runtime — không dùng config.py để env var có hiệu lực ngay
 _HEADLESS       = os.environ.get("HEADLESS",           "true").lower() == "true"
-_DELAY_NEW_SEC  = int(os.environ.get("JOIN_DELAY_NEW",  "30"))   # mới tham gia
-_DELAY_SKIP_SEC = int(os.environ.get("JOIN_DELAY_SKIP",  "5"))   # đã là thành viên
+from db import JOIN_NGHI_MOI_MAC_DINH, JOIN_NGHI_BO_QUA_MAC_DINH
+_DELAY_NEW_SEC  = int(os.environ.get("JOIN_DELAY_NEW",  str(JOIN_NGHI_MOI_MAC_DINH)))
+_DELAY_SKIP_SEC = int(os.environ.get("JOIN_DELAY_SKIP", str(JOIN_NGHI_BO_QUA_MAC_DINH)))
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 

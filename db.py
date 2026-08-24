@@ -85,6 +85,19 @@ TT_LICH_X_TU_DONG = "X😴"
 # trong keep của reset_schedules_to_wait nên sáng hôm sau tự về "Chờ".
 TT_LICH_NGHI_SPAM = "Nghỉ Spam"
 
+# ── Nghỉ bao lâu giữa hai nhóm khi đi tham gia nhóm ────────────────────────
+# VỪA THAM GIA một nhóm mới thì nghỉ lâu hơn hẳn: đó là hành động Facebook đếm.
+# Bấm tham gia liên tiếp là dấu hiệu máy chạy rõ nhất, và cũng là thứ làm nick
+# bị chặn tính năng tham gia nhóm.
+# ĐÃ Ở SẴN trong nhóm thì chỉ mở trang lên xem rồi đi — không có hành động nào
+# bị đếm, nên nghỉ ngắn.
+#
+# Để CHUNG một chỗ vì con số này trước đây bị chép ở 7 nơi (join_groups_runner,
+# server 3 chỗ, app.js 3 chỗ) — sửa một chỗ là lệch ngay, mà lệch thì không ai
+# thấy cho tới lúc nick bị chặn.
+JOIN_NGHI_MOI_MAC_DINH = 15     # giây, sau khi VỪA tham gia một nhóm mới
+JOIN_NGHI_BO_QUA_MAC_DINH = 5   # giây, khi đã là thành viên sẵn
+
 
 def acc_dang_spam(acc: dict) -> bool:
     """

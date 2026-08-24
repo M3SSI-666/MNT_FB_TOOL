@@ -43,6 +43,7 @@ from db import (
     delete_comment_post, xoa_het_comment_posts,
     # loại đăng
     LOAI_DANG_OPTIONS, LOAI_LICH_MAP, acc_dang_spam, la_loai_hon_hop,
+    JOIN_NGHI_MOI_MAC_DINH, JOIN_NGHI_BO_QUA_MAC_DINH,
     TI_LE_COMMENT_MAC_DINH, accounts_theo_lich,
     # settings
     get_setting, set_setting, get_all_settings,
@@ -2026,8 +2027,8 @@ def api_join_add():
 def api_join_gen_quick():
     """Tạo lịch nhanh: mỗi acc Active có page → 1 lịch tham gia nhóm."""
     body       = request.json or {}
-    delay_new  = int(body.get("delay_new",  30))
-    delay_skip = int(body.get("delay_skip",  5))
+    delay_new  = int(body.get("delay_new",  JOIN_NGHI_MOI_MAC_DINH))
+    delay_skip = int(body.get("delay_skip", JOIN_NGHI_BO_QUA_MAC_DINH))
     # Lưu settings để dùng khi Run
     set_setting("join_delay_new",  str(delay_new))
     set_setting("join_delay_skip", str(delay_skip))
@@ -2076,8 +2077,8 @@ def api_join_run(sched_id):
         row = dict(row)
         body       = request.json or {}
         headless   = body.get("headless", True)
-        delay_new  = int(body.get("delay_new",  get_setting("join_delay_new",  "30") or "30"))
-        delay_skip = int(body.get("delay_skip", get_setting("join_delay_skip",  "5") or "5"))
+        delay_new  = int(body.get("delay_new",  get_setting("join_delay_new",  None) or JOIN_NGHI_MOI_MAC_DINH))
+        delay_skip = int(body.get("delay_skip", get_setting("join_delay_skip", None) or JOIN_NGHI_BO_QUA_MAC_DINH))
         flags      = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         env        = {**os.environ,
                       "JOIN_SCHEDULE_ID":   str(sched_id),

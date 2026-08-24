@@ -1946,6 +1946,31 @@ check("giao diện có màn hình tải Chromium",
       'id="chromium-overlay"' in Path("templates/index.html").read_text(encoding="utf-8"))
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Nghỉ giữa hai nhóm khi đi tham gia nhóm
+# ───────────────────────────────────────────────────────────────────────────
+# Vừa tham gia một nhóm MỚI thì nghỉ lâu hơn hẳn — đó là hành động Facebook
+# đếm. Bấm tham gia liên tiếp là dấu hiệu máy chạy rõ nhất. Đã ở sẵn trong nhóm
+# thì chỉ mở trang lên xem rồi đi, không có hành động nào bị đếm.
+check("nghỉ sau khi tham gia nhóm mới = 15 giây",
+      db.JOIN_NGHI_MOI_MAC_DINH == 15)
+check("nghỉ khi đã là thành viên ngắn hơn hẳn",
+      db.JOIN_NGHI_BO_QUA_MAC_DINH < db.JOIN_NGHI_MOI_MAC_DINH)
+
+# Con số này trước đây bị chép ở 7 nơi — Python lẫn JavaScript. Sửa một chỗ là
+# lệch ngay, mà lệch thì không ai thấy cho tới lúc nick bị chặn tham gia nhóm.
+# JS không import được hằng số Python, nên chỉ còn cách canh bằng assertion.
+_m_join = _re_v.search(r'const JOIN_NGHI_MOI_MAC_DINH\s*=\s*(\d+)',
+                       Path("static/js/app.js").read_text(encoding="utf-8"))
+check("giao diện có khai báo cùng hằng số", bool(_m_join))
+check("Python và JavaScript không lệch nhau",
+      bool(_m_join) and int(_m_join.group(1)) == db.JOIN_NGHI_MOI_MAC_DINH)
+# Không còn chỗ nào tự viết lại con số cũ.
+for _f in ("server.py", "join_groups_runner.py", "static/js/app.js"):
+    _nd = Path(_f).read_text(encoding="utf-8")
+    check(f"{_f}: không còn chép cứng mặc định 30",
+          not _re_v.search(r'(delay_new|join_delay_new)[^\n]{0,40}\b30\b', _nd))
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Dò spam phải có ở MỌI phiên đăng bài và comment
 # ───────────────────────────────────────────────────────────────────────────
 # Bị spam thì Facebook gỡ cả bài lẫn comment. Nhưng trước đây chỉ luồng đăng
