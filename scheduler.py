@@ -338,14 +338,6 @@ def _run_commenting(item: dict):
             if kq.get("loi"):
                 phu += f" · {kq['loi']} lỗi"
             _update_status(sid, f"💬 {done} · {ok}/{tong} bài{phu}")
-            # Comment cũng là PHIÊN NHỬ: acc đang Spam mà comment trót lọt
-            # nghĩa là Facebook đã thả, thả luôn cho đăng bài lại. Không có
-            # dòng này thì acc chỉ thoát Spam khi gặp đúng một slot ĐĂNG BÀI —
-            # nick nào lịch toàn comment sẽ kẹt Spam vĩnh viễn.
-            # Chỉ gọi khi đang Spam: với acc bình thường, lịch sử sức khoẻ chỉ
-            # tính phiên đăng bài, trộn comment vào là đổi luôn ngưỡng nghỉ.
-            if ok and db.acc_dang_spam(get_account_by_name(acc_name) or {}):
-                _bao_suc_khoe(stt, acc_name, *db.ghi_nhan_phien_dang(acc_name, True))
         logger.info(f"✅ STT {stt} comment xong: {kq}")
     except CookieDeadError:
         ts2 = datetime.now().strftime("%H:%M")
@@ -360,10 +352,6 @@ def _run_commenting(item: dict):
         if type(e).__name__ == "CommentRestricted":
             _update_status(sid, f"❌ {ts2} BỊ CHẶN COMMENT")
             logger.error(f"⛔ STT {stt}: acc '{acc_name}' bị chặn comment — {e}")
-            # Phiên nhử bằng comment mà bị chặn = vẫn chưa được thả. Nghỉ thêm
-            # một tiếng rồi nhử lại, y như phiên đăng bài hỏng.
-            if db.acc_dang_spam(get_account_by_name(acc_name) or {}):
-                _bao_suc_khoe(stt, acc_name, *db.ghi_nhan_phien_dang(acc_name, False))
         else:
             _update_status(sid, f"❌ {ts2} Comment lỗi: {label}")
             logger.error(f"❌ STT {stt} comment lỗi [{cat}]: {e}")
@@ -378,6 +366,19 @@ def _bao_suc_khoe(stt, acc_name: str, hanh_dong: str, ly_do: str):
 def _run_one(item: dict):
     # Slot nuôi nick / comment đi đường riêng, không dùng retry của đăng bài.
     hd = item.get("hoat_dong") or "dang_bai"
+
+    # Nghỉ đủ một tiếng rồi thì slot kế tiếp là PHIÊN NHỬ, và phiên nhử LUÔN là
+    # đăng bài — kể cả khi slot đó vốn là slot comment. Một loại phiên nhử thì
+    # chỉ có một đường code và một chỗ ghi nhận kết quả.
+    #
+    # Đổi được vì slot comment vẫn giữ nguyên ma_content / ma_nhom / tu_khoa:
+    # lúc gen lịch, chuyển sang comment chỉ đổi mỗi cột hoat_dong.
+    if hd == "comment" and db.acc_can_tham_do(item["ten_acc"]):
+        logger.info(f"🔎 STT {item.get('stt', item['id'])} — acc "
+                    f"'{item['ten_acc']}' hết giờ nghỉ, đổi slot comment thành "
+                    f"PHIÊN NHỬ bằng đăng bài")
+        hd = "dang_bai"
+        item = {**item, "hoat_dong": "dang_bai"}
 
     # Acc đang nghỉ hoặc đã bị tắt thì bỏ qua slot. Ghi trạng thái riêng chứ
     # KHÔNG ghi "❌ lỗi": đếm nó là lỗi thì bộ theo dõi tự bơm phồng chính mình —

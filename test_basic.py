@@ -1380,6 +1380,29 @@ check("thăm dò hỏng -> chặn lại",       db.acc_duoc_chay("SPAM Test", "d
 check("thăm dò hỏng -> slot lại đổi sang nuôi nick",
       db.acc_dang_spam_nghi("SPAM Test") is True)
 
+# ── Phiên nhử LUÔN là đăng bài ─────────────────────────────────────────────
+# Nghỉ đủ giờ thì slot kế tiếp đổi thành ĐĂNG BÀI, kể cả khi nó vốn là slot
+# comment. Một loại phiên nhử = một đường code = một chỗ ghi nhận kết quả.
+# Đổi được vì slot comment vẫn giữ nguyên ma_content / ma_nhom / tu_khoa.
+check("đang nghỉ -> CHƯA cần phiên nhử",
+      db.acc_can_tham_do("SPAM Test") is False)
+# Hai cờ này phải LOẠI TRỪ nhau: cùng đúng thì slot vừa đổi sang nuôi vừa đổi
+# sang nhử, và thứ tự code quyết định kết quả — đúng kiểu lỗi khó lần ra.
+check("đang nghỉ: đổi-sang-nuôi và cần-nhử không cùng đúng",
+      not (db.acc_dang_spam_nghi("SPAM Test") and db.acc_can_tham_do("SPAM Test")))
+with db._conn() as _c:
+    _c.execute("UPDATE accounts SET nghi_den=? WHERE id=?",
+               ((_dt.now() - _td(minutes=1)).isoformat(timespec="seconds"), _sid))
+check("hết giờ -> cần phiên nhử",       db.acc_can_tham_do("SPAM Test") is True)
+check("hết giờ: hai cờ vẫn không cùng đúng",
+      not (db.acc_dang_spam_nghi("SPAM Test") and db.acc_can_tham_do("SPAM Test")))
+# Acc bình thường thì không bao giờ cần phiên nhử.
+check("acc Active -> không cần phiên nhử",
+      db.acc_can_tham_do("SK Test") is False)
+# Đặt lại vào giờ nghỉ: khối trên vừa tua đồng hồ ra khỏi giờ nghỉ, mà vòng lặp
+# ngay dưới bắt đầu bằng giả định "đang trong giờ nghỉ".
+db.danh_dau_spam("SPAM Test", "đặt lại cho vòng lặp", gio=_GIO_MOC)
+
 # ── Vòng lặp phải chạy được VÔ HẠN ─────────────────────────────────────────
 # Thăm dò hỏng thì nghỉ tiếp một tiếng rồi dò lại, cứ thế cho tới khi đăng
 # được. Chạy 3 vòng để bắt lỗi kiểu "chỉ đúng ở lần đầu" — ví dụ một cờ nào đó

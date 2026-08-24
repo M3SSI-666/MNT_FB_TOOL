@@ -721,6 +721,24 @@ def acc_dang_spam_nghi(ten_acc: str) -> bool:
     return _moc_nghi(r["nghi_den"]) is not None
 
 
+def acc_can_tham_do(ten_acc: str) -> bool:
+    """Acc đang Spam và đã nghỉ đủ giờ — slot kế tiếp là PHIÊN NHỬ.
+
+    Phiên nhử luôn là ĐĂNG BÀI, kể cả khi slot đó vốn là slot comment. Một loại
+    phiên nhử thì chỉ có một đường code, một chỗ ghi nhận kết quả — đơn giản hơn
+    hẳn so với việc để cả comment cũng làm phiên nhử.
+
+    Đổi được vì slot comment vẫn giữ nguyên `ma_content`, `ma_nhom`, `tu_khoa`:
+    lúc gen lịch, chuyển sang comment chỉ đổi mỗi cột `hoat_dong`.
+    """
+    with _conn() as con:
+        r = con.execute("SELECT trang_thai, nghi_den FROM accounts "
+                        "WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
+    if not r or (r["trang_thai"] or "") != TRANG_THAI_SPAM:
+        return False
+    return _moc_nghi(r["nghi_den"]) is None      # hết giờ nghỉ
+
+
 def het_spam(ten_acc: str) -> int:
     """Thả hẳn acc: về 'Active', xoá mốc nghỉ, trả mọi slot 'Nghỉ Spam' về 'Chờ'."""
     with _conn() as con:
