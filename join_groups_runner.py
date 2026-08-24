@@ -26,6 +26,25 @@ from db import JOIN_NGHI_MOI_MAC_DINH, JOIN_NGHI_BO_QUA_MAC_DINH
 _DELAY_NEW_SEC  = int(os.environ.get("JOIN_DELAY_NEW",  str(JOIN_NGHI_MOI_MAC_DINH)))
 _DELAY_SKIP_SEC = int(os.environ.get("JOIN_DELAY_SKIP", str(JOIN_NGHI_BO_QUA_MAC_DINH)))
 
+# Tên acc của phiên đang chạy. Mỗi lịch tham gia nhóm chạy trong MỘT TIẾN TRÌNH
+# RIÊNG nên biến này không lẫn giữa các phiên — nhưng cả 5 tiến trình cùng ghi
+# vào MỘT file log, nên không gắn tên acc thì các dòng trộn vào nhau và không
+# cách nào biết dòng lỗi là của acc nào.
+#
+# Đã xảy ra thật: log có 8 dòng "Cookie hết hạn" mà không dòng nào nói acc nào,
+# trong khi 32 phiên đã chạy chung file đó.
+_ACC = ""
+
+
+def _log(muc, msg):
+    """Ghi log kèm tên acc của phiên. `muc` là info / warning / error."""
+    dau = "[" + _ACC + "] " if _ACC else ""
+    xuong_dong = msg.startswith(chr(10))
+    if xuong_dong:
+        msg = msg.lstrip(chr(10))
+    getattr(logger, muc)((chr(10) if xuong_dong else "") + "  " + dau + msg)
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async def _human_delay(min_ms=600, max_ms=1800):
@@ -56,7 +75,7 @@ def _find_profile_dir(acc_name: str, c_user: str = "") -> str:
 
 async def _switch_to_page(page, ctx, page_uid: str):
     from playwright.async_api import TimeoutError as PWTimeout
-    logger.info(f"  [Switch] Goto Page {page_uid}")
+    _log("info", f"[Switch] Goto Page {page_uid}")
     await page.goto(f"https://www.facebook.com/profile.php?id={page_uid}",
                     wait_until="domcontentloaded", timeout=30000)
     await page.wait_for_timeout(3000)
@@ -81,7 +100,7 @@ async def _switch_to_page(page, ctx, page_uid: str):
             btn = await page.wait_for_selector(sel, timeout=2000, state="visible")
             if btn:
                 await btn.click(); await page.wait_for_timeout(2000)
-                logger.info("  [Switch] ✅ Switched to Page")
+                _log("info", "[Switch] ✅ Switched to Page")
                 break
         except (PWTimeout, Exception): pass
 
@@ -188,7 +207,7 @@ async def _lay_nhom_da_vao(page) -> set:
         if yen >= 3:                      # ba lượt liền không thêm được gì
             break
 
-    logger.info(f"  📋 Page đã tham gia {len(da_thay)} nhóm (đọc từ groups/joins)")
+    _log("info", f"📋 Page đã tham gia {len(da_thay)} nhóm (đọc từ groups/joins)")
     return da_thay
 
 
@@ -205,7 +224,7 @@ async def _join_one_group(page, uid: str, ten_nhom: str, link_url: str) -> str:
         await page.goto(url, wait_until="domcontentloaded", timeout=30000)
         await _human_delay(1500, 2500)
     except Exception as e:
-        logger.error(f"  ❌ Không load được nhóm '{ten_nhom}': {e}")
+        _log("error", f"❌ Không load được nhóm '{ten_nhom}': {e}")
         return "loi"
 
     # ── Xác minh nhanh: quét nút 1 lần, lặp tối đa ~6s tới khi có tín hiệu ──
@@ -221,14 +240,14 @@ async def _join_one_group(page, uid: str, ten_nhom: str, link_url: str) -> str:
         await page.wait_for_timeout(1000)
 
     if state == "da_join":
-        logger.info(f"  ⏭️  Đã là thành viên: {ten_nhom}")
+        _log("info", f"⏭️  Đã là thành viên: {ten_nhom}")
         return "da_join"
     if state == "cho_duyet":
-        logger.info(f"  ⏳ Đang chờ duyệt: {ten_nhom}")
+        _log("info", f"⏳ Đang chờ duyệt: {ten_nhom}")
         return "cho_duyet"
     if state != "need_join":
         # Không thấy nút tham gia sau ~6s → coi như đã là thành viên (tránh click sai)
-        logger.info(f"  ⏭️  Không thấy nút tham gia — coi như đã là thành viên: {ten_nhom}")
+        _log("info", f"⏭️  Không thấy nút tham gia — coi như đã là thành viên: {ten_nhom}")
         return "da_join"
 
     # ── need_join: click nút "Tham gia nhóm" (nút đã có sẵn, query nhanh) ──
@@ -244,14 +263,14 @@ async def _join_one_group(page, uid: str, ten_nhom: str, link_url: str) -> str:
             await btn.hover(); await _human_delay(400, 700)
             await btn.click()
             await _human_delay(2000, 3000)
-            logger.info(f"  ✅ Đã click 'Tham gia nhóm': {ten_nhom}")
+            _log("info", f"✅ Đã click 'Tham gia nhóm': {ten_nhom}")
             clicked = True
             break
         except Exception:
             continue
 
     if not clicked:
-        logger.info(f"  ⏭️  Đã là thành viên: {ten_nhom}")
+        _log("info", f"⏭️  Đã là thành viên: {ten_nhom}")
         return "da_join"
 
     # Xử lý dialog xác nhận nếu có
@@ -281,7 +300,7 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
 
     groups = [{"uid": r[0], "ten_nhom": r[1], "link_url": r[2]} for r in rows]
     total  = len(groups)
-    logger.info(f"  📋 Tổng {total} nhóm cần kiểm tra")
+    _log("info", f"📋 Tổng {total} nhóm cần kiểm tra")
 
     def _update_status(status, **kwargs):
         with _conn() as con:
@@ -328,13 +347,29 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
         await page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=30000)
         await _human_delay(2000, 3000)
         if await chua_dang_nhap(page):
-            logger.error(f"  ❌ Cookie hết hạn!")
+            _log("error", "❌ Cookie hết hạn — cần lấy lại cookie cho acc này")
             _update_status("Lỗi - cookie hết hạn")
+            # ĐÁNH DẤU CẢ TÀI KHOẢN, không chỉ dòng lịch. Trước đây chỉ đổi
+            # trạng thái của lịch tham gia nhóm, mà lịch đó bị ghi đè ngay ở
+            # lần chạy sau — nên nhìn tab Tài khoản không thấy gì cả, dù log
+            # đầy dòng "Cookie hết hạn". Không biết acc nào thì không sửa được.
+            #
+            # Luồng đăng bài đã làm đúng việc này từ trước (_mark_cookie_dead);
+            # chỉ luồng tham gia nhóm là bỏ sót.
+            try:
+                with _conn() as con:
+                    con.execute(
+                        "UPDATE accounts SET trang_thai='Cookie hết hạn', "
+                        "canh_bao_moi=? WHERE ten_acc=?",
+                        (f"'{acc_name}' hết cookie khi đi tham gia nhóm — "
+                         f"lấy lại cookie rồi đổi Trạng thái về Active", acc_name))
+            except Exception as e:
+                _log("warning", f"⚠️  Không đánh dấu được acc hết cookie: {e}")
             await ctx.close()
             return
 
         # Switch sang Page
-        logger.info(f"  🔄 Switch sang Page {page_uid}...")
+        _log("info", f"🔄 Switch sang Page {page_uid}...")
         await _switch_to_page(page, ctx, page_uid)
 
         # ── Bỏ qua nhóm Page ĐÃ tham gia, không mở từng trang để hỏi lại ──
@@ -349,7 +384,7 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
         try:
             da_vao = await _lay_nhom_da_vao(page)
         except Exception as e:
-            logger.warning(f"  ⚠️  Không đọc được danh sách nhóm đã tham gia: {e}")
+            _log("warning", f"⚠️  Không đọc được danh sách nhóm đã tham gia: {e}")
             da_vao = set()
 
         if da_vao:
@@ -362,13 +397,13 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
             stats["da_join"] += bo_qua
             results += [{"uid": g["uid"], "ten": g["ten_nhom"], "result": "da_join"}
                         for g in groups if g not in con_lai]
-            logger.info(f"  ⏭️  Bỏ qua {bo_qua} nhóm Page đã tham gia — "
+            _log("info", f"⏭️  Bỏ qua {bo_qua} nhóm Page đã tham gia — "
                         f"còn {len(con_lai)}/{total} nhóm cần vào")
             groups = con_lai
 
         # Duyệt từng nhóm
         for i, g in enumerate(groups, 1):
-            logger.info(f"\n  [{i}/{total}] {g['ten_nhom'] or g['uid']}")
+            _log("info", f"\n[{i}/{total}] {g['ten_nhom'] or g['uid']}")
             result = await _join_one_group(page, g["uid"], g["ten_nhom"], g["link_url"])
             stats[result] += 1
             results.append({"uid": g["uid"], "ten": g["ten_nhom"], "result": result})
@@ -383,10 +418,10 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
             if result == "moi_join":
                 jitter = random.randint(0, max(1, _DELAY_NEW_SEC // 6))
                 wait   = _DELAY_NEW_SEC + jitter
-                logger.info(f"  ⏱️  Mới join → chờ {wait}s...")
+                _log("info", f"⏱️  Mới join → chờ {wait}s...")
             else:
                 wait = _DELAY_SKIP_SEC
-                logger.info(f"  ⏩ Bỏ qua → chờ {wait}s...")
+                _log("info", f"⏩ Bỏ qua → chờ {wait}s...")
             await asyncio.sleep(wait)
 
         await ctx.close()
@@ -399,13 +434,15 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
                    loi=stats["loi"],
                    ket_qua=ket_qua)
 
-    logger.info(f"\n  ✅ HOÀN THÀNH:")
-    logger.info(f"     Mới tham gia: {stats['moi_join']}")
-    logger.info(f"     Đã join rồi:  {stats['da_join']}")
-    logger.info(f"     Chờ duyệt:    {stats['cho_duyet']}")
-    logger.info(f"     Lỗi:          {stats['loi']}")
+    _log("info", f"\n✅ HOÀN THÀNH:")
+    _log("info", f"   Mới tham gia: {stats['moi_join']}")
+    _log("info", f"   Đã join rồi:  {stats['da_join']}")
+    _log("info", f"   Chờ duyệt:    {stats['cho_duyet']}")
+    _log("info", f"   Lỗi:          {stats['loi']}")
 
 
 def run_join_schedule(schedule_id: int, acc_name: str, page_uid: str):
     """Sync wrapper — gọi từ scheduler."""
+    global _ACC
+    _ACC = acc_name          # mọi dòng log của phiên này gắn kèm tên acc
     asyncio.run(_run_join(schedule_id, acc_name, page_uid))

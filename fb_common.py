@@ -253,15 +253,38 @@ async def chua_dang_nhap(page) -> bool:
     trang gốc, nên nick chết cookie chạy trọn phiên nuôi trên trang landing —
     lướt không, like không — rồi báo `✅ nuôi xong`. Thành công giả, im lặng.
     """
+    async def _mot_lan() -> bool:
+        try:
+            if await page.evaluate(
+                    "() => !!document.querySelector('input[type=\"password\"], "
+                    "input[name=\"pass\"], input[name=\"email\"]')"):
+                return True
+        except Exception:
+            pass    # trang chưa dựng xong / bị điều hướng giữa lúc đọc
+        url = page.url or ""
+        return "login" in url or "checkpoint" in url
+
+    if not await _mot_lan():
+        return False
+
+    # Lần đầu bảo "chưa đăng nhập" thì CHỜ RỒI HỎI LẠI, chưa kết luận vội.
+    #
+    # Vì sao: lịch tham gia nhóm mở tới 5 Chromium cùng lúc trên một máy. Trang
+    # tải chậm, `domcontentloaded` bắn sớm, và lúc đó Facebook có thể chưa dựng
+    # xong phần của người đã đăng nhập — dò ngay thì thấy giống hệt trang chưa
+    # đăng nhập. Log ngày 25/08 có 8 dòng "Cookie hết hạn" trong khi CẢ 14 acc
+    # đều còn cookie đủ trường, và cùng những acc đó chạy phiên khác thì xong
+    # bình thường.
+    #
+    # Cookie chết thật thì hỏi lại vẫn chết — chỉ tốn thêm vài giây, và chỉ tốn
+    # trong đúng trường hợp sắp báo lỗi. Đổi lại, không còn tắt nhầm acc còn sống.
     try:
-        if await page.evaluate(
-                "() => !!document.querySelector('input[type=\"password\"], "
-                "input[name=\"pass\"], input[name=\"email\"]')"):
-            return True
+        await asyncio.sleep(4)
+        await page.reload(wait_until="domcontentloaded", timeout=30000)
+        await asyncio.sleep(3)
     except Exception:
-        pass        # trang chưa dựng xong / bị điều hướng giữa lúc đọc
-    url = page.url or ""
-    return "login" in url or "checkpoint" in url
+        pass
+    return await _mot_lan()
 
 
 async def dismiss_anon_dialog(page, wait_ms: int = 0) -> bool:

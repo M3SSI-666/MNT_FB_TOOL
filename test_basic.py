@@ -1951,6 +1951,50 @@ check("giao diện có màn hình tải Chromium",
       'id="chromium-overlay"' in Path("templates/index.html").read_text(encoding="utf-8"))
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Kết luận "cookie hết hạn" phải hỏi lại lần nữa
+# ───────────────────────────────────────────────────────────────────────────
+# Lịch tham gia nhóm mở tới 5 Chromium cùng lúc. Trang tải chậm, dò ngay thì
+# thấy giống hệt trang chưa đăng nhập. Log ngày 25/08 có 8 dòng "Cookie hết
+# hạn" trong khi CẢ 14 acc đều còn cookie đủ trường, và cùng những acc đó chạy
+# phiên khác thì xong bình thường.
+import asyncio as _aio
+from fb_common import chua_dang_nhap as _cdn
+
+class _TrangGia:
+    def __init__(self, ket_qua):
+        self.ket_qua, self.lan, self.reload_n = list(ket_qua), 0, 0
+        self.url = "https://www.facebook.com/"
+    async def evaluate(self, _js):
+        r = self.ket_qua[min(self.lan, len(self.ket_qua) - 1)]
+        self.lan += 1
+        return r
+    async def reload(self, **kw):
+        self.reload_n += 1
+
+def _thu_dang_nhap(ket_qua):
+    t = _TrangGia(ket_qua)
+    return _aio.run(_cdn(t)), t
+
+_r, _t = _thu_dang_nhap([False])
+check("đăng nhập bình thường → kết luận ngay", _r is False and _t.lan == 1)
+check("trường hợp bình thường KHÔNG tốn thêm lần tải", _t.reload_n == 0)
+_r, _t = _thu_dang_nhap([True, True])
+check("cookie chết thật → vẫn kết luận là chết", _r is True and _t.reload_n == 1)
+_r, _t = _thu_dang_nhap([True, False])
+check("lần đầu nhầm, hỏi lại thì ổn → KHÔNG báo chết", _r is False)
+
+# Log của phiên tham gia nhóm phải gắn tên acc: 5 tiến trình cùng ghi một file,
+# không gắn tên thì các dòng trộn vào nhau và không biết dòng lỗi của acc nào.
+_jgr = Path("join_groups_runner.py").read_text(encoding="utf-8")
+check("phiên tham gia nhóm có hàm log gắn tên acc", "def _log(" in _jgr)
+check("không còn gọi logger trực tiếp trong phiên",
+      not _re_v.search(r"logger\.(info|warning|error)\(", _jgr))
+# Hết cookie phải đánh dấu CẢ TÀI KHOẢN, không chỉ dòng lịch — dòng lịch bị ghi
+# đè ở lần chạy sau, nên nhìn tab Tài khoản không thấy gì.
+check("hết cookie thì đánh dấu tài khoản",
+      "UPDATE accounts SET trang_thai='Cookie hết hạn'" in _jgr)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Nghỉ giữa hai nhóm khi đi tham gia nhóm
 # ───────────────────────────────────────────────────────────────────────────
 # Vừa tham gia một nhóm MỚI thì nghỉ lâu hơn hẳn — đó là hành động Facebook
