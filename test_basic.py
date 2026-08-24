@@ -1377,6 +1377,50 @@ check("thăm dò hỏng -> vẫn là Spam",
       any(a["ten_acc"] == "SPAM Test" and a["trang_thai"] == db.TRANG_THAI_SPAM
           for a in db.get_accounts()))
 check("thăm dò hỏng -> chặn lại",       db.acc_duoc_chay("SPAM Test", "dang_bai")[0] is False)
+check("thăm dò hỏng -> slot lại đổi sang nuôi nick",
+      db.acc_dang_spam_nghi("SPAM Test") is True)
+
+# ── Vòng lặp phải chạy được VÔ HẠN ─────────────────────────────────────────
+# Thăm dò hỏng thì nghỉ tiếp một tiếng rồi dò lại, cứ thế cho tới khi đăng
+# được. Chạy 3 vòng để bắt lỗi kiểu "chỉ đúng ở lần đầu" — ví dụ một cờ nào đó
+# bị dùng một lần rồi không đặt lại, hay lịch sử tích luỹ tới ngưỡng rồi rẽ
+# sang nhánh khác.
+for _vong in range(1, 4):
+    check(f"vòng {_vong}: trong giờ nghỉ thì đổi sang nuôi nick",
+          db.acc_dang_spam_nghi("SPAM Test") is True)
+    check(f"vòng {_vong}: trong giờ nghỉ thì chặn đăng bài",
+          db.acc_duoc_chay("SPAM Test", "dang_bai")[0] is False)
+    check(f"vòng {_vong}: trong giờ nghỉ thì nuôi nick vẫn chạy",
+          db.acc_duoc_chay("SPAM Test", "nuoi_nick")[0] is True)
+    with db._conn() as _c:
+        _c.execute("UPDATE accounts SET nghi_den=? WHERE id=?",
+                   ((_dt.now() - _td(minutes=1)).isoformat(timespec="seconds"), _sid))
+    db.mo_duong_tham_do()
+    check(f"vòng {_vong}: hết giờ thì được đăng thật để thăm dò",
+          db.acc_duoc_chay("SPAM Test", "dang_bai")[0] is True)
+    check(f"vòng {_vong}: lúc thăm dò thì KHÔNG đổi sang nuôi",
+          db.acc_dang_spam_nghi("SPAM Test") is False)
+    _hd_v, _ = db.ghi_nhan_phien_dang("SPAM Test", False)
+    check(f"vòng {_vong}: thăm dò hỏng -> quay lại nghỉ", _hd_v == "tham_do_hong")
+
+# Sau 3 vòng hỏng liên tiếp acc vẫn phải còn sống — không bị tắt hẳn, không
+# rơi ra khỏi danh sách. Đây là điều đã đổi khi bỏ trạng thái "Hỏng".
+check("hỏng nhiều vòng vẫn là Spam, không bị tắt",
+      any(a["ten_acc"] == "SPAM Test" and a["trang_thai"] == db.TRANG_THAI_SPAM
+          for a in db.get_accounts()))
+
+# Và vòng nào đăng được thì thoát hẳn.
+with db._conn() as _c:
+    _c.execute("UPDATE accounts SET nghi_den=? WHERE id=?",
+               ((_dt.now() - _td(minutes=1)).isoformat(timespec="seconds"), _sid))
+db.mo_duong_tham_do()
+_hd_ok, _ = db.ghi_nhan_phien_dang("SPAM Test", True)
+check("đăng được -> thoát khỏi Spam",   _hd_ok == "het_spam")
+check("thoát rồi -> đăng bài chạy lại", db.acc_duoc_chay("SPAM Test", "dang_bai")[0] is True)
+check("thoát rồi -> comment chạy lại",  db.acc_duoc_chay("SPAM Test", "comment")[0] is True)
+check("thoát rồi -> hết đổi sang nuôi", db.acc_dang_spam_nghi("SPAM Test") is False)
+# Đặt lại về Spam để các assertion phía sau chạy trên đúng trạng thái cũ.
+db.danh_dau_spam("SPAM Test", "đặt lại cho phần kiểm tiếp theo", gio=_GIO_MOC)
 with db._conn() as _c:
     _ls = _c.execute("SELECT lich_su_phien FROM accounts WHERE id=?", (_sid,)).fetchone()[0]
 check("thăm dò hỏng KHÔNG vào lịch sử", "x" not in (_ls or ""))
