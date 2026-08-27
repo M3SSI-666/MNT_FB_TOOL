@@ -461,7 +461,8 @@ def _run_one(item: dict):
             # nuôi nick.
             ts2 = datetime.now().strftime("%H:%M")
             _update_status(sid, f"🚫 {ts2} Chặn Composer")
-            n, moc = db.danh_dau_spam(acc_name, "Chặn Composer — hộp thoại đăng bài rỗng")
+            n, moc = db.danh_dau_spam(acc_name, "Chặn Composer — hộp thoại đăng bài rỗng",
+                                      ly_do="Lỗi Composer")
             logger.error(f"🚫 STT {stt}: acc '{acc_name}' BỊ CHẶN COMPOSER — "
                          f"{n} slot còn lại chuyển sang nuôi nick, "
                          f"nhử lại lúc {moc:%H:%M}")

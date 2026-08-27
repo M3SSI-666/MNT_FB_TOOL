@@ -298,6 +298,10 @@ def init_db():
         # slot đăng/comment lúc đó không bỏ không, nhưng cũng không được biến
         # tất cả thành phiên nuôi — chỉ nuôi khi đã tới hạn `nuoi_interval`.
         _add_col("accounts",  "nuoi_lan_cuoi", "nuoi_lan_cuoi TEXT DEFAULT ''")
+        # Vì sao acc đang nghỉ — hiện thẳng ở cột Trạng thái. Không có nó thì
+        # mọi kiểu nghỉ nhìn giống hệt nhau ("Nghỉ tới 23:57"), trong khi
+        # "Lỗi Composer" và "lỗi liên tiếp" cần xử lý khác hẳn nhau.
+        _add_col("accounts",  "ly_do_nghi",    "ly_do_nghi TEXT DEFAULT ''")
         _add_col("schedules", "hoat_dong",     "hoat_dong TEXT DEFAULT 'dang_bai'")
 
         # ── Migration: bỏ 2 cột cờ comment ──────────────────────────────
@@ -673,7 +677,8 @@ def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool) -> tuple[bool, in
     return vua_dinh, so_cu
 
 
-def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None) -> tuple[int, object]:
+def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None,
+                  ly_do: str = "") -> tuple[int, object]:
     """
     Cho acc nghỉ ĐĂNG và COMMENT vì Facebook vừa gỡ bài. Nuôi nick vẫn chạy.
 
@@ -700,9 +705,11 @@ def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None) -> tuple[in
                         (ten_acc,)).fetchone()
         if not r:
             return 0, None
+        # `ly_do` hiện thẳng ở cột Trạng thái trên giao diện, ví dụ "Lỗi Composer".
+        # Để trống thì cột đó chỉ hiện "Spam" như cũ.
         con.execute(
-            "UPDATE accounts SET trang_thai=?, nghi_den=?, canh_bao_moi=? WHERE id=?",
-            (TRANG_THAI_SPAM, moc.isoformat(timespec="seconds"),
+            "UPDATE accounts SET trang_thai=?, nghi_den=?, ly_do_nghi=?, canh_bao_moi=? WHERE id=?",
+            (TRANG_THAI_SPAM, moc.isoformat(timespec="seconds"), (ly_do or "").strip()[:40],
              f"'{ten_acc}' dính spam — nghỉ, thăm dò lại lúc {moc:%H:%M}"
              + (f": {chi_tiet}" if chi_tiet else ""),
              r["id"]))
@@ -806,7 +813,7 @@ def het_spam(ten_acc: str) -> int:
     with _conn() as con:
         con.execute(
             "UPDATE accounts SET trang_thai='Active', nghi_den='', "
-            "lich_su_phien='', canh_bao_moi=? WHERE ten_acc=?",
+            "lich_su_phien='', ly_do_nghi='', canh_bao_moi=? WHERE ten_acc=?",
             (f"'{ten_acc}' thăm dò thành công — chạy lại bình thường", ten_acc))
         return con.execute(
             "UPDATE schedules SET trang_thai='Chờ', "

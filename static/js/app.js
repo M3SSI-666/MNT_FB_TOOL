@@ -555,8 +555,19 @@ function _trangThaiAcc(r){
                         +"không nuôi nick. Sửa ô này về Active để chạy lại."};
     if(val===TRANG_THAI_SPAM){
         const t=r.nghi_den?new Date(r.nghi_den):null;
-        const den=(t&&!isNaN(t))?` tới ${String(t.getHours()).padStart(2,"0")}:`
+        const gio=(t&&!isNaN(t))?`${String(t.getHours()).padStart(2,"0")}:`
                                  +`${String(t.getMinutes()).padStart(2,"0")}`:"";
+        const den=gio?` tới ${gio}`:"";
+        // Có lý do cụ thể (vd "Lỗi Composer") thì cho nó lên dòng trên, giờ nghỉ
+        // xuống dòng dưới — nhìn bảng là biết ngay vì sao, không phải rê chuột
+        // vào mới thấy. Không có lý do thì hiện "Spam" như cũ.
+        if((r.ly_do_nghi||"").trim()){
+            return {nhan:`🚫 ${_escapeHtml(r.ly_do_nghi.trim())}`
+                         +(gio?`<div style="font-weight:400;font-size:11px;opacity:.85">Nghỉ tới ${gio}</div>`:""),
+                    mau:"var(--danger)", dam:true,
+                    chiTiet:`${r.ly_do_nghi.trim()} — nghỉ đăng và comment, mỗi 60 phút `
+                           +`tự chạy 1 phiên thăm dò. Được thì chạy lại bình thường. Không cần làm gì.`};
+        }
         return {nhan:`🚫 Spam${den?" · dò lúc"+den.replace(" tới",""):""}`,
                 mau:"var(--danger)", dam:true,
                 chiTiet:`Facebook đã gỡ ${r.so_vi_pham>0?r.so_vi_pham+" bài":"bài"} của nick này. `

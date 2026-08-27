@@ -1951,6 +1951,35 @@ check("giao diện có màn hình tải Chromium",
       'id="chromium-overlay"' in Path("templates/index.html").read_text(encoding="utf-8"))
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Cột Trạng thái phải nói VÌ SAO acc đang nghỉ
+# ───────────────────────────────────────────────────────────────────────────
+# Không có lý do thì mọi kiểu nghỉ nhìn giống hệt nhau ("Nghỉ tới 23:57"), mà
+# "Lỗi Composer" và "lỗi liên tiếp" cần xử lý khác hẳn nhau.
+_aid_ld = db.upsert_account({"ten_acc": "LYDO Test", "trang_thai": "Active",
+                             "loai_dang": "Homestay"})
+db.danh_dau_spam("LYDO Test", "hộp thoại đăng bài rỗng", ly_do="Lỗi Composer")
+_r_ld = next(a for a in db.get_accounts() if a["ten_acc"] == "LYDO Test")
+check("đánh dấu spam lưu được lý do", _r_ld.get("ly_do_nghi") == "Lỗi Composer")
+check("vẫn vào trạng thái Spam như thường", _r_ld["trang_thai"] == db.TRANG_THAI_SPAM)
+# Nhử thành công thì phải XOÁ lý do — không thì acc đã chạy lại bình thường mà
+# cột Trạng thái vẫn treo chữ "Lỗi Composer".
+db.het_spam("LYDO Test")
+_r_ld = next(a for a in db.get_accounts() if a["ten_acc"] == "LYDO Test")
+check("nhử thành công thì xoá lý do", (_r_ld.get("ly_do_nghi") or "") == "")
+# Không truyền lý do thì để trống, cột hiện "Spam" như cũ.
+db.danh_dau_spam("LYDO Test", "3 bài mới bị gỡ")
+_r_ld = next(a for a in db.get_accounts() if a["ten_acc"] == "LYDO Test")
+check("không truyền lý do → để trống", (_r_ld.get("ly_do_nghi") or "") == "")
+with db._conn() as _c:
+    _c.execute("DELETE FROM accounts WHERE ten_acc='LYDO Test'")
+
+check("scheduler ghi lý do 'Lỗi Composer'",
+      'ly_do="Lỗi Composer"' in Path("scheduler.py").read_text(encoding="utf-8"))
+check("giao diện hiện lý do rồi xuống dòng giờ nghỉ",
+      _re_v.search(r"ly_do_nghi[\s\S]{0,400}Nghỉ tới", _ajs2) is not None
+      if (_ajs2 := Path("static/js/app.js").read_text(encoding="utf-8")) else False)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Acc bị chặn đăng: slot chuyển sang nuôi nick THEO NHỊP, không phải mọi slot
 # ───────────────────────────────────────────────────────────────────────────
 # Bản đầu đổi MỌI slot còn lại thành phiên nuôi. Sai hai chuyện:
