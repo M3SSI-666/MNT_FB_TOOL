@@ -244,6 +244,59 @@
 
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px" id="runner-grid"></div>
 
+                <!-- Báo về Telegram -->
+                <div style="margin-top:28px;padding:16px 18px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);max-width:620px">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="tg-bat" onchange="tgLuu()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <div>
+                            <div style="font-size:13px;font-weight:700">📨 Báo về Telegram</div>
+                            <div style="font-size:11px;color:var(--text-muted)">
+                                Nhắn cho bạn ngay khi có tài khoản dính spam, hết cookie hay lỗi Composer
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="tg-form" style="display:none;margin-top:14px">
+                        <div style="display:grid;grid-template-columns:120px 1fr;gap:8px 10px;align-items:center;font-size:12px">
+                            <label for="tg-ten-may">Tên máy này</label>
+                            <input class="input" id="tg-ten-may" placeholder="Máy Nhà" onchange="tgLuu()">
+
+                            <label for="tg-token">Token của bot</label>
+                            <input class="input" id="tg-token" placeholder="123456789:AAG..." onchange="tgLuu()">
+
+                            <label for="tg-chat-id">Chat ID</label>
+                            <input class="input" id="tg-chat-id" placeholder="-1001234567890" onchange="tgLuu()">
+
+                            <label for="tg-gio">Tổng kết lúc</label>
+                            <input class="input" id="tg-gio" placeholder="08:00" style="width:90px" onchange="tgLuu()">
+                        </div>
+
+                        <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
+                            <button class="btn btn-primary" onclick="tgThu()">Gửi thử</button>
+                            <button class="btn btn-ghost" onclick="tgXemTruoc()">Xem trước tổng kết</button>
+                            <span id="tg-ket-qua" style="font-size:12px"></span>
+                        </div>
+
+                        <details style="margin-top:14px">
+                            <summary style="font-size:12px;cursor:pointer;color:var(--text-muted)">
+                                Lấy Token và Chat ID ở đâu?
+                            </summary>
+                            <div style="font-size:12px;color:var(--text-muted);line-height:1.7;margin-top:8px;padding-left:4px">
+                                <b>Token</b> — mở Telegram, tìm <code>@BotFather</code>, gõ
+                                <code>/newbot</code>, đặt tên. Nó trả về một chuỗi dạng
+                                <code>123456789:AAG...</code>, chép vào ô Token.<br>
+                                <b>Chat ID</b> — nhắn một câu bất kỳ cho bot vừa tạo, rồi tìm
+                                <code>@userinfobot</code> và gõ <code>/start</code>; nó hiện Id của bạn.<br>
+                                <b>Nhiều máy</b> — mọi máy điền <u>cùng</u> Token và Chat ID, chỉ
+                                khác <b>Tên máy này</b>. Cả ba máy sẽ báo về chung một khung chat.
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
                 <!-- Tắt phần mềm -->
                 <div style="margin-top:28px;padding:16px 18px;background:var(--bg-card);border:1px solid var(--danger);border-radius:var(--radius);max-width:520px">
                     <div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:4px">🔴 Tắt phần mềm</div>

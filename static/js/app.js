@@ -390,11 +390,15 @@ const RUNNER_LABELS = {
     nuoi:    {title:"Nuôi nick",icon:"🌱",color:"#6ee7b7"},
 };
 let _runnerStatus={};
+let _tgDaNap=false;
 
 async function loadRunnerStatus(){
     try{
         // Nạp cài đặt hiện/ẩn Chrome 1 lần đầu, để ô tick vẽ đúng trạng thái
         if(!Object.keys(_hienChromeMap).length) await napHienChrome();
+        // Cấu hình Telegram cũng chỉ nạp một lần: hàm này chạy lặp lại theo chu
+        // kỳ, nạp mỗi vòng sẽ xoá mất chữ người dùng đang gõ dở vào ô Token.
+        if(!_tgDaNap){ _tgDaNap = true; tgNap(); }
         const res=await API.runStatus();
         _runnerStatus=res;
         renderRunnerGrid();
@@ -454,6 +458,71 @@ async function napHienChrome(){
             _hienChromeMap[loai] = String(s[`hien_chrome_${loai}`] || "0") === "1";
         }
     }catch(e){}
+}
+
+// ── Báo về Telegram ──────────────────────────────────────────────
+// Mỗi máy chạy một cơ sở dữ liệu riêng, không máy nào nhìn thấy máy nào. Cả ba
+// máy điền CÙNG Token + Chat ID, chỉ khác Tên máy, thì khung chat Telegram trở
+// thành chỗ xem tổng — không cần dựng máy chủ nào.
+async function tgNap(){
+    try{
+        const s = (await API.settings()).data || {};
+        const bat = String(s.tg_bat || "0") === "1";
+        const el  = id => document.getElementById(id);
+        if(!el("tg-bat")) return;
+        el("tg-bat").checked   = bat;
+        el("tg-ten-may").value = s.tg_ten_may     || "";
+        el("tg-token").value   = s.tg_token       || "";
+        el("tg-chat-id").value = s.tg_chat_id     || "";
+        el("tg-gio").value     = s.tg_gio_tom_tat || "08:00";
+        el("tg-form").style.display = bat ? "block" : "none";
+        // Chưa đặt tên thì phần mềm tự lấy tên máy Windows. Đưa nó vào gợi ý để
+        // người dùng nhìn ô trống mà vẫn biết tin nhắn sẽ ký tên gì.
+        try{
+            const t = await API.tgTomTat();
+            if(t.ten_may) el("tg-ten-may").placeholder = t.ten_may;
+        }catch(e){}
+    }catch(e){}
+}
+
+async function tgLuu(){
+    const el = id => document.getElementById(id);
+    const bat = el("tg-bat").checked;
+    el("tg-form").style.display = bat ? "block" : "none";
+    try{
+        await API.saveSettings({
+            tg_bat:         bat ? 1 : 0,
+            tg_ten_may:     el("tg-ten-may").value.trim(),
+            tg_token:       el("tg-token").value.trim(),
+            tg_chat_id:     el("tg-chat-id").value.trim(),
+            tg_gio_tom_tat: el("tg-gio").value.trim() || "08:00",
+        });
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function tgThu(){
+    const kq = document.getElementById("tg-ket-qua");
+    kq.textContent = "Đang gửi…";
+    kq.style.color = "var(--text-muted)";
+    await tgLuu();
+    try{
+        const r = await API.tgThu({
+            token:   document.getElementById("tg-token").value.trim(),
+            chat_id: document.getElementById("tg-chat-id").value.trim(),
+        });
+        kq.textContent = (r.ok ? "✅ " : "❌ ") + (r.msg || "");
+        kq.style.color = r.ok ? "var(--success)" : "var(--danger)";
+    }catch(e){
+        kq.textContent = "❌ " + e.message;
+        kq.style.color = "var(--danger)";
+    }
+}
+
+async function tgXemTruoc(){
+    try{
+        const r = await API.tgTomTat();
+        alert(r.text || "(chưa có gì để tổng kết)");
+    }catch(e){ Toast.error(e.message); }
 }
 
 function renderSidebarStatus(){

@@ -2066,6 +2066,112 @@ for _f in _bat:
         _ten += " — " + "; ".join(f"dòng {i}: {ly}" for i, ly in _loi)
     check(_ten, not _loi)
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Báo Telegram — luật là NÓ HỎNG THÌ CHỈ MÌNH NÓ HỎNG
+# ═══════════════════════════════════════════════════════════════════════════
+# Mọi bài kiểm dưới đây bảo vệ đúng một điều: việc báo cáo không bao giờ được
+# chặn hay làm chậm phiên đăng bài. Bản v2.0.0 từng biến một máy chủ ngoài thành
+# thứ bắt buộc và làm mọi máy đứng hình; đừng đi lại đường đó bằng cửa sau.
+import time as _time
+import thong_bao as _tb
+
+_tb_cu = {k: db.get_setting(k, "") for k in
+          ("tg_bat", "tg_token", "tg_chat_id", "tg_ten_may", "tg_gio_tom_tat")}
+try:
+    # ── Chưa bật: im lặng tuyệt đối ─────────────────────────────────────────
+    db.set_setting("tg_bat", "0")
+    check("chưa bật thì san_sang() = False", _tb.san_sang() is False)
+
+    _t0 = _time.time()
+    _tb.gui("không được gửi gì cả")
+    _tb.bao_doi_trang_thai("Acc Không Có Thật", "Spam", "Lỗi Composer")
+    _tat = _time.time() - _t0
+    check(f"tắt Telegram thì báo cáo tốn < 50ms (đo được {_tat*1000:.0f}ms)", _tat < 0.05)
+
+    # ── Bật nhưng token sai: vẫn không được chặn ────────────────────────────
+    # Đây là bài kiểm quan trọng nhất cả file. Token sai là chuyện sẽ xảy ra
+    # thật — gõ nhầm một ký tự là ra. Lúc đó phần mềm phải đăng bài như thường.
+    db.set_setting("tg_bat", "1")
+    db.set_setting("tg_token", "111111:TOKEN_GIA_DUNG_CHO_BAI_KIEM")
+    db.set_setting("tg_chat_id", "999999999")
+    db.set_setting("tg_ten_may", "Máy Kiểm Thử")
+
+    check("bật + đủ thông tin thì san_sang() = True", _tb.san_sang() is True)
+
+    _t0 = _time.time()
+    _tb.bao_doi_trang_thai("Acc Không Có Thật 2", "Cookie hết hạn")
+    _cho = _time.time() - _t0
+    check(f"token sai vẫn không chặn phiên đăng bài (đo được {_cho*1000:.0f}ms)",
+          _cho < 0.5)
+
+    # ── Chống báo lặp ───────────────────────────────────────────────────────
+    # Acc dính spam bị dò lại mỗi tiếng. Không chặn thì mỗi lần dò hỏng là một
+    # tin nhắn, và người dùng sẽ tắt bot đi vì bị dội.
+    _k = "Acc Lặp Kiểm Thử"
+    check("lần đầu báo thì cho qua", _tb._da_bao_gan_day(_k, "Spam") is False)
+    check("lần hai ngay sau đó bị chặn", _tb._da_bao_gan_day(_k, "Spam") is True)
+    check("cùng acc nhưng trạng thái khác thì vẫn báo",
+          _tb._da_bao_gan_day(_k, "Active") is False)
+
+    # ── thu() phải nói rõ hỏng ở đâu ────────────────────────────────────────
+    # Ô để trống nghĩa là "dùng cấu hình đã lưu", nên phải xoá cấu hình đã lưu
+    # thì mới dựng được đúng cảnh người dùng chưa điền gì.
+    db.set_setting("tg_token", "")
+    db.set_setting("tg_chat_id", "")
+    check("thu() thiếu token → báo thiếu token",
+          "token" in _tb.thu("", "")[1].lower())
+    check("thu() thiếu chat id → báo thiếu chat id",
+          "chat id" in _tb.thu("abc", "")[1].lower())
+    db.set_setting("tg_token", "111111:TOKEN_GIA_DUNG_CHO_BAI_KIEM")
+    db.set_setting("tg_chat_id", "999999999")
+
+    # ── Bản tổng kết ────────────────────────────────────────────────────────
+    _tt = _tb.tom_tat()
+    check("tổng kết có tên máy", "Máy Kiểm Thử" in _tt)
+    check("tổng kết có số acc Active", "Active" in _tt)
+finally:
+    for _k2, _v2 in _tb_cu.items():
+        db.set_setting(_k2, _v2)
+    try:
+        with db._conn() as _c:
+            _c.execute("DELETE FROM tb_da_gui WHERE khoa LIKE 'Acc %Kiểm Thử%' "
+                       "OR khoa LIKE 'Acc Không Có Thật%'")
+    except Exception:
+        pass
+
+check("đã trả cấu hình Telegram về như cũ",
+      db.get_setting("tg_bat", "") == _tb_cu["tg_bat"])
+
+# ── Bốn chỗ ghi trạng thái đều phải báo ─────────────────────────────────────
+# Trạng thái acc chỉ được ghi ở đúng bốn chỗ trong toàn bộ mã nguồn. Thêm chỗ
+# thứ năm mà quên gọi bao_doi_trang_thai thì sự cố đó sẽ âm thầm không ai biết.
+_moc = {
+    "db.py":                 2,   # danh_dau_spam + het_spam
+    "scheduler.py":          1,   # _mark_cookie_dead
+    "join_groups_runner.py": 1,   # hết cookie khi tham gia nhóm
+}
+for _f2, _n2 in _moc.items():
+    _src = Path(_f2).read_text(encoding="utf-8")
+    check(f"{_f2} gọi bao_doi_trang_thai đủ {_n2} chỗ",
+          _src.count("bao_doi_trang_thai(") == _n2)
+
+# ── Mẹo offset=-5 không được sửa thành xác nhận ─────────────────────────────
+# Telegram giao mỗi lệnh cho ĐÚNG MỘT bên hỏi rồi xoá. Ba máy cùng một bot mà
+# máy nào cũng xác nhận đã đọc, thì /tinhtrang chỉ một máy trả lời — hỏng đúng
+# cái tính năng này sinh ra để làm. Ai sửa thành offset=update_id+1 sẽ vướng đây.
+_src_tb = Path("thong_bao.py").read_text(encoding="utf-8")
+check("nghe lệnh dùng offset âm (không xác nhận đã đọc)",
+      '"offset": "-5"' in _src_tb)
+check("không có chỗ nào xác nhận update_id + 1",
+      "update_id\"] + 1" not in _src_tb and "uid + 1" not in _src_tb)
+
+# ── Không được thêm thư viện mới ────────────────────────────────────────────
+# Cả file chỉ dùng thư viện chuẩn của Python. Thêm 'requests' vào đây là bắt
+# mọi máy khách phải cài thêm, mà bản cài đã đóng gói sẵn thư viện từ trước.
+check("thong_bao.py không dùng requests", "import requests" not in _src_tb)
+check("thong_bao.py không dùng thư viện ngoài nào",
+      "cryptography" not in _src_tb and "httpx" not in _src_tb)
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:

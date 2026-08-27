@@ -1902,6 +1902,30 @@ def api_settings_save():
     return jsonify({"ok": True})
 
 
+# ── Telegram ──────────────────────────────────────────────────────
+@app.route("/api/telegram/thu", methods=["POST"])
+def api_telegram_thu():
+    """
+    Gửi một tin thử. Đây là chỗ DUY NHẤT được phép chờ mạng: người dùng đang
+    đứng nhìn cái nút, và không phiên đăng bài nào phụ thuộc vào nó.
+    """
+    import thong_bao
+    body = request.json or {}
+    ok, loi = thong_bao.thu(str(body.get("token", "")),
+                            str(body.get("chat_id", "")))
+    return jsonify({"ok": ok, "msg": loi})
+
+
+@app.route("/api/telegram/tom-tat")
+def api_telegram_tom_tat():
+    """Xem trước bản tổng kết, không gửi đi đâu cả."""
+    import thong_bao
+    # Kèm tên máy để giao diện đặt được gợi ý vào ô nhập: bỏ trống thì phần mềm
+    # tự lấy tên máy Windows, mà nhìn ô trống thì không ai đoán ra điều đó.
+    return jsonify({"ok": True, "text": thong_bao.tom_tat(),
+                    "ten_may": thong_bao.cau_hinh()["ten_may"]})
+
+
 # ═══════════════════════════════════════════════════════════════
 # Entry
 # ═══════════════════════════════════════════════════════════════
@@ -2128,6 +2152,15 @@ def _wait_server_ready(port: int, timeout: float = 15.0):
 
 
 def _serve():
+    # Luồng báo Telegram: gửi tổng kết đúng giờ và nghe lệnh /tinhtrang. Đặt ở
+    # ĐÂY chứ không đặt trong scheduler vì có bốn tiến trình scheduler — để
+    # chúng cùng chạy thì mỗi ngày nhận bốn bản tổng kết giống hệt nhau.
+    try:
+        import thong_bao
+        thong_bao.bat_dau_nen()
+    except Exception as e:
+        logger.warning(f"⚠️  Không bật được luồng Telegram: {e}")
+
     # 127.0.0.1 — CHỈ máy này truy cập được. Trước đây bind 0.0.0.0 để điều
     # khiển từ xa, kéo theo việc mọi máy trong mạng LAN cũng chạm được cổng 8080.
     app.run(host="127.0.0.1", port=PORT, debug=False, use_reloader=False, threaded=True)

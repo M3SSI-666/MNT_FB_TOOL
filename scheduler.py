@@ -252,6 +252,12 @@ def _mark_cookie_dead(acc_name: str):
         a = get_account_by_name(acc_name)
         if a:
             update_account_field(a["id"], "trang_thai", "Cookie hết hạn")
+            try:
+                import thong_bao
+                thong_bao.bao_doi_trang_thai(acc_name, "Cookie hết hạn",
+                                             ly_do="phát hiện khi đăng bài")
+            except Exception:
+                pass
     except Exception as e:
         logger.warning(f"⚠️  Không đánh dấu được acc '{acc_name}' hết cookie: {e}")
     try:

@@ -727,6 +727,14 @@ def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None,
             "WHERE ten_acc=? AND trang_thai='Chờ' AND gio_dang > ? "
             "AND COALESCE(hoat_dong,'dang_bai') IN ('dang_bai','comment')",
             (ten_acc, gio)).fetchone()["c"]
+    # Báo ra Telegram. Đặt NGOÀI khối `with _conn()` để không giữ khoá cơ sở dữ
+    # liệu trong lúc gọi mạng; bản thân hàm này cũng không chờ mạng.
+    try:
+        import thong_bao
+        thong_bao.bao_doi_trang_thai(ten_acc, TRANG_THAI_SPAM, ly_do=ly_do,
+                                     nghi_den=moc.isoformat(timespec="seconds"))
+    except Exception:
+        pass
     return n, moc
 
 
@@ -815,11 +823,18 @@ def het_spam(ten_acc: str) -> int:
             "UPDATE accounts SET trang_thai='Active', nghi_den='', "
             "lich_su_phien='', ly_do_nghi='', canh_bao_moi=? WHERE ten_acc=?",
             (f"'{ten_acc}' thăm dò thành công — chạy lại bình thường", ten_acc))
-        return con.execute(
+        n = con.execute(
             "UPDATE schedules SET trang_thai='Chờ', "
             "updated_at=datetime('now','localtime') "
             "WHERE ten_acc=? AND trang_thai=?",
             (ten_acc, TT_LICH_NGHI_SPAM)).rowcount
+    # Tin vui cũng đáng báo: biết acc đã được thả thì mới biết KHÔNG cần đụng tay.
+    try:
+        import thong_bao
+        thong_bao.bao_doi_trang_thai(ten_acc, "Active", ly_do="đăng lại được")
+    except Exception:
+        pass
+    return n
 
 
 def mo_duong_tham_do() -> list[dict]:

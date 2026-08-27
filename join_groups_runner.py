@@ -365,6 +365,12 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
                          f"lấy lại cookie rồi đổi Trạng thái về Active", acc_name))
             except Exception as e:
                 _log("warning", f"⚠️  Không đánh dấu được acc hết cookie: {e}")
+            try:
+                import thong_bao
+                thong_bao.bao_doi_trang_thai(acc_name, "Cookie hết hạn",
+                                             ly_do="phát hiện khi đi tham gia nhóm")
+            except Exception:
+                pass
             await ctx.close()
             return
 

@@ -10,6 +10,32 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.3.0 — 28/08/2026
+
+**Báo về Telegram khi tài khoản gặp vấn đề**
+
+Chạy nhiều máy thì mỗi máy một cơ sở dữ liệu riêng, không máy nào nhìn thấy máy
+nào — muốn biết acc nào hỏng phải mở từng giao diện lên xem. Giờ mỗi máy tự nhắn
+vào **cùng một khung chat Telegram**, mỗi tin có tên máy ở đầu.
+
+- **Báo ngay** khi acc chuyển sang Spam, Cookie hết hạn hay Lỗi Composer — và
+  báo cả khi acc **được thả về Active**, để biết lúc nào KHÔNG cần đụng tay.
+- **Tổng kết hằng ngày** vào giờ bạn chọn: `12/14 Active`, kèm danh sách acc
+  đang có vấn đề. Không liệt kê acc đang chạy tốt — nhìn 40 dòng xanh không cho
+  biết thêm gì.
+- **Hỏi bất cứ lúc nào**: gõ `/tinhtrang` trong Telegram, **mọi máy đang bật đều
+  trả lời**. Đây là cách xem tổng mà không phải mở từng máy.
+- Acc dính spam bị dò lại mỗi tiếng, nên cùng một acc + một trạng thái chỉ báo
+  **một lần trong 55 phút**, khỏi bị dội tin.
+
+Bật ở tab **Hành động**. Cần Token bot lấy từ `@BotFather` và Chat ID — có hướng
+dẫn ngay trong phần mềm. Nhiều máy thì điền **cùng** Token và Chat ID, chỉ khác
+ô *Tên máy này*.
+
+> **Không bật thì không có gì thay đổi.** Và bật rồi mà mất mạng, sai token hay
+> Telegram sập thì phần mềm **vẫn đăng bài như thường** — chỉ là không có tin
+> nhắn. Việc báo cáo không bao giờ chặn việc đăng.
+
 ## v2.2.0 — 28/08/2026
 
 **Gỡ hẳn cổng đăng ký và phê duyệt**
