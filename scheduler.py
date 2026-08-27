@@ -286,6 +286,10 @@ def _run_warming(item: dict, ghi_chu: str = ""):
         run_warming_session(acc_name=acc_name, c_user=c_user_v)
         done = datetime.now().strftime("%H:%M")
         _update_status(sid, f"🌱 {done} (đã nuôi{' — ' + ghi_chu if ghi_chu else ''})")
+        # Đánh mốc để lần sau biết đã tới nhịp nuôi chưa. Ghi cho CẢ hai đường —
+        # slot nuôi vốn có và slot thay cho phiên bị chặn — không thì hai đường
+        # đếm nhịp riêng và acc bị nuôi dày gấp đôi.
+        db.ghi_nhan_nuoi(acc_name)
         logger.info(f"✅ STT {stt} nuôi xong")
     except CookieDeadError:
         ts2 = datetime.now().strftime("%H:%M")
@@ -385,13 +389,24 @@ def _run_one(item: dict):
     # acc nghỉ sinh ra thêm "lỗi", thêm lỗi lại kéo dài nghỉ.
     ok_chay, vi_sao = db.acc_duoc_chay(item["ten_acc"], hd)
     if not ok_chay:
-        # Acc dính spam thì slot đăng/comment KHÔNG bỏ không — chuyển thành phiên
-        # NUÔI NICK. Bị spam thì đăng bài lẫn comment đều bị gỡ như nhau, nhưng
-        # xem story / lướt feed thì không; để nick im lìm cả tiếng còn tệ hơn.
+        # Acc dính spam: slot đăng/comment có thể chuyển thành phiên NUÔI NICK —
+        # nhưng CHỈ KHI acc có tick Nuôi VÀ đã tới nhịp `nuoi_interval` của nó.
+        #
+        # Bản đầu của tôi đổi MỌI slot còn lại thành nuôi nick. Sai hai chuyện:
+        #   - acc KHÔNG tick Nuôi cũng bị nuôi, trong khi người dùng cố ý không
+        #     muốn (acc 'Ngân Nấm' đúng như vậy: 110 slot, 0 slot nuôi)
+        #   - acc CÓ tick thì bị nuôi liên tục mỗi slot, thay vì giữ nhịp 150
+        #     phút như lúc chạy bình thường
+        # Không tới lượt nuôi thì slot nghỉ hẳn, đúng như trước.
         if db.acc_dang_spam_nghi(item["ten_acc"]) and hd in ("dang_bai", "comment"):
-            logger.info(f"🌱 STT {item.get('stt', item['id'])} — acc "
-                        f"'{item['ten_acc']}' dính spam, đổi sang nuôi nick")
-            _run_warming(item, ghi_chu="thay cho phiên bị spam")
+            if db.den_gio_nuoi(item["ten_acc"]):
+                logger.info(f"🌱 STT {item.get('stt', item['id'])} — acc "
+                            f"'{item['ten_acc']}' dính spam, đổi sang nuôi nick")
+                _run_warming(item, ghi_chu="thay cho phiên bị spam")
+                return
+            _update_status(item["id"], f"😴 {vi_sao}")
+            logger.info(f"😴 STT {item.get('stt', item['id'])} bỏ qua — "
+                        f"acc '{item['ten_acc']}' {vi_sao} (chưa tới nhịp nuôi)")
             return
         _update_status(item["id"], f"😴 {vi_sao}")
         logger.info(f"😴 STT {item.get('stt', item['id'])} bỏ qua — "

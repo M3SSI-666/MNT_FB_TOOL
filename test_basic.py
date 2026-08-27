@@ -1951,6 +1951,47 @@ check("giao diện có màn hình tải Chromium",
       'id="chromium-overlay"' in Path("templates/index.html").read_text(encoding="utf-8"))
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Acc bị chặn đăng: slot chuyển sang nuôi nick THEO NHỊP, không phải mọi slot
+# ───────────────────────────────────────────────────────────────────────────
+# Bản đầu đổi MỌI slot còn lại thành phiên nuôi. Sai hai chuyện:
+#   - acc KHÔNG tick Nuôi cũng bị nuôi, trong khi người dùng cố ý không muốn
+#   - acc CÓ tick thì bị nuôi mỗi slot: acc 110 slot thành 110 phiên nuôi/ngày,
+#     trong khi nhịp cài đặt 150 phút chỉ ra ~10 phiên
+_aid_kt = db.upsert_account({"ten_acc": "NUOI KhongTick", "trang_thai": "Active",
+                             "loai_dang": "Homestay", "nuoi_nick": 0, "nuoi_interval": 150})
+_aid_ct = db.upsert_account({"ten_acc": "NUOI CoTick", "trang_thai": "Active",
+                             "loai_dang": "Homestay", "nuoi_nick": 1, "nuoi_interval": 150})
+
+# Trường hợp 1: không tick Nuôi → KHÔNG nuôi, slot nghỉ hẳn.
+check("không tick Nuôi → không có phiên nuôi nào",
+      db.den_gio_nuoi("NUOI KhongTick") is False)
+
+# Trường hợp 2: có tick → giữ đúng nhịp nuoi_interval, y như lúc chạy bình thường.
+check("có tick, chưa nuôi lần nào → nuôi ngay",
+      db.den_gio_nuoi("NUOI CoTick") is True)
+db.ghi_nhan_nuoi("NUOI CoTick")
+check("vừa nuôi xong → chưa tới nhịp, slot nghỉ",
+      db.den_gio_nuoi("NUOI CoTick") is False)
+_bg = _dt.now()
+check("60 phút sau → vẫn chưa tới nhịp",
+      db.den_gio_nuoi("NUOI CoTick", bay_gio=_bg + _td(minutes=60)) is False)
+check("149 phút sau → vẫn chưa tới",
+      db.den_gio_nuoi("NUOI CoTick", bay_gio=_bg + _td(minutes=149)) is False)
+check("150 phút sau → tới nhịp, được nuôi",
+      db.den_gio_nuoi("NUOI CoTick", bay_gio=_bg + _td(minutes=150)) is True)
+# Đồng hồ vặn lùi cho ra khoảng âm — phải cho qua, không thì acc kẹt vĩnh viễn
+# không bao giờ nuôi nữa.
+check("đồng hồ vặn lùi → vẫn cho nuôi, không kẹt",
+      db.den_gio_nuoi("NUOI CoTick", bay_gio=_bg - _td(minutes=60)) is True)
+
+# Phiên nuôi phải ĐÁNH MỐC, cho cả hai đường: slot nuôi vốn có và slot thay cho
+# phiên bị chặn. Không thì hai đường đếm nhịp riêng và acc bị nuôi dày gấp đôi.
+check("chạy xong phiên nuôi thì đánh mốc",
+      "db.ghi_nhan_nuoi(acc_name)" in Path("scheduler.py").read_text(encoding="utf-8"))
+check("scheduler hỏi nhịp trước khi đổi sang nuôi",
+      "db.den_gio_nuoi(item[\"ten_acc\"])" in Path("scheduler.py").read_text(encoding="utf-8"))
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Chặn Composer: hộp thoại đăng bài mở ra nhưng rỗng
 # ───────────────────────────────────────────────────────────────────────────
 # Facebook chặn acc đăng bằng cách trả về hộp thoại trống — 0 nút, 0 ô soạn

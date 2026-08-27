@@ -294,6 +294,10 @@ def init_db():
 
         _add_col("accounts",  "nuoi_nick",     "nuoi_nick INTEGER DEFAULT 0")
         _add_col("accounts",  "nuoi_interval", "nuoi_interval INTEGER DEFAULT 150")
+        # Mốc phiên nuôi gần nhất. Cần để giữ ĐÚNG NHỊP khi acc bị chặn đăng:
+        # slot đăng/comment lúc đó không bỏ không, nhưng cũng không được biến
+        # tất cả thành phiên nuôi — chỉ nuôi khi đã tới hạn `nuoi_interval`.
+        _add_col("accounts",  "nuoi_lan_cuoi", "nuoi_lan_cuoi TEXT DEFAULT ''")
         _add_col("schedules", "hoat_dong",     "hoat_dong TEXT DEFAULT 'dang_bai'")
 
         # ── Migration: bỏ 2 cột cờ comment ──────────────────────────────
@@ -717,6 +721,51 @@ def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None) -> tuple[in
             "AND COALESCE(hoat_dong,'dang_bai') IN ('dang_bai','comment')",
             (ten_acc, gio)).fetchone()["c"]
     return n, moc
+
+
+def ghi_nhan_nuoi(ten_acc: str):
+    """Đánh mốc acc vừa chạy xong một phiên nuôi nick."""
+    with _conn() as con:
+        con.execute("UPDATE accounts SET nuoi_lan_cuoi=? WHERE ten_acc=?",
+                    (datetime.now().isoformat(timespec="seconds"), ten_acc))
+
+
+def den_gio_nuoi(ten_acc: str, bay_gio=None) -> bool:
+    """Acc này đã tới lúc chạy một phiên nuôi nick chưa.
+
+    Dùng khi acc bị chặn đăng: slot đăng/comment bỏ không thì phí, nhưng KHÔNG
+    được biến mọi slot thành phiên nuôi. Đúng hai luật:
+
+      - acc KHÔNG tick Nuôi  → không nuôi, chấm hết. Người dùng cố ý không muốn.
+      - acc CÓ tick Nuôi     → giữ đúng nhịp `nuoi_interval` của nó, y như lúc
+                               chạy bình thường.
+
+    Bản đầu của tôi đổi MỌI slot còn lại thành nuôi nick — với acc 110 slot thì
+    thành 110 phiên nuôi một ngày, trong khi nhịp cài đặt là 150 phút (~9 phiên).
+    Và acc 'Ngân Nấm' còn không hề tick Nuôi.
+    """
+    with _conn() as con:
+        r = con.execute("SELECT nuoi_nick, nuoi_interval, nuoi_lan_cuoi "
+                        "FROM accounts WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
+    if not r or str(r["nuoi_nick"] or "0") != "1":
+        return False                      # không tick Nuôi → không nuôi
+    try:
+        from nuoi_nick import normalize_interval
+        phut = normalize_interval(r["nuoi_interval"])
+    except Exception:
+        phut = 150
+    cuoi = r["nuoi_lan_cuoi"] or ""
+    if not cuoi:
+        return True                       # chưa nuôi lần nào → nuôi ngay
+    try:
+        moc = datetime.fromisoformat(cuoi)
+    except ValueError:
+        return True
+    gio = bay_gio or datetime.now()
+    # Đồng hồ vặn lùi cho ra khoảng âm — coi như tới giờ, thà nuôi thừa một
+    # phiên còn hơn kẹt vĩnh viễn không bao giờ nuôi nữa.
+    troi = (gio - moc).total_seconds() / 60
+    return troi < 0 or troi >= phut
 
 
 def acc_dang_spam_nghi(ten_acc: str) -> bool:
