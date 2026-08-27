@@ -2248,6 +2248,22 @@ check("nghe lệnh nhận cả channel_post (kênh)", "channel_post" in _src_tb2
 check("xin Telegram gửi cả channel_post",
       '"message","channel_post"' in _src_tb2)
 
+# ── Nút ẩn/hiện bảng Telegram ───────────────────────────────────────────────
+# Bảng này là phần cài một lần rồi thôi, nên thu lại cho trang Hành động gọn.
+# Đổi tên id ở một bên mà quên bên kia thì nút bấm không ăn, mà không có lỗi nào
+# hiện ra — kiểu hỏng chỉ phát hiện khi có người thử bấm.
+_html = Path("templates/index.html").read_text(encoding="utf-8")
+_ajs3 = Path("static/js/app.js").read_text(encoding="utf-8")
+for _id in ("tg-bang", "tg-mui-ten", "tg-nhan"):
+    check(f"'{_id}' có trong cả giao diện lẫn mã",
+          f'id="{_id}"' in _html and _id in _ajs3)
+check("thanh tiêu đề gọi được tgGap()", 'onclick="tgGap()"' in _html)
+check("có hàm tgGap", "function tgGap(" in _ajs3)
+# Thu bảng lại thì vẫn phải biết đang bật hay tắt, nên nhãn trạng thái nằm ở
+# thanh tiêu đề chứ không nằm trong phần bị ẩn.
+check("nhãn trạng thái được cập nhật cả khi nạp lẫn khi lưu",
+      _ajs3.count("_tgNhan(") >= 3)
+
 # ── Không được thêm thư viện mới ────────────────────────────────────────────
 # Cả file chỉ dùng thư viện chuẩn của Python. Thêm 'requests' vào đây là bắt
 # mọi máy khách phải cài thêm, mà bản cài đã đóng gói sẵn thư viện từ trước.

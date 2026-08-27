@@ -464,12 +464,35 @@ async function napHienChrome(){
 // Mỗi máy chạy một cơ sở dữ liệu riêng, không máy nào nhìn thấy máy nào. Cả ba
 // máy điền CÙNG Token + Chat ID, chỉ khác Tên máy, thì khung chat Telegram trở
 // thành chỗ xem tổng — không cần dựng máy chủ nào.
+// Gập/mở cả bảng. Đây là phần cài một lần rồi thôi, nên mặc định thu lại cho
+// trang Hành động gọn — thứ dùng hằng ngày ở đây là các nút Run.
+function tgGap(hien){
+    const bang = document.getElementById("tg-bang");
+    if(!bang) return;
+    const mo = (hien === undefined) ? bang.style.display === "none" : hien;
+    bang.style.display = mo ? "block" : "none";
+    document.getElementById("tg-mui-ten").textContent = mo ? "Ẩn ▾" : "Hiện ▸";
+    // Nhớ lại vào settings chứ không để trong trình duyệt: phần mềm chạy trong
+    // cửa sổ pywebview, mỗi lần mở lại là một phiên trình duyệt mới tinh.
+    if(hien === undefined) API.saveSettings({tg_hien_bang: mo ? 1 : 0}).catch(()=>{});
+}
+
+// Nhãn ở thanh tiêu đề — thu bảng lại vẫn phải biết đang bật hay tắt.
+function _tgNhan(bat, dayDu){
+    const n = document.getElementById("tg-nhan"); if(!n) return;
+    if(bat && dayDu){ n.textContent = "Đang bật";        n.style.color = "var(--success)"; }
+    else if(bat)    { n.textContent = "Bật, chưa điền";  n.style.color = "var(--danger)";  }
+    else            { n.textContent = "Đang tắt";        n.style.color = "var(--text-muted)"; }
+}
+
 async function tgNap(){
     try{
         const s = (await API.settings()).data || {};
         const bat = String(s.tg_bat || "0") === "1";
         const el  = id => document.getElementById(id);
         if(!el("tg-bat")) return;
+        _tgNhan(bat, !!(s.tg_token || "").trim() && !!(s.tg_chat_id || "").trim());
+        tgGap(String(s.tg_hien_bang || "0") === "1");
         el("tg-bat").checked   = bat;
         el("tg-ten-may").value = s.tg_ten_may     || "";
         el("tg-token").value   = s.tg_token       || "";
@@ -489,12 +512,14 @@ async function tgLuu(){
     const el = id => document.getElementById(id);
     const bat = el("tg-bat").checked;
     el("tg-form").style.display = bat ? "block" : "none";
+    const token = el("tg-token").value.trim(), chatId = el("tg-chat-id").value.trim();
+    _tgNhan(bat, !!token && !!chatId);
     try{
         await API.saveSettings({
             tg_bat:         bat ? 1 : 0,
             tg_ten_may:     el("tg-ten-may").value.trim(),
-            tg_token:       el("tg-token").value.trim(),
-            tg_chat_id:     el("tg-chat-id").value.trim(),
+            tg_token:       token,
+            tg_chat_id:     chatId,
             tg_gio_tom_tat: el("tg-gio").value.trim() || "08:00",
         });
     }catch(e){ Toast.error(e.message); }

@@ -10,6 +10,20 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.4.1 — 28/08/2026
+
+**Thu gọn bảng Telegram khi không dùng tới**
+
+Bảng cấu hình Telegram là thứ cài một lần rồi thôi, nhưng nó chiếm nửa trang
+*Hành động* — nơi việc hằng ngày là bấm mấy nút **Run**.
+
+- Thêm nút **Ẩn / Hiện** ở thanh tiêu đề của bảng. Bấm vào đâu trên thanh đó
+  cũng gập được, và phần mềm nhớ lựa chọn cho lần mở sau.
+- Mặc định **thu lại**.
+- Thu lại rồi vẫn thấy ngay đang bật hay tắt, nhờ nhãn ở thanh tiêu đề:
+  *Đang bật* · *Đang tắt* · *Bật, chưa điền* (bật mà thiếu Token hoặc Chat ID —
+  trước đây phải mở bảng ra mới biết mình quên).
+
 ## v2.4.0 — 28/08/2026
 
 **Chỉ báo khi acc thật sự đổi từ chạy sang ngừng, hoặc ngược lại**

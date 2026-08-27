@@ -245,19 +245,32 @@
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px" id="runner-grid"></div>
 
                 <!-- Báo về Telegram -->
-                <div style="margin-top:28px;padding:16px 18px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);max-width:620px">
-                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="tg-bat" onchange="tgLuu()">
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <div>
-                            <div style="font-size:13px;font-weight:700">📨 Báo về Telegram</div>
-                            <div style="font-size:11px;color:var(--text-muted)">
-                                Nhắn cho bạn ngay khi có tài khoản dính spam, hết cookie hay lỗi Composer
+                <div style="margin-top:28px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);max-width:620px">
+
+                    <!-- Thanh tiêu đề: bấm vào đâu cũng gập/mở được. Nhãn trạng
+                         thái nằm ngay đây để thu bảng lại vẫn biết đang bật hay tắt. -->
+                    <div onclick="tgGap()" title="Bấm để ẩn/hiện bảng điều khiển"
+                         style="display:flex;align-items:center;gap:10px;padding:14px 18px;cursor:pointer;user-select:none">
+                        <div style="font-size:13px;font-weight:700">📨 Báo về Telegram</div>
+                        <span id="tg-nhan" style="font-size:11px;padding:2px 8px;border-radius:10px;
+                                                  background:var(--bg);color:var(--text-muted)">…</span>
+                        <span id="tg-mui-ten" class="btn btn-ghost"
+                              style="margin-left:auto;font-size:11px;padding:4px 10px">Hiện ▸</span>
+                    </div>
+
+                    <div id="tg-bang" style="display:none;padding:0 18px 16px">
+                        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="tg-bat" onchange="tgLuu()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div>
+                                <div style="font-size:12px;font-weight:600">Bật báo về Telegram</div>
+                                <div style="font-size:11px;color:var(--text-muted)">
+                                    Nhắn cho bạn ngay khi có tài khoản dính spam, hết cookie hay lỗi Composer
+                                </div>
                             </div>
                         </div>
-                    </div>
 
                     <div id="tg-form" style="display:none;margin-top:14px">
                         <div style="display:grid;grid-template-columns:120px 1fr;gap:8px 10px;align-items:center;font-size:12px">
@@ -313,6 +326,7 @@
                                 thì nhớ xoá khỏi nhóm.
                             </div>
                         </details>
+                    </div>
                     </div>
                 </div>
 
