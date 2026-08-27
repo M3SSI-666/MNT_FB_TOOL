@@ -366,10 +366,15 @@ def _nghe_lenh():
     lệnh bắt đầu bằng '/', không thấy người ta nói chuyện với nhau. Nếu ai đó
     tắt chế độ riêng tư ở @BotFather thì mọi câu chat đều lọt vào hàng đợi và
     lệnh có thể bị đẩy ra ngoài 10 tin gần nhất.
+
+    Nghe cả `channel_post`: trong KÊNH, bài đăng không đến dưới dạng `message`
+    mà là `channel_post`. Chỉ nghe `message` thì cảnh báo vẫn tới kênh bình
+    thường còn `/tinhtrang` im lặng vĩnh viễn — hỏng mà không có lấy một dòng
+    lỗi để lần ra. Nghe cả hai thì chọn nhóm hay kênh đều chạy.
     """
     try:
         kq = _goi_api("getUpdates", {"offset": "-10", "timeout": "0",
-                                     "allowed_updates": '["message"]'})
+                                     "allowed_updates": '["message","channel_post"]'})
         if not kq or not kq.get("ok"):
             return
 
@@ -386,7 +391,7 @@ def _nghe_lenh():
                 for _cu in sorted(_da_xu_ly)[:-100]:
                     _da_xu_ly.discard(_cu)
 
-            tin  = up.get("message") or {}
+            tin  = up.get("message") or up.get("channel_post") or {}
             text = (tin.get("text") or "").strip().lower()
             # Chỉ nghe đúng khung chat đã cấu hình. Bot bị kéo vào nhóm khác thì
             # người lạ ở đó không hỏi được trạng thái acc của mình.
@@ -479,17 +484,21 @@ def tim_chat(token: str = "") -> tuple[bool, str, list[dict]]:
 
     thay: dict[str, dict] = {}
     for up in kq.get("result", []):
-        tin = up.get("message") or up.get("my_chat_member") or {}
+        tin = (up.get("message") or up.get("channel_post")
+               or up.get("my_chat_member") or {})
         ch  = tin.get("chat") or {}
         if not ch.get("id"):
             continue
         ten = ch.get("title") or " ".join(
             x for x in (ch.get("first_name"), ch.get("last_name")) if x
         ) or ch.get("username") or "(không tên)"
+        kieu = str(ch.get("type", ""))
         thay[str(ch["id"])] = {
             "id":   str(ch["id"]),
             "ten":  ten,
-            "loai": "Nhóm" if str(ch.get("type", "")).endswith("group") else "Chat riêng",
+            "loai": ("Nhóm"   if kieu.endswith("group") else
+                     "Kênh"   if kieu == "channel"      else
+                     "Chat riêng"),
         }
 
     ds = list(thay.values())

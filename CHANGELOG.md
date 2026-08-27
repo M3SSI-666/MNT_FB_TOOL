@@ -10,6 +10,21 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.3.2 — 28/08/2026
+
+**Dùng kênh (channel) thay nhóm cũng chạy**
+
+Trong kênh, bài đăng đến dưới dạng khác hẳn trong nhóm. Bản trước chỉ nghe kiểu
+của nhóm, nên nếu bạn trỏ vào một kênh thì **cảnh báo vẫn tới bình thường còn
+`/tinhtrang` im lặng vĩnh viễn** — hỏng mà không có lấy một dòng lỗi nào để lần
+ra. Mà nút *Lấy hộ* lại có hiện kênh ra, nên hoàn toàn có thể chọn nhầm vào đó.
+
+Giờ nghe cả hai kiểu, và nút *Lấy hộ* ghi rõ từng khung là **Nhóm**, **Kênh**
+hay **Chat riêng** để bạn biết mình đang chọn gì.
+
+> Vẫn nên dùng **nhóm**: trong kênh chỉ quản trị viên của kênh gõ được lệnh, và
+> mọi người không trao đổi với nhau được.
+
 ## v2.3.1 — 28/08/2026
 
 **Báo vào nhóm chung cho nhiều người cùng quản lý**

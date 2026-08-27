@@ -2189,6 +2189,14 @@ _src_tb2 = Path("thong_bao.py").read_text(encoding="utf-8")
 check("có dọn bớt mã lệnh đã xử lý", "_da_xu_ly" in _src_tb2 and "discard" in _src_tb2)
 check("KHÔNG xoá sạch mã lệnh đã xử lý", "_da_xu_ly.clear()" not in _src_tb2)
 
+# Trong KÊNH, bài đăng đến dưới dạng channel_post chứ không phải message. Chỉ
+# nghe 'message' thì cảnh báo vẫn tới kênh còn /tinhtrang im lặng vĩnh viễn —
+# hỏng mà không có lấy một dòng lỗi nào để lần ra. Nút 'Lấy hộ' lại có thể hiện
+# ra kênh, nên người dùng hoàn toàn có thể đi thẳng vào cái bẫy đó.
+check("nghe lệnh nhận cả channel_post (kênh)", "channel_post" in _src_tb2)
+check("xin Telegram gửi cả channel_post",
+      '"message","channel_post"' in _src_tb2)
+
 # ── Không được thêm thư viện mới ────────────────────────────────────────────
 # Cả file chỉ dùng thư viện chuẩn của Python. Thêm 'requests' vào đây là bắt
 # mọi máy khách phải cài thêm, mà bản cài đã đóng gói sẵn thư viện từ trước.
