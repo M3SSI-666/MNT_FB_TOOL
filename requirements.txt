@@ -9,8 +9,3 @@ openpyxl>=3.1,<3.2
 # Biến thể ảnh chống dedupe (anh_bien_the.py). Thiếu Pillow thì tính năng tự
 # tắt và bài vẫn đăng bằng ảnh gốc — không phải dependency bắt buộc.
 pillow>=11.0,<12.0
-# Kiểm chữ ký Ed25519 của máy chủ phê duyệt (phe_duyet.py).
-# Ghi ra đây dù pywebview đã kéo nó vào sẵn: dựa vào thư viện khác kéo hộ nghĩa
-# là ngày nào pywebview bỏ nó đi thì máy mới cài xong sẽ KHÔNG mở được phần
-# mềm, mà lỗi lại hiện ra ở chỗ chẳng liên quan gì.
-cryptography>=45,<50

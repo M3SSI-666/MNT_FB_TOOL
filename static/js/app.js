@@ -2526,98 +2526,6 @@ async function loadLogs(){
     }catch(e){ if(joinBox) joinBox.textContent="Lỗi: "+e.message; }
 }
 
-// ── Đăng ký và chờ duyệt ──────────────────────────────────────
-// Chỉ chạy khi máy chủ báo bat_buoc=true, tức là đã gắn khoá công khai. Chưa
-// gắn thì phần mềm hoạt động y như trước, không thấy màn hình này bao giờ.
-
-let _duyetHen = null;          // nhịp dày, dùng khi đang bị chặn
-let _duyetHenDaiHan = null;    // nhịp thưa, dùng khi đã được vào
-
-async function _duyetKiem(){
-    let j;
-    try{
-        j = await (await fetch("/api/phe-duyet/status", {cache:"no-store"})).json();
-    }catch(e){ return; }
-
-    const lop = document.getElementById("duyet-overlay");
-    if(!lop) return;
-
-    if(!j.bat_buoc || j.cho_vao){
-        lop.style.display = "none";
-        if(_duyetHen){ clearInterval(_duyetHen); _duyetHen = null; }
-        // Được vào rồi vẫn hỏi lại đều đặn, vì hai lý do:
-        //   - máy chủ mới biết máy này CÒN ĐANG DÙNG, để hiện trong bảng quản lý
-        //   - thu hồi quyền có hiệu lực trong vòng 30 phút, thay vì phải đợi
-        //     hết hạn nhớ 7 ngày
-        if(j.bat_buoc && !_duyetHenDaiHan){
-            _duyetHenDaiHan = setInterval(_duyetKiem, 30*60*1000);
-        }
-        return;
-    }
-
-    lop.style.display = "flex";
-    document.getElementById("duyet-ma-may").textContent = j.ma_may || "…";
-
-    const icon = document.getElementById("duyet-icon");
-    const tieu = document.getElementById("duyet-tieu-de");
-    const mota = document.getElementById("duyet-mo-ta");
-    const form = document.getElementById("duyet-form");
-
-    if(j.trang_thai === "cho_duyet"){
-        // Đã gửi rồi — không cho gửi lại nữa, chỉ chờ.
-        icon.textContent = "⏳";
-        tieu.textContent = "Đang chờ duyệt";
-        mota.innerHTML = "Đã gửi đăng ký. Gửi mã máy ở dưới cho chủ phần mềm "+
-                         "để được duyệt nhanh hơn.<br>Màn hình này tự tắt khi được duyệt.";
-        form.style.display = "none";
-        // Chờ duyệt thì hỏi thưa hơn — người ta duyệt bằng tay, không có
-        // chuyện đổi trong vài giây.
-        if(!_duyetHen) _duyetHen = setInterval(_duyetKiem, 20000);
-        return;
-    }
-
-    if(j.trang_thai === "bi_cat"){
-        icon.textContent = "⛔";
-        tieu.textContent = "Quyền sử dụng đã bị thu hồi";
-        mota.textContent = "Liên hệ chủ phần mềm nếu bạn nghĩ đây là nhầm lẫn.";
-        form.style.display = "none";
-        if(!_duyetHen) _duyetHen = setInterval(_duyetKiem, 20000);
-        return;
-    }
-
-    icon.textContent = "🔑";
-    tieu.textContent = "Đăng ký sử dụng";
-    mota.textContent = "Điền thông tin rồi gửi. Chủ phần mềm duyệt xong là bạn dùng được.";
-    form.style.display = "";
-    if(j.thong_bao) document.getElementById("duyet-loi").textContent = j.thong_bao;
-    if(!_duyetHen) _duyetHen = setInterval(_duyetKiem, 20000);
-}
-
-async function guiDangKy(){
-    const nut = document.getElementById("duyet-gui");
-    const loi = document.getElementById("duyet-loi");
-    loi.textContent = "";
-    const than = {
-        ten:        document.getElementById("duyet-ten").value,
-        dien_thoai: document.getElementById("duyet-dt").value,
-        email:      document.getElementById("duyet-email").value,
-    };
-    if(!than.ten.trim()){ loi.textContent = "Chưa nhập họ tên."; return; }
-    if(!than.dien_thoai.trim() && !than.email.trim()){
-        loi.textContent = "Nhập số điện thoại hoặc Gmail."; return;
-    }
-    nut.disabled = true; nut.textContent = "Đang gửi…";
-    try{
-        const j = await (await fetch("/api/phe-duyet/dang-ky", {
-            method:"POST", headers:{"Content-Type":"application/json"},
-            body: JSON.stringify(than)
-        })).json();
-        if(!j.ok){ loi.textContent = j.error || "Không gửi được."; }
-        else { await _duyetKiem(); }
-    }catch(e){ loi.textContent = "Không gửi được: " + e.message; }
-    nut.disabled = false; nut.textContent = "Gửi đăng ký";
-}
-
 // ── Chromium: lần chạy đầu ────────────────────────────────────
 // Máy vừa cài xong chưa có Chromium. Che màn hình và tải, vì chưa có nó thì
 // không đăng bài / comment / nuôi nick được — cho vào app cũng chẳng làm gì.
@@ -2812,7 +2720,6 @@ document.addEventListener("DOMContentLoaded", ()=>{
     _doBanMoi();
     setInterval(_doBanMoi, 6*60*60*1000);
     _chromiumKiem();
-    _duyetKiem();
 });
 
 // Chỉ để bật cái chấm cạnh số phiên bản. Khách không phải tự đi mở bảng ra xem

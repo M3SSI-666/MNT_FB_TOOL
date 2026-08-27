@@ -10,6 +10,22 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.2.0 — 28/08/2026
+
+**Gỡ hẳn cổng đăng ký và phê duyệt**
+
+Bản `v2.0.1` chỉ *tắt* cổng đăng ký; mã của nó vẫn nằm trong phần mềm, vẫn có
+màn hình chờ duyệt, vẫn có đường gọi ra máy chủ. Bản này **gỡ bỏ hoàn toàn**:
+
+- Không còn màn hình đăng ký, không còn màn hình chờ duyệt, không còn mã máy.
+- Không còn bất kỳ đường nào gọi ra máy chủ ngoài. Mở phần mềm là dùng được ngay,
+  kể cả khi máy mất mạng.
+- Bớt một thư viện phải cài (`cryptography`) — nó chỉ dùng để kiểm chữ ký của
+  máy chủ duyệt.
+
+Toàn bộ tính năng chạy hằng ngày **không đổi**: đăng bài, comment, nuôi nick,
+tham gia nhóm, Page, lịch, dò spam — y nguyên.
+
 ## v2.1.0 — 28/08/2026
 
 **Nhận ra nick bị Facebook chặn đăng bài**

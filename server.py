@@ -20,8 +20,6 @@ from config import VERSION, PORT, LOG_DIR, MEDIA_DIR
 import capnhat
 import chromium_tai
 import db
-import ma_may
-import phe_duyet
 from db import (
     init_db,
     # accounts
@@ -215,37 +213,6 @@ def api_update():
     except Exception as e:
         return jsonify({"ok": False, "error": f"Không chạy được UPDATE.bat: {e}"})
     return jsonify({"ok": True, "version": xin})
-
-
-# ── Đăng ký và phê duyệt ──────────────────────────────────────
-# Khách mở phần mềm lần đầu → điền họ tên, số điện thoại, Gmail → chờ duyệt.
-#
-# Cổng chặn TỰ TẮT khi chưa gắn khoá công khai (phe_duyet.bat_buoc()). Không có
-# điều đó thì ngay lúc cập nhật code, mọi máy đang chạy đều bị khoá ngoài — kể
-# cả máy của chính mình — mà chưa có chỗ nào để xin duyệt.
-
-@app.route("/api/phe-duyet/status")
-def api_phe_duyet_status():
-    tt = phe_duyet.trang_thai_hien_tai()
-    return jsonify({"ok": True, "ma_may": ma_may.ma_may(),
-                    "bat_buoc": phe_duyet.bat_buoc(), **tt})
-
-
-@app.route("/api/phe-duyet/dang-ky", methods=["POST"])
-def api_phe_duyet_dang_ky():
-    d = request.json or {}
-    ten = (d.get("ten") or "").strip()
-    dt  = (d.get("dien_thoai") or "").strip()
-    em  = (d.get("email") or "").strip()
-    if not ten:
-        return jsonify({"ok": False, "error": "Chưa nhập họ tên."})
-    if not dt and not em:
-        return jsonify({"ok": False, "error": "Nhập số điện thoại hoặc Gmail."})
-    ok, ra = phe_duyet.dang_ky(ten, dt, em, d.get("ghi_chu", ""))
-    if not ok:
-        return jsonify({"ok": False,
-                        "error": (ra or {}).get("loi", "Không gửi được đăng ký.")})
-    return jsonify({"ok": True, **(ra if isinstance(ra, dict) else {})})
 
 
 # ── Chromium: tải lần chạy đầu ────────────────────────────────
