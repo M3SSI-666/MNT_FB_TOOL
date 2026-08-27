@@ -530,7 +530,16 @@ def update_account_field(acc_id: int, field: str, value: str):
         if value not in LOAI_DANG_OPTIONS:
             raise ValueError(f"Loại đăng không hợp lệ: '{value}' "
                              f"(chỉ nhận: {', '.join(x or '(trống)' for x in LOAI_DANG_OPTIONS)})")
+    cu, ten_acc = "", ""
     with _conn() as con:
+        # Đọc trạng thái CŨ trước khi ghi đè. Cửa này là nơi cả giao diện lẫn
+        # scheduler đổi Trạng thái, nên bắt ở đây là bắt được cả hai đường.
+        if field == "trang_thai":
+            r = con.execute("SELECT ten_acc, trang_thai FROM accounts WHERE id=?",
+                            (acc_id,)).fetchone()
+            if r:
+                cu, ten_acc = (r["trang_thai"] or ""), (r["ten_acc"] or "")
+
         con.execute(f"UPDATE accounts SET {field}=? WHERE id=?", (value, acc_id))
         # Người dùng bật acc về Active = "tôi đã xử lý xong". Phải xoá cả lịch sử
         # phiên, không thì cửa sổ trượt vẫn còn đầy "x" cũ và acc bị tắt lại ngay
@@ -538,6 +547,14 @@ def update_account_field(acc_id: int, field: str, value: str):
         if field == "trang_thai" and value == "Active":
             con.execute("UPDATE accounts SET lich_su_phien='', nghi_den='', "
                         "canh_bao_moi='' WHERE id=?", (acc_id,))
+
+    # Ngoài khối `with` để không giữ khoá cơ sở dữ liệu khi gọi mạng.
+    if field == "trang_thai" and ten_acc:
+        try:
+            import thong_bao
+            thong_bao.bao_doi_trang_thai(ten_acc, value, trang_thai_cu=cu)
+        except Exception:
+            pass
 
 
 # ── Sức khoẻ acc ────────────────────────────────────────────────────────
@@ -701,10 +718,11 @@ def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None,
     gio = gio or datetime.now().strftime("%H:%M")
     moc = datetime.now() + timedelta(minutes=sk.THAM_DO_PHUT)
     with _conn() as con:
-        r = con.execute("SELECT id FROM accounts WHERE ten_acc=? LIMIT 1",
+        r = con.execute("SELECT id, trang_thai FROM accounts WHERE ten_acc=? LIMIT 1",
                         (ten_acc,)).fetchone()
         if not r:
             return 0, None
+        tt_cu = r["trang_thai"] or ""
         # `ly_do` hiện thẳng ở cột Trạng thái trên giao diện, ví dụ "Lỗi Composer".
         # Để trống thì cột đó chỉ hiện "Spam" như cũ.
         con.execute(
@@ -729,9 +747,13 @@ def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None,
             (ten_acc, gio)).fetchone()["c"]
     # Báo ra Telegram. Đặt NGOÀI khối `with _conn()` để không giữ khoá cơ sở dữ
     # liệu trong lúc gọi mạng; bản thân hàm này cũng không chờ mạng.
+    # Chỉ báo khi acc ĐANG CHẠY mà bị dừng. Hàm này còn được gọi lại mỗi tiếng
+    # khi phiên thăm dò lại dính spam — lúc đó acc vốn đã 'Spam' rồi, không có
+    # gì mới để báo.
     try:
         import thong_bao
-        thong_bao.bao_doi_trang_thai(ten_acc, TRANG_THAI_SPAM, ly_do=ly_do,
+        thong_bao.bao_doi_trang_thai(ten_acc, TRANG_THAI_SPAM, trang_thai_cu=tt_cu,
+                                     ly_do=ly_do,
                                      nghi_den=moc.isoformat(timespec="seconds"))
     except Exception:
         pass
@@ -819,6 +841,9 @@ def acc_can_tham_do(ten_acc: str) -> bool:
 def het_spam(ten_acc: str) -> int:
     """Thả hẳn acc: về 'Active', xoá mốc nghỉ, trả mọi slot 'Nghỉ Spam' về 'Chờ'."""
     with _conn() as con:
+        _r = con.execute("SELECT trang_thai FROM accounts WHERE ten_acc=? LIMIT 1",
+                         (ten_acc,)).fetchone()
+        tt_cu = (_r["trang_thai"] or "") if _r else ""
         con.execute(
             "UPDATE accounts SET trang_thai='Active', nghi_den='', "
             "lich_su_phien='', ly_do_nghi='', canh_bao_moi=? WHERE ten_acc=?",
@@ -831,7 +856,8 @@ def het_spam(ten_acc: str) -> int:
     # Tin vui cũng đáng báo: biết acc đã được thả thì mới biết KHÔNG cần đụng tay.
     try:
         import thong_bao
-        thong_bao.bao_doi_trang_thai(ten_acc, "Active", ly_do="đăng lại được")
+        thong_bao.bao_doi_trang_thai(ten_acc, "Active", trang_thai_cu=tt_cu,
+                                     ly_do="thăm dò thành công, đăng lại được")
     except Exception:
         pass
     return n

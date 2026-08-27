@@ -45,9 +45,11 @@ API = "https://api.telegram.org/bot{token}/{method}"
 # sao, nhưng một phiên đăng bài bị treo vì chờ Telegram thì mới là hỏng việc.
 CHO_GIAY = 8
 
-# Cùng một acc, cùng một trạng thái thì trong ngần này phút chỉ báo MỘT lần.
-# Acc dính spam bị dò lại mỗi tiếng, không chặn thì mỗi lần dò hỏng là một tin.
-LAP_LAI_PHUT = 55
+# Lưới an toàn cho trường hợp hai tiến trình cùng đọc được trạng thái cũ rồi
+# cùng ghi. Việc chống lặp thật sự do `_huong_doi` lo — chỉ báo khi trạng thái
+# THỰC SỰ đổi — nên cửa sổ này để ngắn: dài quá thì acc hỏng rồi hồi phục rồi
+# hỏng lại trong vòng một tiếng sẽ bị nuốt mất tin thứ hai.
+LAP_LAI_PHUT = 5
 
 # Cách nhau ít nhất ngần này giây giữa hai tin. Telegram chỉ cho khoảng 20
 # tin/phút vào cùng một nhóm, mà báo cáo thường đến theo cụm: mất mạng một cái
@@ -218,17 +220,51 @@ BIEU_TUONG = {
     "Dừng":           "⏸",
 }
 
+# Chỉ báo khi acc VƯỢT QUA ranh giới giữa hai nhóm này.
+#
+# 'Dừng' cố tình không nằm ở nhóm nào: đó là bạn tự tay cho nick nghỉ, không
+# phải sự cố, nên không có gì để báo.
+HOAT_DONG       = ("Active",)
+NGUNG_HOAT_DONG = ("Spam", "Cookie hết hạn")
 
-def _da_bao_gan_day(ten_acc: str, trang_thai: str) -> bool:
+
+def _huong_doi(cu: str, moi: str) -> str:
     """
-    Đã báo đúng cặp (acc, trạng thái) này trong `LAP_LAI_PHUT` phút chưa?
+    Cặp (trạng thái cũ, trạng thái mới) này có đáng báo không?
+
+    Trả 'hong' khi đang chạy mà ngưng, 'hoi_phuc' khi ngưng mà chạy lại, và
+    chuỗi rỗng khi không phải chuyển trạng thái thật sự.
+
+    Vì sao phải so cũ với mới chứ không cứ ghi là báo: acc dính spam bị dò lại
+    MỖI TIẾNG, và mỗi lần dò hỏng lại ghi 'Spam' đè lên 'Spam'. Cứ ghi là báo
+    thì một acc kẹt cả tuần sẽ nhắn 168 lần, toàn tin giống hệt nhau — và người
+    ta sẽ tắt bot đi, rồi bỏ lỡ cái cảnh báo thật sự tiếp theo.
+    """
+    cu, moi = (cu or "").strip(), (moi or "").strip()
+    if not cu or cu == moi:
+        return ""
+    if cu in HOAT_DONG and moi in NGUNG_HOAT_DONG:
+        return "hong"
+    if cu in NGUNG_HOAT_DONG and moi in HOAT_DONG:
+        return "hoi_phuc"
+    return ""
+
+
+def _da_bao_gan_day(ten_acc: str, chuyen: str) -> bool:
+    """
+    Đã báo đúng lần chuyển này trong `LAP_LAI_PHUT` phút chưa?
+
+    Khoá phải gồm CẢ HAI đầu của lần chuyển, không chỉ trạng thái mới. Chỉ lấy
+    trạng thái mới thì hai lần chuyển khác nhau mà cùng đích sẽ đè lên nhau:
+    acc A được thả khỏi Spam lúc 10:00, rồi 10:03 acc A được nạp lại cookie —
+    tin thứ hai bị nuốt, đúng cái tin người dùng đang chờ.
 
     Ghi vào cơ sở dữ liệu chứ không giữ trong bộ nhớ, vì các phiên chạy ở những
     tiến trình khác nhau — bộ nhớ của tiến trình này không thấy tiến trình kia.
     """
     try:
         import db
-        khoa = f"{ten_acc}|{trang_thai}"
+        khoa = f"{ten_acc}|{chuyen}"
         with db._conn() as con:
             con.execute("""CREATE TABLE IF NOT EXISTS tb_da_gui (
                                khoa TEXT PRIMARY KEY,
@@ -252,10 +288,18 @@ def _da_bao_gan_day(ten_acc: str, trang_thai: str) -> bool:
         return False
 
 
-def bao_doi_trang_thai(ten_acc: str, trang_thai: str, ly_do: str = "",
-                       nghi_den: str = "") -> None:
+def bao_doi_trang_thai(ten_acc: str, trang_thai: str, trang_thai_cu: str = "",
+                       ly_do: str = "", nghi_den: str = "") -> None:
     """
-    Acc vừa đổi sang `trang_thai`. Gọi từ đúng những chỗ ghi cột trang_thai.
+    Acc vừa chuyển từ `trang_thai_cu` sang `trang_thai`.
+
+    Chỉ báo hai chiều đáng quan tâm — đang chạy mà ngưng, và ngưng mà chạy lại.
+    Mọi thứ khác im lặng, kể cả ghi đè cùng một trạng thái.
+
+    KHÔNG biết trạng thái cũ thì KHÔNG báo. Nghe có vẻ mất cảnh báo, nhưng ngược
+    lại: chỗ gọi nào cũng đọc được trạng thái cũ ngay trước khi ghi, nên thiếu
+    nó nghĩa là chỗ gọi đó viết sai — và im lặng thì còn sửa được, chứ báo bừa
+    mỗi lần ghi thì thành 168 tin một tuần cho một acc kẹt.
 
     `nghi_den` nhận dạng ISO như trong cơ sở dữ liệu; hỏng thì bỏ qua, không để
     một cái mốc giờ xấu làm hỏng cả thông báo.
@@ -263,9 +307,18 @@ def bao_doi_trang_thai(ten_acc: str, trang_thai: str, ly_do: str = "",
     try:
         if not san_sang():
             return
-        c   = cau_hinh()
-        bt  = BIEU_TUONG.get(trang_thai, "•")
-        dong = [f"{bt} {c['ten_may']}", f"{ten_acc} → {trang_thai}"]
+        huong = _huong_doi(trang_thai_cu, trang_thai)
+        if not huong:
+            return
+
+        c = cau_hinh()
+        if huong == "hong":
+            dau, tieu_de = "🔴", "NGỪNG HOẠT ĐỘNG"
+        else:
+            dau, tieu_de = "🟢", "HOẠT ĐỘNG TRỞ LẠI"
+
+        dong = [f"{dau} {c['ten_may']} — {tieu_de}",
+                f"{ten_acc}: {trang_thai_cu} → {trang_thai}"]
 
         chi_tiet = []
         if (ly_do or "").strip():
@@ -278,7 +331,11 @@ def bao_doi_trang_thai(ten_acc: str, trang_thai: str, ly_do: str = "",
         if chi_tiet:
             dong.append(" · ".join(chi_tiet))
 
-        if _da_bao_gan_day(ten_acc, trang_thai):
+        # Chặn trùng chỉ còn là lưới an toàn cho trường hợp hai tiến trình cùng
+        # đọc được trạng thái cũ rồi cùng ghi. Việc chống lặp thật sự do
+        # `_huong_doi` lo. Khoá gồm cả hai đầu của lần chuyển, nên hai lần
+        # chuyển khác nhau không bao giờ nuốt nhau.
+        if _da_bao_gan_day(ten_acc, f"{trang_thai_cu}→{trang_thai}"):
             return
         gui("\n".join(dong))
     except Exception as e:

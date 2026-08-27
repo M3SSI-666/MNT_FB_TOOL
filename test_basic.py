@@ -2084,7 +2084,8 @@ try:
 
     _t0 = _time.time()
     _tb.gui("không được gửi gì cả")
-    _tb.bao_doi_trang_thai("Acc Không Có Thật", "Spam", "Lỗi Composer")
+    _tb.bao_doi_trang_thai("Acc Không Có Thật", "Spam",
+                           trang_thai_cu="Active", ly_do="Lỗi Composer")
     _tat = _time.time() - _t0
     check(f"tắt Telegram thì báo cáo tốn < 50ms (đo được {_tat*1000:.0f}ms)", _tat < 0.05)
 
@@ -2098,20 +2099,24 @@ try:
 
     check("bật + đủ thông tin thì san_sang() = True", _tb.san_sang() is True)
 
+    # Phải là lần chuyển THẬT (Active → Cookie hết hạn), không thì hàm trả về
+    # ngay ở nhánh "không có gì để báo" và bài kiểm này đo một cái vỏ rỗng.
     _t0 = _time.time()
-    _tb.bao_doi_trang_thai("Acc Không Có Thật 2", "Cookie hết hạn")
+    _tb.bao_doi_trang_thai("Acc Không Có Thật 2", "Cookie hết hạn",
+                           trang_thai_cu="Active")
     _cho = _time.time() - _t0
     check(f"token sai vẫn không chặn phiên đăng bài (đo được {_cho*1000:.0f}ms)",
           _cho < 0.5)
 
     # ── Chống báo lặp ───────────────────────────────────────────────────────
-    # Acc dính spam bị dò lại mỗi tiếng. Không chặn thì mỗi lần dò hỏng là một
-    # tin nhắn, và người dùng sẽ tắt bot đi vì bị dội.
+    # Lưới an toàn cho hai tiến trình cùng đọc trạng thái cũ rồi cùng ghi.
     _k = "Acc Lặp Kiểm Thử"
-    check("lần đầu báo thì cho qua", _tb._da_bao_gan_day(_k, "Spam") is False)
-    check("lần hai ngay sau đó bị chặn", _tb._da_bao_gan_day(_k, "Spam") is True)
-    check("cùng acc nhưng trạng thái khác thì vẫn báo",
-          _tb._da_bao_gan_day(_k, "Active") is False)
+    check("lần đầu báo thì cho qua",
+          _tb._da_bao_gan_day(_k, "Active→Spam") is False)
+    check("đúng lần chuyển đó lặp lại thì bị chặn",
+          _tb._da_bao_gan_day(_k, "Active→Spam") is True)
+    check("lần chuyển khác của cùng acc thì vẫn báo",
+          _tb._da_bao_gan_day(_k, "Spam→Active") is False)
 
     # ── thu() phải nói rõ hỏng ở đâu ────────────────────────────────────────
     # Ô để trống nghĩa là "dùng cấu hình đã lưu", nên phải xoá cấu hình đã lưu
@@ -2142,18 +2147,31 @@ finally:
 check("đã trả cấu hình Telegram về như cũ",
       db.get_setting("tg_bat", "") == _tb_cu["tg_bat"])
 
-# ── Bốn chỗ ghi trạng thái đều phải báo ─────────────────────────────────────
-# Trạng thái acc chỉ được ghi ở đúng bốn chỗ trong toàn bộ mã nguồn. Thêm chỗ
-# thứ năm mà quên gọi bao_doi_trang_thai thì sự cố đó sẽ âm thầm không ai biết.
-_moc = {
-    "db.py":                 2,   # danh_dau_spam + het_spam
-    "scheduler.py":          1,   # _mark_cookie_dead
-    "join_groups_runner.py": 1,   # hết cookie khi tham gia nhóm
-}
-for _f2, _n2 in _moc.items():
-    _src = Path(_f2).read_text(encoding="utf-8")
-    check(f"{_f2} gọi bao_doi_trang_thai đủ {_n2} chỗ",
-          _src.count("bao_doi_trang_thai(") == _n2)
+# ── Mọi chỗ ghi trạng thái đều phải báo, và báo ĐÚNG MỘT LẦN ────────────────
+# `update_account_field` là cửa chung: cả giao diện lẫn scheduler đổi Trạng thái
+# qua đó, nên nó tự so cũ với mới rồi báo. Hai hàm còn lại ghi thẳng bằng SQL
+# nên phải tự gọi. Thêm chỗ ghi thứ tư mà quên báo thì sự cố sẽ âm thầm.
+_src_db = Path("db.py").read_text(encoding="utf-8")
+check("db.py báo ở đúng 3 chỗ (cửa chung + danh_dau_spam + het_spam)",
+      _src_db.count("bao_doi_trang_thai(") == 3)
+check("cửa chung update_account_field có đọc trạng thái cũ trước khi ghi",
+      "SELECT ten_acc, trang_thai FROM accounts WHERE id=?" in _src_db)
+check("join_groups_runner.py tự báo (nó ghi thẳng bằng SQL)",
+      Path("join_groups_runner.py").read_text(encoding="utf-8")
+          .count("bao_doi_trang_thai(") == 1)
+
+# scheduler đổi Trạng thái QUA update_account_field. Gọi thêm bao_doi_trang_thai
+# ở đó là mỗi sự cố nhắn hai lần vào nhóm chung — kiểu lỗi không ai coi là lỗi
+# nên không ai đi sửa, chỉ làm người ta dần bỏ qua thông báo.
+check("scheduler.py KHÔNG tự báo (tránh nhắn hai lần)",
+      "bao_doi_trang_thai(" not in Path("scheduler.py").read_text(encoding="utf-8"))
+
+# Quên truyền trạng thái cũ thì hàm im lặng — mất cảnh báo mà không có lỗi nào
+# hiện ra. Mọi lời gọi thật đều phải nêu rõ nó.
+for _f3 in ("db.py", "join_groups_runner.py"):
+    _s3 = Path(_f3).read_text(encoding="utf-8")
+    check(f"{_f3}: mọi lời gọi đều truyền trạng thái cũ",
+          _s3.count("bao_doi_trang_thai(") == _s3.count("trang_thai_cu="))
 
 # ── Mẹo offset ÂM không được sửa thành xác nhận ─────────────────────────────
 # Telegram giao mỗi lệnh cho ĐÚNG MỘT bên hỏi rồi xoá. Ba máy cùng một bot mà
@@ -2167,6 +2185,39 @@ check("offset phải ÂM — số dương là xác nhận đã đọc, máy khá
       _m_off is not None and int(_m_off.group(1)) < 0)
 check("không có chỗ nào xác nhận update_id + 1",
       "update_id\"] + 1" not in _src_tb and "uid + 1" not in _src_tb)
+
+# ── Chỉ báo khi VƯỢT ranh giới chạy / không chạy ────────────────────────────
+# Báo theo LẦN GHI thì một acc kẹt spam cả tuần sẽ nhắn 168 lần giống hệt nhau,
+# vì phiên thăm dò ghi đè 'Spam' lên 'Spam' mỗi tiếng. Người ta sẽ tắt bot đi,
+# rồi bỏ lỡ cảnh báo thật sự tiếp theo. Nên phải so trạng thái CŨ với MỚI.
+for _cu, _moi, _mong in [
+    ("Active",         "Spam",           "hong"),
+    ("Active",         "Cookie hết hạn", "hong"),
+    ("Spam",           "Active",         "hoi_phuc"),
+    ("Cookie hết hạn", "Active",         "hoi_phuc"),
+    # Ghi đè cùng trạng thái — chính là phiên thăm dò mỗi tiếng.
+    ("Spam",           "Spam",           ""),
+    ("Cookie hết hạn", "Cookie hết hạn", ""),
+    # 'Dừng' là bạn tự tay cho nick nghỉ, không phải sự cố.
+    ("Active",         "Dừng",           ""),
+    ("Dừng",           "Active",         ""),
+    ("Dừng",           "Spam",           ""),
+    # Hỏng kiểu này sang hỏng kiểu khác: vẫn đang ngừng, không có gì mới.
+    ("Spam",           "Cookie hết hạn", ""),
+    # Không biết trạng thái cũ thì im, còn hơn báo bừa mỗi lần ghi.
+    ("",               "Spam",           ""),
+]:
+    _ten = f"{_cu or '(không rõ)'} → {_moi}"
+    check(f"{_ten}: {_mong or 'im lặng'}", _tb._huong_doi(_cu, _moi) == _mong)
+
+# Khoá chống trùng phải gồm CẢ HAI đầu của lần chuyển. Chỉ lấy trạng thái mới
+# thì acc được thả khỏi Spam lúc 10:00, rồi 10:03 nạp lại cookie xong — tin thứ
+# hai bị nuốt, đúng cái tin đang chờ. Lỗi này đã xảy ra thật khi chạy thử.
+check("hai lần chuyển khác nhau cùng đích thì KHÔNG nuốt nhau",
+      _tb._da_bao_gan_day("Acc Kiểm Thử", "Spam→Active") is False
+      and _tb._da_bao_gan_day("Acc Kiểm Thử", "Cookie hết hạn→Active") is False)
+check("đúng lần chuyển đó lặp lại thì bị chặn",
+      _tb._da_bao_gan_day("Acc Kiểm Thử", "Spam→Active") is True)
 
 # ── Báo vào NHÓM chung ──────────────────────────────────────────────────────
 # Nhiều máy cùng báo vào một nhóm để mấy quản trị viên cùng xem. Nhóm có hai

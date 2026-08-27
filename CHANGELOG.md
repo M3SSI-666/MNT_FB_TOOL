@@ -10,6 +10,29 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.4.0 — 28/08/2026
+
+**Chỉ báo khi acc thật sự đổi từ chạy sang ngừng, hoặc ngược lại**
+
+Bản trước báo theo **mỗi lần ghi** trạng thái, không phải theo lần đổi. Mà acc
+dính spam thì cứ mỗi tiếng lại có một phiên thăm dò, và mỗi lần thăm dò hỏng lại
+ghi `Spam` đè lên `Spam`. Nghĩa là **một acc kẹt một tuần sẽ nhắn 168 lần**, toàn
+tin giống hệt nhau — rồi bạn tắt bot đi, và bỏ lỡ cảnh báo thật sự tiếp theo.
+
+Giờ phần mềm so trạng thái cũ với mới, và chỉ nhắn khi vượt qua ranh giới:
+
+| Chuyển | Kết quả |
+|---|---|
+| Active → Spam / Lỗi Composer / Cookie hết hạn | 🔴 **NGỪNG HOẠT ĐỘNG** |
+| Spam / Lỗi Composer / Cookie hết hạn → Active | 🟢 **HOẠT ĐỘNG TRỞ LẠI** |
+| Thăm dò lại vẫn hỏng (Spam → Spam) | im lặng |
+| Bạn tự cho nick nghỉ, hoặc tự bật lại (Dừng) | im lặng |
+
+Tin nhắn cũng nói rõ chiều đổi: `Ngân Nấm: Active → Spam`.
+
+**Báo cả khi bạn tự tay sửa xong.** Nạp lại cookie rồi bật acc về Active thì
+nhóm nhận được tin *HOẠT ĐỘNG TRỞ LẠI* — để hai người không cùng đi sửa một acc.
+
 ## v2.3.2 — 28/08/2026
 
 **Dùng kênh (channel) thay nhóm cũng chạy**

@@ -356,8 +356,14 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
             #
             # Luồng đăng bài đã làm đúng việc này từ trước (_mark_cookie_dead);
             # chỉ luồng tham gia nhóm là bỏ sót.
+            tt_cu = ""
             try:
                 with _conn() as con:
+                    # Đọc trạng thái cũ trước khi ghi đè: chỉ báo khi acc đang
+                    # CHẠY mà hết cookie, không báo lại khi nó vốn đã hết rồi.
+                    _r = con.execute("SELECT trang_thai FROM accounts "
+                                     "WHERE ten_acc=? LIMIT 1", (acc_name,)).fetchone()
+                    tt_cu = (_r["trang_thai"] or "") if _r else ""
                     con.execute(
                         "UPDATE accounts SET trang_thai='Cookie hết hạn', "
                         "canh_bao_moi=? WHERE ten_acc=?",
@@ -368,6 +374,7 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
             try:
                 import thong_bao
                 thong_bao.bao_doi_trang_thai(acc_name, "Cookie hết hạn",
+                                             trang_thai_cu=tt_cu,
                                              ly_do="phát hiện khi đi tham gia nhóm")
             except Exception:
                 pass
