@@ -10,6 +10,39 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.1.0 — 28/08/2026
+
+**Nhận ra nick bị Facebook chặn đăng bài**
+
+Có lúc Facebook chặn một nick bằng cách mở hộp thoại *Tạo bài viết* rồi để trống
+— không ô nhập, không nút, không báo lỗi gì. Trước đây phần mềm dò mất **41 giây**
+rồi ghi `Hybrid thất bại`, nhìn như lỗi kỹ thuật.
+
+- Giờ nhận ra trong **10 giây**, và cột Trạng thái ghi rõ:
+  `🚫 Lỗi Composer` · `Nghỉ tới HH:MM`
+- Nick đó vào đúng luồng nghỉ như khi bị gỡ bài: nghỉ một tiếng, rồi tự đăng thử
+  một bài. Được thì chạy lại ngay; chưa được thì nghỉ tiếp — lặp tới khi Facebook
+  thả. Bạn không phải làm gì.
+
+**Nick nghỉ không còn bị nuôi quá tay**
+
+Nick đang nghỉ mà **không tick Nuôi** thì không chạy phiên nuôi nào. Có tick thì
+giữ đúng chu kỳ đã cài (mặc định 150 phút), thay vì nuôi liên tục mỗi slot.
+
+**Log tham gia nhóm đọc được**
+
+- Mỗi dòng log giờ có **tên tài khoản** ở đầu. Trước đây 5 phiên cùng ghi vào một
+  file, các dòng trộn vào nhau, thấy `❌ Cookie hết hạn` mà không biết của nick nào.
+- Hết cookie khi tham gia nhóm giờ **đổi luôn Trạng thái của tài khoản**, không
+  chỉ ghi vào dòng lịch rồi bị ghi đè.
+
+**Bớt báo nhầm cookie hết hạn**
+
+Lịch tham gia nhóm mở tới 5 trình duyệt cùng lúc; trang tải chậm thì nhìn giống
+hệt trang chưa đăng nhập. Giờ phần mềm **hỏi lại lần nữa** trước khi kết luận.
+Cookie chết thật thì hỏi lại vẫn chết — chỉ tốn vài giây, và chỉ tốn đúng lúc
+sắp báo lỗi.
+
 ## v2.0.1 — 25/08/2026
 
 **Tắt cổng đăng ký.** Bản `v2.0.0` bật nó lên, khiến mọi máy cập nhật đều phải
