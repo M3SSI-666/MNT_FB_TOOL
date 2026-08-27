@@ -441,6 +441,36 @@ async def _thu_dong(page, dlg, buoc: int, cho_escape: bool = True) -> None:
             pass
 
 
+async def composer_bi_chan(page, giay_cho: int = 10) -> bool:
+    """Hộp thoại 'Tạo bài viết' đã mở nhưng RỖNG — tức Facebook chặn acc đăng.
+
+    Nhận ra bằng: có dialog, nhưng KHÔNG có nút nào và KHÔNG có ô soạn thảo nào.
+    Composer chạy được luôn có hàng chục nút (ảnh, cảm xúc, gắn thẻ…), nên "0
+    nút" là dấu hiệu sạch, không nhầm với trạng thái đang tải dở.
+
+    Chờ `giay_cho` rồi mới kết luận, phòng máy chậm. Đo thật thì composer bị
+    chặn đứng im tới 40 giây vẫn 0 nút — nên 10 giây là quá đủ, mà lại cắt được
+    ~30 giây so với cách cũ (dò ba selector, mỗi cái timeout riêng).
+    """
+    import asyncio as _aio
+    for _ in range(max(1, giay_cho // 2)):
+        try:
+            tt = await page.evaluate("""() => {
+                const d = document.querySelector("div[role='dialog']");
+                if (!d) return null;
+                return {nut: d.querySelectorAll("div[role='button'],button").length,
+                        o:   d.querySelectorAll("div[contenteditable='true']").length};
+            }""")
+        except Exception:
+            return False        # không đọc được thì đừng kết luận bừa
+        if tt is None:
+            return False        # chưa có dialog — chuyện khác, không phải bị chặn
+        if tt["o"] or tt["nut"]:
+            return False        # đã dựng được nội dung → bình thường
+        await _aio.sleep(2)
+    return True
+
+
 async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
     """Sau mỗi phiên đăng bài / comment: xem Facebook có vừa gỡ gì không.
 

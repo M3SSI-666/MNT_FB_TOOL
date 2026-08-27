@@ -1951,6 +1951,58 @@ check("giao diện có màn hình tải Chromium",
       'id="chromium-overlay"' in Path("templates/index.html").read_text(encoding="utf-8"))
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Chặn Composer: hộp thoại đăng bài mở ra nhưng rỗng
+# ───────────────────────────────────────────────────────────────────────────
+# Facebook chặn acc đăng bằng cách trả về hộp thoại trống — 0 nút, 0 ô soạn
+# thảo, đúng 12 ký tự tiêu đề, KHÔNG lỗi console, KHÔNG request hỏng.
+#
+# Đã đo bằng ba phép thử tách biến trên acc 'Ngân Nấm' ngày 27/08:
+#   acc đó + nhóm khác              → rỗng
+#   acc KHOẺ + đúng nhóm đó         → mở bình thường, 12 nút
+#   acc đó + PROFILE SẠCH hoàn toàn → vẫn rỗng
+# Nên không phải do nhóm, không phải cache, không phải profile — mà do chính
+# tài khoản bị chặn.
+from fb_common import composer_bi_chan as _cbc
+
+class _TrangComposer:
+    def __init__(self, day):
+        self.day, self.i = list(day), 0
+    async def evaluate(self, _js):
+        r = self.day[min(self.i, len(self.day) - 1)]
+        self.i += 1
+        return r
+
+def _thu_composer(day):
+    return _aio.run(_cbc(_TrangComposer(day), giay_cho=4))
+
+check("composer tải được → không phải bị chặn",
+      _thu_composer([{"nut": 12, "o": 1}]) is False)
+# Composer chạy được LUÔN có hàng chục nút, nên "0 nút" là dấu hiệu sạch. Nhưng
+# vẫn phải chờ, không kết luận ngay: máy chậm thì vài giây đầu cũng 0 nút.
+check("tải chậm rồi có nút → không phải bị chặn",
+      _thu_composer([{"nut": 0, "o": 0}, {"nut": 12, "o": 1}]) is False)
+check("rỗng suốt → kết luận BỊ CHẶN",
+      _thu_composer([{"nut": 0, "o": 0}]) is True)
+# Chưa có dialog là chuyện khác hẳn (chưa bấm mở được) — đừng gán nhầm thành bị
+# chặn, không thì mọi lỗi mở composer đều bị đẩy vào đường Spam.
+check("chưa có dialog → KHÔNG kết luận bị chặn",
+      _thu_composer([None]) is False)
+
+# Bị chặn phải đi đúng ĐƯỜNG SPAM, không rơi vào nhánh lỗi kỹ thuật chung.
+_sch = Path("scheduler.py").read_text(encoding="utf-8")
+check("scheduler bắt riêng ComposerBiChan", "except ComposerBiChan:" in _sch)
+check("bị chặn thì đánh dấu Spam",
+      _re_v.search(r"except ComposerBiChan:[\s\S]{0,900}danh_dau_spam", _sch) is not None)
+check("cột trạng thái ghi 'Chặn Composer'", "Chặn Composer" in _sch)
+# Phải bắt TRƯỚC `except Exception` — Python xét theo thứ tự, đặt sau là không
+# bao giờ chạy tới.
+check("bắt ComposerBiChan trước Exception chung",
+      _sch.index("except ComposerBiChan:") < _sch.index("except Exception as e:\n            cat, label"))
+_pvp = Path("page_via_poster.py").read_text(encoding="utf-8")
+check("cả hai luồng đăng đều dò chặn composer",
+      _pvp.count("composer_bi_chan(page)") == 2)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Kết luận "cookie hết hạn" phải hỏi lại lần nữa
 # ───────────────────────────────────────────────────────────────────────────
 # Lịch tham gia nhóm mở tới 5 Chromium cùng lúc. Trang tải chậm, dò ngay thì

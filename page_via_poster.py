@@ -45,8 +45,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cookie_exporter import load_cookie
 from storage import prepare_images_for_post as smart_download, cleanup_temp
 from config import HEADLESS
-from utils import logger, jitter_ms, CookieDeadError
-from fb_common import (kiem_vi_pham, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
+from utils import logger, ComposerBiChan, jitter_ms, CookieDeadError
+from fb_common import (kiem_vi_pham, composer_bi_chan, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
@@ -527,6 +527,16 @@ async def _run_page_via(
             except PWTimeout:
                 continue
         if not typed:
+            # Phân biệt HAI chuyện nhìn giống hệt nhau:
+            #   composer RỖNG   → Facebook chặn acc đăng (0 nút, 0 ô soạn thảo)
+            #   composer có nút → lỗi kỹ thuật thật, selector không khớp
+            # Trước đây gộp làm một, nên acc bị chặn bị ghi là "lỗi [other]" rồi
+            # đẩy vào đường nghỉ-vì-lỗi thay vì đường Spam.
+            if await composer_bi_chan(page):
+                logger.error("  🚫 CHẶN COMPOSER — hộp thoại mở ra nhưng rỗng "
+                             "(0 nút, 0 ô soạn thảo). Facebook đang chặn acc này đăng bài.")
+                await ctx.close()
+                raise ComposerBiChan("Chặn Composer")
             logger.error(f"  ❌ Không paste được nội dung!")
             await ctx.close()
             return False
@@ -1023,6 +1033,16 @@ async def _run_page_wall(
             except PWTimeout:
                 continue
         if not typed:
+            # Phân biệt HAI chuyện nhìn giống hệt nhau:
+            #   composer RỖNG   → Facebook chặn acc đăng (0 nút, 0 ô soạn thảo)
+            #   composer có nút → lỗi kỹ thuật thật, selector không khớp
+            # Trước đây gộp làm một, nên acc bị chặn bị ghi là "lỗi [other]" rồi
+            # đẩy vào đường nghỉ-vì-lỗi thay vì đường Spam.
+            if await composer_bi_chan(page):
+                logger.error("  🚫 CHẶN COMPOSER — hộp thoại mở ra nhưng rỗng "
+                             "(0 nút, 0 ô soạn thảo). Facebook đang chặn acc này đăng bài.")
+                await ctx.close()
+                raise ComposerBiChan("Chặn Composer")
             logger.error(f"  ❌ Không paste được nội dung!")
             await ctx.close()
             return False

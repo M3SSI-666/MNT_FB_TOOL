@@ -22,7 +22,7 @@ from db import (
     update_account_field,
 )
 from cookie_exporter import load_cookie
-from utils import logger, jitter, CookieDeadError, classify_error
+from utils import logger, jitter, CookieDeadError, ComposerBiChan, classify_error
 from config import CHECK_EVERY_SEC, WINDOW_MINUTES, MAX_WORKERS
 
 # ── Cấu hình ─────────────────────────────────────────────────
@@ -433,6 +433,23 @@ def _run_one(item: dict):
             _mark_cookie_dead(acc_name)
             # Cookie chết đã có trạng thái riêng và cách xử lý riêng (đăng nhập
             # lại), đừng tính vào sức khoẻ — nó không phải dấu hiệu bị FB chặn.
+            return
+
+        except ComposerBiChan:
+            # Facebook chặn acc đăng: hộp thoại "Tạo bài viết" mở ra nhưng rỗng.
+            # Cùng loại tín hiệu với "bài bị gỡ" nên đi ĐÚNG đường Spam: nghỉ,
+            # slot còn lại chuyển sang nuôi nick, một tiếng sau nhử lại.
+            #
+            # KHÔNG để nó rơi vào nhánh lỗi chung bên dưới: ở đó nó bị ghi là
+            # "lỗi [other]" và cộng vào lịch sử hỏng, tức là đẩy acc vào đường
+            # nghỉ-vì-lỗi-kỹ-thuật — sai bản chất, và không chuyển slot sang
+            # nuôi nick.
+            ts2 = datetime.now().strftime("%H:%M")
+            _update_status(sid, f"🚫 {ts2} Chặn Composer")
+            n, moc = db.danh_dau_spam(acc_name, "Chặn Composer — hộp thoại đăng bài rỗng")
+            logger.error(f"🚫 STT {stt}: acc '{acc_name}' BỊ CHẶN COMPOSER — "
+                         f"{n} slot còn lại chuyển sang nuôi nick, "
+                         f"nhử lại lúc {moc:%H:%M}")
             return
 
         except Exception as e:

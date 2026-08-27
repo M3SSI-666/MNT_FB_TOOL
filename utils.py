@@ -70,6 +70,26 @@ class CookieDeadError(PostError):
     """Cookie hết hạn / bị đăng xuất — cần refresh cookie thủ công."""
 
 
+class ComposerBiChan(PostError):
+    """Facebook chặn acc đăng bài: hộp thoại 'Tạo bài viết' mở ra nhưng RỖNG.
+
+    KHÔNG phải lỗi kỹ thuật, dù nhìn giống. Đã đo bằng ba phép thử tách biến
+    trên acc 'Ngân Nấm' ngày 27/08:
+
+        acc đó + nhóm khác            → rỗng
+        acc KHOẺ + đúng nhóm đó       → mở bình thường, 12 nút
+        acc đó + PROFILE SẠCH hoàn toàn → vẫn rỗng
+
+    Nên không phải do nhóm, không phải do cache, không phải do profile. Biến duy
+    nhất còn lại là chính tài khoản. Facebook chặn bằng cách trả về hộp thoại
+    trống: 0 nút, 0 ô soạn thảo, đúng 12 ký tự tiêu đề — và KHÔNG có lỗi console
+    hay request hỏng nào, tức là không có gì tải trượt cả.
+
+    Đây là cùng loại tín hiệu với "bài bị gỡ", nên xử lý bằng đúng đường Spam:
+    nghỉ, chuyển slot sang nuôi nick, một tiếng sau nhử lại.
+    """
+
+
 def classify_error(exc) -> tuple:
     """
     Đoán loại lỗi từ exception → (category, nhãn tiếng Việt) để hiển thị.
