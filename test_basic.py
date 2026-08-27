@@ -2155,15 +2155,39 @@ for _f2, _n2 in _moc.items():
     check(f"{_f2} gọi bao_doi_trang_thai đủ {_n2} chỗ",
           _src.count("bao_doi_trang_thai(") == _n2)
 
-# ── Mẹo offset=-5 không được sửa thành xác nhận ─────────────────────────────
+# ── Mẹo offset ÂM không được sửa thành xác nhận ─────────────────────────────
 # Telegram giao mỗi lệnh cho ĐÚNG MỘT bên hỏi rồi xoá. Ba máy cùng một bot mà
 # máy nào cũng xác nhận đã đọc, thì /tinhtrang chỉ một máy trả lời — hỏng đúng
 # cái tính năng này sinh ra để làm. Ai sửa thành offset=update_id+1 sẽ vướng đây.
 _src_tb = Path("thong_bao.py").read_text(encoding="utf-8")
-check("nghe lệnh dùng offset âm (không xác nhận đã đọc)",
-      '"offset": "-5"' in _src_tb)
+import re as _re
+_m_off = _re.search(r'"getUpdates",\s*\{"offset":\s*"(-?\d+)"', _src_tb)
+check("nghe lệnh có truyền offset", _m_off is not None)
+check("offset phải ÂM — số dương là xác nhận đã đọc, máy khác sẽ mất lệnh",
+      _m_off is not None and int(_m_off.group(1)) < 0)
 check("không có chỗ nào xác nhận update_id + 1",
       "update_id\"] + 1" not in _src_tb and "uid + 1" not in _src_tb)
+
+# ── Báo vào NHÓM chung ──────────────────────────────────────────────────────
+# Nhiều máy cùng báo vào một nhóm để mấy quản trị viên cùng xem. Nhóm có hai
+# ràng buộc mà chat riêng không có, và cả hai đều âm thầm.
+check("có giãn cách giữa hai tin", hasattr(_tb, "GIAN_CACH_GIAY"))
+# Telegram cho khoảng 20 tin/phút vào cùng một nhóm. Vượt thì nó NUỐT tin chứ
+# không báo gì — mất cảnh báo mà không ai biết là đã mất.
+check("giãn cách đủ thưa để không vượt ~20 tin/phút của nhóm",
+      _tb.GIAN_CACH_GIAY >= 3.0)
+check("giãn cách không thưa quá đến mức cảnh báo tới muộn",
+      _tb.GIAN_CACH_GIAY <= 10)
+
+check("tim_chat thiếu token → báo thiếu token",
+      "token" in _tb.tim_chat("")[1].lower())
+
+# Quên mã lệnh cũ để không phình bộ nhớ, nhưng KHÔNG được quên sạch: mỗi lần
+# hỏi, Telegram trả lại đúng mấy lệnh gần nhất — quên sạch là trả lời lại từng
+# ấy lệnh cũ thêm một lần nữa, vào nhóm chung, trước mặt mọi người.
+_src_tb2 = Path("thong_bao.py").read_text(encoding="utf-8")
+check("có dọn bớt mã lệnh đã xử lý", "_da_xu_ly" in _src_tb2 and "discard" in _src_tb2)
+check("KHÔNG xoá sạch mã lệnh đã xử lý", "_da_xu_ly.clear()" not in _src_tb2)
 
 # ── Không được thêm thư viện mới ────────────────────────────────────────────
 # Cả file chỉ dùng thư viện chuẩn của Python. Thêm 'requests' vào đây là bắt

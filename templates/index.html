@@ -268,7 +268,12 @@
                             <input class="input" id="tg-token" placeholder="123456789:AAG..." onchange="tgLuu()">
 
                             <label for="tg-chat-id">Chat ID</label>
-                            <input class="input" id="tg-chat-id" placeholder="-1001234567890" onchange="tgLuu()">
+                            <div style="display:flex;gap:6px">
+                                <input class="input" id="tg-chat-id" placeholder="-1001234567890" style="flex:1" onchange="tgLuu()">
+                                <button class="btn btn-ghost" style="white-space:nowrap"
+                                        onclick="tgTimChat()"
+                                        title="Hỏi bot xem nó đang ở nhóm nào rồi điền hộ">Lấy hộ</button>
+                            </div>
 
                             <label for="tg-gio">Tổng kết lúc</label>
                             <input class="input" id="tg-gio" placeholder="08:00" style="width:90px" onchange="tgLuu()">
@@ -282,16 +287,30 @@
 
                         <details style="margin-top:14px">
                             <summary style="font-size:12px;cursor:pointer;color:var(--text-muted)">
-                                Lấy Token và Chat ID ở đâu?
+                                Cài lần đầu — báo vào nhóm chung cho nhiều người cùng xem
                             </summary>
-                            <div style="font-size:12px;color:var(--text-muted);line-height:1.7;margin-top:8px;padding-left:4px">
-                                <b>Token</b> — mở Telegram, tìm <code>@BotFather</code>, gõ
-                                <code>/newbot</code>, đặt tên. Nó trả về một chuỗi dạng
-                                <code>123456789:AAG...</code>, chép vào ô Token.<br>
-                                <b>Chat ID</b> — nhắn một câu bất kỳ cho bot vừa tạo, rồi tìm
-                                <code>@userinfobot</code> và gõ <code>/start</code>; nó hiện Id của bạn.<br>
-                                <b>Nhiều máy</b> — mọi máy điền <u>cùng</u> Token và Chat ID, chỉ
-                                khác <b>Tên máy này</b>. Cả ba máy sẽ báo về chung một khung chat.
+                            <div style="font-size:12px;color:var(--text-muted);line-height:1.75;margin-top:8px;padding-left:4px">
+                                <b>1. Tạo bot</b> — mở Telegram, tìm <code>@BotFather</code>, gõ
+                                <code>/newbot</code>, đặt tên. Nó trả về chuỗi dạng
+                                <code>123456789:AAG...</code> → chép vào ô <b>Token</b>.<br>
+
+                                <b>2. Tạo nhóm</b> — tạo một nhóm Telegram, thêm bot vừa tạo vào,
+                                rồi thêm các quản trị viên bạn muốn cho cùng xem.<br>
+
+                                <b>3. Lấy Chat ID</b> — gõ <code>/start</code> <u>trong nhóm đó</u>,
+                                rồi bấm nút <b>Lấy hộ</b> bên trên. ID nhóm là số âm dạng
+                                <code>-100...</code>, không tự tìm được ở đâu trong Telegram.<br>
+
+                                <b>4. Các máy còn lại</b> — điền <u>y hệt</u> Token và Chat ID, chỉ
+                                đổi ô <b>Tên máy này</b>. Mọi máy sẽ báo chung vào một nhóm.<br><br>
+
+                                <b>Lưu ý:</b> đừng tắt chế độ riêng tư của bot ở
+                                <code>@BotFather</code> — để nguyên mặc định thì trong nhóm bot chỉ
+                                nhìn thấy các lệnh, không đọc được người ta nói chuyện với nhau.<br>
+
+                                Ai ở trong nhóm cũng gõ được <code>/tinhtrang</code> và thấy tên
+                                mọi tài khoản, nên chỉ thêm người bạn thực sự tin. Người nghỉ việc
+                                thì nhớ xoá khỏi nhóm.
                             </div>
                         </details>
                     </div>

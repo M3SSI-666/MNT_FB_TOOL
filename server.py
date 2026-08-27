@@ -1916,6 +1916,20 @@ def api_telegram_thu():
     return jsonify({"ok": ok, "msg": loi})
 
 
+@app.route("/api/telegram/tim-chat", methods=["POST"])
+def api_telegram_tim_chat():
+    """
+    Hỏi bot xem nó đang ở những khung chat nào, kèm Chat ID.
+
+    Bước khó nhất khi cài là lấy Chat ID của NHÓM: nó là số âm và Telegram
+    không hiện ở đâu cả.
+    """
+    import thong_bao
+    body = request.json or {}
+    ok, msg, ds = thong_bao.tim_chat(str(body.get("token", "")))
+    return jsonify({"ok": ok, "msg": msg, "ds": ds})
+
+
 @app.route("/api/telegram/tom-tat")
 def api_telegram_tom_tat():
     """Xem trước bản tổng kết, không gửi đi đâu cả."""

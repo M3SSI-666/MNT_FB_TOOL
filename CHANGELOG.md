@@ -10,6 +10,29 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.3.1 — 28/08/2026
+
+**Báo vào nhóm chung cho nhiều người cùng quản lý**
+
+Nhiều máy báo chung vào một nhóm Telegram vốn đã chạy được từ `v2.3.0`, nhưng
+nhóm có mấy chỗ vấp mà chat riêng không có. Bản này gỡ hết:
+
+- **Nút "Lấy hộ" Chat ID.** ID của nhóm là số âm dạng `-100...` và Telegram
+  không hiện nó ở đâu cả — `@userinfobot` chỉ cho ID cá nhân. Giờ thêm bot vào
+  nhóm, gõ `/start` trong đó, bấm nút là phần mềm tự hỏi bot và điền vào.
+- **Không còn mất cảnh báo khi hỏng hàng loạt.** Telegram chỉ nhận khoảng 20
+  tin/phút vào một nhóm; vượt thì nó *nuốt* tin chứ không báo gì. Mất mạng một
+  cái là cả loạt acc cùng hết cookie trong vài giây — đúng lúc cần biết nhất
+  thì lại là lúc dễ mất tin nhất. Giờ các tin được giãn ra và gửi lại nếu
+  Telegram bảo chờ.
+- **Hướng dẫn cài ngay trong phần mềm** viết lại theo đúng thứ tự làm: tạo bot →
+  tạo nhóm → thêm quản trị viên → lấy Chat ID → sang máy khác điền y hệt.
+- Báo lỗi rõ hơn: bot bị xoá khỏi nhóm, hoặc điền nhầm ID cá nhân vào ô nhóm.
+
+> **Lưu ý khi thêm người:** ai ở trong nhóm cũng gõ được `/tinhtrang` và thấy
+> tên mọi tài khoản. Chỉ thêm người bạn thực sự tin, và xoá người nghỉ việc ra
+> khỏi nhóm.
+
 ## v2.3.0 — 28/08/2026
 
 **Báo về Telegram khi tài khoản gặp vấn đề**

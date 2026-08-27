@@ -91,6 +91,7 @@ const API = {
     // Telegram
     tgThu:           (data)       => API.post("/api/telegram/thu", data),
     tgTomTat:        ()           => API.get("/api/telegram/tom-tat"),
+    tgTimChat:       (data)       => API.post("/api/telegram/tim-chat", data),
 
     // App
     appShutdown:     ()           => API.post("/api/app/shutdown", {}),

@@ -518,6 +518,39 @@ async function tgThu(){
     }
 }
 
+// Lấy Chat ID hộ. Đây là bước khó nhất khi cài, nhất là với NHÓM: ID nhóm là
+// số âm và Telegram không hiện nó ở đâu cả.
+async function tgTimChat(){
+    const kq = document.getElementById("tg-ket-qua");
+    kq.textContent = "Đang hỏi bot…";
+    kq.style.color = "var(--text-muted)";
+    await tgLuu();
+    try{
+        const r = await API.tgTimChat({
+            token: document.getElementById("tg-token").value.trim()
+        });
+        if(!r.ok || !(r.ds||[]).length){
+            kq.textContent = "❌ " + (r.msg || "Không thấy khung chat nào");
+            kq.style.color = "var(--danger)";
+            return;
+        }
+        const ds = r.ds;
+        // Một khung thì điền luôn, khỏi bắt chọn.
+        const chon = ds.length === 1 ? ds[0] : ds[Math.max(0, parseInt(
+            prompt("Bot đang ở những khung chat này.\n\n"
+                + ds.map((c,i)=>`${i+1}. ${c.ten} — ${c.loai} (${c.id})`).join("\n")
+                + "\n\nGõ số của khung muốn dùng:", "1") || "0", 10) - 1)];
+        if(!chon) return;
+        document.getElementById("tg-chat-id").value = chon.id;
+        await tgLuu();
+        kq.textContent = `✅ Đã điền: ${chon.ten} (${chon.id})`;
+        kq.style.color = "var(--success)";
+    }catch(e){
+        kq.textContent = "❌ " + e.message;
+        kq.style.color = "var(--danger)";
+    }
+}
+
 async function tgXemTruoc(){
     try{
         const r = await API.tgTomTat();

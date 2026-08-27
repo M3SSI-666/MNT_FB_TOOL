@@ -49,6 +49,11 @@ CHO_GIAY = 8
 # Acc dính spam bị dò lại mỗi tiếng, không chặn thì mỗi lần dò hỏng là một tin.
 LAP_LAI_PHUT = 55
 
+# Cách nhau ít nhất ngần này giây giữa hai tin. Telegram chỉ cho khoảng 20
+# tin/phút vào cùng một nhóm, mà báo cáo thường đến theo cụm: mất mạng một cái
+# là cả loạt acc cùng hết cookie trong vài giây.
+GIAN_CACH_GIAY = 3.5
+
 _hang: "queue.Queue[tuple[str, str]]" = queue.Queue(maxsize=200)
 _luong_gui: threading.Thread | None = None
 _khoa = threading.Lock()
@@ -113,6 +118,7 @@ def _goi_api(method: str, tham_so: dict, token: str = "") -> dict | None:
 
 def _luong_chay():
     """Luồng nền: rút tin khỏi hàng đợi rồi gửi. Chết là chết một mình."""
+    lan_truoc = 0.0
     while True:
         try:
             token, text = _hang.get()
@@ -122,11 +128,33 @@ def _luong_chay():
             if text is None:                     # tín hiệu dừng
                 _hang.task_done()
                 return
-            c = cau_hinh()
-            _goi_api("sendMessage",
-                     {"chat_id": c["chat_id"], "text": text,
-                      "disable_web_page_preview": "true"},
-                     token=token or c["token"])
+
+            # Giãn cách giữa hai tin. Telegram chỉ cho khoảng 20 tin/phút vào
+            # cùng một nhóm; ba máy cùng báo một lúc — ví dụ cả loạt acc hết
+            # cookie cùng lúc — là vượt ngay, và Telegram sẽ NUỐT tin chứ không
+            # báo gì. Chờ ở đây vô hại: luồng này chạy nền, không ai đợi nó.
+            cho = GIAN_CACH_GIAY - (time.time() - lan_truoc)
+            if cho > 0:
+                time.sleep(cho)
+
+            c  = cau_hinh()
+            kq = _goi_api("sendMessage",
+                          {"chat_id": c["chat_id"], "text": text,
+                           "disable_web_page_preview": "true"},
+                          token=token or c["token"])
+            lan_truoc = time.time()
+
+            # Vẫn quá nhanh thì Telegram nói rõ phải chờ bao lâu — nghe lời nó
+            # và gửi lại đúng một lần.
+            if kq and not kq.get("ok"):
+                cho_them = (kq.get("parameters") or {}).get("retry_after")
+                if cho_them:
+                    time.sleep(min(int(cho_them) + 1, 60))
+                    _goi_api("sendMessage",
+                             {"chat_id": c["chat_id"], "text": text,
+                              "disable_web_page_preview": "true"},
+                             token=token or c["token"])
+                    lan_truoc = time.time()
         except Exception as e:
             logger.debug(f"Gửi Telegram hỏng: {e}")
         finally:
@@ -325,15 +353,22 @@ def _nghe_lenh():
     bot mà máy nào cũng xác nhận đã đọc, thì `/tinhtrang` chỉ có một máy nhận
     được — hai máy kia im lặng, đúng cái ta không muốn.
 
-    Nên ở đây dùng `offset=-5`: xin năm lệnh gần nhất và KHÔNG xác nhận đã đọc.
+    Nên ở đây dùng offset ÂM: xin mấy lệnh gần nhất và KHÔNG xác nhận đã đọc.
     Telegram giữ nguyên hàng đợi, nên cả ba máy cùng thấy cùng một lệnh và cùng
     trả lời. Mỗi máy tự nhớ mình đã xử lý lệnh nào trong `_da_xu_ly`.
 
     Vì vậy: ĐỪNG bao giờ đổi thành `offset=<update_id>+1`. Làm thế là xác nhận,
     và các máy khác sẽ mất lệnh.
+
+    Xin 10 lệnh gần nhất chứ không phải 1: giữa hai lần hỏi cách nhau 20 giây,
+    trong nhóm đông người có thể trôi qua vài tin. Con số này chỉ đủ dùng khi
+    bot GIỮ chế độ riêng tư mặc định — lúc đó trong nhóm nó chỉ nhìn thấy các
+    lệnh bắt đầu bằng '/', không thấy người ta nói chuyện với nhau. Nếu ai đó
+    tắt chế độ riêng tư ở @BotFather thì mọi câu chat đều lọt vào hàng đợi và
+    lệnh có thể bị đẩy ra ngoài 10 tin gần nhất.
     """
     try:
-        kq = _goi_api("getUpdates", {"offset": "-5", "timeout": "0",
+        kq = _goi_api("getUpdates", {"offset": "-10", "timeout": "0",
                                      "allowed_updates": '["message"]'})
         if not kq or not kq.get("ok"):
             return
@@ -343,6 +378,13 @@ def _nghe_lenh():
             if uid is None or uid in _da_xu_ly:
                 continue
             _da_xu_ly.add(uid)
+            # Máy chạy liên tục nhiều tháng, đừng để cái set này phình mãi. Chỉ
+            # giữ 100 mã MỚI NHẤT — KHÔNG được xoá sạch: mỗi lần hỏi Telegram
+            # trả lại đúng 10 lệnh gần nhất, xoá sạch là lần sau trả lời lại
+            # từng ấy lệnh cũ một lần nữa.
+            if len(_da_xu_ly) > 300:
+                for _cu in sorted(_da_xu_ly)[:-100]:
+                    _da_xu_ly.discard(_cu)
 
             tin  = up.get("message") or {}
             text = (tin.get("text") or "").strip().lower()
@@ -412,6 +454,51 @@ def bat_dau_nen():
 # Thử cấu hình — nút "Gửi thử" trên giao diện gọi vào đây
 # ═══════════════════════════════════════════════════════════════════════════
 
+def tim_chat(token: str = "") -> tuple[bool, str, list[dict]]:
+    """
+    Liệt kê những khung chat mà bot vừa nhìn thấy, kèm Chat ID.
+
+    Có hàm này vì lấy Chat ID của NHÓM là bước khó nhất khi cài. `@userinfobot`
+    chỉ cho ID cá nhân; ID nhóm là số ÂM và không có chỗ nào trong Telegram hiện
+    nó ra. Cách duy nhất là hỏi chính con bot xem nó đang ở những nhóm nào.
+
+    Người dùng: thêm bot vào nhóm → gõ `/start` trong nhóm → bấm nút này.
+
+    Phải gõ một lệnh có dấu `/`, không thể gõ câu thường: bot mặc định bật chế
+    độ riêng tư nên trong nhóm nó chỉ nhìn thấy các lệnh.
+    """
+    tok = (token or cau_hinh()["token"]).strip()
+    if not tok:
+        return False, "Chưa điền Token của bot.", []
+
+    kq = _goi_api("getUpdates", {"offset": "-20", "timeout": "0"}, token=tok)
+    if kq is None:
+        return False, "Không gọi được Telegram — kiểm tra mạng, hoặc Token sai.", []
+    if not kq.get("ok"):
+        return False, f"Telegram từ chối: {kq.get('description', 'không rõ')}", []
+
+    thay: dict[str, dict] = {}
+    for up in kq.get("result", []):
+        tin = up.get("message") or up.get("my_chat_member") or {}
+        ch  = tin.get("chat") or {}
+        if not ch.get("id"):
+            continue
+        ten = ch.get("title") or " ".join(
+            x for x in (ch.get("first_name"), ch.get("last_name")) if x
+        ) or ch.get("username") or "(không tên)"
+        thay[str(ch["id"])] = {
+            "id":   str(ch["id"]),
+            "ten":  ten,
+            "loai": "Nhóm" if str(ch.get("type", "")).endswith("group") else "Chat riêng",
+        }
+
+    ds = list(thay.values())
+    if not ds:
+        return False, ("Bot chưa thấy khung chat nào. Thêm bot vào nhóm, gõ "
+                       "/start trong nhóm đó, rồi bấm lại nút này."), []
+    return True, f"Thấy {len(ds)} khung chat.", ds
+
+
 def thu(token: str = "", chat_id: str = "") -> tuple[bool, str]:
     """
     Gửi một tin thử và nói rõ hỏng ở đâu. Đây là hàm DUY NHẤT trong file được
@@ -437,9 +524,12 @@ def thu(token: str = "", chat_id: str = "") -> tuple[bool, str]:
     if not kq.get("ok"):
         mo_ta = str(kq.get("description", "")).lower()
         if "chat not found" in mo_ta:
-            return False, ("Chat ID sai, hoặc bạn chưa nhắn cho bot lần nào. "
-                           "Mở Telegram, tìm bot của bạn và bấm Start trước.")
+            return False, ("Chat ID sai. Nếu là NHÓM: ID nhóm là số ÂM "
+                           "(-100...), bấm 'Lấy Chat ID' để lấy đúng. Nếu là "
+                           "chat riêng: mở Telegram nhắn cho bot một câu trước.")
         if "unauthorized" in mo_ta:
             return False, "Token sai — chép lại từ @BotFather."
+        if "kicked" in mo_ta or "not a member" in mo_ta:
+            return False, "Bot đã bị xoá khỏi nhóm — thêm lại bot vào nhóm."
         return False, f"Telegram từ chối: {kq.get('description', 'không rõ')}"
     return True, "Đã gửi. Kiểm tra Telegram xem có tin chưa."
