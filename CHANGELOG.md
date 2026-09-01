@@ -10,6 +10,14 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.4.2 — 28/08/2026
+
+**Sửa: khởi động lại app là nhận thêm một bản tổng kết**
+
+Mốc "hôm nay đã gửi tổng kết rồi" chỉ nằm trong bộ nhớ, nên tắt phần mềm mở lại
+là quên sạch. Ngày nào mở lại vài lần sau giờ tổng kết là ngần ấy tin giống hệt
+nhau. Giờ mốc được ghi xuống cơ sở dữ liệu.
+
 ## v2.4.1 — 28/08/2026
 
 **Thu gọn bảng Telegram khi không dùng tới**

@@ -2248,6 +2248,30 @@ check("nghe lệnh nhận cả channel_post (kênh)", "channel_post" in _src_tb2
 check("xin Telegram gửi cả channel_post",
       '"message","channel_post"' in _src_tb2)
 
+# ── Tổng kết hằng ngày chỉ được gửi MỘT lần ─────────────────────────────────
+# Mốc "đã gửi hôm nay" phải nằm trong cơ sở dữ liệu. Giữ trong biến thì tắt app
+# mở lại là quên sạch, và mỗi lần khởi động lại sau giờ tổng kết sẽ gửi thêm
+# một bản nữa — ngày chạy RUN_APP bốn lần là bốn tin giống hệt nhau.
+# Đặt mốc giờ cố định thay vì so với đồng hồ thật: bài kiểm so đồng hồ thật sẽ
+# đúng hay sai tuỳ lúc chạy — chạy gần nửa đêm là vỡ.
+_luc = _dt(2026, 8, 28, 14, 30)          # 14:30 ngày 28/08
+check("chưa gửi hôm nay + đã qua giờ → gửi",
+      _tb._den_gio("08:00", "", _luc) is True)
+check("đã gửi hôm nay rồi → không gửi lại",
+      _tb._den_gio("08:00", "2026-08-28", _luc) is False)
+check("chưa tới giờ → chưa gửi",
+      _tb._den_gio("23:00", "", _luc) is False)
+check("đúng phút đặt → gửi",
+      _tb._den_gio("14:30", "", _luc) is True)
+check("mốc hôm qua → sang ngày mới thì gửi",
+      _tb._den_gio("08:00", "2026-08-27", _luc) is True)
+check("giờ ghi sai định dạng → không gửi bừa",
+      _tb._den_gio("tầm bậy", "", _luc) is False)
+_src_vn = Path("thong_bao.py").read_text(encoding="utf-8")
+check("mốc tổng kết ghi xuống cơ sở dữ liệu, không giữ trong biến",
+      'set_setting("tg_tomtat_ngay"' in _src_vn
+      and 'get_setting("tg_tomtat_ngay"' in _src_vn)
+
 # ── Nút ẩn/hiện bảng Telegram ───────────────────────────────────────────────
 # Bảng này là phần cài một lần rồi thôi, nên thu lại cho trang Hành động gọn.
 # Đổi tên id ở một bên mà quên bên kia thì nút bấm không ăn, mà không có lỗi nào

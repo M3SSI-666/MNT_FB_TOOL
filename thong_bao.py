@@ -466,10 +466,16 @@ def _nghe_lenh():
         logger.debug(f"_nghe_lenh hỏng: {e}")
 
 
-def _den_gio(moc: str, lan_cuoi: str) -> bool:
-    """Đã tới `moc` (HH:MM) của hôm nay mà hôm nay chưa gửi lần nào?"""
+def _den_gio(moc: str, lan_cuoi: str, bay_gio: datetime = None) -> bool:
+    """
+    Đã tới `moc` (HH:MM) của hôm nay mà hôm nay chưa gửi lần nào?
+
+    `bay_gio` chỉ để bài kiểm đặt một mốc giờ cố định. Không có nó thì bài kiểm
+    phải so với đồng hồ thật, và sẽ đúng hay sai tuỳ lúc chạy — chạy gần nửa đêm
+    là vỡ, mà lỗi kiểu đó làm người ta mất tin vào cả bộ bài kiểm.
+    """
     try:
-        gio  = datetime.now()
+        gio  = bay_gio or datetime.now()
         hom  = gio.strftime("%Y-%m-%d")
         if lan_cuoi == hom:
             return False
@@ -486,14 +492,20 @@ def vong_nen(nghi_giay: int = 20):
     Chỉ chạy trong tiến trình giao diện (server.py), KHÔNG chạy trong scheduler:
     có bốn tiến trình scheduler, để chúng cùng chạy thì mỗi ngày nhận bốn bản
     tổng kết giống hệt nhau.
+
+    Ngày đã gửi tổng kết ghi XUỐNG cơ sở dữ liệu, không giữ trong biến. Giữ
+    trong biến thì tắt app mở lại là quên, và mỗi lần khởi động lại sau giờ tổng
+    kết sẽ gửi thêm một bản nữa — ngày chạy RUN_APP bốn lần là bốn tin giống hệt.
     """
-    lan_cuoi = ""
     while True:
         try:
             if san_sang():
+                import db
                 c = cau_hinh()
-                if _den_gio(c["gio_tomtat"], lan_cuoi):
-                    lan_cuoi = datetime.now().strftime("%Y-%m-%d")
+                if _den_gio(c["gio_tomtat"], db.get_setting("tg_tomtat_ngay", "")):
+                    # Ghi mốc TRƯỚC khi gửi: gửi trước rồi mới ghi thì lỗi mạng
+                    # giữa chừng sẽ khiến vòng sau gửi lại, cứ 20 giây một lần.
+                    db.set_setting("tg_tomtat_ngay", datetime.now().strftime("%Y-%m-%d"))
                     gui(tom_tat())
                 _nghe_lenh()
         except Exception as e:
