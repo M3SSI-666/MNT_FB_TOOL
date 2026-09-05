@@ -371,18 +371,15 @@
                                 <input class="input" id="sl-mat-khau" type="password"
                                        placeholder="đặt một câu dễ nhớ, khó đoán" onchange="slLuu()">
 
-                                <label for="sl-chat-id">Gửi vào đâu</label>
-                                <div style="display:flex;gap:6px">
-                                    <input class="input" id="sl-chat-id" style="flex:1"
-                                           placeholder="Chat ID kênh RIÊNG của bạn" onchange="slLuu()">
-                                    <button class="btn btn-ghost" style="white-space:nowrap"
-                                            onclick="slTimChat()">Lấy hộ</button>
-                                </div>
+                                <label>Gửi vào</label>
+                                <div id="sl-noi-gui" style="color:var(--text-muted)">…</div>
                             </div>
 
                             <div style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.6">
-                                Phải là <b>kênh riêng chỉ mình bạn</b>, KHÔNG phải nhóm quản trị.
-                                Quản trị viên cần biết acc nào hỏng, không cần mật khẩu của acc đó.
+                                Dùng chung khung chat với cảnh báo, lấy từ tab <b>Báo về Telegram</b> ở trên.
+                                Ai trong khung chat đó cũng nhận được file — nhưng file đã mã hoá, không có
+                                mật khẩu thì không mở ra được. Nên <b>đặt mật khẩu này khác</b> mọi mật khẩu
+                                mà người trong nhóm có thể đoán ra.
                             </div>
 
                             <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">

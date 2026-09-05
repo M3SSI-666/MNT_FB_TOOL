@@ -618,7 +618,12 @@ async function slNap(){
         const bat = String(s.sl_bat || "0") === "1";
         el("sl-bat").checked    = bat;
         el("sl-mat-khau").value = s.sl_mat_khau || "";
-        el("sl-chat-id").value  = s.sl_chat_id  || "";
+        // Noi gui lay tu tab Bao ve Telegram, khong co o rieng.
+        const cid = (s.tg_chat_id || "").trim();
+        const noi = el("sl-noi-gui");
+        if(cid){ noi.textContent = `Telegram · ${cid}`; noi.style.color = "var(--text)"; }
+        else   { noi.textContent = "chưa cấu hình Telegram ở trên";
+                 noi.style.color = "var(--danger)"; }
         el("sl-form").style.display = bat ? "block" : "none";
         slGap(String(s.sl_hien_bang || "0") === "1");
         _slNhan();
@@ -645,32 +650,9 @@ async function slLuu(){
         await API.saveSettings({
             sl_bat:      bat ? 1 : 0,
             sl_mat_khau: el("sl-mat-khau").value,
-            sl_chat_id:  el("sl-chat-id").value.trim(),
         });
         _slNhan();
     }catch(e){ Toast.error(e.message); }
-}
-
-async function slTimChat(){
-    const kq = document.getElementById("sl-ket-qua");
-    kq.textContent = "Đang hỏi bot…"; kq.style.color = "var(--text-muted)";
-    try{
-        const r = await API.tgTimChat({token: document.getElementById("tg-token").value.trim()});
-        if(!r.ok || !(r.ds||[]).length){
-            kq.textContent = "❌ " + (r.msg || "Không thấy khung chat nào");
-            kq.style.color = "var(--danger)"; return;
-        }
-        const ds = r.ds;
-        const i = parseInt(prompt("Chọn nơi cất bản sao lưu.\n\n"
-            + "⚠ Nên chọn KÊNH RIÊNG chỉ mình bạn, không phải nhóm quản trị.\n\n"
-            + ds.map((c,k)=>`${k+1}. ${c.ten} — ${c.loai} (${c.id})`).join("\n")
-            + "\n\nGõ số:", "1") || "0", 10);
-        const chon = ds[i-1]; if(!chon) return;
-        document.getElementById("sl-chat-id").value = chon.id;
-        await slLuu();
-        kq.textContent = `✅ ${chon.ten} (${chon.loai})`;
-        kq.style.color = "var(--success)";
-    }catch(e){ kq.textContent = "❌ " + e.message; kq.style.color = "var(--danger)"; }
 }
 
 async function slChayNgay(){

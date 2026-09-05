@@ -182,13 +182,23 @@ def _don(thu_muc: Path):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def cau_hinh() -> dict:
-    """Cấu hình sao lưu tự động. Lỗi thì trả 'tắt', không ném ra ngoài."""
+    """
+    Cấu hình sao lưu tự động. Lỗi thì trả 'tắt', không ném ra ngoài.
+
+    Nơi gửi lấy thẳng từ tab *Báo về Telegram* — cùng khung chat với cảnh báo,
+    không có ô riêng. Chủ dự án chọn vậy để khỏi phải điền hai chỗ, và để thêm
+    một trạm mới chỉ là điền đúng một bộ thông số.
+
+    Đánh đổi cần biết: ai ở trong khung chat đó cũng nhận được file sao lưu.
+    File đã mã hoá nên không mở ra được nếu không có mật khẩu, nhưng họ vẫn giữ
+    được file — nên mật khẩu mã hoá phải khác mọi mật khẩu họ có thể đoán ra.
+    """
     try:
         import db
         return {
             "bat":      db.get_setting("sl_bat", "0") == "1",
             "mat_khau": db.get_setting("sl_mat_khau", ""),
-            "chat_id":  db.get_setting("sl_chat_id", "").strip(),
+            "chat_id":  db.get_setting("tg_chat_id", "").strip(),
             "ngay":     db.get_setting("sl_ngay", ""),
             "ket_qua":  db.get_setting("sl_ket_qua", ""),
         }
@@ -217,7 +227,7 @@ def chay_hang_ngay(ep: bool = False) -> tuple[bool, str]:
     if not (c["mat_khau"] or "").strip():
         return False, "Chưa đặt mật khẩu mã hoá"
     if not c["chat_id"]:
-        return False, "Chưa đặt nơi cất bản sao lưu"
+        return False, "Chưa cấu hình Telegram ở tab Báo về Telegram"
 
     ban = enc = None
     try:

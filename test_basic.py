@@ -2419,10 +2419,12 @@ try:
 
     # ── Bản sao lưu KHÔNG được rơi vào nhóm quản trị ───────────────────────
     # Quản trị viên cần biết acc nào hỏng, không cần mật khẩu của acc đó.
-    check("sao lưu gửi tới chat_id RIÊNG, không dùng chung nơi nhận cảnh báo",
-          'db.get_setting("sl_chat_id"' in _src_sl)
-    check("chưa đặt nơi cất thì không gửi bừa",
-          "Chưa đặt nơi cất bản sao lưu" in _src_sl)
+    # Nơi gửi lấy thẳng từ tab Báo về Telegram — chủ dự án chọn vậy để khỏi
+    # điền hai chỗ, và để thêm một trạm mới chỉ là điền đúng một bộ thông số.
+    check("nơi gửi lấy từ cấu hình Telegram, không có ô riêng",
+          'db.get_setting("tg_chat_id"' in _src_sl and "sl_chat_id" not in _src_sl)
+    check("chưa cấu hình Telegram thì không gửi bừa",
+          "Chưa cấu hình Telegram" in _src_sl)
     check("chưa đặt mật khẩu thì không gửi file trần",
           "Chưa đặt mật khẩu mã hoá" in _src_sl)
 

@@ -10,6 +10,19 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.6.1 — 28/08/2026
+
+**Sao lưu gửi vào cùng khung chat với cảnh báo**
+
+Bỏ ô *Gửi vào đâu* riêng trong bảng Sao lưu. Giờ nó dùng thẳng Chat ID đã điền
+ở tab **Báo về Telegram** — chỉ phải điền một chỗ, và thêm một trạm mới cũng chỉ
+là điền đúng một bộ thông số.
+
+> Đánh đổi: ai ở trong khung chat đó cũng nhận được file sao lưu. File đã mã hoá
+> nên không có mật khẩu thì không mở ra được, nhưng họ vẫn **giữ được file**.
+> Nên hãy đặt mật khẩu mã hoá **khác** mọi mật khẩu mà người trong nhóm có thể
+> đoán ra.
+
 ## v2.6.0 — 28/08/2026
 
 **Sao lưu hằng ngày, tự gửi đi nơi khác, đã mã hoá**
