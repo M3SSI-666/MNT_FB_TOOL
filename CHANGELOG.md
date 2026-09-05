@@ -27,7 +27,7 @@ Hai nguyên nhân chồng lên nhau:
    `app.db-wal`, chưa gộp vào `app.db`. Lệnh `copy` chỉ chép `app.db`, tức là
    chép đúng cái phần chưa có gì.
 2. **Chép nhầm chỗ.** Bản cài đặt để dữ liệu ở `%LOCALAPPDATA%`, nhưng phần sao
-   lưu lại đi tìm `datapp.db` cạnh mã nguồn. Trên máy vệ tinh nó không thấy
+   lưu lại đi tìm file dữ liệu **cạnh mã nguồn**. Trên máy vệ tinh nó không thấy
    gì, in *"chua co du lieu - bo qua sao luu"* rồi cập nhật luôn — nghĩa là
    **các máy cài đặt chưa từng được sao lưu lần nào**.
 
