@@ -1916,6 +1916,31 @@ def api_telegram_thu():
     return jsonify({"ok": ok, "msg": loi})
 
 
+@app.route("/api/sao-luu/trang-thai")
+def api_sao_luu_trang_thai():
+    import sao_luu
+    c  = sao_luu.cau_hinh()
+    d  = sao_luu.thu_muc_dich()
+    ds = sorted(d.glob("app_*.db"), key=lambda p: p.stat().st_mtime, reverse=True) \
+         if d.exists() else []
+    return jsonify({
+        "ok": True, "ngay": c["ngay"], "ket_qua": c["ket_qua"],
+        "thu_muc": str(d), "so_ban": len(ds),
+        "moi_nhat": (f"{ds[0].name} · {ds[0].stat().st_size/1024:.0f} KB") if ds else "",
+    })
+
+
+@app.route("/api/sao-luu/ngay", methods=["POST"])
+def api_sao_luu_ngay():
+    """
+    Nút 'Sao lưu ngay'. Chờ mạng đồng bộ vì người dùng đang đứng nhìn — và vì
+    họ bấm nút này chính là để biết kết quả, không phải để nó chạy đâu đó.
+    """
+    import sao_luu
+    ok, msg = sao_luu.chay_hang_ngay(ep=True)
+    return jsonify({"ok": ok, "msg": msg})
+
+
 @app.route("/api/telegram/tim-chat", methods=["POST"])
 def api_telegram_tim_chat():
     """

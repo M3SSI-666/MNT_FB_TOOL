@@ -29,6 +29,7 @@ from __future__ import annotations
 import atexit
 import json
 import logging
+import os
 import queue
 import threading
 import time
@@ -82,7 +83,6 @@ def cau_hinh() -> dict:
 
 def _ten_may_mac_dinh() -> str:
     """Chưa đặt tên thì lấy tên máy Windows, để tin nhắn vẫn phân biệt được."""
-    import os
     return os.environ.get("COMPUTERNAME", "").strip() or "Máy không tên"
 
 
@@ -116,6 +116,63 @@ def _goi_api(method: str, tham_so: dict, token: str = "") -> dict | None:
     except Exception as e:
         logger.debug(f"Telegram {method} hỏng: {e}")
         return None
+
+
+def gui_file(duong_dan, chu_thich: str = "", chat_id: str = "") -> tuple[bool, str]:
+    """
+    Gửi một file lên Telegram. Dùng cho bản sao lưu hằng ngày.
+
+    Gửi ĐỒNG BỘ, không qua hàng đợi như `gui()`: người gọi cần biết file đã lên
+    tới nơi hay chưa để còn ghi nhận "hôm nay đã sao lưu". Chạy trong luồng nền
+    nên chờ ở đây không cản việc gì.
+
+    `chat_id` cho phép gửi tới một khung chat KHÁC nơi nhận cảnh báo. Bản sao
+    lưu chứa mật khẩu của mọi tài khoản, nên nó không được rơi vào nhóm quản trị
+    — quản trị viên cần biết acc nào hỏng, không cần mật khẩu của acc đó.
+    """
+    from pathlib import Path
+    c   = cau_hinh()
+    tok = c["token"]
+    cid = (chat_id or "").strip() or c["chat_id"]
+    f   = Path(duong_dan)
+    if not tok or not cid:
+        return False, "Chưa cấu hình Telegram"
+    if not f.exists():
+        return False, f"Không thấy file: {f}"
+
+    try:
+        # Dựng multipart/form-data bằng tay. Thư viện `requests` làm hộ việc này
+        # nhưng cả file chỉ dùng thư viện chuẩn của Python, và đổi điều đó nghĩa
+        # là bắt mọi máy khách cài thêm một thứ nữa.
+        ranh = "----MNTBoundary" + os.urandom(8).hex()
+        r, n = ranh.encode(), b"\r\n"
+        than = bytearray()
+        for ten, gia_tri in (("chat_id", cid), ("caption", chu_thich)):
+            than += b"--" + r + n
+            than += f'Content-Disposition: form-data; name="{ten}"'.encode() + n + n
+            than += str(gia_tri).encode("utf-8") + n
+        than += b"--" + r + n
+        than += (f'Content-Disposition: form-data; name="document"; '
+                 f'filename="{f.name}"').encode("utf-8") + n
+        than += b"Content-Type: application/octet-stream" + n + n
+        than += f.read_bytes() + n
+        than += b"--" + r + b"--" + n
+
+        req = urllib.request.Request(
+            API.format(token=tok, method="sendDocument"),
+            data=bytes(than),
+            headers={"User-Agent": "MNT-FB-AutoPost/1.0",
+                     "Content-Type": f"multipart/form-data; boundary={ranh}"},
+        )
+        # Chờ lâu hơn tin nhắn thường: đây là file vài trăm KB, không phải vài
+        # chục chữ, và mạng ở nhà thì đường lên bao giờ cũng hẹp hơn đường xuống.
+        with urllib.request.urlopen(req, timeout=120) as kq:
+            tra = json.loads(kq.read().decode("utf-8"))
+        if tra.get("ok"):
+            return True, "Đã gửi"
+        return False, str(tra.get("description", "Telegram từ chối"))
+    except Exception as e:
+        return False, f"Không gửi được: {e}"
 
 
 def _luong_chay():
@@ -366,6 +423,29 @@ def tom_tat() -> str:
         dong = [f"📊 {c['ten_may']} · {datetime.now():%d/%m %H:%M}",
                 f"{len(tot)}/{len(accs)} Active"]
 
+        # Tình trạng sao lưu. Có dòng này thì máy nào ngừng sao lưu sẽ lộ ra
+        # trong vài ngày — không có nó thì một máy hỏng thầm lặng nhiều tháng
+        # mà không ai biết, đúng như chuyện đã xảy ra.
+        try:
+            import sao_luu
+            sl = sao_luu.cau_hinh()
+            if sl["bat"]:
+                hom_nay = datetime.now().strftime("%Y-%m-%d")
+                if sl["ngay"] == hom_nay:
+                    dong.append(f"🗄 Sao lưu: {sl['ket_qua'] or 'xong'}")
+                elif sl["ngay"]:
+                    try:
+                        cach = (datetime.now().date()
+                                - datetime.strptime(sl["ngay"], "%Y-%m-%d").date()).days
+                        dong.append(f"⚠️ Sao lưu: {cach} ngày trước"
+                                    + (f" — {sl['ket_qua']}" if cach > 1 else ""))
+                    except Exception:
+                        pass
+                else:
+                    dong.append("⚠️ Sao lưu: chưa lần nào")
+        except Exception:
+            pass
+
         if not xau:
             dong.append("")
             dong.append("Tất cả đang chạy bình thường.")
@@ -497,8 +577,22 @@ def vong_nen(nghi_giay: int = 20):
     trong biến thì tắt app mở lại là quên, và mỗi lần khởi động lại sau giờ tổng
     kết sẽ gửi thêm một bản nữa — ngày chạy RUN_APP bốn lần là bốn tin giống hệt.
     """
+    da_thu_sao_luu = False
     while True:
         try:
+            # Sao lưu hằng ngày. Chạy sau khi phần mềm đã lên được một lúc, và
+            # chỉ thử MỘT lần mỗi lần chạy phần mềm: hỏng thì để hôm sau, đừng
+            # cứ 20 giây lại nén cả cơ sở dữ liệu một lần.
+            if not da_thu_sao_luu:
+                da_thu_sao_luu = True
+                try:
+                    import sao_luu
+                    ok, msg = sao_luu.chay_hang_ngay()
+                    if not ok and "đã sao lưu rồi" not in msg and "Chưa bật" not in msg:
+                        logger.warning(f"⚠️  Sao lưu: {msg}")
+                except Exception as e:
+                    logger.debug(f"Sao lưu hỏng: {e}")
+
             if san_sang():
                 import db
                 c = cau_hinh()

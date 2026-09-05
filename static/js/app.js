@@ -398,7 +398,7 @@ async function loadRunnerStatus(){
         if(!Object.keys(_hienChromeMap).length) await napHienChrome();
         // Cấu hình Telegram cũng chỉ nạp một lần: hàm này chạy lặp lại theo chu
         // kỳ, nạp mỗi vòng sẽ xoá mất chữ người dùng đang gõ dở vào ô Token.
-        if(!_tgDaNap){ _tgDaNap = true; tgNap(); }
+        if(!_tgDaNap){ _tgDaNap = true; tgNap(); slNap(); }
         const res=await API.runStatus();
         _runnerStatus=res;
         renderRunnerGrid();
@@ -581,6 +581,109 @@ async function tgXemTruoc(){
         const r = await API.tgTomTat();
         alert(r.text || "(chưa có gì để tổng kết)");
     }catch(e){ Toast.error(e.message); }
+}
+
+// ── Sao lưu tự động ──────────────────────────────────────────────
+function slGap(hien){
+    const bang = document.getElementById("sl-bang");
+    if(!bang) return;
+    const mo = (hien === undefined) ? bang.style.display === "none" : hien;
+    bang.style.display = mo ? "block" : "none";
+    document.getElementById("sl-mui-ten").textContent = mo ? "Ẩn ▾" : "Hiện ▸";
+    if(hien === undefined) API.saveSettings({sl_hien_bang: mo ? 1 : 0}).catch(()=>{});
+}
+
+// Nhãn ở thanh tiêu đề. Nó nói NGÀY sao lưu gần nhất chứ không chỉ bật/tắt:
+// bật mà mấy hôm không chạy được thì đó mới là điều cần thấy ngay.
+async function _slNhan(){
+    const n = document.getElementById("sl-nhan"); if(!n) return;
+    const s = (await API.settings().catch(()=>({data:{}}))).data || {};
+    if(String(s.sl_bat || "0") !== "1"){
+        n.textContent = "Đang tắt"; n.style.color = "var(--text-muted)"; return;
+    }
+    const homNay = new Date().toLocaleDateString("sv");   // yyyy-mm-dd
+    if(s.sl_ngay === homNay){ n.textContent = "Hôm nay ✓"; n.style.color = "var(--success)"; }
+    else if(s.sl_ngay){
+        const cach = Math.round((new Date(homNay) - new Date(s.sl_ngay)) / 86400000);
+        n.textContent = `${cach} ngày trước`;
+        n.style.color = cach > 2 ? "var(--danger)" : "var(--warning, var(--text-muted))";
+    }else{ n.textContent = "Chưa lần nào"; n.style.color = "var(--danger)"; }
+}
+
+async function slNap(){
+    try{
+        const s = (await API.settings()).data || {};
+        const el = id => document.getElementById(id);
+        if(!el("sl-bat")) return;
+        const bat = String(s.sl_bat || "0") === "1";
+        el("sl-bat").checked    = bat;
+        el("sl-mat-khau").value = s.sl_mat_khau || "";
+        el("sl-chat-id").value  = s.sl_chat_id  || "";
+        el("sl-form").style.display = bat ? "block" : "none";
+        slGap(String(s.sl_hien_bang || "0") === "1");
+        _slNhan();
+        _slThongTin();
+    }catch(e){}
+}
+
+async function _slThongTin(){
+    const box = document.getElementById("sl-thong-tin"); if(!box) return;
+    try{
+        const t = await API.slTrangThai();
+        box.innerHTML = `Đang giữ <b>${t.so_ban}</b> bản trên máy`
+            + (t.moi_nhat ? ` — mới nhất: ${_escapeHtml(t.moi_nhat)}` : "")
+            + `<br><span style="opacity:.8">${_escapeHtml(t.thu_muc)}</span>`
+            + (t.ket_qua ? `<br>Lần chạy gần nhất: ${_escapeHtml(t.ket_qua)}` : "");
+    }catch(e){}
+}
+
+async function slLuu(){
+    const el = id => document.getElementById(id);
+    const bat = el("sl-bat").checked;
+    el("sl-form").style.display = bat ? "block" : "none";
+    try{
+        await API.saveSettings({
+            sl_bat:      bat ? 1 : 0,
+            sl_mat_khau: el("sl-mat-khau").value,
+            sl_chat_id:  el("sl-chat-id").value.trim(),
+        });
+        _slNhan();
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function slTimChat(){
+    const kq = document.getElementById("sl-ket-qua");
+    kq.textContent = "Đang hỏi bot…"; kq.style.color = "var(--text-muted)";
+    try{
+        const r = await API.tgTimChat({token: document.getElementById("tg-token").value.trim()});
+        if(!r.ok || !(r.ds||[]).length){
+            kq.textContent = "❌ " + (r.msg || "Không thấy khung chat nào");
+            kq.style.color = "var(--danger)"; return;
+        }
+        const ds = r.ds;
+        const i = parseInt(prompt("Chọn nơi cất bản sao lưu.\n\n"
+            + "⚠ Nên chọn KÊNH RIÊNG chỉ mình bạn, không phải nhóm quản trị.\n\n"
+            + ds.map((c,k)=>`${k+1}. ${c.ten} — ${c.loai} (${c.id})`).join("\n")
+            + "\n\nGõ số:", "1") || "0", 10);
+        const chon = ds[i-1]; if(!chon) return;
+        document.getElementById("sl-chat-id").value = chon.id;
+        await slLuu();
+        kq.textContent = `✅ ${chon.ten} (${chon.loai})`;
+        kq.style.color = "var(--success)";
+    }catch(e){ kq.textContent = "❌ " + e.message; kq.style.color = "var(--danger)"; }
+}
+
+async function slChayNgay(){
+    const kq = document.getElementById("sl-ket-qua");
+    kq.textContent = "Đang tạo, mã hoá và gửi… (có thể mất vài chục giây)";
+    kq.style.color = "var(--text-muted)";
+    await slLuu();
+    try{
+        const r = await API.slNgay();
+        kq.textContent = (r.ok ? "✅ " : "❌ ") + (r.msg || "");
+        kq.style.color = r.ok ? "var(--success)" : "var(--danger)";
+        _slNhan(); _slThongTin();
+    }catch(e){ kq.textContent = "❌ " + e.message; kq.style.color = "var(--danger)"; }
 }
 
 function renderSidebarStatus(){

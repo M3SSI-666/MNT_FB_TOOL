@@ -2337,9 +2337,99 @@ try:
     check(f"bản sao MỞ ĐƯỢC và đủ tài khoản ({_n_ban}/{_n_that})", _n_ban == _n_that)
     check("bản sao không phải cái vỏ vài KB", _ban.stat().st_size > 50 * 1024)
 
-    # Giữ 10 bản gần nhất. Không dọn thì ổ đĩa đầy dần rồi một ngày sao lưu hỏng
+    # Giữ 14 bản gần nhất. Không dọn thì ổ đĩa đầy dần rồi một ngày sao lưu hỏng
     # vì hết chỗ — đúng lúc cần nó nhất.
-    check("có dọn bớt bản cũ", _sl.GIU_LAI == 10)
+    check("có dọn bớt bản cũ", _sl.GIU_LAI == 14)
+
+    # ── Mã hoá: file rời khỏi máy KHÔNG được để lộ gì ───────────────────────
+    # File sao lưu chứa mật khẩu Facebook, cookie xs, mã 2FA của MỌI tài khoản.
+    # Ai cầm được nó là đăng nhập được vào tất cả.
+    _MK = "mat khau dung cho bai kiem"
+    _enc = _sl.ma_hoa(_ban, _MK, _tm_sl / "kiem.enc")
+    _tho = _enc.read_bytes()
+
+    check("file mã hoá có nhãn nhận dạng", _tho.startswith(_sl.DAU_FILE))
+    try:
+        _sq3.connect(f"file:{_enc}?mode=ro", uri=True).execute("SELECT 1 FROM accounts")
+        check("file mã hoá KHÔNG còn mở được bằng SQLite", False)
+    except Exception:
+        check("file mã hoá KHÔNG còn mở được bằng SQLite", True)
+
+    # Bài kiểm quan trọng nhất của cả phần này: soi từng mật khẩu thật xem có
+    # byte nào lọt nguyên văn ra file đã mã hoá không.
+    _mk_that = [(a.get("password") or "") for a in db.get_accounts()
+                if (a.get("password") or "").strip()]
+    _lo = [m for m in _mk_that if m.encode() in _tho]
+    check(f"không mật khẩu Facebook nào lọt ra file mã hoá ({len(_mk_that)} cái soi)",
+          not _lo)
+    _ck_that = [(a.get("xs") or "") for a in db.get_accounts() if (a.get("xs") or "").strip()]
+    check(f"không cookie nào lọt ra file mã hoá ({len(_ck_that)} cái soi)",
+          not [c for c in _ck_that if c.encode() in _tho])
+
+    # Hai lần mã hoá cùng dữ liệu phải ra hai file khác hẳn — nếu giống nhau thì
+    # người ngoài nhìn vào là biết hôm nay dữ liệu có đổi hay không.
+    _enc2 = _sl.ma_hoa(_ban, _MK, _tm_sl / "kiem2.enc")
+    check("mỗi lần mã hoá ra một file khác nhau",
+          _enc2.read_bytes() != _tho)
+
+    # ── Giải mã và các đường hỏng ──────────────────────────────────────────
+    _ra = _sl.giai_ma(_enc, _MK, _tm_sl / "giai.db")
+    check("giải mã đúng mật khẩu → về đủ tài khoản", _sl.dem_acc(_ra) == _n_that)
+
+    for _mo_ta, _ham in (
+        ("sai mật khẩu bị từ chối",
+         lambda: _sl.giai_ma(_enc, "sai bet", _tm_sl / "x1.db")),
+        ("file không phải của phần mềm này bị từ chối",
+         lambda: _sl.giai_ma(_ban, _MK, _tm_sl / "x3.db")),
+    ):
+        try:
+            _ham(); check(_mo_ta, False)
+        except Exception:
+            check(_mo_ta, True)
+
+    # Sửa một byte trong ruột file — Fernet phải phát hiện. Không có bước này
+    # thì file hỏng trên đường truyền sẽ giải mã ra rác mà vẫn coi là thành công.
+    _sua = _tm_sl / "sua.enc"
+    _b = bytearray(_tho); _b[-5] ^= 0xFF; _sua.write_bytes(bytes(_b))
+    try:
+        _sl.giai_ma(_sua, _MK, _tm_sl / "x2.db")
+        check("file bị sửa một byte bị phát hiện", False)
+    except Exception:
+        check("file bị sửa một byte bị phát hiện", True)
+
+    # ── Đường khôi phục phải luôn còn ──────────────────────────────────────
+    # Bản sao lưu chưa khôi phục thử thì chưa phải bản sao lưu.
+    check("có hàm khôi phục", callable(getattr(_sl, "khoi_phuc", None)))
+    check("có KHOI_PHUC_DU_LIEU.bat cho người dùng",
+          Path("KHOI_PHUC_DU_LIEU.bat").exists())
+    _bat_kp = Path("KHOI_PHUC_DU_LIEU.bat").read_text(encoding="utf-8", errors="replace")
+    check("file khôi phục tắt phần mềm trước khi thay dữ liệu", "taskkill" in _bat_kp)
+    _src_sl = Path("sao_luu.py").read_text(encoding="utf-8")
+    check("khôi phục cất bản đang dùng sang một bên trước",
+          "truoc_khi_khoi_phuc" in _src_sl)
+    check("khôi phục xoá WAL cũ để SQLite không gộp nhầm dữ liệu cũ",
+          '"-wal", "-shm"' in _src_sl)
+
+    # `with sqlite3.connect(...)` chỉ commit chứ KHÔNG đóng kết nối. Trên Windows
+    # file vẫn bị giữ, nên khôi phục ném PermissionError — lỗi này đã xảy ra thật
+    # và chỉ lộ ra khi diễn tập khôi phục.
+    check("mọi kết nối SQLite trong sao_luu.py đều được đóng thật",
+          "with sqlite3.connect" not in _src_sl
+          and _src_sl.count("contextlib.closing") >= 4)
+
+    # ── Bản sao lưu KHÔNG được rơi vào nhóm quản trị ───────────────────────
+    # Quản trị viên cần biết acc nào hỏng, không cần mật khẩu của acc đó.
+    check("sao lưu gửi tới chat_id RIÊNG, không dùng chung nơi nhận cảnh báo",
+          'db.get_setting("sl_chat_id"' in _src_sl)
+    check("chưa đặt nơi cất thì không gửi bừa",
+          "Chưa đặt nơi cất bản sao lưu" in _src_sl)
+    check("chưa đặt mật khẩu thì không gửi file trần",
+          "Chưa đặt mật khẩu mã hoá" in _src_sl)
+
+    # Đẩy đi hỏng thì KHÔNG được ghi nhận "hôm nay xong" — để hôm sau còn thử lại.
+    _i_gui = _src_sl.index("if not ok:")
+    _i_ghi = _src_sl.index('db.set_setting("sl_ngay"')
+    check("đẩy đi hỏng thì không đánh dấu là đã xong", _i_gui < _i_ghi)
 except Exception as _e_sl:
     check(f"tạo được bản sao lưu (lỗi: {_e_sl})", False)
 finally:

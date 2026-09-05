@@ -10,6 +10,46 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.6.0 — 28/08/2026
+
+**Sao lưu hằng ngày, tự gửi đi nơi khác, đã mã hoá**
+
+Bản `v2.5.0` sửa cho bản sao lưu dùng được, nhưng nó vẫn nằm trên chính cái máy
+có thể hỏng. Bản này đưa nó ra khỏi máy.
+
+**Cách chạy** — mỗi ngày, lần đầu bạn mở phần mềm:
+
+1. Tạo bản sao đầy đủ, giữ **14 bản gần nhất** trên máy
+2. **Mã hoá** bản đó bằng mật khẩu của bạn
+3. Gửi lên **kênh Telegram riêng** của bạn, tên file mang tên máy:
+   `MNT_MayNha_20260906.db.enc`
+
+Máy nào cũng tự làm, nên thêm trạm mới chỉ là điền cùng token và cùng mật khẩu.
+
+**Vì sao bắt buộc mã hoá.** File sao lưu chứa mật khẩu Facebook, cookie `xs`,
+mã 2FA và email khôi phục của **mọi tài khoản** — ai cầm được nó là đăng nhập
+được vào tất cả. Nó không phải "file dữ liệu", nó là **xâu chìa khoá**. Nên nó
+được mã hoá trước khi rời khỏi máy, và gửi vào **kênh riêng chỉ mình bạn**,
+không phải nhóm quản trị: quản trị viên cần biết acc nào hỏng, không cần mật
+khẩu của acc đó.
+
+**Biết ngay khi sao lưu ngừng chạy.** Bản tổng kết hằng ngày thêm một dòng —
+`🗄 Sao lưu: 08:14 · 17 tài khoản`, hoặc `⚠️ Sao lưu: 4 ngày trước`. Không có
+dòng này thì một trạm hỏng thầm lặng nhiều tháng mà không ai biết.
+
+**Đường về đã diễn tập thật.** Thêm `KHOI_PHUC_DU_LIEU.bat`: tắt phần mềm, chọn
+bản sao lưu (hoặc dán file `.enc` tải từ Telegram), nhập mật khẩu. Nó giải mã,
+**đếm lại số tài khoản**, rồi mới thay vào — và cất bản đang dùng sang một bên
+trước, phòng khi bạn chọn nhầm file.
+
+> Đã chạy thử trọn vòng trên một máy giả: xoá sạch dữ liệu, rồi khôi phục từ file
+> `.enc` — về đủ 17 tài khoản, 1321 dòng lịch, 55 content, 128 UID nhóm, và đủ
+> cả 17 mật khẩu lẫn 17 cookie.
+
+> ⚠ **Ghi mật khẩu mã hoá ra giấy.** Còn một máy sống thì còn giải mã được. Mất
+> hết máy **và** quên mật khẩu thì mọi bản sao lưu thành vô dụng vĩnh viễn —
+> mã hoá đúng cách thì không có cửa sau.
+
 ## v2.5.0 — 28/08/2026
 
 **Sửa: bản sao lưu trước khi cập nhật chưa bao giờ dùng được**

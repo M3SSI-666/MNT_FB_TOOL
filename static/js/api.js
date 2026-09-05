@@ -93,6 +93,10 @@ const API = {
     tgTomTat:        ()           => API.get("/api/telegram/tom-tat"),
     tgTimChat:       (data)       => API.post("/api/telegram/tim-chat", data),
 
+    // Sao lưu
+    slTrangThai:     ()           => API.get("/api/sao-luu/trang-thai"),
+    slNgay:          ()           => API.post("/api/sao-luu/ngay", {}),
+
     // App
     appShutdown:     ()           => API.post("/api/app/shutdown", {}),
 };
