@@ -144,28 +144,24 @@ echo.
 :: Nen ban sao nay la thu duy nhat cuu duoc du lieu khi mot ban cap nhat hong,
 :: hoac khi phai lui ve ban cu.
 echo [3/6] Sao luu du lieu...
-set "SAOLUU=%LOCALAPPDATA%\MNT FB AutoPost\backup"
-if not exist "!SAOLUU!" mkdir "!SAOLUU!" >nul 2>&1
-rem Lay moc thoi gian qua PowerShell chu khong qua %date%: %date% doi dang theo
-rem vung cua may. Tren may nay no cho ra "Sun 08/23/2026" nen cach cat chuoi cu
-rem de ten file thanh "app_2308Sun_202617.db" - vua kho doc vua khong sap xep
-rem duoc. Get-Date -Format cho ra dung mot dang tren moi may.
-for /f "delims=" %%d in ('powershell -NoProfile -NonInteractive -Command "Get-Date -Format yyyyMMdd_HHmmss" 2^>nul') do set "DAU=%%d"
-if "!DAU!"=="" set "DAU=khong_ro_gio"
-if exist "data\app.db" (
-    copy /y "data\app.db" "!SAOLUU!\app_!DAU!.db" >nul 2>&1
-    if errorlevel 1 (
-        echo [LOI] Khong sao luu duoc du lieu - DUNG LAI de khong lam mat gi.
-        echo       Kiem tra quyen ghi vao: !SAOLUU!
-        pause
-        exit /b 1
-    )
-    echo [OK] Da sao luu: !SAOLUU!\app_!DAU!.db
-) else (
-    echo      ^(chua co du lieu - bo qua sao luu^)
+rem Sao luu bang Python chu khong bang lenh copy. Hai ly do, ca hai deu tung
+rem lam hong that:
+rem  1. CSDL chay che do WAL - nhung gi vua ghi nam trong app.db-wal, chua gop
+rem     vao app.db. Chep moi app.db la chep thieu: do tren may that, du lieu
+rem     716 KB ma ban sao ra 4 KB va SQLite bao "file is not a database".
+rem  2. Duong dan bi DOAN. Khoi cu tim "datapp.db" canh ma nguon, nhung ban
+rem     CAI DAT de du lieu o %LOCALAPPDATA%. Tren may ve tinh no khong thay gi,
+rem     in "bo qua sao luu" roi cap nhat luon - nen may cai dat chua tung duoc
+rem     sao luu lan nao.
+rem sao_luu.py hoi thang config xem du lieu that nam dau, dung VACUUM INTO de
+rem gop ca WAL, roi MO LAI ban vua tao de dem lai so tai khoan.
+call "%MNT_UPDATE_DIR%_TIM_PYTHON.bat"
+%PY% -X utf8 "%MNT_UPDATE_DIR%sao_luu.py"
+if errorlevel 1 (
+    echo [LOI] Khong sao luu duoc du lieu - DUNG LAI de khong lam mat gi.
+    pause
+    exit /b 1
 )
-:: Giu 10 ban gan nhat, xoa bot cho khoi phinh o dia.
-for /f "skip=10 delims=" %%f in ('dir /b /o-d "!SAOLUU!\app_*.db" 2^>nul') do del "!SAOLUU!\%%f" >nul 2>&1
 echo.
 
 :: --- [3b] Tai code theo TAG PHAT HANH ---

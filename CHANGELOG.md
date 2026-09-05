@@ -10,6 +10,36 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.5.0 — 28/08/2026
+
+**Sửa: bản sao lưu trước khi cập nhật chưa bao giờ dùng được**
+
+Đây là lỗi nặng nhất tìm được từ trước tới nay, và nó đã âm thầm suốt từ
+`v1.0.2` — bản đầu tiên có tính năng sao lưu.
+
+Mỗi lần cập nhật, phần mềm vẫn in `[OK] Da sao luu` rồi đi tiếp. Nhưng kiểm lại
+bốn bản sao lưu đang có trên máy: **cả bốn đều không mở được**, SQLite báo
+*file is not a database*. Dữ liệu thật 716 KB, bản sao ra 4 KB.
+
+Hai nguyên nhân chồng lên nhau:
+
+1. **Chép thiếu.** Cơ sở dữ liệu chạy chế độ WAL — những gì vừa ghi nằm ở file
+   `app.db-wal`, chưa gộp vào `app.db`. Lệnh `copy` chỉ chép `app.db`, tức là
+   chép đúng cái phần chưa có gì.
+2. **Chép nhầm chỗ.** Bản cài đặt để dữ liệu ở `%LOCALAPPDATA%`, nhưng phần sao
+   lưu lại đi tìm `datapp.db` cạnh mã nguồn. Trên máy vệ tinh nó không thấy
+   gì, in *"chua co du lieu - bo qua sao luu"* rồi cập nhật luôn — nghĩa là
+   **các máy cài đặt chưa từng được sao lưu lần nào**.
+
+Giờ phần sao lưu hỏi thẳng phần mềm xem dữ liệu thật nằm đâu, dùng `VACUUM INTO`
+của SQLite để gộp cả WAL, rồi **mở lại bản vừa tạo và đếm lại số tài khoản**.
+Không khớp thì xoá bản đó đi và **dừng cập nhật**.
+
+> Bản sao lưu đầu tiên dùng được thật đã tạo trên máy tác giả: 628 KB, mở lên đủ
+> 17 tài khoản, 1321 dòng lịch, 55 content.
+
+Nếu bạn từng cập nhật rồi mất dữ liệu và không khôi phục được — đây là lý do.
+
 ## v2.4.2 — 28/08/2026
 
 **Sửa: khởi động lại app là nhận thêm một bản tổng kết**

@@ -2295,6 +2295,57 @@ check("thong_bao.py không dùng requests", "import requests" not in _src_tb)
 check("thong_bao.py không dùng thư viện ngoài nào",
       "cryptography" not in _src_tb and "httpx" not in _src_tb)
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Sao lưu — bản sao chỉ có giá trị nếu MỞ ĐƯỢC
+# ═══════════════════════════════════════════════════════════════════════════
+# Bốn bản sao lưu đầu tiên của phần mềm này đều trông như thành công — `copy`
+# chạy xong, không lỗi, UPDATE.bat in "[OK] Da sao luu" — mà cả bốn đều là file
+# hỏng, SQLite mở lên báo "file is not a database". Dữ liệu 716 KB, bản sao 4 KB.
+#
+# Hai nguyên nhân, và bài kiểm dưới đây khoá cả hai lại.
+import sao_luu as _sl
+import sqlite3 as _sq3
+import config as _cfg
+
+_src_up = Path("UPDATE.bat").read_text(encoding="utf-8", errors="replace")
+
+# 1. Chế độ WAL: những gì vừa ghi nằm trong app.db-wal, chưa gộp vào app.db.
+#    `copy app.db` là chép thiếu. VACUUM INTO thì SQLite tự gộp.
+check("sao lưu dùng VACUUM INTO chứ không phải copy",
+      "VACUUM INTO" in Path("sao_luu.py").read_text(encoding="utf-8"))
+check("UPDATE.bat KHÔNG còn copy thẳng app.db",
+      "copy /y \"data\\app.db\"" not in _src_up)
+check("UPDATE.bat gọi sao_luu.py", "sao_luu.py" in _src_up)
+check("sao lưu thất bại thì UPDATE.bat DỪNG, không cập nhật tiếp",
+      "if errorlevel 1" in _src_up and "DUNG LAI de khong lam mat gi" in _src_up)
+
+# 2. Đường dẫn bị đoán: bản CÀI ĐẶT để dữ liệu ở %LOCALAPPDATA%, nên khối cũ
+#    tìm "data\app.db" cạnh mã nguồn không thấy gì và bỏ qua sao lưu — máy vệ
+#    tinh chưa từng được sao lưu lần nào.
+check("nơi để bản sao lưu bám theo nơi dữ liệu thật, không phải mã nguồn",
+      Path(_sl.thu_muc_dich()).parent == Path(_cfg.DB_PATH).parent.parent)
+
+# Tạo thật một bản rồi MỞ LẠI đếm — không tin vào "lệnh chạy xong không báo lỗi".
+_tm_sl = Path(_tmp).parent / "kiem_sao_luu"
+try:
+    _ban = _sl.tao(_tm_sl)
+    check("bản sao lưu tạo ra có thật", _ban.exists())
+    with _sq3.connect(f"file:{_ban}?mode=ro", uri=True) as _c_sl:
+        _n_ban = _c_sl.execute("SELECT COUNT(*) FROM accounts").fetchone()[0]
+        _n_that = _sq3.connect(str(_cfg.DB_PATH)).execute(
+            "SELECT COUNT(*) FROM accounts").fetchone()[0]
+    check(f"bản sao MỞ ĐƯỢC và đủ tài khoản ({_n_ban}/{_n_that})", _n_ban == _n_that)
+    check("bản sao không phải cái vỏ vài KB", _ban.stat().st_size > 50 * 1024)
+
+    # Giữ 10 bản gần nhất. Không dọn thì ổ đĩa đầy dần rồi một ngày sao lưu hỏng
+    # vì hết chỗ — đúng lúc cần nó nhất.
+    check("có dọn bớt bản cũ", _sl.GIU_LAI == 10)
+except Exception as _e_sl:
+    check(f"tạo được bản sao lưu (lỗi: {_e_sl})", False)
+finally:
+    import shutil as _sh
+    _sh.rmtree(_tm_sl, ignore_errors=True)
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:
