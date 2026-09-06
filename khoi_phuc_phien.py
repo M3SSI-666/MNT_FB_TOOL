@@ -49,36 +49,51 @@ MOI_LUOT = 3
 CHO_GIAY = 75
 
 
-def _da_thu_gan_day(ten_acc: str) -> bool:
-    """
-    Vừa thử cứu acc này trong `NGHI_PHUT` phút chưa?
+def _bang_da_thu(con):
+    con.execute("""CREATE TABLE IF NOT EXISTS kp_da_thu (
+                       ten_acc TEXT PRIMARY KEY,
+                       luc     TEXT NOT NULL
+                   )""")
 
-    Ghi vào cơ sở dữ liệu chứ không giữ trong bộ nhớ: bốn tiến trình scheduler
-    chạy song song, bộ nhớ của tiến trình này không thấy tiến trình kia, và cả
-    bốn đều có thể cùng nhắm vào một acc.
+
+def _con_nghi(ten_acc: str) -> bool:
+    """
+    Acc này còn trong thời gian nghỉ giữa hai lần thử không? CHỈ ĐỌC.
+
+    Tách hẳn khỏi việc ghi dấu, và đây không phải chuyện kiểu cách. Lúc đầu tôi
+    gộp hai việc vào một hàm rồi gọi nó trong bộ lọc:
+
+        cho = [a for a in ds if not _da_thu_gan_day(a)][:MOI_LUOT]
+
+    Bộ lọc chạy qua MỌI acc hết hạn, nên MỌI acc đều bị ghi dấu "vừa thử" —
+    trong khi `[:MOI_LUOT]` chỉ lấy 3 acc đầu để thử thật. Có 10 acc hỏng thì 7
+    acc bị khoá 90 phút mà chưa hề được đụng tới. Càng nhiều trạm, mỗi trạm 15
+    nick, thì cái này càng cắn đau.
     """
     try:
         import db
         with db._conn() as con:
-            con.execute("""CREATE TABLE IF NOT EXISTS kp_da_thu (
-                               ten_acc TEXT PRIMARY KEY,
-                               luc     TEXT NOT NULL
-                           )""")
+            _bang_da_thu(con)
             r = con.execute("SELECT luc FROM kp_da_thu WHERE ten_acc=?",
                             (ten_acc,)).fetchone()
-            gio = datetime.now()
-            if r:
-                try:
-                    if gio - datetime.fromisoformat(r["luc"]) < timedelta(minutes=NGHI_PHUT):
-                        return True
-                except ValueError:
-                    pass
-            con.execute("INSERT INTO kp_da_thu(ten_acc,luc) VALUES(?,?) "
-                        "ON CONFLICT(ten_acc) DO UPDATE SET luc=excluded.luc",
-                        (ten_acc, gio.isoformat(timespec="seconds")))
-        return False
+        if not r:
+            return False
+        return datetime.now() - datetime.fromisoformat(r["luc"]) < timedelta(minutes=NGHI_PHUT)
     except Exception:
         return False        # không kiểm được thì cứ thử, thà thừa còn hơn kẹt
+
+
+def _danh_dau_da_thu(ten_acc: str):
+    """Ghi dấu đã thử. Gọi NGAY TRƯỚC khi thử thật, không gọi lúc lọc."""
+    try:
+        import db
+        with db._conn() as con:
+            _bang_da_thu(con)
+            con.execute("INSERT INTO kp_da_thu(ten_acc,luc) VALUES(?,?) "
+                        "ON CONFLICT(ten_acc) DO UPDATE SET luc=excluded.luc",
+                        (ten_acc, datetime.now().isoformat(timespec="seconds")))
+    except Exception:
+        pass
 
 
 async def _hoi_facebook(profile_dir: str) -> dict:
@@ -168,12 +183,15 @@ def quet() -> int:
     try:
         from db import get_accounts
         cho = [a for a in get_accounts(trang_thai="Cookie hết hạn")
-               if not _da_thu_gan_day(a["ten_acc"])][:MOI_LUOT]
+               if not _con_nghi(a["ten_acc"])][:MOI_LUOT]
         if not cho:
             return 0
 
         duoc = 0
         for a in cho:
+            # Ghi dấu ngay trước khi thử, không ghi lúc lọc: acc bị `[:MOI_LUOT]`
+            # cắt ra ngoài phải được thử ở lượt sau chứ không bị khoá oan.
+            _danh_dau_da_thu(a["ten_acc"])
             ok, vi_sao = cuu_mot_acc(a)
             if ok:
                 duoc += 1

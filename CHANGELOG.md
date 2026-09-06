@@ -10,6 +10,19 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.7.1 — 28/08/2026
+
+**Sửa: nhiều nick hỏng cùng lúc thì phần lớn bị bỏ quên 90 phút**
+
+Mỗi lượt quét chỉ cứu tối đa 3 nick, để không mở cả loạt trình duyệt cùng lúc.
+Nhưng phần lọc lại ghi dấu *"vừa thử"* cho **mọi** nick hỏng, không chỉ 3 nick
+thật sự được thử. Có 10 nick hỏng thì 7 nick bị khoá 90 phút mà chưa hề được
+đụng tới.
+
+Giờ chỉ nick nào thật sự được thử mới bị ghi dấu; số còn lại vào lượt sau ngay.
+
+> Máy càng nhiều nick thì lỗi này càng nặng — đúng hướng bạn đang mở rộng.
+
 ## v2.7.0 — 28/08/2026
 
 **Tự lấy lại phiên cho nick báo hết cookie**

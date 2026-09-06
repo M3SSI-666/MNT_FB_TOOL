@@ -2529,6 +2529,20 @@ check("có chặn trên thời gian cho mỗi acc", 30 <= _kp.CHO_GIAY <= 180)
 check("chặn trùng ghi xuống cơ sở dữ liệu (bốn tiến trình không thấy nhau)",
       "kp_da_thu" in _src_kp)
 
+# Việc KIỂM và việc GHI DẤU phải tách rời. Gộp lại rồi gọi trong bộ lọc thì mọi
+# acc hết hạn đều bị ghi dấu "vừa thử", trong khi chỉ MOI_LUOT acc đầu được thử
+# thật — 10 acc hỏng thì 7 acc bị khoá 90 phút mà chưa hề được đụng tới.
+check("kiểm và ghi dấu là hai hàm riêng",
+      callable(getattr(_kp, "_con_nghi", None))
+      and callable(getattr(_kp, "_danh_dau_da_thu", None)))
+# rindex chu khong index: docstring cua ham co chep lai doan ma CU de
+# giai thich loi, nen index() bat nham vao vi du do.
+_loc = _src_kp[_src_kp.rindex("cho = ["):_src_kp.rindex("][:MOI_LUOT]")]
+check("bộ lọc chỉ ĐỌC, không ghi dấu",
+      "_con_nghi(" in _loc and "_danh_dau_da_thu" not in _loc)
+check("ghi dấu ngay trước khi thử thật",
+      _src_kp.index("_danh_dau_da_thu(a[") < _src_kp.index("cuu_mot_acc(a)"))
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:
