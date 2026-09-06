@@ -349,14 +349,20 @@ def kiem_tra(bay_gio: datetime = None) -> str:
         #
         # Và nó dùng CỬA SỔ chứ không dùng "đã qua giờ chưa" — xem `_trong_cua_so`.
         if _trong_cua_so(c["gio_tat"], gio) and c["ngay_tat"] != hom:
-            db.set_setting("lm_ngay_tat", hom)
+            # LÀM XONG RỒI MỚI ĐÁNH DẤU, không được làm ngược lại.
+            #
+            # Bản đầu đánh dấu trước rồi mới làm. Chỉ cần bước sau hỏng — hoặc
+            # phần mềm bị tắt đúng khoảnh khắc giữa hai dòng — là mốc còn đó mà
+            # việc thì chưa làm, và CẢ ĐÊM ĐÓ máy không bao giờ ngủ. Không lỗi,
+            # không dấu hiệu. Đã xảy ra thật lúc 02:00 ngày 07/09.
             n = tat_runner()
             _cho_may_nghi(c["hanh_dong"])
+            db.set_setting("lm_ngay_tat", hom)
             return f"nghỉ ({n} runner đã dừng)"
 
         if _qua_gio(c["gio_bat"], gio) and c["ngay_bat"] != hom:
-            db.set_setting("lm_ngay_bat", hom)
             n = bat_runner()
+            db.set_setting("lm_ngay_bat", hom)      # cùng lý do: làm xong mới đánh dấu
             return f"chạy ({n} runner đã bật)"
         return ""
     except Exception as e:

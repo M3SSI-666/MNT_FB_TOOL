@@ -2665,6 +2665,16 @@ finally:
 # Cờ "đã dựng lại" phải nằm trong bộ nhớ, KHÔNG ghi xuống cơ sở dữ liệu: nó phải
 # quên đi mỗi lần mở lại phần mềm — đó chính là điều nó dùng để nhận ra.
 _src_lm0 = Path("lich_may.py").read_text(encoding="utf-8")
+# LÀM XONG RỒI MỚI ĐÁNH DẤU. Đánh dấu trước rồi mới làm thì chỉ cần bước sau
+# hỏng — hoặc phần mềm bị tắt đúng khoảnh khắc giữa hai dòng — là mốc còn đó mà
+# việc chưa làm, và CẢ ĐÊM ĐÓ máy không bao giờ ngủ. Đã xảy ra thật 07/09.
+_i_nghi   = _src_lm0.index('_cho_may_nghi(c["hanh_dong"])')
+_i_dau_tat = _src_lm0.index('set_setting("lm_ngay_tat", hom)')
+check("cho máy nghỉ TRƯỚC, đánh dấu SAU", _i_nghi < _i_dau_tat)
+_i_bat     = _src_lm0.index("n = bat_runner()", _src_lm0.index('_qua_gio(c["gio_bat"]'))
+_i_dau_bat = _src_lm0.index('set_setting("lm_ngay_bat", hom)')
+check("bật runner TRƯỚC, đánh dấu SAU", _i_bat < _i_dau_bat)
+
 check("cờ đã-dựng-lại không ghi xuống cơ sở dữ liệu",
       "_da_dung_lai" in _src_lm0 and 'set_setting("lm_da_dung_lai' not in _src_lm0)
 

@@ -10,6 +10,23 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.9.2 — 28/08/2026
+
+**Sửa: máy không ngủ mà không có lý do gì**
+
+Tới giờ khuya mà máy vẫn chạy tiếp, không báo lỗi, không dấu hiệu — và hôm đó
+sẽ không bao giờ ngủ nữa.
+
+Nguyên nhân là thứ tự hai dòng lệnh. Phần mềm **đánh dấu "hôm nay đã nghỉ rồi"
+TRƯỚC khi thật sự cho máy nghỉ**. Chỉ cần bước sau hỏng — hoặc phần mềm bị tắt
+đúng khoảnh khắc giữa hai dòng — là mốc còn đó mà việc thì chưa làm. Vòng kiểm
+tiếp theo nhìn vào mốc, thấy "xong rồi", và bỏ qua.
+
+Giờ **làm xong mới đánh dấu**. Có trục trặc thì vòng sau thử lại, vì cửa sổ tắt
+máy rộng 30 phút.
+
+Áp dụng cho cả mốc buổi sáng.
+
 ## v2.9.1 — 28/08/2026
 
 **Sửa: bấm "Tắt phần mềm" mà phần mềm không tắt**
