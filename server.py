@@ -1916,6 +1916,19 @@ def api_telegram_thu():
     return jsonify({"ok": ok, "msg": loi})
 
 
+@app.route("/api/lich-may/thu", methods=["POST"])
+def api_lich_may_thu():
+    """
+    Nút 'Chạy thử' — bật đúng những runner đã tick, không đụng tới máy.
+
+    Có nút này vì hai mốc giờ kia cách nhau cả ngày; không ai muốn chờ tới 7h
+    sáng mới biết mình tick sai.
+    """
+    import lich_may
+    n = lich_may.bat_runner()
+    return jsonify({"ok": True, "msg": f"Đã bật {n} runner"})
+
+
 @app.route("/api/sao-luu/trang-thai")
 def api_sao_luu_trang_thai():
     import sao_luu

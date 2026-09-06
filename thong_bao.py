@@ -606,6 +606,15 @@ def vong_nen(nghi_giay: int = 20):
                 except Exception as e:
                     logger.debug(f"Sao lưu hỏng: {e}")
 
+            # Lịch của máy: sáng bật runner, khuya cho máy nghỉ. Kiểm mỗi vòng
+            # (20 giây) vì cửa sổ tắt máy chỉ rộng 30 phút — kiểm thưa quá là
+            # lỡ mất cả đêm.
+            try:
+                import lich_may
+                lich_may.kiem_tra()
+            except Exception as e:
+                logger.debug(f"Lịch máy hỏng: {e}")
+
             if san_sang():
                 import db
                 c = cau_hinh()

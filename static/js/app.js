@@ -398,7 +398,7 @@ async function loadRunnerStatus(){
         if(!Object.keys(_hienChromeMap).length) await napHienChrome();
         // Cấu hình Telegram cũng chỉ nạp một lần: hàm này chạy lặp lại theo chu
         // kỳ, nạp mỗi vòng sẽ xoá mất chữ người dùng đang gõ dở vào ô Token.
-        if(!_tgDaNap){ _tgDaNap = true; tgNap(); slNap(); }
+        if(!_tgDaNap){ _tgDaNap = true; tgNap(); slNap(); lmNap(); }
         const res=await API.runStatus();
         _runnerStatus=res;
         renderRunnerGrid();
@@ -581,6 +581,101 @@ async function tgXemTruoc(){
         const r = await API.tgTomTat();
         alert(r.text || "(chưa có gì để tổng kết)");
     }catch(e){ Toast.error(e.message); }
+}
+
+// ── Lịch của máy ─────────────────────────────────────────────────
+const LM_RUNNER = [["homestay","🏠 Homestay"],["thue","🏡 Thuê"],["ban","💰 Bán"],
+                   ["page","📄 Đăng Page"],["nuoi","🌱 Nuôi nick"]];
+
+function lmGap(hien){
+    const bang = document.getElementById("lm-bang");
+    if(!bang) return;
+    const mo = (hien === undefined) ? bang.style.display === "none" : hien;
+    bang.style.display = mo ? "block" : "none";
+    document.getElementById("lm-mui-ten").textContent = mo ? "Ẩn ▾" : "Hiện ▸";
+    if(hien === undefined) API.saveSettings({lm_hien_bang: mo ? 1 : 0}).catch(()=>{});
+}
+
+function _lmNhan(bat, gioBat, gioTat){
+    const n = document.getElementById("lm-nhan"); if(!n) return;
+    if(bat){ n.textContent = `${gioBat} → ${gioTat}`; n.style.color = "var(--success)"; }
+    else   { n.textContent = "Đang tắt";              n.style.color = "var(--text-muted)"; }
+}
+
+// Cảnh báo khi chọn "Tắt hẳn": đó là lựa chọn duy nhất mà phần mềm KHÔNG tự lo
+// được phần đánh thức, và nếu không nói rõ thì sáng hôm sau máy vẫn nằm im.
+function _lmCanhBao(){
+    const hd = document.getElementById("lm-hanh-dong").value;
+    const box = document.getElementById("lm-canh-bao");
+    if(hd === "tat_may"){
+        box.style.display = "block";
+        box.innerHTML = "<b style='color:var(--danger)'>⚠ Tắt hẳn thì phần mềm "
+            + "không đánh thức máy được</b><br>Máy tắt là điện đã ngắt. Muốn sáng "
+            + "máy tự lên, anh phải tự vào BIOS bật <code>RTC Alarm</code>. "
+            + "Không muốn đụng BIOS thì chọn <b>Ngủ đông</b>.";
+    } else if(hd === "ngu_dong" || hd === "ngu"){
+        box.style.display = "block";
+        box.style.background = "rgba(52,211,153,.08)";
+        box.style.borderColor = "var(--success)";
+        box.innerHTML = "Nhớ bấm đúp <code>CAI_LICH_MAY.bat</code> <b>một lần</b> "
+            + "để Windows biết phải đánh thức máy lúc "
+            + _escapeHtml(document.getElementById("lm-gio-bat").value || "07:00") + ".";
+    } else { box.style.display = "none"; }
+}
+
+async function lmNap(){
+    try{
+        const s = (await API.settings()).data || {};
+        const el = id => document.getElementById(id);
+        if(!el("lm-bat")) return;
+        const bat = String(s.lm_bat || "0") === "1";
+        const chon = (s.lm_runner || "").split(",").filter(Boolean);
+
+        el("lm-runner").innerHTML = LM_RUNNER.map(([k,ten]) =>
+            `<label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+                <input type="checkbox" value="${k}" ${chon.includes(k)?"checked":""}
+                       onchange="lmLuu()"> ${ten}
+             </label>`).join("");
+
+        el("lm-bat").checked      = bat;
+        el("lm-gio-bat").value    = s.lm_gio_bat   || "07:00";
+        el("lm-gio-tat").value    = s.lm_gio_tat   || "01:00";
+        el("lm-hanh-dong").value  = s.lm_hanh_dong || "ngu_dong";
+        el("lm-form").style.display = bat ? "block" : "none";
+        lmGap(String(s.lm_hien_bang || "0") === "1");
+        _lmNhan(bat, el("lm-gio-bat").value, el("lm-gio-tat").value);
+        _lmCanhBao();
+    }catch(e){}
+}
+
+async function lmLuu(){
+    const el = id => document.getElementById(id);
+    const bat = el("lm-bat").checked;
+    el("lm-form").style.display = bat ? "block" : "none";
+    const chon = [...el("lm-runner").querySelectorAll("input:checked")].map(x=>x.value);
+    _lmNhan(bat, el("lm-gio-bat").value, el("lm-gio-tat").value);
+    _lmCanhBao();
+    try{
+        await API.saveSettings({
+            lm_bat:       bat ? 1 : 0,
+            lm_gio_bat:   el("lm-gio-bat").value.trim() || "07:00",
+            lm_gio_tat:   el("lm-gio-tat").value.trim() || "01:00",
+            lm_runner:    chon.join(","),
+            lm_hanh_dong: el("lm-hanh-dong").value,
+        });
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function lmThu(){
+    const kq = document.getElementById("lm-ket-qua");
+    kq.textContent = "Đang bật…"; kq.style.color = "var(--text-muted)";
+    await lmLuu();
+    try{
+        const r = await API.lmThu();
+        kq.textContent = "✅ " + (r.msg || "");
+        kq.style.color = "var(--success)";
+        loadRunnerStatus();
+    }catch(e){ kq.textContent = "❌ " + e.message; kq.style.color = "var(--danger)"; }
 }
 
 // ── Sao lưu tự động ──────────────────────────────────────────────

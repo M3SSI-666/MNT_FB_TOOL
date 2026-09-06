@@ -10,6 +10,37 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.8.0 — 28/08/2026
+
+**Lịch của máy: sáng tự chạy, khuya tự nghỉ**
+
+Máy trạm chạy cả ngày thì tốn điện và hao máy; mà sáng nào cũng phải nhớ bấm Run
+bốn cái thì trước sau gì cũng có hôm quên.
+
+Đặt ở tab **Hành động** → *⏰ Lịch của máy*:
+
+- **Sáng, lúc `07:00`** — tự bật những runner bạn **tick chọn**. Tick cái nào
+  chạy cái đó, đổi lúc nào cũng được.
+- **Khuya, lúc `01:00`** — dừng **hết** runner, rồi cho máy **ngủ đông** (hoặc
+  ngủ thường / tắt hẳn / không làm gì — tuỳ bạn).
+
+**Một sự thật cần biết trước.** Máy đã **tắt hẳn** thì không phần mềm nào bật nó
+lên được — điện đã ngắt, Windows không còn chạy. Nên:
+
+- Chọn **Ngủ đông** rồi bấm đúp `CAI_LICH_MAY.bat` **một lần** → Windows tự đánh
+  thức máy đúng giờ sáng. Tốn điện gần như bằng tắt hẳn, mà máy thức dậy là phần
+  mềm đã sẵn ở đó, không phải khởi động lại.
+- Chọn **Tắt hẳn** thì bạn phải tự vào BIOS bật `RTC Alarm`. Phần mềm có hiện
+  cảnh báo này ngay khi bạn chọn, để không ai sáng hôm sau ngồi chờ một cái máy
+  nằm im.
+
+Có nút **Chạy thử ngay** để bật đúng những runner đã tick mà không phải chờ tới
+7h sáng mới biết mình tick sai.
+
+> Việc cho máy nghỉ chỉ nổ trong **30 phút** quanh mốc giờ đã đặt. Đêm qua máy
+> tắt, 9h sáng bạn mở phần mềm lên thì nó **không** ngủ đông ngay lúc đó — lỡ
+> giờ thì bỏ hôm ấy, không làm bù.
+
 ## v2.7.1 — 28/08/2026
 
 **Sửa: nhiều nick hỏng cùng lúc thì phần lớn bị bỏ quên 90 phút**

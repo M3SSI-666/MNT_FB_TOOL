@@ -2543,6 +2543,90 @@ check("bộ lọc chỉ ĐỌC, không ghi dấu",
 check("ghi dấu ngay trước khi thử thật",
       _src_kp.index("_danh_dau_da_thu(a[") < _src_kp.index("cuu_mot_acc(a)"))
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Lịch của máy — sáng tự chạy, khuya tự nghỉ
+# ═══════════════════════════════════════════════════════════════════════════
+import lich_may as _lm
+
+# ── Giờ BẬT runner: "đã qua giờ chưa" ──────────────────────────────────────
+# Bật muộn là vô hại, thậm chí mong muốn: mở phần mềm lúc 9h sáng thì vẫn nên
+# bật runner lên chạy.
+for _h, _mong in ((6, False), (7, True), (9, True), (15, True)):
+    check(f"bật runner lúc {_h:02d}:00 (mốc 07:00) → {_mong}",
+          _lm._qua_gio("07:00", _dt(2026, 9, 8, _h, 0)) is _mong)
+
+# ── Giờ CHO MÁY NGHỈ: phải dùng CỬA SỔ ─────────────────────────────────────
+# Đây là chỗ suýt hỏng nặng. Dùng "đã qua giờ chưa" như lúc bật thì: đêm qua
+# máy tắt, 9h sáng mở phần mềm lên — mốc 01:00 vẫn tính là "đã qua mà hôm nay
+# chưa chạy", và máy NGỦ ĐÔNG NGAY LÚC 9H SÁNG, cắt ngang mọi thứ.
+for _h, _p, _mong in ((0, 59, False), (1, 0, True), (1, 29, True),
+                      (1, 30, False), (9, 0, False), (23, 0, False)):
+    check(f"cho máy nghỉ lúc {_h:02d}:{_p:02d} (mốc 01:00) → {_mong}",
+          _lm._trong_cua_so("01:00", _dt(2026, 9, 8, _h, _p)) is _mong)
+check("MỞ PHẦN MỀM LÚC 9H SÁNG KHÔNG làm máy ngủ đông",
+      _lm._trong_cua_so("01:00", _dt(2026, 9, 8, 9, 0)) is False)
+
+# Cửa sổ phải cộng vòng qua nửa đêm: mốc 23:50 thì chạy tới 00:20 hôm sau.
+check("cửa sổ cộng vòng qua nửa đêm",
+      _lm._trong_cua_so("23:50", _dt(2026, 9, 8, 0, 10)) is True
+      and _lm._trong_cua_so("23:50", _dt(2026, 9, 8, 0, 20)) is False)
+
+# ── Chạy qua nhiều ngày: mỗi ngày đúng một lần bật, một lần nghỉ ───────────
+_lm_cu = {k: db.get_setting(k, "") for k in
+          ("lm_bat", "lm_gio_bat", "lm_gio_tat", "lm_runner", "lm_hanh_dong",
+           "lm_ngay_bat", "lm_ngay_tat")}
+_that_bat, _that_tat, _that_nghi = _lm.bat_runner, _lm.tat_runner, _lm._cho_may_nghi
+_dem = {"bat": 0, "tat": 0, "nghi": []}
+try:
+    _lm.bat_runner    = lambda: (_dem.__setitem__("bat", _dem["bat"] + 1), 2)[1]
+    _lm.tat_runner    = lambda: (_dem.__setitem__("tat", _dem["tat"] + 1), 3)[1]
+    _lm._cho_may_nghi = lambda hd: _dem["nghi"].append(hd)
+    for _k, _v in (("lm_bat", "1"), ("lm_gio_bat", "07:00"), ("lm_gio_tat", "01:00"),
+                   ("lm_runner", "homestay,nuoi"), ("lm_hanh_dong", "ngu_dong"),
+                   ("lm_ngay_bat", ""), ("lm_ngay_tat", "")):
+        db.set_setting(_k, _v)
+
+    _t = _dt(2026, 9, 8, 5, 0)
+    for _ in range(3 * 24 * 3):          # 3 ngày, kiểm mỗi 20 phút
+        _lm.kiem_tra(_t)
+        _t += _td(minutes=20)
+    check(f"3 ngày → đúng 3 lần bật (đếm được {_dem['bat']})", _dem["bat"] == 3)
+    check(f"3 ngày → đúng 3 lần nghỉ (đếm được {len(_dem['nghi'])})",
+          len(_dem["nghi"]) == 3)
+    check("cho máy nghỉ đúng kiểu đã chọn",
+          set(_dem["nghi"]) == {"ngu_dong"})
+
+    # Tắt lịch thì tuyệt đối không đụng gì tới máy.
+    _dem["nghi"].clear()
+    db.set_setting("lm_bat", "0")
+    db.set_setting("lm_ngay_tat", "")
+    check("tắt lịch thì không làm gì", _lm.kiem_tra(_dt(2026, 9, 9, 1, 0)) == "")
+    check("tắt lịch thì tuyệt đối không cho máy nghỉ", not _dem["nghi"])
+finally:
+    _lm.bat_runner, _lm.tat_runner, _lm._cho_may_nghi = _that_bat, _that_tat, _that_nghi
+    for _k, _v in _lm_cu.items():
+        db.set_setting(_k, _v)
+
+check("đã trả cấu hình lịch máy về như cũ",
+      db.get_setting("lm_bat", "") == _lm_cu["lm_bat"])
+
+# ── Máy tắt hẳn thì phần mềm KHÔNG đánh thức được ──────────────────────────
+# Sự thật kỹ thuật này phải hiện ra trong giao diện, không thì người dùng chọn
+# "Tắt hẳn" rồi sáng hôm sau ngồi chờ một cái máy nằm im.
+_html_lm = Path("templates/index.html").read_text(encoding="utf-8")
+_ajs_lm = Path("static/js/app.js").read_text(encoding="utf-8")
+check("giao diện có cảnh báo cho lựa chọn Tắt hẳn", "_lmCanhBao" in _ajs_lm)
+check("cảnh báo nói rõ phải vào BIOS", "BIOS" in _ajs_lm or "RTC Alarm" in _ajs_lm)
+check("có file cài lịch đánh thức", Path("CAI_LICH_MAY.bat").exists())
+_bat_lm = Path("CAI_LICH_MAY.bat").read_text(encoding="utf-8", errors="replace")
+# schtasks KHÔNG có cờ "đánh thức máy để chạy" — mà đó là thứ duy nhất cần ở đây.
+check("dùng PowerShell -WakeToRun chứ không phải schtasks", "-WakeToRun" in _bat_lm)
+# Windows mặc định TẮT hẹn giờ đánh thức trên laptop; tắt thì tác vụ vô dụng.
+check("có bật 'cho phép hẹn giờ đánh thức'", "RTCWAKE" in _bat_lm)
+check("có bật chế độ ngủ đông", "hibernate on" in _bat_lm)
+# Giờ đánh thức đọc từ chính cơ sở dữ liệu, khỏi phải điền hai nơi rồi lệch nhau.
+check("giờ đánh thức lấy từ cấu hình trong phần mềm", "lm_gio_bat" in _bat_lm)
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:
