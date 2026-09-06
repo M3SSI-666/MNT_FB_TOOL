@@ -1934,10 +1934,14 @@ def api_lich_may_cai_danh_thuc():
 @app.route("/api/lich-may/thu", methods=["POST"])
 def api_lich_may_thu():
     """
-    Nút 'Chạy thử' — bật đúng những runner đã tick, không đụng tới máy.
+    Nút 'Bật runner ngay' — bật THẬT những runner đã tick, ngay lúc này.
 
-    Có nút này vì hai mốc giờ kia cách nhau cả ngày; không ai muốn chờ tới 7h
-    sáng mới biết mình tick sai.
+    Trước đây nút này tên là "Chạy thử", và tên đó sai: nó không thử gì cả, nó
+    bật runner thật. Người dùng hỏi thẳng "sao lại chạy thử, sao không chạy
+    thật" — đúng, nên đổi tên cho khớp việc nó làm.
+
+    Có nút này vì hai mốc giờ cách nhau cả ngày; không ai muốn chờ tới 7h sáng
+    mới biết mình tick sai runner. Nó KHÔNG đụng gì tới máy — chỉ bật runner.
     """
     import lich_may
     n = lich_may.bat_runner()

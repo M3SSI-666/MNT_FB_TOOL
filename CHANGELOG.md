@@ -10,6 +10,23 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.8.2 — 28/08/2026
+
+**Sửa hai chỗ gây hiểu nhầm ở Lịch của máy**
+
+**Nút "Chạy thử ngay" đặt tên sai.** Nó không thử gì cả — nó bật runner thật,
+ngay lúc bấm. Tên đó khiến người dùng hoặc ngại bấm, hoặc bấm rồi tưởng chưa
+chạy. Đổi thành **"Bật runner ngay"**, đúng việc nó làm.
+
+**Ô giờ không nói gì khi đã lưu.** Gõ `01:00` thành `02:00` xong thì không biết
+phải bấm đâu — vì thật ra không phải bấm đâu cả, nó tự lưu. Nhưng không nói ra
+thì làm sao biết. Giờ:
+
+- Lưu **ngay trong lúc gõ**, không phải rời khỏi ô. Gõ xong đóng luôn cửa sổ
+  cũng không mất — trước đây thì mất, mà ô này quyết định mấy giờ máy ngủ.
+- Hiện chữ **✓ Đã lưu** ngay cạnh, và nhãn ở đầu bảng đổi theo:
+  `07:00 → 02:00`.
+
 ## v2.8.1 — 28/08/2026
 
 **Đổi giờ sáng: giờ chỉ cần sửa một chỗ**

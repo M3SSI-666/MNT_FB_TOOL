@@ -693,7 +693,28 @@ async function lmNap(){
     }catch(e){}
 }
 
+// Lưu ngay trong lúc đang gõ, chỉ chờ 800ms cho gõ xong.
+//
+// `onchange` chỉ nổ khi rời khỏi ô. Người dùng gõ "02:00" rồi đóng luôn cửa sổ,
+// hoặc chỉ nhìn rồi bỏ đi, thì thay đổi bay mất mà không có dấu hiệu gì — mà ô
+// này quyết định mấy giờ máy ngủ, sai là mất cả đêm làm việc.
+let _lmHenLuu = null;
+function lmLuuTre(){
+    clearTimeout(_lmHenLuu);
+    _lmHenLuu = setTimeout(lmLuu, 800);
+}
+
+// Chớp chữ "Đã lưu" — không có nó thì người dùng không biết phải bấm vào đâu,
+// và câu hỏi đầu tiên luôn là "tôi nhấn đâu để nó ăn?".
+function _lmDaLuu(){
+    const n = document.getElementById("lm-da-luu"); if(!n) return;
+    n.style.opacity = "1";
+    clearTimeout(n._hen);
+    n._hen = setTimeout(() => { n.style.opacity = "0"; }, 1800);
+}
+
 async function lmLuu(){
+    clearTimeout(_lmHenLuu);
     const el = id => document.getElementById(id);
     const bat = el("lm-bat").checked;
     el("lm-form").style.display = bat ? "block" : "none";
@@ -708,12 +729,13 @@ async function lmLuu(){
             lm_runner:    chon.join(","),
             lm_hanh_dong: el("lm-hanh-dong").value,
         });
+        _lmDaLuu();
     }catch(e){ Toast.error(e.message); }
 }
 
 async function lmThu(){
     const kq = document.getElementById("lm-ket-qua");
-    kq.textContent = "Đang bật…"; kq.style.color = "var(--text-muted)";
+    kq.textContent = "Đang bật runner…"; kq.style.color = "var(--text-muted)";
     await lmLuu();
     try{
         const r = await API.lmThu();
