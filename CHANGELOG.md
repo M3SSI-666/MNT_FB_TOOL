@@ -10,6 +10,39 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.7.0 — 28/08/2026
+
+**Tự lấy lại phiên cho nick báo hết cookie**
+
+`xs` trong phần mềm và cookie trong profile Chrome là **hai kho riêng biệt**.
+Cái trong phần mềm là ảnh chụp lúc bạn nhập tay; cái trong profile do Chrome giữ
+và được Facebook làm mới mỗi lần nick hoạt động.
+
+Đo trên máy thật: **12/12 nick đọc được đều có `xs` ở profile khác hẳn `xs` trong
+phần mềm** — không một cái nào còn trùng. Nghĩa là mọi thứ dựng phiên từ dữ liệu
+(đăng chế độ VIA, tham gia nhóm, xuất cookie) đều đang chạy bằng giá trị đã cũ.
+
+**Giữ cho `xs` không cũ đi.** Sau mỗi phiên vừa đóng trình duyệt, phần mềm lấy
+`xs` mới nhất từ profile ghi lại vào dữ liệu. Trước đây việc này chỉ chạy khi bạn
+tự bật cột *Refresh = Yes*, nên giá trị cứ cũ dần cho tới ngày Facebook thu hồi
+hẳn — lúc đó nick báo "hết cookie" trong khi profile vẫn còn đăng nhập tốt.
+
+> Chạy ngay lần đầu trên máy tác giả: **11 nick lấy được `xs` mới**.
+
+**Tự cứu nick đã báo hết cookie.** Cứ 10 phút, phần mềm mở profile của nick đó
+lên và hỏi Facebook xem còn đăng nhập không. Còn thì lấy `xs` mới, trả nick về
+**Active**, và nhắn `🟢 HOẠT ĐỘNG TRỞ LẠI` vào Telegram. Bạn không phải làm gì.
+
+Cách này **không dùng một chữ mật khẩu nào**. Với Facebook thì đó chỉ là nick mở
+trình duyệt xem trang chủ — đúng thứ nó vẫn làm hằng ngày. Khác hẳn đăng nhập
+lại tự động, vốn là hành vi dễ bị hỏi xác minh nhất.
+
+Có mấy chốt an toàn: bỏ qua nick đang chạy phiên, từ chối khi profile đã đăng
+nhập sang nick khác, mỗi nick chỉ thử lại sau **90 phút**, và mỗi lượt chỉ cứu
+tối đa 3 nick để không mở cả loạt trình duyệt cùng lúc.
+
+> Nick nào profile cũng đã đăng xuất thì vẫn phải nạp cookie tay như trước.
+
 ## v2.6.2 — 28/08/2026
 
 **Sửa: máy bật liên tục thì chỉ sao lưu đúng một lần rồi thôi**

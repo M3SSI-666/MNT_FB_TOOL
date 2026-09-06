@@ -234,6 +234,47 @@ def _sync_xs_to_db(acc: dict, live: dict) -> str:
         return ""
 
 
+def dong_bo_xs(acc_name: str) -> str:
+    """
+    TẦNG 0 — giữ cho `xs` trong DB không bị cũ đi.
+
+    Gọi NGAY SAU mỗi phiên vừa đóng trình duyệt. Facebook xoay `xs` theo phiên,
+    nên giá trị người dùng nhập tay hôm đầu càng ngày càng lệch so với thực tế.
+    Đo trên máy thật: 12/12 acc đọc được đều có `xs` ở profile KHÁC hẳn `xs`
+    trong DB — không một cái nào còn trùng.
+
+    Điều đó nghĩa là mọi thứ dựng phiên từ DB (đăng bài chế độ VIA, tham gia
+    nhóm, xuất cookie) đều đang chạy bằng một giá trị đã cũ, và đến một ngày
+    Facebook thu hồi hẳn thì acc "hết cookie" trong khi profile vẫn còn sống.
+
+    Phải gọi khi trình duyệt ĐÃ ĐÓNG: profile đang mở thì Chrome khoá file
+    cookie, đọc không ra và hàm này lặng lẽ bỏ qua.
+
+    Không bao giờ ném lỗi — đây là việc dọn dẹp bên lề, không được phép làm
+    hỏng kết quả của phiên vừa chạy.
+    """
+    if not acc_name:
+        return ""
+    try:
+        # KHÔNG dùng `get_account_by_name`: hàm đó chỉ trả acc Active/Spam, nên
+        # acc đang 'Dừng' hay 'Cookie hết hạn' sẽ tra ra rỗng — đúng những acc
+        # mà việc giữ `xs` cho mới là cần nhất.
+        import db as _db
+        with _db._conn() as con:
+            r = con.execute("SELECT * FROM accounts WHERE ten_acc=? LIMIT 1",
+                            (acc_name,)).fetchone()
+        if not r:
+            return ""
+        acc = dict(r)
+        live = _read_cookies_from_profile(acc_name, (acc.get("c_user") or "").strip())
+        if not live:
+            return ""
+        return _sync_xs_to_db(acc, live)
+    except Exception as e:
+        logger.debug(f"dong_bo_xs '{acc_name}' hỏng: {e}")
+        return ""
+
+
 def _find_profile_dir(acc_name: str, c_user: str = "") -> str | None:
     """
     Tìm thư mục profile Chrome của acc — CHỈ ĐỌC, không tạo mới.

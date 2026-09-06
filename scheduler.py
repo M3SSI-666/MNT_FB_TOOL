@@ -237,6 +237,19 @@ def _don_cache_sau_phien(acc_name: str):
     """
     if not acc_name:
         return
+
+    # TẦNG 0 — lấy `xs` mới từ profile về DB. Đặt ở đây vì đây là thời điểm duy
+    # nhất chắc chắn trình duyệt đã đóng: profile còn mở thì Chrome khoá file
+    # cookie và đọc không ra.
+    #
+    # Trước đây việc này chỉ chạy khi bật cột Refresh=Yes, nên `xs` trong DB cứ
+    # cũ dần: đo thực tế 12/12 acc có `xs` ở profile khác hẳn `xs` trong DB.
+    try:
+        from cookie_exporter import dong_bo_xs
+        dong_bo_xs(acc_name)
+    except Exception as e:
+        logger.debug(f"Đồng bộ xs '{acc_name}' hỏng: {e}")
+
     try:
         from fb_common import find_profile_dir, don_cache_profile
         a = get_account_by_name(acc_name)
@@ -492,6 +505,23 @@ def _run_one(item: dict):
             return
 
 
+def _cuu_phien_het_han():
+    """
+    TẦNG 1 — thử lấy lại phiên cho acc đang 'Cookie hết hạn'.
+
+    Chỉ CHẠY Ở MỘT LOẠI scheduler. Có bốn tiến trình scheduler chạy song song;
+    để cả bốn cùng quét thì cùng một acc sẽ bị bốn trình duyệt mở lên cùng lúc.
+    Chọn 'homestay' vì nó luôn có mặt.
+    """
+    if LOAI != "homestay":
+        return
+    try:
+        import khoi_phuc_phien
+        khoi_phuc_phien.quet()
+    except Exception as e:
+        logger.error(f"❌ _cuu_phien_het_han: {e}")
+
+
 # ── Auto-refresh cookie ───────────────────────────────────────
 
 def _check_refresh():
@@ -556,6 +586,7 @@ def main():
             # Refresh cookie mỗi 10 phút
             if time.time() - last_refresh_check >= 600:
                 _check_refresh()
+                _cuu_phien_het_han()
                 last_refresh_check = time.time()
 
             logger.info(f"⏰ [{now.strftime('%H:%M:%S')}] Kiểm tra lịch {LOAI}...")

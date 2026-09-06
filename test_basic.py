@@ -2456,6 +2456,79 @@ finally:
     import shutil as _sh
     _sh.rmtree(_tm_sl, ignore_errors=True)
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Lấy lại phiên cho acc hết xs
+# ═══════════════════════════════════════════════════════════════════════════
+# `xs` trong DB và cookie trong profile Chrome là HAI KHO RIÊNG. Cái trong DB là
+# ảnh chụp lúc nhập tay; cái trong profile do Chrome giữ và Facebook làm mới mỗi
+# lần acc hoạt động. Đo trên máy thật: 12/12 acc đọc được đều có `xs` ở profile
+# KHÁC hẳn `xs` trong DB — không một cái nào còn trùng.
+import cookie_exporter as _ce
+import khoi_phuc_phien as _kp
+
+_src_ce = Path("cookie_exporter.py").read_text(encoding="utf-8")
+_src_sch = Path("scheduler.py").read_text(encoding="utf-8")
+_src_kp = Path("khoi_phuc_phien.py").read_text(encoding="utf-8")
+
+# ── Tầng 0: giữ xs khỏi cũ đi ──────────────────────────────────────────────
+check("có hàm đồng bộ xs sau phiên", callable(getattr(_ce, "dong_bo_xs", None)))
+check("scheduler gọi nó sau mỗi phiên", "dong_bo_xs" in _src_sch)
+# Đặt trong _don_cache_sau_phien vì đó là lúc DUY NHẤT chắc chắn trình duyệt đã
+# đóng — profile còn mở thì Chrome khoá file cookie và đọc không ra.
+_i_don = _src_sch.index("def _don_cache_sau_phien")
+_i_sync = _src_sch.index("dong_bo_xs")
+check("đồng bộ xs đặt trong hàm chạy sau khi trình duyệt đã đóng",
+      _i_don < _i_sync < _src_sch.index("def _cuu_phien_het_han"))
+
+# `get_account_by_name` CHỈ trả acc Active/Spam. Dùng nó ở đây thì acc đang
+# 'Dừng' hay 'Cookie hết hạn' tra ra rỗng — đúng những acc cần giữ xs nhất.
+_i_ds = _src_ce.index("def dong_bo_xs")
+# Bỏ dòng chú thích trước khi soi: chính chú thích trong hàm đó giải thích VÌ SAO
+# không dùng `get_account_by_name`, nên soi cả chú thích là bắt nhầm.
+_than_ds = "\n".join(l for l in _src_ce[_i_ds:_src_ce.index("def _find_profile_dir")].splitlines()
+                     if not l.lstrip().startswith("#"))
+check("đồng bộ xs KHÔNG gọi get_account_by_name (hàm đó lọc mất acc Dừng)",
+      "get_account_by_name" not in _than_ds)
+
+check("acc không có thật thì trả rỗng, không nổ", _ce.dong_bo_xs("Acc Không Có Thật") == "")
+check("tên rỗng thì trả rỗng, không nổ", _ce.dong_bo_xs("") == "")
+
+# ── Tầng 1: cứu từ profile ─────────────────────────────────────────────────
+check("có hàm quét cứu phiên", callable(getattr(_kp, "quet", None)))
+check("scheduler gọi quét cứu phiên", "_cuu_phien_het_han" in _src_sch)
+
+# Bốn tiến trình scheduler chạy song song. Để cả bốn cùng quét thì một acc bị
+# bốn trình duyệt mở lên cùng lúc.
+check("chỉ MỘT loại scheduler chạy quét cứu, tránh mở bốn trình duyệt cùng lúc",
+      'if LOAI != "homestay"' in _src_sch)
+
+# Chỉ trả acc về Active khi Facebook ĐÃ XÁC NHẬN phiên còn sống. Dựa vào "đọc
+# được cookie" thôi thì chưa đủ: file cookie vẫn còn nguyên sau khi phiên bị thu
+# hồi, nên acc sẽ về Active rồi hỏng lại ngay, mỗi vòng bắn một cặp tin Telegram.
+check("phải hỏi Facebook trước khi trả acc về Active",
+      "chua_dang_nhap" in _src_kp)
+_i_hoi = _src_kp.index("if await chua_dang_nhap(page)")
+_i_active = _src_kp.index('update_account_field(acc["id"], "trang_thai", "Active")')
+check("hỏi Facebook TRƯỚC rồi mới đổi trạng thái", _i_hoi < _i_active)
+
+# Đổi qua update_account_field để nó tự so cũ/mới rồi bắn '🟢 HOẠT ĐỘNG TRỞ LẠI'.
+check("đổi trạng thái qua cửa chung, để tin Telegram tự bắn",
+      "update_account_field" in _src_kp
+      and "UPDATE accounts SET trang_thai" not in _src_kp)
+
+# Profile đang mở nghĩa là acc đó đang chạy phiên — đụng vào là hỏng cả hai.
+check("bỏ qua acc có profile đang mở", "_profile_dang_mo" in _src_kp)
+# Profile đăng nhập sang nick khác thì ghi bừa sẽ gán cookie nhầm nick.
+check("từ chối khi profile đang là nick khác", "profile đang là nick khác" in _src_kp)
+
+check("có giãn cách giữa hai lần thử cứu cùng một acc", _kp.NGHI_PHUT >= 30)
+check("mỗi lượt chỉ cứu vài acc, khỏi mở cả loạt trình duyệt", 1 <= _kp.MOI_LUOT <= 5)
+# Vòng lặp scheduler gọi hàm này; một profile hỏng treo vô hạn là đứng luôn
+# việc đăng bài.
+check("có chặn trên thời gian cho mỗi acc", 30 <= _kp.CHO_GIAY <= 180)
+check("chặn trùng ghi xuống cơ sở dữ liệu (bốn tiến trình không thấy nhau)",
+      "kp_da_thu" in _src_kp)
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:
