@@ -10,6 +10,23 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.6.2 — 28/08/2026
+
+**Sửa: máy bật liên tục thì chỉ sao lưu đúng một lần rồi thôi**
+
+Bản `v2.6.0` chỉ thử sao lưu **một lần cho mỗi lần chạy phần mềm**. Máy nào tắt
+mở mỗi ngày thì không sao, nhưng **máy trạm bật suốt** — đúng cách chạy thường
+gặp nhất — sẽ sao lưu đúng một lần lúc mở, rồi không bao giờ nữa: hôm sau, tuần
+sau đều không chạy, mà không có một dấu hiệu nào.
+
+Giờ phần mềm hỏi lại **mỗi 30 phút** xem hôm nay đã sao lưu chưa. Hỏi là rẻ:
+xong rồi thì nó trả lời ngay, không đụng vào dữ liệu.
+
+Kèm theo đó, hai chỗ khác cũng hết hỏng:
+
+- **Mất mạng lúc mở phần mềm** thì nửa tiếng sau tự thử lại, thay vì bỏ cả ngày.
+- **Sang ngày mới** trên máy không tắt: chậm nhất 30 phút là có bản của ngày mới.
+
 ## v2.6.1 — 28/08/2026
 
 **Sao lưu gửi vào cùng khung chat với cảnh báo**

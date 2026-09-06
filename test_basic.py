@@ -2428,6 +2428,24 @@ try:
     check("chưa đặt mật khẩu thì không gửi file trần",
           "Chưa đặt mật khẩu mã hoá" in _src_sl)
 
+    # ── Máy bật liên tục vẫn phải sao lưu mỗi ngày ─────────────────────────
+    # Trước đây dùng một biến bật/tắt đặt một lần cho cả đời tiến trình, nên máy
+    # để chạy suốt sẽ sao lưu ĐÚNG MỘT LẦN rồi thôi vĩnh viễn — hôm sau, tuần
+    # sau đều không chạy, mà không có dấu hiệu gì. Máy trạm bật cả ngày là
+    # trường hợp thường gặp nhất, nên đó là chỗ hỏng nặng nhất.
+    _src_tn = Path("thong_bao.py").read_text(encoding="utf-8")
+    check("có khoảng thời gian hỏi lại việc sao lưu", hasattr(_tb, "THU_SAO_LUU_PHUT"))
+    check("hỏi lại đủ dày để sang ngày mới không trễ quá một tiếng",
+          _tb.THU_SAO_LUU_PHUT <= 60)
+    check("hỏi lại không quá dày, khỏi phí công",
+          _tb.THU_SAO_LUU_PHUT >= 10)
+    check("đo bằng thời điểm, KHÔNG bằng biến bật/tắt một lần",
+          "lan_thu_sao_luu" in _src_tn and "da_thu_sao_luu" not in _src_tn)
+    # Mốc khởi tạo phải là 0 để lần hỏi đầu nổ ngay khi mở phần mềm, chứ không
+    # bắt người dùng chờ hết một chu kỳ.
+    check("mở phần mềm là sao lưu ngay, không chờ hết chu kỳ",
+          "lan_thu_sao_luu = 0.0" in _src_tn)
+
     # Đẩy đi hỏng thì KHÔNG được ghi nhận "hôm nay xong" — để hôm sau còn thử lại.
     _i_gui = _src_sl.index("if not ok:")
     _i_ghi = _src_sl.index('db.set_setting("sl_ngay"')

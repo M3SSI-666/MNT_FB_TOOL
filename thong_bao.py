@@ -57,6 +57,12 @@ LAP_LAI_PHUT = 5
 # là cả loạt acc cùng hết cookie trong vài giây.
 GIAN_CACH_GIAY = 3.5
 
+# Bao lâu thì hỏi lại "hôm nay sao lưu chưa". Hỏi là rẻ — hôm nay xong rồi thì
+# `chay_hang_ngay` trả về ngay, không đụng vào cơ sở dữ liệu. Con số này thật ra
+# là ĐỘ TRỄ TỐI ĐA của hai việc: sao lưu lại sau khi mất mạng, và sao lưu của
+# ngày mới trên máy để chạy suốt không tắt.
+THU_SAO_LUU_PHUT = 30
+
 _hang: "queue.Queue[tuple[str, str]]" = queue.Queue(maxsize=200)
 _luong_gui: threading.Thread | None = None
 _khoa = threading.Lock()
@@ -577,14 +583,21 @@ def vong_nen(nghi_giay: int = 20):
     trong biến thì tắt app mở lại là quên, và mỗi lần khởi động lại sau giờ tổng
     kết sẽ gửi thêm một bản nữa — ngày chạy RUN_APP bốn lần là bốn tin giống hệt.
     """
-    da_thu_sao_luu = False
+    lan_thu_sao_luu = 0.0
     while True:
         try:
-            # Sao lưu hằng ngày. Chạy sau khi phần mềm đã lên được một lúc, và
-            # chỉ thử MỘT lần mỗi lần chạy phần mềm: hỏng thì để hôm sau, đừng
-            # cứ 20 giây lại nén cả cơ sở dữ liệu một lần.
-            if not da_thu_sao_luu:
-                da_thu_sao_luu = True
+            # ── Sao lưu hằng ngày ──────────────────────────────────────────
+            # Đo bằng THỜI ĐIỂM thử gần nhất, không phải bằng một biến bật/tắt.
+            # Dùng biến bật/tắt thì máy để chạy liên tục sẽ sao lưu đúng MỘT lần
+            # rồi thôi vĩnh viễn — hôm sau, tuần sau đều không chạy nữa, mà lại
+            # không có dấu hiệu gì. Máy trạm bật cả ngày là trường hợp thường
+            # gặp nhất, nên đó là chỗ hỏng nặng nhất.
+            #
+            # Cách này cho: mở phần mềm là thử ngay; hỏng (mất mạng) thì nửa
+            # tiếng thử lại; xong rồi thì `chay_hang_ngay` tự thấy "hôm nay đã
+            # sao lưu" và trả về ngay, không nén lại cơ sở dữ liệu lần nữa.
+            if time.time() - lan_thu_sao_luu >= THU_SAO_LUU_PHUT * 60:
+                lan_thu_sao_luu = time.time()
                 try:
                     import sao_luu
                     ok, msg = sao_luu.chay_hang_ngay()
