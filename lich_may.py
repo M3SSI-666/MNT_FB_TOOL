@@ -140,6 +140,90 @@ def _trong_cua_so(moc: str, bay_gio: datetime = None, rong: int = 30) -> bool:
     return 0 <= (now - m) % (24 * 60) < rong
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Giờ đánh thức của Windows — nơi duy nhất phần mềm không tự lo được
+# ═══════════════════════════════════════════════════════════════════════════
+# Giờ sáng nằm ở HAI nơi: phần mềm biết "7h thì bật runner", còn việc đánh thức
+# máy là một tác vụ của Windows. Đổi giờ trong phần mềm mà quên chạy lại
+# `CAI_LICH_MAY.bat` thì máy vẫn thức — nhưng theo giờ CŨ.
+#
+# Hỏng kiểu tệ nhất: nhìn thì như chạy được, chỉ là muộn mấy tiếng, và không có
+# một dòng lỗi nào. Nên phần mềm tự đi đọc giờ trong tác vụ Windows rồi đối
+# chiếu. Đọc thì không cần quyền quản trị; chỉ ghi mới cần.
+
+TEN_TAC_VU = "MNT_DanhThucMay"
+
+
+def gio_danh_thuc() -> str | None:
+    """
+    Giờ `HH:MM` mà Windows đang hẹn đánh thức máy. `None` nếu chưa cài tác vụ.
+
+    Đọc từ XML chứ không đọc bản in `/FO LIST`: bản in ra theo ngôn ngữ và định
+    dạng giờ của máy ("7:00:00 AM" hay "07:00:00"), nên phân tích nó sẽ hỏng
+    trên máy đặt ngôn ngữ khác. Trong XML luôn là `2026-09-07T07:00:00`.
+    """
+    if sys.platform != "win32":
+        return None
+    try:
+        r = subprocess.run(["schtasks", "/Query", "/TN", TEN_TAC_VU, "/XML"],
+                           capture_output=True, timeout=20,
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+        if r.returncode != 0:
+            return None
+        xml = r.stdout.decode("utf-16", errors="ignore")
+        if "<StartBoundary>" not in xml:
+            xml = r.stdout.decode("utf-8", errors="ignore")
+        moc = xml.split("<StartBoundary>", 1)[1].split("</StartBoundary>", 1)[0]
+        return moc.split("T", 1)[1][:5]          # "2026-09-07T07:00:00" -> "07:00"
+    except Exception:
+        return None
+
+
+def tinh_trang_danh_thuc() -> dict:
+    """
+    Giờ trong phần mềm có khớp giờ Windows đang hẹn không?
+
+    Chỉ xét khi lịch đang bật VÀ kiểu nghỉ cần đánh thức. Chọn "chỉ dừng runner"
+    thì máy có ngủ đâu mà cần thức.
+    """
+    c   = cau_hinh()
+    can = c["bat"] and c["hanh_dong"] in ("ngu_dong", "ngu")
+    win = gio_danh_thuc()
+    return {
+        "can_danh_thuc": can,
+        "gio_phan_mem":  c["gio_bat"],
+        "gio_windows":   win,
+        "da_cai":        win is not None,
+        "khop":          (win == c["gio_bat"]) if win else False,
+        "tat_han":       c["bat"] and c["hanh_dong"] == "tat_may",
+    }
+
+
+def cai_danh_thuc() -> tuple[bool, str]:
+    """
+    Chạy `CAI_LICH_MAY.bat` với quyền quản trị để cập nhật giờ đánh thức.
+
+    Windows sẽ hiện cửa sổ hỏi xác nhận — không có cách nào đăng ký tác vụ đánh
+    thức mà không qua bước đó. Trả về ngay sau khi bật, không chờ người dùng
+    bấm, vì họ có thể để đó cả phút.
+    """
+    from config import BASE_DIR
+    from pathlib import Path
+    f = Path(BASE_DIR) / "CAI_LICH_MAY.bat"
+    if not f.exists():
+        return False, "Không thấy CAI_LICH_MAY.bat"
+    if sys.platform != "win32":
+        return False, "Chỉ chạy được trên Windows"
+    try:
+        subprocess.Popen(
+            ["powershell", "-NoProfile", "-Command",
+             f"Start-Process cmd.exe -ArgumentList '/c',\"`\"{f}`\" < nul\" -Verb RunAs"],
+            creationflags=subprocess.CREATE_NO_WINDOW)
+        return True, "Đang mở — bấm Yes ở cửa sổ Windows vừa hiện lên"
+    except Exception as e:
+        return False, str(e)[:90]
+
+
 def bat_runner() -> int:
     """Bật những runner đã tick. Bỏ qua cái đang chạy. Trả số cái vừa bật."""
     c  = cau_hinh()

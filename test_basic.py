@@ -2614,6 +2614,7 @@ check("đã trả cấu hình lịch máy về như cũ",
 # Sự thật kỹ thuật này phải hiện ra trong giao diện, không thì người dùng chọn
 # "Tắt hẳn" rồi sáng hôm sau ngồi chờ một cái máy nằm im.
 _html_lm = Path("templates/index.html").read_text(encoding="utf-8")
+_src_lm  = Path("lich_may.py").read_text(encoding="utf-8")
 _ajs_lm = Path("static/js/app.js").read_text(encoding="utf-8")
 check("giao diện có cảnh báo cho lựa chọn Tắt hẳn", "_lmCanhBao" in _ajs_lm)
 check("cảnh báo nói rõ phải vào BIOS", "BIOS" in _ajs_lm or "RTC Alarm" in _ajs_lm)
@@ -2626,6 +2627,26 @@ check("có bật 'cho phép hẹn giờ đánh thức'", "RTCWAKE" in _bat_lm)
 check("có bật chế độ ngủ đông", "hibernate on" in _bat_lm)
 # Giờ đánh thức đọc từ chính cơ sở dữ liệu, khỏi phải điền hai nơi rồi lệch nhau.
 check("giờ đánh thức lấy từ cấu hình trong phần mềm", "lm_gio_bat" in _bat_lm)
+
+# ── Hai nơi giữ giờ sáng, phần mềm phải tự đối chiếu ───────────────────────
+# Giờ sáng nằm ở phần mềm VÀ ở tác vụ đánh thức của Windows. Đổi trong phần mềm
+# mà quên chạy lại CAI_LICH_MAY.bat thì máy vẫn thức — nhưng theo giờ CŨ. Nhìn
+# như chạy được, chỉ là muộn mấy tiếng, và không một dòng lỗi nào.
+check("đọc được giờ Windows đang hẹn", callable(getattr(_lm, "gio_danh_thuc", None)))
+check("có hàm đối chiếu hai bên", callable(getattr(_lm, "tinh_trang_danh_thuc", None)))
+_tt_dt = _lm.tinh_trang_danh_thuc()
+for _k in ("gio_phan_mem", "gio_windows", "da_cai", "khop"):
+    check(f"kết quả đối chiếu có '{_k}'", _k in _tt_dt)
+
+# Đọc XML chứ không đọc bản in /FO LIST: bản in ra theo ngôn ngữ và định dạng
+# giờ của máy ("7:00:00 AM"), nên phân tích nó sẽ hỏng trên máy đặt ngôn ngữ khác.
+check("đọc giờ từ XML, không phụ thuộc ngôn ngữ máy",
+      "StartBoundary" in _src_lm and "/XML" in _src_lm)
+
+# Bấm nút sửa thì phải chạy có quyền quản trị, không thì tác vụ không ghi được.
+check("nút sửa chạy CAI_LICH_MAY.bat có quyền quản trị",
+      "-Verb RunAs" in _src_lm and "CAI_LICH_MAY.bat" in _src_lm)
+check("giao diện có nút sửa khi lệch giờ", "lmCaiDanhThuc" in _ajs_lm)
 
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):

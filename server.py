@@ -1916,6 +1916,21 @@ def api_telegram_thu():
     return jsonify({"ok": ok, "msg": loi})
 
 
+@app.route("/api/lich-may/danh-thuc")
+def api_lich_may_danh_thuc():
+    """Giờ trong phần mềm có khớp giờ Windows đang hẹn đánh thức không."""
+    import lich_may
+    return jsonify({"ok": True, **lich_may.tinh_trang_danh_thuc()})
+
+
+@app.route("/api/lich-may/cai-danh-thuc", methods=["POST"])
+def api_lich_may_cai_danh_thuc():
+    """Chạy CAI_LICH_MAY.bat có quyền quản trị để đồng bộ lại giờ đánh thức."""
+    import lich_may
+    ok, msg = lich_may.cai_danh_thuc()
+    return jsonify({"ok": ok, "msg": msg})
+
+
 @app.route("/api/lich-may/thu", methods=["POST"])
 def api_lich_may_thu():
     """

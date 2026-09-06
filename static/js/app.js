@@ -602,25 +602,70 @@ function _lmNhan(bat, gioBat, gioTat){
     else   { n.textContent = "Đang tắt";              n.style.color = "var(--text-muted)"; }
 }
 
-// Cảnh báo khi chọn "Tắt hẳn": đó là lựa chọn duy nhất mà phần mềm KHÔNG tự lo
-// được phần đánh thức, và nếu không nói rõ thì sáng hôm sau máy vẫn nằm im.
-function _lmCanhBao(){
-    const hd = document.getElementById("lm-hanh-dong").value;
+// Giờ sáng nằm ở HAI nơi: phần mềm, và tác vụ đánh thức của Windows. Đổi giờ
+// trong phần mềm mà quên chạy lại CAI_LICH_MAY.bat thì máy vẫn thức — nhưng
+// theo giờ CŨ. Nhìn như chạy được, chỉ là muộn mấy tiếng, không một dòng lỗi.
+//
+// Nên phần mềm tự đối chiếu hai bên và nói thẳng ra, thay vì bắt người dùng nhớ.
+async function _lmCanhBao(){
+    const hd  = document.getElementById("lm-hanh-dong").value;
     const box = document.getElementById("lm-canh-bao");
+    box.style.display = "block";
+
     if(hd === "tat_may"){
-        box.style.display = "block";
+        box.style.background = "rgba(239,68,68,.08)";
+        box.style.borderColor = "var(--danger)";
         box.innerHTML = "<b style='color:var(--danger)'>⚠ Tắt hẳn thì phần mềm "
             + "không đánh thức máy được</b><br>Máy tắt là điện đã ngắt. Muốn sáng "
-            + "máy tự lên, anh phải tự vào BIOS bật <code>RTC Alarm</code>. "
+            + "máy tự lên, bạn phải tự vào BIOS bật <code>RTC Alarm</code>. "
             + "Không muốn đụng BIOS thì chọn <b>Ngủ đông</b>.";
-    } else if(hd === "ngu_dong" || hd === "ngu"){
-        box.style.display = "block";
-        box.style.background = "rgba(52,211,153,.08)";
-        box.style.borderColor = "var(--success)";
-        box.innerHTML = "Nhớ bấm đúp <code>CAI_LICH_MAY.bat</code> <b>một lần</b> "
-            + "để Windows biết phải đánh thức máy lúc "
-            + _escapeHtml(document.getElementById("lm-gio-bat").value || "07:00") + ".";
-    } else { box.style.display = "none"; }
+        return;
+    }
+    if(hd === "chi_tat_app"){ box.style.display = "none"; return; }
+
+    box.style.background = "var(--bg)";
+    box.style.borderColor = "var(--border)";
+    box.innerHTML = "Đang kiểm giờ đánh thức của Windows…";
+    try{
+        const t = await API.lmDanhThuc();
+        const gio = _escapeHtml(document.getElementById("lm-gio-bat").value || "07:00");
+        if(!t.da_cai){
+            box.style.background = "rgba(239,68,68,.08)";
+            box.style.borderColor = "var(--danger)";
+            box.innerHTML = "<b style='color:var(--danger)'>⚠ Windows chưa biết phải "
+                + "đánh thức máy</b><br>Chưa cài thì 1h đêm máy ngủ thật, nhưng sáng "
+                + "không tự dậy.<br>"
+                + `<button class="btn btn-primary" style="margin-top:8px;font-size:11px;padding:4px 10px" onclick="lmCaiDanhThuc()">Cài ngay cho ${gio}</button>`;
+        } else if(!t.khop){
+            box.style.background = "rgba(239,68,68,.08)";
+            box.style.borderColor = "var(--danger)";
+            box.innerHTML = "<b style='color:var(--danger)'>⚠ Hai bên đang lệch giờ</b><br>"
+                + `Bạn đặt <b>${gio}</b>, nhưng Windows vẫn đánh thức máy lúc `
+                + `<b>${_escapeHtml(t.gio_windows)}</b>. Máy sẽ dậy muộn mà không báo lỗi gì.<br>`
+                + `<button class="btn btn-primary" style="margin-top:8px;font-size:11px;padding:4px 10px" onclick="lmCaiDanhThuc()">Sửa lại thành ${gio}</button>`;
+        } else {
+            box.style.background = "rgba(52,211,153,.08)";
+            box.style.borderColor = "var(--success)";
+            box.innerHTML = `✅ Windows sẽ đánh thức máy lúc <b>${_escapeHtml(t.gio_windows)}</b> — khớp với giờ bạn đặt.`;
+        }
+    }catch(e){ box.style.display = "none"; }
+}
+
+async function lmCaiDanhThuc(){
+    const kq = document.getElementById("lm-ket-qua");
+    kq.textContent = "Đang mở cửa sổ xác nhận của Windows…";
+    kq.style.color = "var(--text-muted)";
+    await lmLuu();
+    try{
+        const r = await API.lmCaiDanhThuc();
+        kq.textContent = (r.ok ? "→ " : "❌ ") + (r.msg || "");
+        kq.style.color = r.ok ? "var(--text-muted)" : "var(--danger)";
+        // Chờ người dùng bấm Yes rồi kiểm lại. Không có cách nào biết chính xác
+        // lúc nào họ bấm, nên kiểm lại vài lần cách nhau vài giây.
+        for(const giay of [4, 8, 14]){
+            setTimeout(_lmCanhBao, giay * 1000);
+        }
+    }catch(e){ kq.textContent = "❌ " + e.message; kq.style.color = "var(--danger)"; }
 }
 
 async function lmNap(){

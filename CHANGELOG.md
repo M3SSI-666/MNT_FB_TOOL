@@ -10,6 +10,27 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.8.1 — 28/08/2026
+
+**Đổi giờ sáng: giờ chỉ cần sửa một chỗ**
+
+Giờ sáng vốn nằm ở **hai nơi**: phần mềm biết *"7h thì bật runner"*, còn việc
+đánh thức máy là một **tác vụ của Windows**. Đổi trong phần mềm mà quên chạy lại
+`CAI_LICH_MAY.bat` thì máy vẫn thức — **nhưng theo giờ cũ**.
+
+Đó là kiểu hỏng khó chịu nhất: nhìn thì như chạy được, chỉ là muộn mấy tiếng, và
+**không có lấy một dòng lỗi nào** để bạn biết.
+
+Giờ phần mềm tự đi đọc giờ trong tác vụ Windows rồi đối chiếu, và nói thẳng ra:
+
+- Khớp → `✅ Windows sẽ đánh thức máy lúc 07:00 — khớp với giờ bạn đặt.`
+- Lệch → `⚠ Bạn đặt 02:00, nhưng Windows vẫn đánh thức máy lúc 07:00.`
+  kèm nút **Sửa lại thành 02:00** — bấm một cái, xác nhận với Windows, xong.
+- Chưa cài bao giờ → nút **Cài ngay**.
+
+**Nên từ nay đổi giờ chỉ là sửa trong phần mềm rồi bấm nút hiện ra.** Không phải
+nhớ chạy file nào nữa.
+
 ## v2.8.0 — 28/08/2026
 
 **Lịch của máy: sáng tự chạy, khuya tự nghỉ**

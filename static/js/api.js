@@ -95,6 +95,8 @@ const API = {
 
     // Lịch của máy
     lmThu:           ()           => API.post("/api/lich-may/thu", {}),
+    lmDanhThuc:      ()           => API.get("/api/lich-may/danh-thuc"),
+    lmCaiDanhThuc:   ()           => API.post("/api/lich-may/cai-danh-thuc", {}),
 
     // Sao lưu
     slTrangThai:     ()           => API.get("/api/sao-luu/trang-thai"),
