@@ -2610,6 +2610,64 @@ finally:
 check("đã trả cấu hình lịch máy về như cũ",
       db.get_setting("lm_bat", "") == _lm_cu["lm_bat"])
 
+# ── Mở phần mềm giữa giờ làm việc thì dựng runner dậy ──────────────────────
+# Lịch hằng ngày chỉ nổ MỘT lần mỗi ngày và có ghi dấu "hôm nay chạy rồi", nên
+# tình huống này lọt lưới: 07:00 chạy → 12:00 tắt máy đi ăn → 14:00 bật lại thì
+# phần mềm thấy "hôm nay chạy rồi" và NẰM IM. Mất trắng buổi chiều, không dấu hiệu.
+_lm_cu2 = {k: db.get_setting(k, "") for k in
+           ("lm_bat", "lm_gio_bat", "lm_gio_tat", "lm_runner", "lm_ngay_bat", "lm_ngay_tat")}
+_that_bat2 = _lm.bat_runner
+_dem2 = {"n": 0}
+try:
+    _lm.bat_runner = lambda: (_dem2.__setitem__("n", _dem2["n"] + 1), 2)[1]
+    for _k, _v in (("lm_bat", "1"), ("lm_gio_bat", "07:00"), ("lm_gio_tat", "02:00"),
+                   ("lm_runner", "homestay,thue")):
+        db.set_setting(_k, _v)
+
+    # Giờ làm vắt qua nửa đêm: 07:00 → 02:00.
+    for _h, _mong in ((6, False), (7, True), (12, True), (23, True),
+                      (1, True), (2, False), (4, False)):
+        check(f"{_h:02d}:00 trong giờ làm việc (07:00→02:00) → {_mong}",
+              _lm.trong_gio_lam_viec(_dt(2026, 9, 7, _h, 0)) is _mong)
+
+    # Sáng đã chạy rồi, trưa tắt máy, chiều bật lại.
+    db.set_setting("lm_ngay_bat", "2026-09-07")
+    _lm._da_dung_lai = False
+    _dem2["n"] = 0
+    check("mở phần mềm lúc 14:00 (sáng đã chạy) → vẫn dựng runner dậy",
+          bool(_lm.dung_lai_neu_can(_dt(2026, 9, 7, 14, 0))) and _dem2["n"] == 1)
+
+    # Nhưng chỉ MỘT lần mỗi lần mở phần mềm. Làm liên tục thì người dùng vừa bấm
+    # Dừng một runner là 20 giây sau nó tự bật lại.
+    _dem2["n"] = 0
+    for _ in range(3):
+        _lm.dung_lai_neu_can(_dt(2026, 9, 7, 14, 1))
+    check("các vòng sau KHÔNG bật lại, để người dùng bấm Dừng được", _dem2["n"] == 0)
+
+    # Ngoài giờ làm thì tuyệt đối không bật.
+    _lm._da_dung_lai = False
+    _dem2["n"] = 0
+    _lm.dung_lai_neu_can(_dt(2026, 9, 7, 4, 0))
+    check("mở phần mềm lúc 04:00 (ngoài giờ làm) → không bật gì", _dem2["n"] == 0)
+
+    # Lịch tắt thì không đụng gì.
+    _lm._da_dung_lai = False
+    db.set_setting("lm_bat", "0")
+    _dem2["n"] = 0
+    _lm.dung_lai_neu_can(_dt(2026, 9, 7, 14, 0))
+    check("lịch tắt → không dựng runner", _dem2["n"] == 0)
+finally:
+    _lm.bat_runner = _that_bat2
+    _lm._da_dung_lai = False
+    for _k, _v in _lm_cu2.items():
+        db.set_setting(_k, _v)
+
+# Cờ "đã dựng lại" phải nằm trong bộ nhớ, KHÔNG ghi xuống cơ sở dữ liệu: nó phải
+# quên đi mỗi lần mở lại phần mềm — đó chính là điều nó dùng để nhận ra.
+_src_lm0 = Path("lich_may.py").read_text(encoding="utf-8")
+check("cờ đã-dựng-lại không ghi xuống cơ sở dữ liệu",
+      "_da_dung_lai" in _src_lm0 and 'set_setting("lm_da_dung_lai' not in _src_lm0)
+
 # ── Máy tắt hẳn thì phần mềm KHÔNG đánh thức được ──────────────────────────
 # Sự thật kỹ thuật này phải hiện ra trong giao diện, không thì người dùng chọn
 # "Tắt hẳn" rồi sáng hôm sau ngồi chờ một cái máy nằm im.

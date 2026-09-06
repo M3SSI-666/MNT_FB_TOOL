@@ -267,6 +267,61 @@ def _cho_may_nghi(hanh_dong: str):
         logger.error(f"❌ Lịch máy: không {ten} được: {e}")
 
 
+def trong_gio_lam_viec(bay_gio: datetime = None) -> bool:
+    """
+    Bây giờ có nằm giữa giờ sáng và giờ khuya không?
+
+    Cộng vòng qua nửa đêm: 07:00 → 02:00 nghĩa là khoảng làm việc vắt qua ngày
+    hôm sau, nên 23:00 và 01:00 đều tính là ĐANG trong giờ làm.
+    """
+    c  = cau_hinh()
+    a  = _phut_trong_ngay(c["gio_bat"])
+    b  = _phut_trong_ngay(c["gio_tat"])
+    if a is None or b is None:
+        return False
+    g   = bay_gio or datetime.now()
+    now = g.hour * 60 + g.minute
+    return (a <= now < b) if a < b else (now >= a or now < b)
+
+
+# Đã dựng lại runner cho lần chạy này của phần mềm chưa. Cố tình là biến trong
+# bộ nhớ chứ không ghi xuống cơ sở dữ liệu: nó phải quên đi mỗi lần mở lại
+# phần mềm — đó chính là điều nó dùng để nhận ra.
+_da_dung_lai = False
+
+
+def dung_lai_neu_can(bay_gio: datetime = None) -> str:
+    """
+    Mở phần mềm giữa giờ làm việc thì bật luôn runner đã tick.
+
+    VÌ SAO CẦN RIÊNG HÀM NÀY. Lịch hằng ngày chỉ nổ MỘT lần mỗi ngày, và có ghi
+    dấu "hôm nay chạy rồi". Nên tình huống này lọt lưới:
+
+        07:00  máy chạy, runner bật, đánh dấu đã chạy hôm nay
+        12:00  bạn tắt máy đi ăn
+        14:00  bật máy lại  →  phần mềm thấy "hôm nay chạy rồi"  →  NẰM IM
+
+    Buổi chiều mất trắng mà không có dấu hiệu gì. Nên khi phần mềm vừa mở, nếu
+    đang trong giờ làm việc thì dựng runner dậy, bất kể hôm nay đã chạy chưa.
+
+    Chỉ làm MỘT lần mỗi lần mở phần mềm. Làm liên tục thì bạn vừa bấm Dừng một
+    runner là 20 giây sau nó tự bật lại — không ai chịu nổi kiểu đó.
+
+    An toàn vì `bat_runner` bỏ qua runner đang chạy sẵn.
+    """
+    global _da_dung_lai
+    if _da_dung_lai:
+        return ""
+    _da_dung_lai = True
+    c = cau_hinh()
+    if not c["bat"] or not c["runner"]:
+        return ""
+    if not trong_gio_lam_viec(bay_gio):
+        return ""
+    n = bat_runner()
+    return f"mở giữa giờ làm — dựng lại {n} runner" if n else ""
+
+
 def kiem_tra(bay_gio: datetime = None) -> str:
     """
     Gọi định kỳ từ luồng nền. Trả về việc vừa làm, hoặc chuỗi rỗng.
@@ -282,6 +337,12 @@ def kiem_tra(bay_gio: datetime = None) -> str:
             return ""
         gio = bay_gio or datetime.now()
         hom = gio.strftime("%Y-%m-%d")
+
+        # Mở phần mềm giữa giờ làm việc thì dựng runner dậy ngay, không chờ tới
+        # mốc sáng hôm sau. Chỉ chạy một lần cho mỗi lần mở phần mềm.
+        dung = dung_lai_neu_can(gio)
+        if dung:
+            return dung
 
         # Giờ nghỉ xét TRƯỚC giờ chạy, để một cấu hình kiểu 07:00 nghỉ / 08:00
         # chạy không bật runner lên rồi tắt ngay sau đó.

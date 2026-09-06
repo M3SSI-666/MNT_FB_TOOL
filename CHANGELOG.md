@@ -10,6 +10,31 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.9.0 — 28/08/2026
+
+**Mở phần mềm giữa giờ làm việc thì runner tự dựng dậy**
+
+Lịch hằng ngày chỉ nổ **một lần mỗi ngày**, và có ghi dấu *"hôm nay chạy rồi"*.
+Nên tình huống rất thường gặp này lọt lưới:
+
+```
+07:00   máy chạy, runner bật, đánh dấu đã chạy hôm nay
+12:00   bạn tắt máy đi ăn
+14:00   bật máy lại  →  phần mềm thấy "hôm nay chạy rồi"  →  NẰM IM
+```
+
+Mất trắng cả buổi chiều, mà không có một dấu hiệu nào.
+
+Giờ khi phần mềm vừa mở, nếu **đang trong giờ làm việc** thì nó dựng runner đã
+tick dậy luôn, bất kể hôm nay đã chạy chưa. Giờ làm việc tính vắt qua nửa đêm:
+đặt `07:00 → 02:00` thì 23h hay 1h sáng đều là đang trong giờ làm.
+
+Chỉ dựng **một lần cho mỗi lần mở phần mềm**. Bấm Dừng một runner giữa ngày thì
+nó nằm yên, không tự bật lại sau 20 giây.
+
+> Nghĩa là: máy tắt hẳn, mở lại lúc nào cũng được — miễn trong giờ làm việc là
+> phần mềm tự lên và tự chạy. Muốn cho nghỉ hẳn thì bấm **Tắt phần mềm**.
+
 ## v2.8.2 — 28/08/2026
 
 **Sửa hai chỗ gây hiểu nhầm ở Lịch của máy**
