@@ -2706,6 +2706,40 @@ check("nút sửa chạy CAI_LICH_MAY.bat có quyền quản trị",
       "-Verb RunAs" in _src_lm and "CAI_LICH_MAY.bat" in _src_lm)
 check("giao diện có nút sửa khi lệch giờ", "lmCaiDanhThuc" in _ajs_lm)
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Tắt phần mềm phải THẬT SỰ tắt
+# ═══════════════════════════════════════════════════════════════════════════
+# Bấm "Tắt phần mềm" thì runner chết hết nhưng SERVER VẪN SỐNG — đo được: 21
+# phút sau vẫn phục vụ bình thường. Người dùng tưởng đã tắt, thực ra chưa.
+#
+# Nguyên nhân: `subprocess.run(..., capture_output=True)` KHÔNG có hạn chờ. Nó
+# đợi tới khi ống dữ liệu đóng, mà tiến trình con của Chrome giữ ống đó — nên
+# treo vĩnh viễn, và `os._exit(0)` phía sau không bao giờ chạy.
+_src_sv = Path("server.py").read_text(encoding="utf-8")
+
+# Soi theo VỊ TRÍ chứ không bằng biểu thức chính quy: dấu ")" đầu tiên là của
+# `str(pid)`, nên regex kiểu [^)]* sẽ cắt trước khi tới `timeout=` và báo nhầm
+# là thiếu — đúng lỗi bài kiểm này vừa mắc.
+_vt = [i for i in range(len(_src_sv))
+       if _src_sv.startswith('subprocess.run(["taskkill"', i)]
+check(f"tìm thấy các lời gọi taskkill ({len(_vt)})", len(_vt) >= 4)
+_thieu = [_src_sv[i:i + 50] for i in _vt if "timeout=" not in _src_sv[i:i + 240]]
+check("MỌI lời gọi taskkill đều có hạn chờ" +
+      (f" — thiếu {len(_thieu)}" if _thieu else ""), not _thieu)
+
+check("tắt phần mềm: dọn dẹp chạy trong luồng riêng có hạn chờ",
+      "don.join(timeout=" in _src_sv)
+_i_join = _src_sv.index("don.join(timeout=")
+_i_exit = _src_sv.index("os._exit(0)", _i_join)
+check("thoát tiến trình SAU khi hết hạn chờ, bất kể dọn xong chưa",
+      _i_join < _i_exit)
+
+# Nút X cũng gọi cùng hàm dọn đó, nên cũng phải chờ có hạn — không thì bấm X
+# mấy lần cửa sổ cũng không nhúc nhích.
+check("nút X cũng chờ có hạn, không gọi thẳng _shutdown_all",
+      "win.events.closing += _dong_cua_so" in _src_sv)
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:

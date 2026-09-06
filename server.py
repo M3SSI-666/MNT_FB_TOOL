@@ -346,8 +346,11 @@ def _kill_pids(pids) -> list:
     da_diet = []
     for pid in pids:
         try:
+            # timeout BAT BUOC: `capture_output` cho tới khi ống dữ liệu đóng,
+            # mà tiến trình con của Chrome giữ ống đó — không có hạn chờ thì
+            # hàm này treo vĩnh viễn và cả việc tắt phần mềm đứng theo.
             subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
-                           capture_output=True,
+                           capture_output=True, timeout=15,
                            creationflags=subprocess.CREATE_NO_WINDOW)
             da_diet.append(int(pid))
         except Exception:
@@ -375,7 +378,7 @@ def _kill_all_runners():
                 pid = int(pf.read_text().strip())
                 if sys.platform == "win32":
                     subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
-                                   capture_output=True)
+                                   capture_output=True, timeout=15)
                 else:
                     os.kill(pid, 15)
             except Exception:
@@ -419,8 +422,14 @@ def api_app_shutdown():
     import threading as _th
     def _bye():
         time.sleep(0.6)          # để response kịp trả về client
-        _shutdown_all()
-        os._exit(0)              # thoát cả server (và cửa sổ app nếu có)
+        # Dọn dẹp trong luồng RIÊNG rồi chờ có hạn. Trước đây gọi thẳng
+        # `_shutdown_all()`, và khi nó treo thì `os._exit(0)` không bao giờ chạy:
+        # runner chết hết nhưng SERVER VẪN SỐNG — bấm "Tắt phần mềm" xong app
+        # vẫn còn đó. Đo được: 21 phút sau vẫn phục vụ bình thường.
+        don = _th.Thread(target=_shutdown_all, daemon=True)
+        don.start()
+        don.join(timeout=25)
+        os._exit(0)              # thoát dù dọn xong hay chưa
     _th.Thread(target=_bye, daemon=True).start()
     return jsonify({"ok": True})
 
@@ -467,7 +476,8 @@ def run_stop(loai):
     if pid:
         try:
             if sys.platform == "win32":
-                subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+                               capture_output=True, timeout=15)
             else:
                 os.kill(pid, 15)
             killed.append(pid)
@@ -2167,7 +2177,8 @@ def api_join_stop(sched_id):
     if pf.exists():
         try:
             pid = int(pf.read_text().strip())
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+                               capture_output=True, timeout=15)
             killed = True
         except Exception:
             pass
@@ -2300,8 +2311,14 @@ if __name__ == "__main__":
                 width=1440, height=920,
                 min_size=(1024, 700),
             )
-            # Nhấn X = tắt sạch: dừng luôn runner đăng nền + join worker
-            win.events.closing += _shutdown_all
+            # Nhấn X = tắt sạch: dừng luôn runner đăng nền + join worker.
+            # Chờ CÓ HẠN như nút "Tắt phần mềm": gọi thẳng `_shutdown_all` mà nó
+            # treo thì cửa sổ không đóng được, bấm X mấy lần cũng không nhúc nhích.
+            def _dong_cua_so():
+                don = threading.Thread(target=_shutdown_all, daemon=True)
+                don.start()
+                don.join(timeout=25)
+            win.events.closing += _dong_cua_so
             # block đến khi đóng cửa sổ → tiến trình kết thúc
             try:
                 webview.start(icon=_icon)

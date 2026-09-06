@@ -10,6 +10,27 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.9.1 — 28/08/2026
+
+**Sửa: bấm "Tắt phần mềm" mà phần mềm không tắt**
+
+Bấm nút đó thì runner chết hết thật, nhưng **server vẫn sống**. Đo trên máy
+thật: **21 phút sau vẫn phục vụ bình thường**. Nhìn thì như đã tắt — runner
+dừng, giao diện im — nhưng phần mềm vẫn còn đó, vẫn giữ cổng, vẫn chạy lịch.
+
+Nguyên nhân là một dòng thiếu hạn chờ. Lệnh diệt tiến trình đợi tới khi ống dữ
+liệu đóng, mà tiến trình con của Chrome giữ ống đó — nên nó **treo vĩnh viễn**,
+và lệnh thoát nằm ngay phía sau không bao giờ chạy tới.
+
+- Mọi lệnh diệt tiến trình giờ đều có **hạn chờ 15 giây**
+- Việc dọn dẹp chạy tách riêng, chờ tối đa **25 giây** rồi **thoát dù xong hay
+  chưa** — tắt là phải tắt
+- **Nút X cũng vậy.** Nó gọi cùng đoạn mã đó, nên trước đây bấm X mấy lần cửa sổ
+  cũng có thể không nhúc nhích
+
+> Sau khi sửa: bấm Tắt phần mềm → **thoát sạch trong 5 giây**, không còn tiến
+> trình nào sót lại.
+
 ## v2.9.0 — 28/08/2026
 
 **Mở phần mềm giữa giờ làm việc thì runner tự dựng dậy**
