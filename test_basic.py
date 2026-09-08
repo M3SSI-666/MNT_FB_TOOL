@@ -592,6 +592,18 @@ _cua_nhom = [r for r in _b3 if r["nhom"] == _b[0]["nhom"]][0]
 check("bài đã comment nhường bài chưa comment", _cua_nhom["id"] != _b[0]["id"])
 check("vẫn giữ 1 bài mỗi nhóm", len({r["nhom"] for r in _b3}) == 3)
 
+# so_lan phải cộng ĐÚNG số câu đã gửi. Bài chính chủ nhận 2 câu một lượt; cộng 1
+# mỗi lượt thì nó bị đếm thiếu một nửa và cứ được bốc lại mãi, vì so_lan chính là
+# khoá xếp hạng "bài nào ít comment nhất đi trước".
+_sl = lambda i: [r for r in db.get_comment_posts("homestay") if r["id"] == i][0]
+_truoc = _sl(_b[0]["id"])["so_lan"]
+db.ghi_nhan_comment(_b[0]["id"], True, so_cau=2)
+check("so_cau=2 -> so_lan cộng 2",   _sl(_b[0]["id"])["so_lan"] == _truoc + 2)
+check("gửi nhiều câu hiện ×n trên bảng", "×2" in _sl(_b[0]["id"])["trang_thai"])
+db.ghi_nhan_comment(_b[0]["id"], True)
+check("mặc định vẫn cộng 1",          _sl(_b[0]["id"])["so_lan"] == _truoc + 3)
+check("1 câu thì không ghi ×",        "×" not in _sl(_b[0]["id"])["trang_thai"])
+
 # Cửa sổ trượt: link mới đẩy link cũ ra và XOÁ HẲN
 db.xoa_het_comment_posts("thue")
 db.them_comment_posts("thue", [_lk("g1", i) for i in range(10)], gioi_han=6)
@@ -633,17 +645,23 @@ check("bài bình thường -> không báo chết",
 # mặc định cho page.evaluate, nên trang Facebook treo là phiên treo vô hạn, giữ
 # luôn một worker của scheduler. Đã gặp thật: kẹt 13 phút ở bước lướt newsfeed.
 check("có trần thời gian cho phiên comment", _cb.GIOI_HAN_PHIEN_GIAY > 0)
+# Tính theo ca TỘ6 NHẤT: mọi bài đều là bài chính chủ nên bài nào cũng nhận
+# `comment_cau_chinh_chu` câu, và giữa mỗi cặp câu còn nghỉ thêm NGHI_GIUA_2_CAU.
+_so_bai  = _cb.DEFAULTS["comment_so_bai"]
+_so_cau  = _cb.DEFAULTS["comment_cau_chinh_chu"]
 _uoc = (max(_cb.STORY_GIAY) + max(_cb.FEED_GIAY) + max(_cb.KET_GIAY)
-        + _cb.DEFAULTS["comment_so_bai"] * 15
-        + (_cb.DEFAULTS["comment_so_bai"] - 1) * _cb.DEFAULTS["comment_nghi_max"])
+        + _so_bai * _so_cau * 15
+        + _so_bai * (_so_cau - 1) * max(_cb.NGHI_GIUA_2_CAU)
+        + (_so_bai - 1) * _cb.DEFAULTS["comment_nghi_max"])
 check("trần rộng hơn phiên chạy bình thường", _cb.GIOI_HAN_PHIEN_GIAY > _uoc)
 check("trần không quá rộng (≤ 30 phút)",      _cb.GIOI_HAN_PHIEN_GIAY <= 1800)
 
-# Chỉ còn ĐÚNG 3 thông số chỉnh được. Khởi động / kết phiên bám đúng luồng đăng
-# bài Page nên không có lý do chỉnh riêng — thêm ô cấu hình vào đây là thêm chỗ
-# để hai luồng lệch nhau.
-check("chỉ còn 3 thông số cấu hình",
-      set(_cb.DEFAULTS) == {"comment_so_bai", "comment_nghi_min", "comment_nghi_max"})
+# Thời lượng khởi động / kết phiên BÁM ĐÚNG luồng đăng bài Page — thêm ô chỉnh
+# riêng cho chúng là tạo chỗ để hai luồng lệch nhau. Chỉ số LƯỢNG (bao nhiêu bài,
+# bao nhiêu câu, nghỉ bao lâu) mới được cấu hình.
+check("không thêm ô chỉnh thời lượng phiên",
+      set(_cb.DEFAULTS) == {"comment_so_bai", "comment_nghi_min", "comment_nghi_max",
+                            "comment_cau_chinh_chu", "comment_cau_khac"})
 check("thời lượng story khớp luồng đăng bài",  _cb.STORY_GIAY == (15, 20))
 check("thời lượng newsfeed khớp luồng đăng bài", _cb.FEED_GIAY == (20, 30))
 check("kết phiên khớp luồng đăng bài",        _cb.KET_GIAY == (15, 30))
@@ -652,6 +670,45 @@ check("kết phiên like đúng 1 bài",            _cb.KET_LIKE == 1)
 # Lý do bỏ qua
 check("danh sách trống -> báo trống", _cb.ly_do_bo_qua([]) == "danh sách trống")
 check("còn link -> không bỏ qua",     _cb.ly_do_bo_qua([{"url": "x"}]) == "")
+
+# Chia câu theo chủ sở hữu bài: bài của chính Page mình được nhiều câu hơn.
+_UID = "P1"
+_BAI = [{"id": 1, "url": "u1", "page": "P1"},      # chính chủ
+        {"id": 2, "url": "u2", "page": "P9"},      # Page khác
+        {"id": 3, "url": "u3", "page": "P1"}]      # chính chủ
+_POOL = [f"c{i}" for i in range(12)]
+
+check("nhận ra bài chính chủ",    _cb.la_chinh_chu(_BAI[0], _UID))
+check("bài Page khác không phải chính chủ", not _cb.la_chinh_chu(_BAI[1], _UID))
+check("không có Page -> không ai là chính chủ", not _cb.la_chinh_chu(_BAI[0], ""))
+
+_b, _c = _cb.chia_cau_cho_bai(_BAI, _POOL, 2, 1, _UID)
+check("giữ đủ 3 bài",              len(_b) == 3)
+check("chính chủ nhận 2 câu",      len(_c[0]) == 2 and len(_c[2]) == 2)
+check("Page khác nhận 1 câu",      len(_c[1]) == 1)
+check("tổng câu = 2+1+2",          sum(len(x) for x in _c) == 5)
+
+# Hai câu trên CÙNG một bài mà giống hệt nhau thì lộ ngay. pick_messages đảm bảo
+# không trùng liền kề, và vì cắt từ MỘT dãy chung nên ràng buộc đó xuyên qua cả
+# ranh giới giữa hai bài — bài này không kết thúc bằng đúng câu bài sau mở đầu.
+_phang = [x for cum in _c for x in cum]
+check("không câu nào trùng câu liền trước",
+      all(_phang[i] != _phang[i - 1] for i in range(1, len(_phang))))
+
+# Đặt 0 = loại hẳn khỏi phiên, không mở trang rồi mới bỏ (mở trang cũng bị đếm).
+_b0, _c0 = _cb.chia_cau_cho_bai(_BAI, _POOL, 2, 0, _UID)
+check("khac=0 -> bỏ hẳn bài Page khác", [b["id"] for b in _b0] == [1, 3])
+check("khac=0 -> cụm câu khớp số bài",  len(_c0) == 2 and all(len(x) == 2 for x in _c0))
+
+_b1, _c1 = _cb.chia_cau_cho_bai(_BAI, _POOL, 0, 0, _UID)
+check("cả hai = 0 -> không còn bài nào", _b1 == [] and _c1 == [])
+
+# Thư viện ít câu hơn nhu cầu vẫn phải chạy được, không ném lỗi
+_b2, _c2 = _cb.chia_cau_cho_bai(_BAI, ["x", "y"], 2, 1, _UID)
+check("thư viện 2 câu vẫn đủ chia 5 lượt", sum(len(x) for x in _c2) == 5)
+
+check("nghỉ giữa 2 câu dài hơn nghỉ giữa 2 bài",
+      _cb.NGHI_GIUA_2_CAU[0] > _cb.DEFAULTS["comment_nghi_max"])
 
 # Thư viện câu
 check("tách câu bỏ dòng trống/trùng",

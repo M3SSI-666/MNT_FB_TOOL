@@ -11,8 +11,12 @@ sống để đẩy chúng lên.
 Cách hoạt động
 ──────────────
 Mỗi loại (homestay / thuê / bán) có một danh sách URL bài viết + một thư viện
-câu comment. Đến phiên, acc mở từng bài, gõ một câu bốc ngẫu nhiên, gửi, nghỉ,
+câu comment. Đến phiên, acc mở từng bài, gõ câu bốc ngẫu nhiên, gửi, nghỉ,
 sang bài kế tiếp.
+
+Số câu mỗi bài tách theo CHỦ SỞ HỮU bài đó: bài của chính Page mình được nhiều
+câu hơn (mặc định 2), bài của Page khác dè hơn (mặc định 1). Hai câu trên cùng
+một bài cách nhau 20–45s. Xem `comment_cau_chinh_chu` / `comment_cau_khac`.
 
 Slot chạy phiên comment lấy từ chính lịch đăng bài — giống nuôi nick: cứ mỗi
 `comment_interval` phút thì một slot đăng của acc đó biến thành phiên comment.
@@ -58,7 +62,25 @@ DEFAULTS = {
     # ra để tránh.
     "comment_nghi_min": 10,
     "comment_nghi_max": 15,
+    # Số câu comment cho MỘT bài, tách theo chủ sở hữu bài đó.
+    #
+    # Bài của chính Page mình thì comment dày hơn được: tự trả lời bài của mình
+    # là hành vi bình thường, và mỗi comment là một lần bài nổi lại lên đầu nhóm.
+    # Bài của Page khác thì dè hơn — người lạ vào comment liền hai câu dưới một
+    # bài là thứ admin nhóm nhìn thấy ngay.
+    #
+    # Đặt 0 cho `khac` = không comment bài Page khác nữa; những bài đó bị loại
+    # khỏi phiên luôn chứ không mở ra rồi bỏ đi.
+    "comment_cau_chinh_chu": 2,
+    "comment_cau_khac":      1,
 }
+
+# Nghỉ giữa hai câu TRÊN CÙNG MỘT BÀI (giây).
+#
+# Dài hơn hẳn nghỉ giữa 2 bài (10–15s) và có chủ đích: hai comment nối đuôi nhau
+# trong vài giây dưới cùng một bài đọc ra là máy ngay. Khoảng 20–45s cho ra dáng
+# người vừa gõ thêm một ý nữa.
+NGHI_GIUA_2_CAU = (20, 45)
 
 # Khởi động và kết phiên BÁM ĐÚNG luồng đăng bài Page — cùng một hành vi thì
 # cùng một khoảng thời gian, không có lý do gì để chỉnh riêng. Xem các bước
@@ -69,15 +91,19 @@ KET_GIAY   = (15, 30)     # [7/7] lướt cuối phiên
 KET_LIKE   = 1            # [7/7] like tối đa 1 bài — chỗ DUY NHẤT có like
 
 
-# Trần cứng cho một phiên comment. Đo thật: phiên 9 bài mất ~6 phút, nên 15
-# phút là dư gấp đôi.
+# Trần cứng cho một phiên comment.
+#
+# Từng là 900s khi mỗi bài chỉ một câu (phiên 9 bài mất ~6 phút). Nay bài chính
+# chủ nhận 2 câu, mỗi cặp câu còn nghỉ thêm 20–45s: 9 bài chính chủ × 2 câu tính
+# ra ~830s — sát trần cũ đến mức chỉ cần mạng chậm một chút là phiên bị cắt giữa
+# chừng. Nới lên 1500s để phần dư quay lại mức an toàn.
 #
 # BẮT BUỘC phải có. Playwright không đặt timeout mặc định cho `page.evaluate`,
 # nên khi trang Facebook rơi vào trạng thái xấu thì `browse_and_like` treo vô
 # hạn. Đã gặp thật: phiên comment kẹt 13 phút ở bước lướt newsfeed, giữ luôn
 # một worker của scheduler, dòng lịch đứng mãi ở "Đang comment", và tới giờ
 # scheduler còn mở thêm phiên nuôi cho CÙNG acc đó → hai Chrome cùng một profile.
-GIOI_HAN_PHIEN_GIAY = 900
+GIOI_HAN_PHIEN_GIAY = 1500
 
 
 class CommentRestricted(Exception):
@@ -122,6 +148,41 @@ def cai_dat() -> dict:
 def ly_do_bo_qua(ds: list) -> str:
     """Vì sao phiên không bốc được bài nào. Chỉ còn một khả năng: danh sách trống."""
     return "danh sách trống" if not ds else ""
+
+
+def la_chinh_chu(bai: dict, page_uid: str) -> bool:
+    """Bài này do CHÍNH Page đang chạy phiên đăng ra."""
+    return bool(page_uid) and (bai.get("page") or "") == page_uid
+
+
+def chia_cau_cho_bai(bai: list, pool: list, so_chinh_chu: int, so_khac: int,
+                     page_uid: str, rng=random):
+    """
+    Chia câu comment cho từng bài. Trả về `(bài_còn_lại, [cụm_câu_từng_bài])`.
+
+    Bài của chính Page mình nhận `so_chinh_chu` câu, bài Page khác nhận
+    `so_khac`. Số nào bằng 0 thì những bài thuộc nhóm đó bị LOẠI KHỎI phiên —
+    không mở trang ra rồi mới bỏ đi, vì mở trang cũng là một lượt Facebook đếm.
+
+    Bốc MỘT dãy duy nhất cho cả phiên rồi mới cắt thành cụm. Bốc riêng từng bài
+    thì `pick_messages` chỉ tránh trùng trong phạm vi bài đó, nên bài này vẫn có
+    thể kết thúc bằng đúng câu mà bài kế tiếp mở đầu — hai comment giống hệt
+    cách nhau mươi giây là thứ dễ thấy nhất.
+    """
+    so = {True: max(0, int(so_chinh_chu or 0)), False: max(0, int(so_khac or 0))}
+    giu = [(b, so[la_chinh_chu(b, page_uid)]) for b in bai]
+    giu = [(b, k) for b, k in giu if k > 0]
+    if not giu:
+        return [], []
+
+    day = pick_messages(pool, sum(k for _, k in giu), rng=rng)
+
+    ra_bai, cum, i = [], [], 0
+    for b, k in giu:
+        ra_bai.append(b)
+        cum.append(day[i:i + k])
+        i += k
+    return ra_bai, cum
 
 
 def tach_cau(raw: str) -> list:
@@ -291,33 +352,13 @@ async def _ket_phien(page, acc_name: str = "") -> None:
         logger.warning(f"    ⚠️  Kết phiên không trọn vẹn: {e}")
 
 
-async def _comment_mot_bai(page, url: str, cau: str) -> None:
+async def _gui_mot_cau(page, cau: str) -> None:
     """
-    Mở một bài viết và gửi một comment.
+    Gõ và gửi MỘT câu vào ô bình luận của trang đang mở.
 
-    Ném exception nếu không gửi được; CommentRestricted nếu acc bị chặn (phiên
-    sẽ dừng); BaiDaChet nếu bài đã bị xoá.
+    Tìm lại ô mỗi lần gọi: gửi xong Facebook dựng lại vùng bình luận, locator cũ
+    trỏ vào phần tử đã bị gỡ nên câu thứ hai sẽ gõ vào hư không.
     """
-    await page.goto(url, wait_until="domcontentloaded", timeout=45000)
-    await human_delay(2500, 4500)
-
-    # Dialog cảnh báo che mất ô bình luận y như che composer khi đăng bài.
-    await dong_dialog_canh_bao(page)
-
-    if await chua_dang_nhap(page):
-        raise CookieDeadError("bị đá về trang đăng nhập khi mở bài viết")
-
-    # Bị chặn thì dừng NGAY, không gõ gì. Cùng lý do với nuôi nick: cố thao tác
-    # trong lúc đang bị hạn chế chỉ làm acc bị soi nặng thêm.
-    try:
-        body = await page.inner_text("body")
-    except Exception:
-        body = ""
-    if is_messaging_restricted(body):
-        raise CommentRestricted("Facebook đang hạn chế hoạt động của acc")
-    if bai_da_chet(body):
-        raise BaiDaChet("bài đã bị xoá hoặc đổi phạm vi hiển thị")
-
     box = await _tim_o_comment(page)
     if box is None:
         raise Exception("Không tìm thấy ô bình luận (bài bị xoá / FB đổi giao diện?)")
@@ -349,6 +390,54 @@ async def _comment_mot_bai(page, url: str, cau: str) -> None:
         raise
     except Exception:
         pass
+
+
+async def _comment_mot_bai(page, url: str, cau_ds: list) -> int:
+    """
+    Mở một bài viết và gửi lần lượt các câu trong `cau_ds`. Trả về SỐ CÂU đã gửi.
+
+    Câu ĐẦU hỏng thì ném exception — bài đó coi như thất bại. Câu sau hỏng thì
+    chỉ ghi cảnh báo và trả về số đã gửi: một comment đã lên rồi, đánh cả bài là
+    ❌ thì bảng lịch sai và `so_lan` cũng sai theo.
+
+    CommentRestricted và BaiDaChet vẫn ném ra ngoài ở mọi vị trí — hai thứ đó
+    phải dừng phiên / xoá link ngay, không được nuốt.
+    """
+    await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+    await human_delay(2500, 4500)
+
+    # Dialog cảnh báo che mất ô bình luận y như che composer khi đăng bài.
+    await dong_dialog_canh_bao(page)
+
+    if await chua_dang_nhap(page):
+        raise CookieDeadError("bị đá về trang đăng nhập khi mở bài viết")
+
+    # Bị chặn thì dừng NGAY, không gõ gì. Cùng lý do với nuôi nick: cố thao tác
+    # trong lúc đang bị hạn chế chỉ làm acc bị soi nặng thêm.
+    try:
+        body = await page.inner_text("body")
+    except Exception:
+        body = ""
+    if is_messaging_restricted(body):
+        raise CommentRestricted("Facebook đang hạn chế hoạt động của acc")
+    if bai_da_chet(body):
+        raise BaiDaChet("bài đã bị xoá hoặc đổi phạm vi hiển thị")
+
+    da_gui = 0
+    for i, cau in enumerate(cau_ds):
+        if i:
+            await asyncio.sleep(random.uniform(*NGHI_GIUA_2_CAU))
+        try:
+            await _gui_mot_cau(page, cau)
+            da_gui += 1
+        except (CommentRestricted, CookieDeadError):
+            raise
+        except Exception as e:
+            if da_gui == 0:
+                raise
+            logger.warning(f"       ⚠️  câu {i+1}/{len(cau_ds)} không gửi được: {e}")
+            break
+    return da_gui
 
 
 def _lay_page_uid(page_name: str) -> str:
@@ -392,14 +481,21 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
         logger.warning(f"  ⏭️  Bỏ phiên — chưa có link nào trong danh sách '{loai}'")
         return {"da_comment": 0, "loi": 0, "bo_qua": "danh sách trống"}
 
-    cau_ds = pick_messages(pool, len(bai))     # không lặp câu ở hai bài liền nhau
-    n_minh = sum(1 for b in bai if page_uid and (b.get("page") or "") == page_uid)
-    nguon = (f"{n_minh} bài chính chủ + {len(bai) - n_minh} bài cùng hạng mục"
-             if page_uid else "chung kho")
-    logger.info(f"  💬 Phiên comment: {len(bai)}/{st['comment_so_bai']} bài | "
-                f"thư viện {len(pool)} câu | {nguon}")
+    so_minh = max(0, int(st["comment_cau_chinh_chu"]))
+    so_khac = max(0, int(st["comment_cau_khac"]))
+    bai, cum = chia_cau_cho_bai(bai, pool, so_minh, so_khac, page_uid)
+    if not bai:
+        logger.warning("  ⏭️  Bỏ phiên — số câu đang đặt 0 cho mọi bài bốc được")
+        return {"da_comment": 0, "loi": 0, "bo_qua": "số câu đặt 0"}
 
-    ok_n, loi_n = 0, 0
+    n_minh = sum(1 for b in bai if la_chinh_chu(b, page_uid))
+    nguon = (f"{n_minh} bài chính chủ ×{so_minh} câu + "
+             f"{len(bai) - n_minh} bài cùng hạng mục ×{so_khac} câu"
+             if page_uid else f"chung kho ×{so_khac} câu")
+    logger.info(f"  💬 Phiên comment: {len(bai)}/{st['comment_so_bai']} bài | "
+                f"{sum(len(c) for c in cum)} câu | thư viện {len(pool)} câu | {nguon}")
+
+    ok_n, loi_n, cau_n = 0, 0, 0        # bài xong / bài hỏng / TỔNG CÂU đã lên
     chet = []                                  # link chết gặp trong phiên này
     chet_theo_acc = {}                         # acc đã đăng các bài chết đó
     async with async_playwright() as p:
@@ -408,12 +504,18 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
             la_page = await _khoi_dong(page, ctx, page_uid)
             logger.info(f"  💬 Comment dưới danh nghĩa: "
                         f"{'Page ' + page_name if la_page else 'acc cá nhân ' + acc_name}")
-            for i, (b, cau) in enumerate(zip(bai, cau_ds), 1):
+            for i, (b, cau_cum) in enumerate(zip(bai, cum), 1):
                 try:
-                    await _comment_mot_bai(page, b["url"], cau)
-                    db.ghi_nhan_comment(b["id"], True)
-                    ok_n += 1
-                    logger.info(f"    ✅ [{i}/{len(bai)}] {cau[:38]} "
+                    n_gui = await _comment_mot_bai(page, b["url"], cau_cum)
+                    # so_lan phải cộng ĐÚNG số câu đã lên, không phải cộng 1 mỗi
+                    # bài: nó là khoá xếp hạng "bài nào ít comment nhất đi trước",
+                    # đếm thiếu thì bài chính chủ cứ được bốc lại mãi.
+                    db.ghi_nhan_comment(b["id"], True, so_cau=n_gui)
+                    ok_n   += 1
+                    cau_n  += n_gui
+                    dau = "🎯" if la_chinh_chu(b, page_uid) else "  "
+                    logger.info(f"    ✅ [{i}/{len(bai)}] {dau} {n_gui} câu: "
+                                f"{' | '.join(c[:24] for c in cau_cum[:n_gui])} "
                                 f"→ ...{b['url'][-32:]}")
                 except BaiDaChet as e:
                     # Không tính là lỗi hệ thống: bài cũ bị xoá là chuyện bình
@@ -460,7 +562,7 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
             except Exception:
                 pass
 
-    logger.info(f"  ✅ Xong phiên comment — {ok_n} thành công, "
+    logger.info(f"  ✅ Xong phiên comment — {ok_n} bài / {cau_n} câu, "
                 f"{loi_n} lỗi, {len(chet)} link chết")
     if chet:
         # In hẳn ra log để người dùng biết mà dọn, không phải mở app mới thấy.
@@ -474,8 +576,9 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
             tk = " · ".join(f"{a}: {n}" for a, n in
                             sorted(chet_theo_acc.items(), key=lambda x: -x[1]))
             logger.warning(f"  📌 Bài bị gỡ thuộc về — {tk}")
-    return {"da_comment": ok_n, "loi": loi_n, "link_chet": len(chet),
-            "tong_bai": len(bai), "chet_theo_acc": chet_theo_acc}
+    return {"da_comment": ok_n, "da_cau": cau_n, "loi": loi_n,
+            "link_chet": len(chet), "tong_bai": len(bai),
+            "chet_theo_acc": chet_theo_acc}
 
 
 async def _chay_co_han(*a, **kw) -> dict:
@@ -488,7 +591,8 @@ async def _chay_co_han(*a, **kw) -> dict:
         # duyệt, nên không để lại Chrome mồ côi giữ khoá profile.
         logger.error(f"  ⏱️  Phiên comment quá {GIOI_HAN_PHIEN_GIAY}s — cắt ngang. "
                      f"Thường là trang Facebook treo ở bước lướt newsfeed.")
-        return {"da_comment": 0, "loi": 0, "link_chet": 0, "tong_bai": 0,
+        return {"da_comment": 0, "da_cau": 0, "loi": 0, "link_chet": 0,
+                "tong_bai": 0,
                 "bo_qua": f"quá {GIOI_HAN_PHIEN_GIAY // 60} phút, bị cắt"}
 
 

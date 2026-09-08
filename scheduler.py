@@ -352,6 +352,10 @@ def _run_commenting(item: dict):
         else:
             ok, tong = kq.get("da_comment", 0), kq.get("tong_bai", 0)
             phu = ""
+            # Bài chính chủ nhận nhiều câu một lượt nên "5/9 bài" không còn nói
+            # hết — ghi thêm tổng số câu đã lên.
+            if kq.get("da_cau", 0) > ok:
+                phu += f" ({kq['da_cau']} câu)"
             if kq.get("link_chet"):
                 phu += f" · {kq['link_chet']} chết"
             if kq.get("loi"):

@@ -1598,12 +1598,18 @@ def boc_bai_de_comment(loai: str, so_bai: int, page: str = "") -> list[dict]:
     return [r for _, r in sorted(ung_vien.values(), key=lambda x: x[0])[:n]]
 
 
-def ghi_nhan_comment(post_id: int, ok: bool, ghi_chu: str = "", chet: bool = False):
+def ghi_nhan_comment(post_id: int, ok: bool, ghi_chu: str = "", chet: bool = False,
+                     so_cau: int = 1):
     """
     Ghi lại kết quả một lượt comment.
 
     Chỉ tính `lan_cuoi` / `so_lan` khi THÀNH CÔNG, để hai cột đó phản ánh đúng
     số comment đã lên thật.
+
+    `so_cau`: số câu đã gửi trong lượt này. Bài chính chủ nhận nhiều câu một lần
+    (xem comment_cau_chinh_chu), và `so_lan` là khoá xếp hạng "bài nào ít comment
+    nhất đi trước" — cộng 1 mỗi lượt thì bài 2 câu bị đếm thiếu một nửa và cứ
+    được bốc lại mãi.
 
     `chet=True`: bài đã bị xoá / đổi phạm vi → **XOÁ NGAY khỏi danh sách**.
     Đo thật cho thấy 20–30% bài bị gỡ; để chúng nằm lại chờ bị đẩy ra thì chừng
@@ -1621,9 +1627,11 @@ def ghi_nhan_comment(post_id: int, ok: bool, ghi_chu: str = "", chet: bool = Fal
             con.execute("DELETE FROM comment_posts WHERE id=?", (post_id,))
             return dict(r) if r else None
         elif ok:
-            con.execute("UPDATE comment_posts SET lan_cuoi=?, so_lan=so_lan+1, "
+            n = max(1, int(so_cau or 1))
+            con.execute("UPDATE comment_posts SET lan_cuoi=?, so_lan=so_lan+?, "
                         "trang_thai=? WHERE id=?",
-                        (now, f"✅ {now[-5:]}", post_id))
+                        (now, n, f"✅ {now[-5:]}" + (f" ×{n}" if n > 1 else ""),
+                         post_id))
         else:
             con.execute("UPDATE comment_posts SET trang_thai=? WHERE id=?",
                         (f"❌ {now[-5:]} {ghi_chu}"[:60], post_id))

@@ -2245,6 +2245,11 @@ async function openCommentSettings(){
               `${num("comment_nghi_min",10)} — ${num("comment_nghi_max",15)}`,
               "Comment liên tiếp không nghỉ là dấu hiệu máy rõ nhất")}
 
+        ${row("Số câu — bài của CHÍNH Page mình", num("comment_cau_chinh_chu",2),
+              "Tự comment dưới bài của mình là bình thường. Hai câu cách nhau 20–45s, bốc ngẫu nhiên và không trùng nhau.")}
+        ${row("Số câu — bài của Page KHÁC", num("comment_cau_khac",1),
+              "Để 1 cho an toàn: người lạ comment liền hai câu dưới một bài là thứ admin nhóm nhìn thấy ngay. Đặt 0 = bỏ hẳn bài Page khác.")}
+
         <div style="display:flex;align-items:center;gap:8px;margin:16px 0 6px">
             <span style="font-size:12px;font-weight:700;color:var(--accent)">THƯ VIỆN CÂU THEO LOẠI</span>
             <span style="margin-left:auto;display:flex;gap:6px">
@@ -2317,12 +2322,24 @@ async function saveCommentSettings(){
         comment_so_bai:   gi("comment_so_bai",9),
         comment_nghi_min: gi("comment_nghi_min",10),
         comment_nghi_max: gi("comment_nghi_max",15),
+        comment_cau_chinh_chu: gi("comment_cau_chinh_chu",2),
+        comment_cau_khac:      gi("comment_cau_khac",1),
     };
     CMT_LOAI.forEach(([k])=>{ data["comment_pool_"+k]=g("comment_pool_"+k)?.value||""; });
     if(data.comment_nghi_min > data.comment_nghi_max){
         Toast.error("Nghỉ giữa 2 bài: giá trị đầu phải nhỏ hơn giá trị sau"); return;
     }
     if(data.comment_so_bai < 1){ Toast.error("Số bài mỗi phiên phải từ 1 trở lên"); return; }
+    if(data.comment_cau_chinh_chu < 1){
+        Toast.error("Số câu cho bài của chính mình phải từ 1 trở lên"); return;
+    }
+    // Cả hai cùng 0 thì phiên mở trình duyệt ra rồi không làm gì — chặn ngay ở đây.
+    if(data.comment_cau_khac < 0){
+        Toast.error("Số câu cho bài Page khác không được âm"); return;
+    }
+    if(data.comment_cau_chinh_chu > 3 || data.comment_cau_khac > 3){
+        Toast.error("Trên 3 câu một bài là spam thấy rõ — nhóm sẽ đá acc"); return;
+    }
     if(data.comment_ti_le < 0 || data.comment_ti_le > 100){
         Toast.error("Tỉ lệ comment phải từ 0 đến 100"); return;
     }
