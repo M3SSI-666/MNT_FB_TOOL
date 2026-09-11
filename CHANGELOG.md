@@ -10,6 +10,31 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.10.0 — 11/09/2026
+
+**Comment: bài của chính mình được 2 câu, bài Page khác vẫn 1 câu**
+
+Trước đây mỗi bài chỉ nhận đúng một câu comment, không phân biệt bài của ai.
+Giờ tách làm hai mức:
+
+- **Bài do chính Page mình đăng: 2 câu** — tự trả lời dưới bài của mình là
+  hành vi bình thường, và mỗi comment là một lần bài nổi lại lên đầu nhóm.
+- **Bài của Page khác: 1 câu** — người lạ vào comment liền hai câu dưới một
+  bài là thứ admin nhóm nhìn thấy ngay.
+
+Cả hai chỉnh được trong **Cài đặt comment**. Để `0` ở ô "Page khác" thì những
+bài đó bị bỏ hẳn khỏi phiên, không mở trang ra rồi mới bỏ đi.
+
+Hai câu trên cùng một bài luôn **khác nhau** và cách nhau **20–45 giây** — dài
+hơn hẳn nghỉ giữa hai bài (10–15 giây), vì hai comment nối đuôi trong vài giây
+dưới cùng một bài đọc ra là máy ngay.
+
+Trần thời gian một phiên comment nới từ 15 lên **25 phút**: phiên 9 bài chính
+chủ nay tốn khoảng 14 phút, sát trần cũ đến mức mạng chậm một chút là bị cắt
+giữa chừng.
+
+Bảng lịch hiện thêm tổng số câu, ví dụ `💬 09:42 · 9/9 bài (15 câu)`.
+
 ## v2.9.2 — 28/08/2026
 
 **Sửa: máy không ngủ mà không có lý do gì**
