@@ -10,6 +10,31 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.11.0 — 13/09/2026
+
+**Nút "🗑 Xoá lịch" — làm trắng bảng lịch như chưa từng gen**
+
+Đổi cột "Loại đăng" của một tài khoản **không tự dọn lịch cũ của nó**. Tài khoản
+vẫn nằm nguyên trong bảng lịch loại cũ và vẫn tới giờ chạy, nên cùng một nick có
+thể bị hai loại lịch gọi cùng lúc — hai cửa sổ Chrome trên cùng một hồ sơ đăng
+nhập, dễ làm hỏng phiên đăng nhập của nick.
+
+Tick "Dừng" không giải quyết được: nó chỉ đổi trạng thái sang X, các dòng vẫn
+nằm đó. Kiểm tra trên máy đang chạy: lịch Bán còn **331 dòng** dù đã ngừng đăng
+Bán từ lâu, và hai tài khoản đang nằm ở hai loại lịch cùng lúc.
+
+Nút mới nằm trên thanh công cụ của **mọi tab lịch**. Bấm vào là bảng trống hẳn,
+muốn có lại thì bấm "Gen lịch".
+
+Hai lớp bảo vệ:
+
+- **Hỏi xác nhận hai lần**, lần sau phải gõ chữ `XOA`. Không hoàn tác được, mà
+  nút lại nằm ngay cạnh "Dừng → X" trông rất giống nhau.
+- **Từ chối xoá khi runner của loại đó đang chạy.** Rút bảng lịch dưới chân
+  phiên đang chạy thì nó ghi kết quả vào dòng vừa biến mất — không báo lỗi gì,
+  và bạn tưởng đã xoá xong trong khi Chrome vẫn đang đăng bài. Hãy Dừng ở tab
+  "Hành động" trước.
+
 ## v2.10.4 — 13/09/2026
 
 **Phiên comment nhanh hơn gần một nửa**
