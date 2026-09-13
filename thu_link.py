@@ -31,9 +31,17 @@ from utils import logger
 
 # Chờ bao lâu sau khi bấm Đăng rồi mới mở trang thông báo.
 # Facebook đẩy thông báo "Đã đăng chéo…" theo từng nhóm và KHÔNG đồng thời —
-# mở quá sớm thì mới về vài cái, thu thiếu link. Đo thật: chờ 60s thu được 8/9
-# nhóm, nên để 90s cho dư biên.
-CHO_THONG_BAO_GIAY = 90
+# mở quá sớm thì mới về vài cái, thu thiếu link.
+#
+# Từng để 90s. Hạ xuống 60s vì 90s chiếm tới 37% cả chu trình đăng bài mà
+# phần lớn là đứng im. Đây là ĐÁNH ĐỔI có ý thức: đo cũ cho thấy 60s thu được
+# 8/9 nhóm, tức có thể hụt một link mỗi phiên. Chấp nhận được vì còn nguồn (c)
+# — nhật ký Page — tự chạy bù khi số link thu được ít hơn số nhóm đã tick.
+#
+# ĐÃ THỬ cách dò lặp để dừng sớm rồi BỎat: mỗi lượt dò tốn ~13s tải trang,
+# nên khi thông báo về chậm thì tổng lên tới 136s — tệ hơn cả ngủ thẳng 90s.
+# Một con số cố định đoán trước được tốt hơn một vòng lặp thông minh nửa vời.
+CHO_THONG_BAO_GIAY = 60
 
 # Định danh nhóm có thể là SỐ hoặc SLUG chữ ("homestaytimescity",
 # "homestay.timescity.hanoi"). Chỉ khớp \d+ là bỏ sót các nhóm dùng slug —
@@ -209,56 +217,6 @@ async def thu_tu_thong_bao(page, toi_da_phut: int = 180,
         ra.append((u, mo_ta))
     return ra
 
-
-async def cho_va_thu_thong_bao(page, can_du: int = 0, toi_da_phut: int = 5,
-                               tran_giay: int = CHO_THONG_BAO_GIAY,
-                               cho_dau_giay: int = 18) -> list:
-    """
-    Chờ thông báo đăng chéo về rồi thu link — DỪNG NGAY khi đủ `can_du` link.
-
-    Bản cũ `sleep(90)` rồi mới đọc đúng một lần. 90 giây là con số chọn cho ca
-    xấu nhất, nhưng phải trả đủ ở MỌI phiên kể cả khi link đã về sau 30 giây.
-    Đo trên một chu trình thật: bước này ngốn 106s trên tổng 287s — 37% cả
-    phiên đăng bài, và gần như toàn bộ là đứng im.
-
-    Số nhóm đã tick chính là số link cần thu, nên có đích để dừng sớm.
-
-    `can_du = 0` nghĩa là không biết đích — khi đó giữ nguyên nết cũ (chờ đủ
-    trần rồi đọc một lần), vì không có cơ sở nào để kết luận "đã đủ".
-    """
-    import time as _time
-    from fb_common import human_delay
-
-    if can_du <= 0:
-        await asyncio.sleep(tran_giay)
-        return await thu_tu_thong_bao(page, toi_da_phut=toi_da_phut)
-
-    # Mở trang thông báo ngay lúc vừa bấm Đăng thì chưa có gì để đọc — nhịp chờ
-    # đầu này rẻ hơn một lượt dò hụt (mỗi lượt tốn ~12-16s tải trang + cuộn).
-    await asyncio.sleep(min(cho_dau_giay, tran_giay))
-
-    het = _time.monotonic() + max(0, tran_giay - cho_dau_giay)
-    tot_nhat, lan = [], 0
-    while True:
-        lan += 1
-        ds = await thu_tu_thong_bao(page, toi_da_phut=toi_da_phut, so_luot_cuon=2)
-        if len(ds) > len(tot_nhat):
-            tot_nhat = ds
-        if len(tot_nhat) >= can_du:
-            logger.info(f"    ✅ Đủ {len(tot_nhat)}/{can_du} link sau {lan} lượt dò")
-            return tot_nhat
-        if _time.monotonic() >= het:
-            break
-        logger.info(f"    ⏳ Mới {len(tot_nhat)}/{can_du} link — dò lại...")
-        await human_delay(1500, 2500)
-
-    # Hết giờ mà vẫn thiếu: cuộn sâu hơn một lượt cuối, biết đâu thông báo cũ
-    # hơn bị đẩy xuống dưới.
-    ds = await thu_tu_thong_bao(page, toi_da_phut=toi_da_phut, so_luot_cuon=5)
-    if len(ds) > len(tot_nhat):
-        tot_nhat = ds
-    logger.info(f"    ⏹ Hết {tran_giay}s — thu được {len(tot_nhat)}/{can_du} link")
-    return tot_nhat
 
 
 async def thu_tu_nhat_ky_page(page, page_uid: str, so_luot_cuon: int = 4,

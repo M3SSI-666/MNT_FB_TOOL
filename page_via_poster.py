@@ -771,20 +771,17 @@ async def _run_page_via(
 
         # (b) Trang thông báo — các nhóm được đăng chéo tới.
         try:
-            from thu_link import cho_va_thu_thong_bao, CHO_THONG_BAO_GIAY
-            # Số nhóm đã tick CHÍNH LÀ số link cần thu — có đích thì dừng được
-            # ngay khi đủ, thay vì ngủ trọn 90s ở mọi phiên.
-            logger.info(f"  ⏳ Chờ thông báo đăng chéo (tối đa {CHO_THONG_BAO_GIAY}s, "
-                        f"dừng sớm khi đủ {_groups_posted or '?'} link)...")
-            # Cửa sổ lọc phải BÁM SÁT lần đăng này. Thông báo của chính nó chỉ
-            # 0–3 phút tuổi; 5 phút là dư biên.
+            from thu_link import thu_tu_thong_bao, CHO_THONG_BAO_GIAY
+            logger.info(f"  ⏳ Chờ {CHO_THONG_BAO_GIAY}s cho thông báo đăng chéo về...")
+            await asyncio.sleep(CHO_THONG_BAO_GIAY)
+            # Cửa sổ lọc phải BÁM SÁT lần đăng này. Đã chờ 60s nên thông báo
+            # của chính nó chỉ 1–2 phút tuổi; 5 phút là dư biên.
             #
             # Để 60 phút thì vơ luôn thông báo của các lần đăng chéo TRƯỚC bằng
             # cùng Page — và nếu lần trước thuộc loại lịch khác thì link bị lưu
             # nhầm hạng mục. Đã xảy ra thật: 7 link nhóm Homestay lọt vào danh
             # sách Thuê, khiến acc thuê đi comment vào bài homestay.
-            _ds = await cho_va_thu_thong_bao(page, can_du=_groups_posted or 0,
-                                             toi_da_phut=5)
+            _ds = await thu_tu_thong_bao(page, toi_da_phut=5)
             _them = [u for u, _ in _ds if u not in _link_moi]
             _link_moi += _them
             logger.info(f"  🔗 [b] Thông báo: {len(_ds)} link ({len(_them)} link mới)")

@@ -779,55 +779,9 @@ check("KHÔNG lặp câu ở 2 bài liền nhau",
       all(_pick[i] != _pick[i+1] for i in range(len(_pick) - 1)))
 db.xoa_het_comment_posts("homestay")
 
-# ── Chờ thu link: dừng SỚM khi đủ, không ngủ trọn 90s ─────────────────────
-# Bản cũ sleep(90) rồi mới đọc một lần. 90s là con số cho ca xấu nhất nhưng phải
-# trả ở MỌI phiên: đo trên một chu trình thật, bước này ngốn 106s / 287s = 37%
-# cả phiên, gần như toàn bộ là đứng im.
+# ── Thu link: đọc từ trang thông báo ──────────────────────────────
 import thu_link as _tl
 import asyncio as _aio2
-
-
-def _gia_lap_thu(ket_qua_tung_luot):
-    """Thay thu_tu_thong_bao bằng hàm trả kết quả dựng sẵn, đếm số lượt gọi."""
-    dem = {"n": 0}
-
-    async def _gia(page, toi_da_phut=5, so_luot_cuon=4):
-        i = min(dem["n"], len(ket_qua_tung_luot) - 1)
-        dem["n"] += 1
-        return [(f"u{k}", "") for k in range(ket_qua_tung_luot[i])]
-    return _gia, dem
-
-
-_that = _tl.thu_tu_thong_bao
-try:
-    # Đủ ngay lượt đầu -> chỉ dò MỘT lượt rồi về, không chờ thêm.
-    _tl.thu_tu_thong_bao, _d = _gia_lap_thu([9])
-    _kq = _aio2.run(_tl.cho_va_thu_thong_bao(None, can_du=9, tran_giay=6, cho_dau_giay=0))
-    check("đủ link ngay -> dừng sau 1 lượt", len(_kq) == 9 and _d["n"] == 1)
-
-    # Thiếu ở lượt đầu, đủ ở lượt sau -> phải dò tiếp chứ không bỏ cuộc.
-    _tl.thu_tu_thong_bao, _d = _gia_lap_thu([4, 9])
-    _kq = _aio2.run(_tl.cho_va_thu_thong_bao(None, can_du=9, tran_giay=30, cho_dau_giay=0))
-    check("thiếu -> dò lại tới khi đủ", len(_kq) == 9 and _d["n"] == 2)
-
-    # Mãi không đủ -> dừng ở trần, TRẢ VỀ kết quả tốt nhất chứ không trả rỗng.
-    _tl.thu_tu_thong_bao, _d = _gia_lap_thu([5])
-    _kq = _aio2.run(_tl.cho_va_thu_thong_bao(None, can_du=9, tran_giay=3, cho_dau_giay=0))
-    check("hết giờ -> trả kết quả tốt nhất", len(_kq) == 5 and _d["n"] >= 2)
-
-    # Lượt sau trả ÍT hơn lượt trước (thông báo trôi khỏi tầm nhìn) -> vẫn giữ
-    # bản nhiều nhất, không để kết quả tụt xuống.
-    _tl.thu_tu_thong_bao, _d = _gia_lap_thu([7, 2, 2])
-    _kq = _aio2.run(_tl.cho_va_thu_thong_bao(None, can_du=9, tran_giay=3, cho_dau_giay=0))
-    check("giữ lượt thu được nhiều nhất", len(_kq) == 7
-
-          )
-    # Không biết cần bao nhiêu -> giữ nguyên nết cũ: chờ đủ trần rồi đọc 1 lần.
-    _tl.thu_tu_thong_bao, _d = _gia_lap_thu([3])
-    _kq = _aio2.run(_tl.cho_va_thu_thong_bao(None, can_du=0, tran_giay=1))
-    check("can_du=0 -> đọc đúng 1 lần như cũ", len(_kq) == 3 and _d["n"] == 1)
-finally:
-    _tl.thu_tu_thong_bao = _that
 
 
 # ── Hộp thoại 'Anonymous post': dò MỘT lần thay vì 5 lần tuần tự ───────────
@@ -900,24 +854,22 @@ check("gộp giữ được link nhóm composer", _composer in _gop)
 check("gộp đủ cả hai nguồn",             len(_gop) == 3)
 check("gộp không sinh trùng",            len(_gop) == len(set(_gop)))
 
-check("chờ thông báo đủ rộng (≥90s)",    _tl.CHO_THONG_BAO_GIAY >= 90)
+# 60s là ĐÁNH ĐỔI có ý thức: đo cũ cho thấy 60s thu được 8/9 nhóm, còn 90s thì đủ
+# nhưng chiếm 37% cả chu trình. Dưới 60s thì hụt nhiều, không được hạ tiếp.
+check("chờ thông báo ≥ 60s",       _tl.CHO_THONG_BAO_GIAY >= 60)
 
 # Cửa sổ lọc thông báo phải BÁM SÁT lần đăng vừa rồi. Rộng quá thì vơ luôn
 # thông báo của lần đăng chéo TRƯỚC bằng cùng Page — nếu lần đó thuộc loại lịch
 # khác thì link bị lưu nhầm hạng mục (đã xảy ra: 7 link Homestay lọt vào Thuê).
 import re as _re
 _src = Path("page_via_poster.py").read_text(encoding="utf-8")
-_m = _re.search(r"cho_va_thu_thong_bao\(page,[^)]*toi_da_phut=(\d+)", _src, _re.S)
+_m = _re.search(r"thu_tu_thong_bao\(page,\s*toi_da_phut=(\d+)\)", _src)
 check("luồng đăng lọc thông báo ≤10 phút",
       _m is not None and int(_m.group(1)) <= 10)
 # Chờ tối đa CHO_THONG_BAO_GIAY rồi mới chốt, nên cửa sổ phải rộng hơn thế
 check("cửa sổ lọc rộng hơn thời gian chờ",
       _m is not None and int(_m.group(1)) * 60 > _tl.CHO_THONG_BAO_GIAY)
 
-# Luồng đăng PHẢI truyền số nhóm đã tick làm đích. Thiếu nó thì cho_va_thu
-# rơi về nhánh can_du=0, tức ngủ trọn trần y như bản cũ — sửa mà không ăn gì.
-check("có truyền đích để dừng sớm",
-      _re.search(r"cho_va_thu_thong_bao\(page,\s*can_du=_groups_posted", _src) is not None)
 
 # Nhóm slug cũng phải khớp ở regex permalink dùng cho nhật ký
 check("permalink nhóm slug",
