@@ -10,6 +10,16 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.11.1 — 13/09/2026
+
+**Xoá lịch: bỏ bước gõ chữ `XOA`**
+
+Bản v2.11.0 bắt xác nhận hai lần. Rườm rà — giờ chỉ còn **một hộp hỏi, bấm OK
+là xoá**. Hộp đó vẫn ghi rõ số dòng sắp mất.
+
+Chốt quan trọng hơn vẫn giữ nguyên: **không cho xoá khi runner của loại đó
+đang chạy**.
+
 ## v2.11.0 — 13/09/2026
 
 **Nút "🗑 Xoá lịch" — làm trắng bảng lịch như chưa từng gen**

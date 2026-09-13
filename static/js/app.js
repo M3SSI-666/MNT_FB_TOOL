@@ -2708,8 +2708,11 @@ async function stopSchedule(loai){
 // trong bảng lịch loại cũ và vẫn tới giờ chạy, nên một nick có thể bị hai loại
 // lịch gọi cùng lúc — hai Chrome trên cùng một thư mục profile.
 //
-// Hỏi XÁC NHẬN HAI LẦN và bắt gõ chữ: không hoàn tác được, mà nút lại nằm
-// ngay cạnh "Dừng → X" trông rất giống nhau.
+// Một lần hỏi xác nhận là đủ (theo yêu cầu — bắt gõ thêm chữ chỉ tốn công).
+// Hộp hỏi có ghi SỐ DÒNG sắp mất, đó mới là thứ giúp phân biệt với nút
+// "Dừng → X" nằm ngay cạnh.
+//
+// Chốt thật sự nằm ở backend: endpoint từ chối xoá khi runner đang chạy.
 async function xoaHetLich(loai){
     const n = (_schedData[loai]||[]).length;
     if(!n){ Toast.info("Bảng lịch đang trống rồi"); return; }
@@ -2719,9 +2722,6 @@ async function xoaHetLich(loai){
               + `Bảng sẽ trống như chưa từng gen. KHÔNG khôi phục được.
 `
               + `Muốn có lại thì bấm "Gen lịch".`)) return;
-    if((prompt('Gõ XOA để xác nhận:')||"").trim().toUpperCase() !== "XOA"){
-        Toast.info("Đã huỷ"); return;
-    }
     try{
         const r = await API.scheduleXoaHet(loai);
         if(r.ok){ Toast.success(`Đã xoá ${r.deleted} dòng`); loadSchedule(loai); }
