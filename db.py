@@ -159,17 +159,7 @@ def init_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with _conn() as con:
         con.executescript("""
-        -- ── Phiên đang mở trình duyệt, DÙNG CHUNG CHO MỌI RUNNER ────────
-        -- Mỗi runner là một tiến trình riêng với Semaphore riêng, nên
-        -- MAX_WORKERS chỉ chặn được trong nội bộ một runner. Bảng này là chỗ
-        -- duy nhất cả 5 runner cùng nhìn thấy nhau.
-        CREATE TABLE IF NOT EXISTS phien_dang_chay (
-            id        INTEGER PRIMARY KEY AUTOINCREMENT,
-            loai      TEXT NOT NULL,
-            ten_acc   TEXT DEFAULT '',
-            pid       INTEGER DEFAULT 0,
-            bat_dau   TEXT NOT NULL
-        );
+        DROP TABLE IF EXISTS phien_dang_chay;
 
         -- ── Tài khoản Facebook ──────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS accounts (
@@ -415,105 +405,6 @@ def init_db():
             con.execute("ALTER TABLE content DROP COLUMN link_anh_hook")
             print("  ↪ Đã gộp ảnh hook vào danh sách ảnh, bỏ cột link_anh_hook")
     print(f"✅ DB initialized: {DB_PATH}")
-
-
-# ═══════════════════════════════════════════════════════════════
-# Cổng chặn số phiên mở trình duyệt CÙNG LÚC — dùng chung mọi runner
-# ═══════════════════════════════════════════════════════════════
-# Vì sao phải có, dù đã có MAX_WORKERS:
-#
-# `MAX_WORKERS` là threading.Semaphore tạo BÊN TRONG main() của scheduler, mà
-# mỗi loại lịch chạy một tiến trình riêng. 4 runner đang bật nghĩa là trần thật
-# bằng MAX_WORKERS × 4, không phải MAX_WORKERS. Không có gì cho chúng thấy nhau.
-#
-# Hậu quả đo được ngày 13/09/2026: đỉnh 7 phiên chạy cùng lúc, RAM cạn, Chromium
-# bị hệ điều hành giết và 23 dòng lịch chết với "Page.goto: Page crashed".
-#
-# Máy 16 GB: nền hệ thống ~6,8 GB, mỗi phiên ~1 GB → 3 phiên là mức an toàn.
-GIOI_HAN_PHIEN_TOAN_CUC = 3
-
-# Dọn hàng mồ côi: runner bị giết giữa chừng thì dòng của nó nằm lại vĩnh viễn
-# và khoá dần hết slot. Phiên dài nhất là phiên comment (trần 25 phút), lấy 40
-# phút cho dư.
-HET_HAN_PHIEN_PHUT = 40
-
-
-def _don_phien_qua_han(con):
-    """Xoá dòng của phiên đã quá hạn — chủ của nó chắc chắn đã chết."""
-    moc = (datetime.now() - timedelta(minutes=HET_HAN_PHIEN_PHUT)).strftime("%Y-%m-%d %H:%M:%S")
-    con.execute("DELETE FROM phien_dang_chay WHERE bat_dau < ?", (moc,))
-
-
-def xin_slot_phien(loai: str, ten_acc: str = "", gioi_han: int = None) -> int | None:
-    """
-    Xin một suất mở trình duyệt. Trả về id suất, hoặc None khi đã đủ chỗ.
-
-    `BEGIN IMMEDIATE` là bắt buộc: đếm rồi mới chèn mà không khoá ghi thì hai
-    runner cùng đọc "đang có 2", cùng kết luận còn chỗ, và cùng chèn — thành 4.
-    Đúng kiểu chạy đua mà cổng này sinh ra để chặn.
-    """
-    han = GIOI_HAN_PHIEN_TOAN_CUC if gioi_han is None else gioi_han
-    con = _conn()
-    try:
-        con.execute("BEGIN IMMEDIATE")
-        _don_phien_qua_han(con)
-        dang = con.execute("SELECT COUNT(*) FROM phien_dang_chay").fetchone()[0]
-        if dang >= han:
-            con.rollback()
-            return None
-        cur = con.execute(
-            "INSERT INTO phien_dang_chay (loai, ten_acc, pid, bat_dau) VALUES (?,?,?,?)",
-            (loai, ten_acc, os.getpid(),
-             datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-        con.commit()
-        return cur.lastrowid
-    except Exception:
-        try:
-            con.rollback()
-        except Exception:
-            pass
-        # Cổng hỏng KHÔNG được chặn việc đăng bài: thà chạy không có trần còn
-        # hơn đứng im cả ngày vì một lỗi SQLite nhất thời.
-        return -1
-    finally:
-        con.close()
-
-
-def tra_slot_phien(slot_id) -> None:
-    """Trả suất sau khi đóng trình duyệt. Gọi trong `finally`, không được sót."""
-    if not slot_id or slot_id < 0:
-        return
-    try:
-        with _conn() as con:
-            con.execute("DELETE FROM phien_dang_chay WHERE id=?", (slot_id,))
-    except Exception:
-        pass        # hết hạn 40 phút sẽ dọn nốt
-
-
-def xoa_slot_cua_loai(loai: str) -> int:
-    """
-    Xoá mọi suất của một loại lịch. Runner gọi lúc KHỞI ĐỘNG.
-
-    Dọn theo LOẠI chứ không theo pid: runner vừa khởi động mang pid mới, nên
-    lọc theo pid của chính mình thì không bao giờ trúng dòng của lần chạy trước.
-    Mà runner của loại này đang khởi động thì mọi phiên cũ của nó chắc chắn đã
-    chết — không dọn thì chúng khoá slot suốt 40 phút.
-    """
-    try:
-        with _conn() as con:
-            return con.execute("DELETE FROM phien_dang_chay WHERE loai=?",
-                               (loai,)).rowcount
-    except Exception:
-        return 0
-
-
-def dem_phien_dang_chay() -> int:
-    try:
-        with _conn() as con:
-            _don_phien_qua_han(con)
-            return con.execute("SELECT COUNT(*) FROM phien_dang_chay").fetchone()[0]
-    except Exception:
-        return 0
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -95,15 +95,16 @@ PORT = int(os.environ.get("PORT", "8080"))
 CHECK_EVERY_SEC = 60
 WINDOW_MINUTES  = 3
 
-# Số phiên tối đa MỘT runner chạy cùng lúc.
+# Số phiên tối đa MỘT runner chạy cùng lúc — và là chỗ chặn DUY NHẤT.
 #
-# Đây KHÔNG phải trần của cả máy: mỗi loại lịch là một tiến trình riêng với
-# semaphore riêng, nên 4 runner đang bật thì trần thật là MAX_WORKERS × 4. Trần
-# toàn máy nằm ở db.GIOI_HAN_PHIEN_TOAN_CUC — đó mới là chỗ chặn thật.
+# KHÔNG phải trần của cả máy: mỗi loại lịch là một tiến trình riêng với semaphore
+# riêng, nên trần thật = MAX_WORKERS × số runner đang bật. 4 runner × 2 = 8 phiên.
 #
-# Từng để 15. Con số đó chưa bao giờ có thật: mỗi phiên ~1 GB, máy 16 GB còn
-# ~9 GB dùng được, tức chỉ chứa nổi 3 phiên. Hạ xuống 2 để nếu cổng toàn cục có
-# hỏng thì thiệt hại vẫn nằm trong tầm.
+# Đo ngày 13/09/2026: mỗi phiên ~2 GB, máy 15,9 GB. 8 phiên là ~16 GB — vượt trần,
+# và đó chính là cấu hình đã gây 23 lần "Page crashed" sáng hôm đó. Đã từng có một
+# cổng chặn toàn máy (3 phiên, đếm qua SQLite) nhưng đã gỡ theo yêu cầu: nó chặn
+# đúng nhưng làm rơi 25% số phiên, vì lịch xếp 37 phiên/giờ trong khi công suất
+# chỉ 32, mà dòng bị hoãn chỉ sống được WINDOW_MINUTES rồi mất hẳn.
 MAX_WORKERS     = 2
 
 # Media subdirs per content type

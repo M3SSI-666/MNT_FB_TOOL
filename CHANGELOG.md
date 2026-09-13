@@ -10,6 +10,33 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.12.0 — 13/09/2026
+
+**Bỏ trần 3 phiên cho cả máy — lịch chạy đủ trở lại**
+
+Bản v2.10.1 thêm một trần chung: cả máy chỉ được 3 phiên chạy cùng lúc. Nó chặn
+đúng thứ cần chặn (máy hết RAM, trình duyệt bị giết), nhưng sinh ra tác dụng phụ
+nặng hơn: **cứ 4 phiên thì mất 1**.
+
+Lý do: lịch đang xếp **37 phiên/giờ** trong khi 3 suất chỉ chạy nổi **32 phiên/
+giờ**. Số dư không có chỗ chạy bị hoãn lại — 261 lượt hoãn chỉ trong một ngày —
+mà một dòng lịch chỉ sống được 3 phút sau giờ đã định rồi mất hẳn, nằm im ở
+"Chờ" không ai biết.
+
+Nay trần chung đã gỡ. Giới hạn quay về **số phiên tối đa mỗi loại lịch** như
+trước (mặc định 2 mỗi loại).
+
+⚠️ **Cần biết:** trần thật giờ là *2 × số loại lịch đang bật*. Bật 4 loại là tối
+đa 8 phiên cùng lúc. Đo trên máy 16 GB: mỗi phiên tốn khoảng 2 GB, nên 8 phiên
+là chạm trần RAM — đúng cấu hình đã làm 23 dòng lịch chết vì "Page crashed".
+
+Nếu bạn thấy lỗi đó quay lại, có hai cách xử lý, chọn một:
+
+- **Giãn nhịp tài khoản** — tăng "Thời gian nghỉ" ở tab Tài khoản (ví dụ 12 →
+  15 phút) để lịch xếp thưa hơn.
+- **Giảm số phiên mỗi loại** — báo người cung cấp phần mềm hạ `MAX_WORKERS`
+  xuống 1.
+
 ## v2.11.1 — 13/09/2026
 
 **Xoá lịch: bỏ bước gõ chữ `XOA`**
