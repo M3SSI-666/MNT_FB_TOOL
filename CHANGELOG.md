@@ -10,6 +10,29 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.10.2 — 13/09/2026
+
+**Mỗi lần đăng bài nhanh hơn 1 phút**
+
+Một chu trình đăng bài (đăng chéo 9 nhóm) rút từ **4,8 phút xuống 3,8 phút**.
+Đo bằng cách chạy thật cùng một tài khoản, cùng nội dung, trước và sau.
+
+Hai chỗ đứng im vô ích:
+
+- **Chờ thu link: 106 → 54 giây.** Sau khi đăng, phần mềm phải chờ Facebook
+  báo về link bài ở từng nhóm (để dành cho tính năng comment). Trước đây nó
+  ngủ thẳng 90 giây rồi mới đọc một lần — 90 giây là chọn cho trường hợp xấu
+  nhất, nhưng phải trả ở mọi lần đăng. Giờ nó biết cần bao nhiêu link (bằng số
+  nhóm đã tick) và **dừng ngay khi đủ**.
+- **Bước tick nhóm: 32 → 19 giây.** Có một bước dò hộp thoại "bài viết ẩn
+  danh" chạy thử 5 kiểu nối tiếp nhau, mỗi kiểu chờ 3 giây, nên khi không có
+  hộp thoại là mất trọn 15 giây. Đếm trên nhật ký: **350 lần chạy, 0 lần hộp
+  thoại đó xuất hiện** — tức khoảng 87 phút đứng im. Giờ dò cả 5 kiểu cùng
+  lúc, tệ nhất mất 3 giây.
+
+Không đổi cách đăng bài, chỉ bỏ phần chờ thừa. Lịch chạy dày hơn và cũng ít
+chồng lấn hơn.
+
 ## v2.10.1 — 13/09/2026
 
 **Sửa: lịch chết hàng loạt với lỗi "Page crashed"**
