@@ -541,6 +541,12 @@ def _check_refresh():
 # ── Main loop ─────────────────────────────────────────────────
 
 def main():
+    # Lần chạy trước của chính loại này có thể đã bị giết giữa chừng, để lại
+    # suất treo trong bảng — không dọn thì chúng khoá slot tới 40 phút.
+    _rac = db.xoa_slot_cua_loai(LOAI)
+    if _rac:
+        logger.info(f"🧹 Dọn {_rac} suất treo của lần chạy trước")
+
     semaphore  = threading.Semaphore(MAX_WORKERS)
     running    = set()
     lock       = threading.Lock()
@@ -548,11 +554,14 @@ def main():
     last_reset_date    = None
     last_refresh_check = 0
 
-    def _worker(item):
+    def _worker(item, slot_id):
         key = item["id"]
         try:
             _run_one(item)
         finally:
+            # Trả suất TRƯỚC khi dọn cache: dọn cache quét cả trăm thư mục, giữ
+            # suất suốt lúc đó là chặn oan phiên kế tiếp dù trình duyệt đã đóng.
+            db.tra_slot_phien(slot_id)
             _don_cache_sau_phien(item.get("ten_acc", ""))
             with lock:
                 running.discard(key)
@@ -618,9 +627,25 @@ def main():
                     if not acquired:
                         logger.warning(f"⚠️  Đã đạt {MAX_WORKERS} workers — bỏ qua STT {item['stt']}")
                         continue
+
+                    # Cổng TOÀN CỤC — 4 runner là 4 tiến trình, semaphore ở trên
+                    # chỉ thấy được phiên của chính mình. Đây là chỗ duy nhất
+                    # chúng đếm chung nhau.
+                    #
+                    # Hết chỗ thì để nguyên dòng ở "Chờ" và thử lại vòng sau
+                    # (60s). Cửa sổ ±3 phút cho nó vài lượt nữa; lỡ hẳn vẫn tốt
+                    # hơn mở thêm trình duyệt rồi cả đám cùng sập vì cạn RAM.
+                    slot_id = db.xin_slot_phien(LOAI, item.get("ten_acc", ""))
+                    if slot_id is None:
+                        semaphore.release()
+                        logger.info(f"⏸️  Đủ {db.GIOI_HAN_PHIEN_TOAN_CUC} phiên "
+                                    f"chạy cùng lúc trên máy — hoãn STT {item['stt']}, "
+                                    f"thử lại vòng sau")
+                        continue
+
                     with lock:
                         running.add(item["id"])
-                    t = threading.Thread(target=_worker, args=(item,), daemon=True)
+                    t = threading.Thread(target=_worker, args=(item, slot_id), daemon=True)
                     t.start()
                     active_threads.append(t)
                     # Giãn cách ngẫu nhiên ~2–6s giữa mỗi lần khởi động worker

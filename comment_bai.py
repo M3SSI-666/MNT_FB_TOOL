@@ -77,10 +77,15 @@ DEFAULTS = {
 
 # Nghỉ giữa hai câu TRÊN CÙNG MỘT BÀI (giây).
 #
-# Dài hơn hẳn nghỉ giữa 2 bài (10–15s) và có chủ đích: hai comment nối đuôi nhau
-# trong vài giây dưới cùng một bài đọc ra là máy ngay. Khoảng 20–45s cho ra dáng
-# người vừa gõ thêm một ý nữa.
-NGHI_GIUA_2_CAU = (20, 45)
+# Vẫn dài hơn nghỉ giữa 2 bài (10–15s), có chủ đích: hai comment nối đuôi nhau
+# trong vài giây dưới cùng một bài đọc ra là máy ngay.
+#
+# Từng để 20–45s. Phải rút lại vì nó kéo phiên comment từ 5,3 lên 11,9 phút
+# (đo trên log 18-20/08 so với 12-13/09) — phiên dài gấp đôi thì số phiên chồng
+# lên nhau cũng gấp đôi, và ngày 13/09 máy cạn RAM, Chromium bị giết, 23 dòng
+# lịch chết với "Page crashed". Nghỉ dài là tốt cho một phiên, nhưng trả giá
+# bằng cả cái máy thì không đáng.
+NGHI_GIUA_2_CAU = (10, 20)
 
 # Khởi động và kết phiên BÁM ĐÚNG luồng đăng bài Page — cùng một hành vi thì
 # cùng một khoảng thời gian, không có lý do gì để chỉnh riêng. Xem các bước

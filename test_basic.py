@@ -104,6 +104,56 @@ check("init_db chạy lại: thứ tự content còn nguyên",
 check("init_db chạy lại: thứ tự uid nhóm còn nguyên",
       [g["id"] for g in db.get_all_uid_groups() if g["ma_nhom"] == ""][-2:] == [_g2, _g1])
 
+# ── Cổng chặn số phiên chạy cùng lúc, DÙNG CHUNG mọi runner ───────────────
+# MAX_WORKERS là semaphore trong tiến trình, mỗi runner một cái. 4 runner nghĩa
+# là trần thật = MAX_WORKERS × 4. Ngày 13/09/2026 điều đó cho ra 7 phiên cùng
+# lúc, RAM cạn, và 23 dòng lịch chết vì "Page.goto: Page crashed".
+import config as _cfg
+from datetime import datetime as _dt, timedelta as _td
+
+with db._conn() as _c:
+    _c.execute("DELETE FROM phien_dang_chay")
+
+_s1 = db.xin_slot_phien("homestay", "A", gioi_han=2)
+_s2 = db.xin_slot_phien("thue", "B", gioi_han=2)
+check("cấp đủ suất khi còn chỗ",     _s1 and _s2 and _s1 != _s2)
+check("đếm đúng số phiên đang chạy", db.dem_phien_dang_chay() == 2)
+
+# Runner KHÁC xin khi đã đầy — đây là ca mà semaphore của từng tiến trình không
+# thể chặn, vì nó không nhìn thấy phiên của runner kia.
+check("đủ trần -> từ chối runner khác", db.xin_slot_phien("page", "C", gioi_han=2) is None)
+check("bị từ chối thì KHÔNG chèn dòng", db.dem_phien_dang_chay() == 2)
+
+db.tra_slot_phien(_s1)
+check("trả suất -> giảm số đang chạy", db.dem_phien_dang_chay() == 1)
+_s3 = db.xin_slot_phien("page", "C", gioi_han=2)
+check("có chỗ trống -> cấp lại được", _s3 is not None)
+
+db.tra_slot_phien(None)
+db.tra_slot_phien(-1)
+check("trả suất rỗng/-1 không nổ",    db.dem_phien_dang_chay() == 2)
+
+# Runner khởi động lại phải dọn suất treo của CHÍNH loại đó. Lọc theo pid thì
+# không bao giờ trúng: tiến trình mới mang pid mới.
+check("dọn suất theo loại", db.xoa_slot_cua_loai("page") == 1
+      and db.dem_phien_dang_chay() == 1)
+
+# Hàng mồ côi: runner bị giết giữa chừng để lại dòng, không dọn thì khoá slot
+# vĩnh viễn. Giả lập bằng cách lùi bat_dau ra ngoài hạn.
+with db._conn() as _c:
+    _cu = (_dt.now() - _td(minutes=db.HET_HAN_PHIEN_PHUT + 5)
+           ).strftime("%Y-%m-%d %H:%M:%S")
+    _c.execute("UPDATE phien_dang_chay SET bat_dau=?", (_cu,))
+check("suất quá hạn tự bị dọn", db.dem_phien_dang_chay() == 0)
+
+# Trần toàn cục phải CHẶT hơn trần mỗi runner, nếu không nó vô tác dụng.
+check("trần toàn cục < MAX_WORKERS × số runner",
+      db.GIOI_HAN_PHIEN_TOAN_CUC < _cfg.MAX_WORKERS * 4)
+
+with db._conn() as _c:
+    _c.execute("DELETE FROM phien_dang_chay")
+
+
 # ── db: busy_timeout được bật (tránh 'database is locked') ─────────────────
 with db._conn() as _c:
     _bt = _c.execute("PRAGMA busy_timeout").fetchone()[0]
@@ -707,8 +757,17 @@ check("cả hai = 0 -> không còn bài nào", _b1 == [] and _c1 == [])
 _b2, _c2 = _cb.chia_cau_cho_bai(_BAI, ["x", "y"], 2, 1, _UID)
 check("thư viện 2 câu vẫn đủ chia 5 lượt", sum(len(x) for x in _c2) == 5)
 
-check("nghỉ giữa 2 câu dài hơn nghỉ giữa 2 bài",
-      _cb.NGHI_GIUA_2_CAU[0] > _cb.DEFAULTS["comment_nghi_max"])
+# Hai comment dưới CÙNG một bài phải giãn hơn hai comment ở hai bài khác nhau —
+# cùng một Page gõ liền hai câu dưới một bài là thứ dễ thấy nhất.
+#
+# Từng đòi cận DƯỚI phải lớn hơn cận trên của nghỉ-giữa-2-bài (20 > 15). Phải
+# nới điều kiện vì khoảng 20–45s kéo phiên comment từ 5,3 lên 11,9 phút, gây ra
+# sự cố cạn RAM ngày 13/09/2026. Nay giữ đúng phần cốt lõi: không ngắn hơn, và
+# vươn xa hơn ở cận trên.
+check("nghỉ giữa 2 câu không ngắn hơn nghỉ giữa 2 bài",
+      _cb.NGHI_GIUA_2_CAU[0] >= _cb.DEFAULTS["comment_nghi_min"])
+check("nghỉ giữa 2 câu vươn xa hơn ở cận trên",
+      _cb.NGHI_GIUA_2_CAU[1] > _cb.DEFAULTS["comment_nghi_max"])
 
 # Thư viện câu
 check("tách câu bỏ dòng trống/trùng",
