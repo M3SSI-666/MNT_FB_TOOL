@@ -10,6 +10,31 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.10.3 — 13/09/2026
+
+**Rút gọn thời gian chờ thu link — cách làm đơn giản hơn bản trước**
+
+Bản v2.10.2 thay quãng chờ cố định bằng kiểu "dò liên tục, thấy đủ link là đi
+ngay". Đo lại bằng một phiên sạch thì cách đó **chậm hơn cả bản cũ**: mỗi lần
+dò phải tải lại trang thông báo mất ~13 giây, nên khi Facebook báo về chậm thì
+càng dò càng lỗ — có phiên mất tới 136 giây.
+
+Nay quay về quãng chờ cố định như trước, chỉ **hạ từ 90 xuống 60 giây**.
+
+Đo thật cùng một tài khoản, cùng nội dung:
+
+| | Chờ thu link | Cả chu trình |
+|---|---|---|
+| v2.10.1 | 106 giây | 287 giây |
+| v2.10.2 (dò lặp) | 136 giây | 298 giây |
+| **v2.10.3** | **76 giây** | **242 giây** |
+
+Đây là đánh đổi có cân nhắc: đo cũ cho thấy chờ 60 giây thu được 8/9 nhóm, tức
+thỉnh thoảng hụt một link. Chấp nhận được vì phần mềm còn một nguồn lấy link dự
+phòng (nhật ký Page) tự chạy bù khi thiếu. Lần đo cuối thu đủ 9/9.
+
+Giữ nguyên phần rút gọn bước tick nhóm của v2.10.2 (32 → 19 giây).
+
 ## v2.10.2 — 13/09/2026
 
 **Mỗi lần đăng bài nhanh hơn 1 phút**
