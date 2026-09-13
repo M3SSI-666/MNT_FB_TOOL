@@ -751,6 +751,36 @@ def api_canh_bao_xong():
         return jsonify({"ok": False, "error": str(e)})
 
 
+@app.route("/api/accounts/<int:acc_id>/thu-cookie", methods=["POST"])
+def api_accounts_thu_cookie(acc_id):
+    """
+    Thử cookie của một acc NGAY, báo kết quả trong ~20 giây.
+
+    Trước đây dán xs xong phải chờ tới giờ lịch mới biết đúng sai — mà sai thì
+    phần mềm đánh X toàn bộ slot còn lại trong ngày, mất cả ngày công của acc đó.
+
+    Thử ĐƯỢC thì tự đưa trạng thái về Active: dán xs KHÔNG tự làm việc này, nên
+    acc đã từng "Cookie hết hạn" sẽ bị Gen lịch bỏ qua mãi dù cookie đã sống lại.
+    """
+    acc = db.get_account_by_id(acc_id)
+    if not acc:
+        return jsonify({"ok": False, "error": "Không tìm thấy tài khoản"})
+    try:
+        from cookie_exporter import thu_cookie
+        ok, mo_ta = thu_cookie(acc["ten_acc"], (acc.get("c_user") or "").strip(),
+                               (acc.get("xs") or "").strip())
+        doi = False
+        if ok and (acc.get("trang_thai") or "") == "Cookie hết hạn":
+            update_account_field(acc_id, "trang_thai", "Active")
+            doi = True
+        logger.info(f"🍪 Thử cookie '{acc['ten_acc']}': "
+                    f"{'OK' if ok else 'HỎNG'} — {mo_ta}")
+        return jsonify({"ok": True, "song": ok, "mo_ta": mo_ta,
+                        "da_bat_lai": doi})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @app.route("/api/accounts/refresh-now", methods=["POST"])
 def api_accounts_refresh_now():
     """

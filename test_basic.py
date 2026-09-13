@@ -2924,6 +2924,57 @@ finally:
     server._runner_running = _that_rr
 
 
+# ── Thử cookie ─────────────────────────────────────────────────────────────
+import inspect as _ins2
+_src_thu = _ins2.getsource(_ce.thu_cookie)
+
+# PHẢI mở trên thư mục TẠM. Dùng profile thật thì nó đã có sẵn phiên đăng nhập
+# cũ, nên vào được kể cả khi xs vừa dán đã chết — tức luôn báo "OK" và vô dụng.
+# Đây là điểm khiến cả tính năng có nghĩa hay không, nên khoá lại bằng test.
+check("thử cookie dùng thư mục tạm",      "mkdtemp" in _src_thu)
+check("KHÔNG đụng profile thật của acc",  "find_profile_dir" not in _src_thu)
+check("dọn thư mục tạm sau khi xong",     "rmtree" in _src_thu)
+# Dò ô mật khẩu trên DOM, không so chuỗi trong URL — xem chú thích chua_dang_nhap.
+check("dùng chua_dang_nhap để nhận biết", "chua_dang_nhap" in _src_thu)
+check("có chặn trên thời gian",           "wait_for" in _src_thu)
+
+check("thiếu c_user/xs -> báo lỗi, không mở trình duyệt",
+      _ce.thu_cookie("KhongCoAccNay", "", "") == (False, "Thiếu c_user hoặc xs"))
+
+# Endpoint: acc không tồn tại phải báo lỗi gọn, không nổ
+_r = _client.post("/api/accounts/999999/thu-cookie").get_json()
+check("acc không tồn tại -> báo lỗi", _r.get("ok") is False
+      and "Không tìm thấy" in (_r.get("error") or ""))
+
+# Thử ĐƯỢC thì phải tự bật lại Active: dán xs KHÔNG tự làm việc này, nên acc đã
+# từng "Cookie hết hạn" sẽ bị Gen lịch bỏ qua mãi dù cookie đã sống lại.
+_id_ck = db.upsert_account({"ten_acc": "AccThuCookie", "c_user": "111",
+                            "xs": "xs1", "trang_thai": "Cookie hết hạn"})
+_that_thu = _ce.thu_cookie
+try:
+    import cookie_exporter as _ce_mod
+    _ce_mod.thu_cookie = lambda *a, **k: (True, "Cookie còn dùng được")
+    _r = _client.post(f"/api/accounts/{_id_ck}/thu-cookie").get_json()
+    check("cookie sống -> báo song=True", _r.get("song") is True)
+    check("cookie sống -> tự bật lại Active",
+          _r.get("da_bat_lai") is True
+          and db.get_account_by_id(_id_ck)["trang_thai"] == "Active")
+
+    # Đang Active sẵn thì KHÔNG báo "đã bật lại" — tránh nói thừa.
+    _r = _client.post(f"/api/accounts/{_id_ck}/thu-cookie").get_json()
+    check("đang Active -> không báo bật lại", _r.get("da_bat_lai") is False)
+
+    # Cookie chết thì TUYỆT ĐỐI không được đụng vào trạng thái.
+    db.update_account_field(_id_ck, "trang_thai", "Cookie hết hạn")
+    _ce_mod.thu_cookie = lambda *a, **k: (False, "Facebook không nhận cookie")
+    _r = _client.post(f"/api/accounts/{_id_ck}/thu-cookie").get_json()
+    check("cookie chết -> song=False",  _r.get("song") is False)
+    check("cookie chết -> giữ nguyên trạng thái",
+          db.get_account_by_id(_id_ck)["trang_thai"] == "Cookie hết hạn")
+finally:
+    _ce_mod.thu_cookie = _that_thu
+
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:

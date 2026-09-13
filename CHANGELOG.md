@@ -10,6 +10,31 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.14.0 — 14/09/2026
+
+**Nút "🍪 Thử cookie" — biết ngay cookie còn dùng được hay không**
+
+Trước đây dán `xs` mới xong phải **chờ tới giờ lịch mới biết đúng hay sai**. Mà
+nếu sai thì phần mềm đánh X toàn bộ slot còn lại trong ngày — mất cả ngày công của
+tài khoản đó, đúng như đã xảy ra với hai nick sáng 14/09 (97 và 94 slot bị bỏ).
+
+Nay ở tab **Tài khoản**, mỗi dòng có thêm nút 🍪 bên cạnh nút xoá. Bấm vào, chờ
+khoảng 20 giây, nó báo ngay:
+
+- ✅ **Cookie còn dùng được** — và nếu tài khoản đang ở "Cookie hết hạn" thì **tự
+  đưa về Active**. Việc này quan trọng: dán `xs` mới KHÔNG tự đổi trạng thái, mà
+  Gen lịch thì bỏ qua mọi tài khoản không phải Active — nên trước đây cookie sống
+  lại rồi mà nick vẫn nằm ngoài lịch mãi.
+- ❌ **Facebook không nhận cookie** — cần lấy `xs` mới.
+- ❌ **Nick đang bị checkpoint** — phải xác minh thủ công.
+
+Nó mở một Chrome ẩn trên **thư mục tạm**, không dùng hồ sơ trình duyệt thật của nick.
+Bắt buộc phải vậy: hồ sơ thật đã có sẵn phiên đăng nhập cũ nên sẽ vào được kể cả
+khi `xs` vừa dán đã chết — tức luôn báo "Ổn" và vô dụng.
+
+Mẹo lấy cookie sống lâu: đăng nhập, copy `xs`, rồi **đóng tab mà ĐỪNG đăng xuất**.
+Đăng xuất ở trình duyệt nguồn sẽ huỷ luôn `xs` vừa lấy.
+
 ## v2.13.0 — 13/09/2026
 
 **Bỏ nốt trần số phiên mỗi loại lịch — lịch chạy đủ 100%**

@@ -166,6 +166,69 @@ def export_all_accounts(target_acc: str = None) -> int:
         return 0
 
 
+def thu_cookie(acc_name: str, c_user: str = "", xs: str = "") -> tuple:
+    """
+    Thử c_user + xs xem Facebook còn nhận không. Trả về `(ok, mô_tả)`.
+
+    Mở trình duyệt trên THƯ MỤC TẠM, không dùng profile thật của acc. Bắt buộc
+    như vậy: profile thật đã có sẵn phiên đăng nhập cũ, nên nó sẽ vào được kể cả
+    khi xs vừa dán đã chết — tức là luôn báo "OK" và vô dụng. Thư mục tạm cô lập
+    đúng thứ cần thử: chính cặp cookie đang lưu trong DB.
+
+    Đã kiểm chứng cách này phân biệt được thật: acc 'Huỳnh Như' (còn sống) vào
+    được, 'Ngan Thi' và 'Ngan Nguyen Thi' (cookie chết) bị đẩy ra trang đăng nhập.
+    """
+    import asyncio, shutil, tempfile
+
+    if not c_user or not xs:
+        try:
+            from db import get_account_by_name
+            acc = get_account_by_name(acc_name) or {}
+            c_user = c_user or (acc.get("c_user") or "").strip()
+            xs     = xs     or (acc.get("xs") or "").strip()
+        except Exception:
+            pass
+    if not c_user or not xs:
+        return False, "Thiếu c_user hoặc xs"
+
+    async def _chay():
+        from playwright.async_api import async_playwright
+        from fb_common import browser_launch_kwargs, chua_dang_nhap
+
+        tam = tempfile.mkdtemp(prefix="thu_cookie_")
+        try:
+            async with async_playwright() as p:
+                ctx = await p.chromium.launch_persistent_context(
+                    user_data_dir=tam, **browser_launch_kwargs(True))
+                try:
+                    page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+                    await ctx.add_cookies([
+                        {"name": n, "value": v, "domain": ".facebook.com",
+                         "path": "/", "httpOnly": True, "secure": True,
+                         "sameSite": "None"}
+                        for n, v in (("c_user", c_user), ("xs", xs))
+                    ])
+                    await page.goto("https://www.facebook.com/",
+                                    wait_until="domcontentloaded", timeout=45000)
+                    await asyncio.sleep(5)
+                    if await chua_dang_nhap(page):
+                        return False, "Facebook không nhận cookie — cần lấy xs mới"
+                    if "checkpoint" in page.url:
+                        return False, "Nick đang bị checkpoint, phải xác minh thủ công"
+                    return True, "Cookie còn dùng được"
+                finally:
+                    await ctx.close()
+        finally:
+            shutil.rmtree(tam, ignore_errors=True)
+
+    try:
+        return asyncio.run(asyncio.wait_for(_chay(), timeout=90))
+    except asyncio.TimeoutError:
+        return False, "Quá 90s không xong — mạng chậm hoặc Facebook treo"
+    except Exception as e:
+        return False, f"Lỗi khi thử: {type(e).__name__}: {str(e)[:80]}"
+
+
 def refresh_pending_accounts() -> dict:
     """
     Làm mới cookie cho mọi acc đang để cột Refresh = Yes, rồi đánh dấu Done.

@@ -1099,7 +1099,10 @@ function renderAccTable(data){
             <td style="text-align:center;color:var(--text-muted);cursor:grab;font-size:16px;padding:4px 6px"
                 title="Kéo để di chuyển hàng">☰</td>
             ${tds}
-            <td style="text-align:center">
+            <td style="text-align:center;white-space:nowrap">
+                <button title="Thử cookie còn dùng được không (~20 giây)"
+                    id="thu-ck-${r.id}" onclick="thuCookieAcc(${r.id})"
+                    style="background:var(--bg-hover);border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;margin-right:4px">🍪</button>
                 <button title="Xóa" onclick="deleteAcc(${r.id})"
                     style="background:var(--danger-light);color:var(--danger);border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px">🗑️</button>
             </td>
@@ -1281,6 +1284,31 @@ async function saveAccForm(){
     if(!data.id) delete data.id;
     try{ const r=await API.saveAccount(data); if(r.ok){Toast.success("Đã lưu");closeModal();loadAccounts();}else Toast.error(r.error); }
     catch(e){ Toast.error(e.message); }
+}
+
+// Thử cookie của một acc ngay tại chỗ.
+//
+// Trước đây dán xs xong phải chờ tới giờ lịch mới biết đúng sai — mà sai thì phần
+// mềm đánh X toàn bộ slot còn lại trong ngày, mất cả ngày công của acc đó.
+//
+// Mỗi lần thử phải mở một Chrome ẩn nên mất ~20 giây — khoá nút trong lúc chạy.
+async function thuCookieAcc(id){
+    const btn = document.getElementById(`thu-ck-${id}`);
+    const cu  = btn ? btn.textContent : "";
+    if(btn){ btn.disabled = true; btn.textContent = "⏳"; }
+    try{
+        const r = await API.thuCookie(id);
+        if(!r.ok){ Toast.error(r.error || "không rõ lỗi"); return; }
+        if(r.song){
+            Toast.success(r.da_bat_lai
+                ? `✅ ${r.mo_ta} — đã bật lại trạng thái Active`
+                : `✅ ${r.mo_ta}`);
+            if(r.da_bat_lai) loadAccounts();
+        } else {
+            Toast.error(`❌ ${r.mo_ta}`);
+        }
+    }catch(e){ Toast.error(e.message); }
+    finally{ if(btn){ btn.disabled = false; btn.textContent = cu; } }
 }
 
 async function deleteAcc(id){
