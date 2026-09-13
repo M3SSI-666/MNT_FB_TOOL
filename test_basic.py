@@ -2941,6 +2941,31 @@ check("có chặn trên thời gian",           "wait_for" in _src_thu)
 check("thiếu c_user/xs -> báo lỗi, không mở trình duyệt",
       _ce.thu_cookie("KhongCoAccNay", "", "") == (False, "Thiếu c_user hoặc xs"))
 
+# Đối chiếu UID Facebook trả về với c_user đang lưu — bắt ca c_user cũ / gõ nhầm
+# một chữ số mà xs vẫn đúng phiên.
+check("có đọc UID thật từ mã trang", '"USER_ID"' in _src_thu)
+check("có so UID với c_user đang lưu", "uid != c_user" in _src_thu)
+
+# ── Trùng c_user giữa hai dòng ─────────────────────────────────────────────
+# Dán nhầm CẢ CẶP c_user + xs của nick A vào dòng nick B thì cookie hợp lệ, và
+# phép đối chiếu UID ở trên cũng khớp (Facebook trả về A, ô c_user cũng ghi A).
+# Dấu vết duy nhất là hai dòng cùng mang một c_user.
+_a1 = db.upsert_account({"ten_acc": "TrungA", "c_user": "555", "xs": "x1",
+                         "trang_thai": "Active"})
+_a2 = db.upsert_account({"ten_acc": "TrungB", "c_user": "666", "xs": "x2",
+                         "trang_thai": "Active"})
+check("c_user khác nhau -> không báo trùng", db.acc_trung_c_user(_a1) == [])
+
+db.update_account_field(_a2, "c_user", "555")          # dán nhầm cookie của A
+check("trùng -> A thấy B",  db.acc_trung_c_user(_a1) == ["TrungB"])
+check("trùng -> B thấy A",  db.acc_trung_c_user(_a2) == ["TrungA"])
+
+db.update_account_field(_a2, "c_user", " 555 ")        # thừa khoảng trắng vẫn là trùng
+check("bỏ qua khoảng trắng thừa", db.acc_trung_c_user(_a1) == ["TrungB"])
+
+db.update_account_field(_a1, "c_user", "")
+check("c_user rỗng -> không coi là trùng", db.acc_trung_c_user(_a1) == [])
+
 # Endpoint: acc không tồn tại phải báo lỗi gọn, không nổ
 _r = _client.post("/api/accounts/999999/thu-cookie").get_json()
 check("acc không tồn tại -> báo lỗi", _r.get("ok") is False

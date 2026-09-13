@@ -10,6 +10,27 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.14.1 — 14/09/2026
+
+**Thử cookie: bắt thêm hai kiểu nhập nhầm**
+
+Nút 🍪 ở bản trước chỉ trả lời được "cookie này có đăng nhập được không". Nay
+nó bắt thêm hai kiểu sai mà câu trả lời đó không chạm tới:
+
+- **Cookie của nick khác.** Sau khi đăng nhập được, nó đọc UID thật mà Facebook
+  trả về và đối chiếu với ô `c_user`. Lệch thì báo rõ cả hai số.
+- **Hai dòng cùng một `c_user`.** Đây là kiểu nhầm nguy hiểm nhất: dán cả cặp
+  `c_user` + `xs` của nick A vào dòng nick B thì cookie **hoàn toàn hợp lệ** — mọi
+  phép thử đăng nhập đều báo ổn, kể cả phép đối chiếu UID ở trên. Nhưng phần mềm
+  sẽ lấy nick A đăng lên Page của B mà không một dấu hiệu nào. Dấu vết duy nhất
+  là hai dòng trùng `c_user`, nên nút 🍪 nay báo riêng cảnh báo đó — dù cookie sống
+  hay chết.
+
+Nhân tiện ghi lại một ca thật vừa gặp: hai nick báo "Cookie hết hạn" suốt, cookie
+dán đúng nhưng bị **hoán đổi `c_user` cho nhau**. `c_user` và `xs` phải thuộc cùng
+một phiên — ghép chéo thì Facebook từ chối y như cookie chết. Đổi lại đúng là cả hai
+sống ngay.
+
 ## v2.14.0 — 14/09/2026
 
 **Nút "🍪 Thử cookie" — biết ngay cookie còn dùng được hay không**

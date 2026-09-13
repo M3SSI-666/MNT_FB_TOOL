@@ -773,10 +773,16 @@ def api_accounts_thu_cookie(acc_id):
         if ok and (acc.get("trang_thai") or "") == "Cookie hết hạn":
             update_account_field(acc_id, "trang_thai", "Active")
             doi = True
+        # Cảnh báo trùng c_user chạy DÙ cookie sống hay chết, và là phép thuần
+        # DB nên không tốn thêm giây nào. Đây là dấu vết duy nhất của kiểu nhầm
+        # "dán cả cặp cookie của nick A vào dòng nick B" — ca đó cookie hợp lệ
+        # nên mọi phép thử đăng nhập đều báo ổn.
+        trung = db.acc_trung_c_user(acc_id)
         logger.info(f"🍪 Thử cookie '{acc['ten_acc']}': "
-                    f"{'OK' if ok else 'HỎNG'} — {mo_ta}")
+                    f"{'OK' if ok else 'HỎNG'} — {mo_ta}"
+                    + (f" | TRÙNG c_user với: {', '.join(trung)}" if trung else ""))
         return jsonify({"ok": True, "song": ok, "mo_ta": mo_ta,
-                        "da_bat_lai": doi})
+                        "da_bat_lai": doi, "trung_c_user": trung})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 

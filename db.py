@@ -515,6 +515,28 @@ def delete_account(acc_id: int):
         con.execute("DELETE FROM accounts WHERE id=?", (acc_id,))
 
 
+def acc_trung_c_user(acc_id: int) -> list[str]:
+    """
+    Tên các tài khoản KHÁC đang dùng cùng `c_user` với acc này. Rỗng = không trùng.
+
+    Vì sao cần: dán nhầm cả cặp c_user + xs của nick A vào dòng nick B thì cookie
+    hoàn toàn hợp lệ — mọi phép thử đăng nhập đều báo "còn dùng được", kể cả phép
+    đối chiếu UID (Facebook trả về A, ô c_user cũng ghi A, khớp nhau). Phần mềm
+    sẽ lấy nick A đăng lên Page của B mà không một dấu hiệu nào.
+
+    Dấu vết DUY NHẤT của kiểu nhầm đó là hai dòng cùng mang một `c_user` —
+    c_user vốn là định danh duy nhất, không bao giờ được phép trùng.
+    """
+    with _conn() as con:
+        r = con.execute("SELECT c_user FROM accounts WHERE id=?", (acc_id,)).fetchone()
+        cu = ((r["c_user"] if r else "") or "").strip()
+        if not cu:
+            return []
+        return [x["ten_acc"] for x in con.execute(
+            "SELECT ten_acc FROM accounts WHERE TRIM(c_user)=? AND id<>? "
+            "ORDER BY order_idx, id", (cu, acc_id))]
+
+
 def update_account_field(acc_id: int, field: str, value: str):
     safe = {
         "ten_acc","loai_dang","thoi_gian_nghi","link_profile","email_sdt",

@@ -1307,6 +1307,12 @@ async function thuCookieAcc(id){
         } else {
             Toast.error(`❌ ${r.mo_ta}`);
         }
+        // Báo RIÊNG và báo SAU, dù cookie sống hay chết: trùng c_user là vấn đề khác
+        // hẳn, và nguy hơn — cookie vẫn chạy tốt nhưng chạy bằng nick khác.
+        if((r.trung_c_user || []).length){
+            Toast.error(`⚠️ c_user này TRÙNG với: ${r.trung_c_user.join(", ")} `
+                      + `— hai dòng đang trỏ về cùng một nick`);
+        }
     }catch(e){ Toast.error(e.message); }
     finally{ if(btn){ btn.disabled = false; btn.textContent = cu; } }
 }

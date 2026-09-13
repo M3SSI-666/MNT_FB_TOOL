@@ -215,7 +215,27 @@ def thu_cookie(acc_name: str, c_user: str = "", xs: str = "") -> tuple:
                         return False, "Facebook không nhận cookie — cần lấy xs mới"
                     if "checkpoint" in page.url:
                         return False, "Nick đang bị checkpoint, phải xác minh thủ công"
-                    return True, "Cookie còn dùng được"
+
+                    # Đối chiếu UID Facebook TRẢ VỀ với c_user đang lưu.
+                    #
+                    # Ghép lệch c_user ↔ xs thì Facebook từ chối hẳn nên đã bị
+                    # chặn ở trên. Phép này bắt phần còn lại: c_user trong bảng
+                    # đã cũ / gõ nhầm một chữ số mà xs vẫn đúng phiên.
+                    #
+                    # Đọc được từ ba khoá trong mã trang, đã đo thấy cả ba đều
+                    # cho cùng giá trị — lấy khoá đầu tiên khớp.
+                    try:
+                        import re as _re
+                        html = await page.content()
+                        m = (_re.search(r'"USER_ID":"(\d+)"', html)
+                             or _re.search(r'"actorID":"(\d+)"', html))
+                        uid = m.group(1) if m else ""
+                    except Exception:
+                        uid = ""
+                    if uid and uid != c_user:
+                        return False, (f"Cookie này là của nick khác — Facebook trả về "
+                                       f"UID {uid}, nhưng ô c_user đang ghi {c_user}")
+                    return True, "Cookie còn dùng được" + (f" (UID {uid})" if uid else "")
                 finally:
                     await ctx.close()
         finally:
