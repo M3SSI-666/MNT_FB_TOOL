@@ -1520,6 +1520,26 @@ def bulk_set_schedule_status(loai: str, old_status_prefix: str, new_status: str)
         return cur.rowcount
 
 
+def xoa_het_lich(loai: str) -> int:
+    """
+    Xoá SẠCH bảng lịch của một loại — coi như chưa từng gen. Trả về số dòng xoá.
+
+    Khác hai thao tác sẵn có, và khác ở chỗ QUAN TRỌNG:
+      - `reset_schedules_to_wait`      đưa trạng thái về 'Chờ', dòng VẪN CÒN
+      - `bulk_set_schedule_status(X)`  tắt thủ công,          dòng VẪN CÒN
+      - hàm này                        dòng BIẾN MẤT HẲN
+
+    Cần vì đổi cột "Loại đăng" của một acc KHÔNG tự dọn lịch cũ của nó. Acc vẫn
+    nằm nguyên trong bảng lịch loại cũ và vẫn tới giờ chạy, nên cùng một nick bị
+    HAI loại lịch gọi — hai tiến trình runner khác nhau, mở hai Chrome trên cùng
+    một thư mục profile. Tick 'Dừng' không cứu được: nó chỉ đổi trạng thái sang
+    'X', mà đầu ngày `reset_schedules_to_wait` lại đưa về 'Chờ' nếu 'X' không
+    nằm trong `keep`.
+    """
+    with _conn() as con:
+        return con.execute("DELETE FROM schedules WHERE loai=?", (loai,)).rowcount
+
+
 def replace_schedules(loai: str, rows: list[dict]):
     """Xóa lịch cũ và ghi lịch mới — dùng khi gen lịch."""
     with _conn() as con:

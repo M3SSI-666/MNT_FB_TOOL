@@ -52,6 +52,7 @@ const API = {
     schedule:        (loai)       => API.get(`/api/schedule/${loai}`),
     scheduleReset:   (loai)       => API.post(`/api/schedule/${loai}/reset`),
     scheduleStop:    (loai)       => API.post(`/api/schedule/${loai}/stop`),
+    scheduleXoaHet:  (loai)       => API.post(`/api/schedule/${loai}/xoa-het`),
     scheduleCell:    (loai, id, f, v) => API.post(`/api/schedule/${loai}/cell`, {id, field:f, value:v}),
     scheduleGen:     (loai, data) => API.post(`/api/schedule/${loai}/gen`, data),
     scheduleGenData: (loai)       => API.get(`/api/schedule/${loai}/gen-data`),

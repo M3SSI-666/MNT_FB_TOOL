@@ -2025,6 +2025,8 @@ function renderSchedulePage(loai){
             ${loai==="nuoi"?`<button class="btn btn-ghost" onclick="openNuoiSettings()">⚙️ Cài đặt nuôi</button>`:""}
             <button class="btn btn-ghost"   onclick="resetSchedule('${loai}')">🔄 Reset → Chờ</button>
             <button class="btn btn-danger"  onclick="stopSchedule('${loai}')">⏹ Dừng → X</button>
+            <button class="btn btn-danger"  onclick="xoaHetLich('${loai}')"
+                    title="Xoá sạch bảng lịch, coi như chưa từng gen. Muốn có lại thì bấm Gen lịch.">🗑 Xoá lịch</button>
             <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
                 <select id="${loai}-filter" class="btn btn-ghost" style="padding:6px 10px" onchange="renderScheduleTable('${loai}',_schedData['${loai}']||[])">
                     <option value="">Tất cả</option><option value="Chờ">Chờ</option>
@@ -2698,6 +2700,33 @@ async function stopSchedule(loai){
     if(!confirm(`Dừng TẤT CẢ → 'X'?`)) return;
     try{ const r=await API.scheduleStop(loai); if(r.ok){Toast.success(`Dừng ${r.updated} dòng`);loadSchedule(loai);}else Toast.error(r.error); }
     catch(e){Toast.error(e.message);}
+}
+
+// Xoá SẠCH bảng lịch — khác "Dừng → X" ở chỗ dòng biến mất hẳn.
+//
+// Cần vì đổi cột "Loại đăng" của một acc KHÔNG tự dọn lịch cũ: acc vẫn nằm
+// trong bảng lịch loại cũ và vẫn tới giờ chạy, nên một nick có thể bị hai loại
+// lịch gọi cùng lúc — hai Chrome trên cùng một thư mục profile.
+//
+// Hỏi XÁC NHẬN HAI LẦN và bắt gõ chữ: không hoàn tác được, mà nút lại nằm
+// ngay cạnh "Dừng → X" trông rất giống nhau.
+async function xoaHetLich(loai){
+    const n = (_schedData[loai]||[]).length;
+    if(!n){ Toast.info("Bảng lịch đang trống rồi"); return; }
+    if(!confirm(`Xoá SẠCH ${n} dòng lịch "${(SCHEDULE_LABELS[loai]||{}).title||loai}"?
+
+`
+              + `Bảng sẽ trống như chưa từng gen. KHÔNG khôi phục được.
+`
+              + `Muốn có lại thì bấm "Gen lịch".`)) return;
+    if((prompt('Gõ XOA để xác nhận:')||"").trim().toUpperCase() !== "XOA"){
+        Toast.info("Đã huỷ"); return;
+    }
+    try{
+        const r = await API.scheduleXoaHet(loai);
+        if(r.ok){ Toast.success(`Đã xoá ${r.deleted} dòng`); loadSchedule(loai); }
+        else Toast.error(r.error);
+    }catch(e){ Toast.error(e.message); }
 }
 
 // ── Gen lịch ──────────────────────────────────────────────────

@@ -1444,6 +1444,30 @@ def api_schedule_stop(loai):
     return jsonify({"ok": True, "updated": count})
 
 
+@app.route("/api/schedule/<loai>/xoa-het", methods=["POST"])
+def api_schedule_xoa_het(loai):
+    """
+    Xoá sạch bảng lịch của một loại — coi như chưa từng gen.
+
+    Chặn `loai` lạ bằng RUNNER_CFG: route nhận chuỗi tự do, mà đây là lệnh XOÁ
+    nên gõ nhầm một chữ không được phép chạm vào dữ liệu nào khác.
+    """
+    if loai not in RUNNER_CFG:
+        return jsonify({"ok": False, "error": "Loại không hợp lệ"})
+    if _runner_running(loai):
+        # Runner đang chạy mà rút bảng lịch dưới chân nó thì phiên đang chạy ghi
+        # trạng thái vào dòng vừa biến mất — im lặng, không lỗi, và người dùng
+        # tưởng đã xoá xong trong khi Chrome vẫn đang đăng bài.
+        return jsonify({"ok": False,
+                        "error": f"Runner {loai} đang chạy — hãy Dừng ở tab Hành động trước"})
+    try:
+        n = db.xoa_het_lich(loai)
+        logger.info(f"🗑️  Xoá sạch lịch {loai}: {n} dòng")
+        return jsonify({"ok": True, "deleted": n})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @app.route("/api/schedule/<loai>/cell", methods=["POST"])
 def api_schedule_cell(loai):
     body = request.json or {}

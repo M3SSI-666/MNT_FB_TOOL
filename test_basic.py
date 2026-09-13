@@ -2921,6 +2921,59 @@ check("thoát tiến trình SAU khi hết hạn chờ, bất kể dọn xong ch�
 check("nút X cũng chờ có hạn, không gọi thẳng _shutdown_all",
       "win.events.closing += _dong_cua_so" in _src_sv)
 
+# ── Xoá sạch bảng lịch ─────────────────────────────────────────────────────
+# Đổi cột "Loại đăng" của một acc KHÔNG tự dọn lịch cũ — acc vẫn nằm trong bảng
+# lịch loại cũ và vẫn tới giờ chạy, nên một nick có thể bị HAI loại lịch gọi,
+# mở hai Chrome trên cùng một thư mục profile.
+def _dong_lich(loai, stt, gio="08:00", acc="AccXoa"):
+    """replace_schedules đọc theo TÊN KHOÁ nên thiếu một khoá là SQLite ném lỗi."""
+    return {"loai": loai, "stt": stt, "ma_content": "C1", "ten_acc": acc,
+            "ten_page": "P", "gio_dang": gio, "ma_nhom": "TIME1",
+            "tu_khoa": "k", "mode": "Hybrid", "trang_thai": "Chờ"}
+
+
+db.replace_schedules("ban", [_dong_lich("ban", i) for i in range(1, 6)])
+check("dựng được 5 dòng lịch ban", len(db.get_schedules("ban")) == 5)
+
+# Xoá SẠCH khác hẳn "Dừng → X": kia đổi trạng thái, dòng vẫn còn.
+db.bulk_set_schedule_status("ban", "Chờ", "X")
+check("Dừng→X: dòng VẪN CÒN", len(db.get_schedules("ban")) == 5)
+
+check("xoá sạch trả về số dòng đã xoá", db.xoa_het_lich("ban") == 5)
+check("xoá sạch: bảng trống hẳn",       db.get_schedules("ban") == [])
+check("xoá bảng đã trống -> 0, không nổ", db.xoa_het_lich("ban") == 0)
+
+# Chỉ đụng ĐÚNG loại được chỉ định — xoá nhầm loại khác là mất cả ngày công gen.
+db.replace_schedules("ban",  [_dong_lich("ban", 1)])
+db.replace_schedules("thue", [_dong_lich("thue", 1, "09:00")])
+db.xoa_het_lich("ban")
+check("không đụng loại lịch khác", len(db.get_schedules("thue")) == 1
+      and db.get_schedules("ban") == [])
+
+# Endpoint: route nhận chuỗi tự do mà đây là lệnh XOÁ, nên loại lạ phải bị chặn
+# TRƯỚC khi chạm vào bảng.
+_r = _client.post("/api/schedule/khong_co_loai_nay/xoa-het").get_json()
+check("loại lạ -> từ chối", _r.get("ok") is False and "hợp lệ" in (_r.get("error") or ""))
+check("loại lạ -> không xoá gì", len(db.get_schedules("thue")) == 1)
+
+# Runner đang chạy mà rút bảng lịch dưới chân nó thì phiên đang chạy ghi trạng
+# thái vào dòng vừa biến mất — im lặng, không lỗi, và người dùng tưởng đã xoá
+# xong trong khi Chrome vẫn đang đăng bài.
+_that_rr = server._runner_running
+try:
+    server._runner_running = lambda l: True
+    _r = _client.post("/api/schedule/thue/xoa-het").get_json()
+    check("runner đang chạy -> từ chối xoá", _r.get("ok") is False
+          and "đang chạy" in (_r.get("error") or ""))
+    check("runner đang chạy -> dòng còn nguyên", len(db.get_schedules("thue")) == 1)
+
+    server._runner_running = lambda l: False
+    _r = _client.post("/api/schedule/thue/xoa-het").get_json()
+    check("runner đã dừng -> xoá được", _r.get("ok") is True and _r.get("deleted") == 1)
+finally:
+    server._runner_running = _that_rr
+
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:
