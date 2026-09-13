@@ -287,44 +287,48 @@ async def chua_dang_nhap(page) -> bool:
     return await _mot_lan()
 
 
+ANON_SELECTORS = (
+    "div[role='dialog']:has-text('Anonymous') div[role='button']:has-text('Got it')",
+    "div[role='dialog']:has-text('ẩn danh') div[role='button']:has-text('Hiểu rồi')",
+    "div[role='dialog']:has-text('ẩn danh') div[role='button']:has-text('OK')",
+    "div[role='button']:has-text('Got it')",
+    "div[role='button']:has-text('Hiểu rồi')",
+)
+
+# Gộp thành MỘT selector thay vì dò lần lượt. Playwright nhận danh sách ngăn
+# bằng dấu phẩy, kể cả với :has-text — đã kiểm chứng trong Chromium thật.
+#
+# Dò lần lượt thì mỗi mẫu chờ trọn wait_ms, nên lúc KHÔNG có hộp thoại phải trả
+# đủ 5 × wait_ms. Mà "không có" gần như là luôn luôn: đếm trên log thật là 350
+# lượt gọi ở bước Thêm nhóm, 0 lượt thấy hộp thoại — tức 350 × 15s ≈ 87 phút
+# đứng im vô ích. Gộp lại thì ca xấu nhất chỉ còn wait_ms.
+ANON_GOP = ", ".join(ANON_SELECTORS)
+
+
 async def dismiss_anon_dialog(page, wait_ms: int = 0) -> bool:
     """
     Đóng popup 'Anonymous post' / 'Bài viết ẩn danh' nếu xuất hiện.
     wait_ms > 0: chủ động chờ tối đa wait_ms ms để dialog xuất hiện.
     """
     from playwright.async_api import TimeoutError as PWTimeout
-    selectors = [
-        "div[role='dialog']:has-text('Anonymous') div[role='button']:has-text('Got it')",
-        "div[role='dialog']:has-text('ẩn danh') div[role='button']:has-text('Hiểu rồi')",
-        "div[role='dialog']:has-text('ẩn danh') div[role='button']:has-text('OK')",
-        "div[role='button']:has-text('Got it')",
-        "div[role='button']:has-text('Hiểu rồi')",
-    ]
-    if wait_ms > 0:
-        for sel in selectors:
-            try:
-                btn = await page.wait_for_selector(sel, timeout=wait_ms, state="visible")
-                if btn:
-                    await btn.click()
-                    await asyncio.sleep(1.0)
-                    logger.info("    ℹ️  Dismiss 'Anonymous post'")
-                    return True
-            except PWTimeout:
-                continue
-            except Exception:
-                continue
-    else:
-        for sel in selectors:
-            try:
-                btn = await page.query_selector(sel)
-                if btn and await btn.is_visible():
-                    await btn.click()
-                    await asyncio.sleep(0.8)
-                    logger.info("    ℹ️  Dismiss 'Anonymous post'")
-                    return True
-            except Exception:
-                continue
-    return False
+    try:
+        if wait_ms > 0:
+            btn = await page.wait_for_selector(ANON_GOP, timeout=wait_ms,
+                                               state="visible")
+        else:
+            btn = await page.query_selector(ANON_GOP)
+            if btn and not await btn.is_visible():
+                btn = None
+        if not btn:
+            return False
+        await btn.click()
+        await asyncio.sleep(1.0 if wait_ms > 0 else 0.8)
+        logger.info("    ℹ️  Dismiss 'Anonymous post'")
+        return True
+    except PWTimeout:
+        return False
+    except Exception:
+        return False
 
 
 # Dialog "Sự việc" / "Trạng thái tài khoản" — Facebook bật lên khi vừa gỡ nội

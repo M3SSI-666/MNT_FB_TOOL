@@ -779,8 +779,81 @@ check("KHÔNG lặp câu ở 2 bài liền nhau",
       all(_pick[i] != _pick[i+1] for i in range(len(_pick) - 1)))
 db.xoa_het_comment_posts("homestay")
 
-# ── Thu link bài vừa đăng: đọc từ trang thông báo ──────────────────────────
+# ── Chờ thu link: dừng SỚM khi đủ, không ngủ trọn 90s ─────────────────────
+# Bản cũ sleep(90) rồi mới đọc một lần. 90s là con số cho ca xấu nhất nhưng phải
+# trả ở MỌI phiên: đo trên một chu trình thật, bước này ngốn 106s / 287s = 37%
+# cả phiên, gần như toàn bộ là đứng im.
 import thu_link as _tl
+import asyncio as _aio2
+
+
+def _gia_lap_thu(ket_qua_tung_luot):
+    """Thay thu_tu_thong_bao bằng hàm trả kết quả dựng sẵn, đếm số lượt gọi."""
+    dem = {"n": 0}
+
+    async def _gia(page, toi_da_phut=5, so_luot_cuon=4):
+        i = min(dem["n"], len(ket_qua_tung_luot) - 1)
+        dem["n"] += 1
+        return [(f"u{k}", "") for k in range(ket_qua_tung_luot[i])]
+    return _gia, dem
+
+
+_that = _tl.thu_tu_thong_bao
+try:
+    # Đủ ngay lượt đầu -> chỉ dò MỘT lượt rồi về, không chờ thêm.
+    _tl.thu_tu_thong_bao, _d = _gia_lap_thu([9])
+    _kq = _aio2.run(_tl.cho_va_thu_thong_bao(None, can_du=9, tran_giay=6, cho_dau_giay=0))
+    check("đủ link ngay -> dừng sau 1 lượt", len(_kq) == 9 and _d["n"] == 1)
+
+    # Thiếu ở lượt đầu, đủ ở lượt sau -> phải dò tiếp chứ không bỏ cuộc.
+    _tl.thu_tu_thong_bao, _d = _gia_lap_thu([4, 9])
+    _kq = _aio2.run(_tl.cho_va_thu_thong_bao(None, can_du=9, tran_giay=30, cho_dau_giay=0))
+    check("thiếu -> dò lại tới khi đủ", len(_kq) == 9 and _d["n"] == 2)
+
+    # Mãi không đủ -> dừng ở trần, TRẢ VỀ kết quả tốt nhất chứ không trả rỗng.
+    _tl.thu_tu_thong_bao, _d = _gia_lap_thu([5])
+    _kq = _aio2.run(_tl.cho_va_thu_thong_bao(None, can_du=9, tran_giay=3, cho_dau_giay=0))
+    check("hết giờ -> trả kết quả tốt nhất", len(_kq) == 5 and _d["n"] >= 2)
+
+    # Lượt sau trả ÍT hơn lượt trước (thông báo trôi khỏi tầm nhìn) -> vẫn giữ
+    # bản nhiều nhất, không để kết quả tụt xuống.
+    _tl.thu_tu_thong_bao, _d = _gia_lap_thu([7, 2, 2])
+    _kq = _aio2.run(_tl.cho_va_thu_thong_bao(None, can_du=9, tran_giay=3, cho_dau_giay=0))
+    check("giữ lượt thu được nhiều nhất", len(_kq) == 7
+
+          )
+    # Không biết cần bao nhiêu -> giữ nguyên nết cũ: chờ đủ trần rồi đọc 1 lần.
+    _tl.thu_tu_thong_bao, _d = _gia_lap_thu([3])
+    _kq = _aio2.run(_tl.cho_va_thu_thong_bao(None, can_du=0, tran_giay=1))
+    check("can_du=0 -> đọc đúng 1 lần như cũ", len(_kq) == 3 and _d["n"] == 1)
+finally:
+    _tl.thu_tu_thong_bao = _that
+
+
+# ── Hộp thoại 'Anonymous post': dò MỘT lần thay vì 5 lần tuần tự ───────────
+# Dò lần lượt thì mỗi mẫu chờ trọn wait_ms, nên lúc không có hộp thoại phải trả
+# đủ 5 × 3s = 15s. Đếm trên log thật: 350 lượt gọi, 0 lượt thấy hộp thoại.
+check("gộp đủ 5 mẫu vào một selector", _fc.ANON_GOP.count(",") >= len(_fc.ANON_SELECTORS) - 1)
+check("mọi mẫu đều có trong selector gộp",
+      all(m in _fc.ANON_GOP for m in _fc.ANON_SELECTORS))
+
+
+class _TrangDem:
+    """Đếm số lần wait_for_selector — phải đúng 1, không phải 5."""
+    def __init__(self): self.lan = 0
+    async def wait_for_selector(self, sel, timeout=None, state=None):
+        self.lan += 1
+        from playwright.async_api import TimeoutError as PWT
+        raise PWT("khong co")
+    async def query_selector(self, sel): return None
+
+
+_t2 = _TrangDem()
+check("không có hộp thoại -> chỉ chờ MỘT lần",
+      _aio2.run(_fc.dismiss_anon_dialog(_t2, wait_ms=3000)) is False and _t2.lan == 1)
+
+
+# ── Thu link bài vừa đăng: đọc từ trang thông báo ──────────────────────────
 
 _H_CHEO = ("https://www.facebook.com/groups/1193274271124469/?multi_permalinks="
            "3303234150128460&notif_id=1&notif_t=group_crossposting_published&ref=notif")
@@ -834,12 +907,17 @@ check("chờ thông báo đủ rộng (≥90s)",    _tl.CHO_THONG_BAO_GIAY >= 90
 # khác thì link bị lưu nhầm hạng mục (đã xảy ra: 7 link Homestay lọt vào Thuê).
 import re as _re
 _src = Path("page_via_poster.py").read_text(encoding="utf-8")
-_m = _re.search(r"thu_tu_thong_bao\(page,\s*toi_da_phut=(\d+)\)", _src)
+_m = _re.search(r"cho_va_thu_thong_bao\(page,[^)]*toi_da_phut=(\d+)", _src, _re.S)
 check("luồng đăng lọc thông báo ≤10 phút",
       _m is not None and int(_m.group(1)) <= 10)
-# Chờ 90s rồi mới đọc, nên cửa sổ phải rộng hơn thời gian chờ
+# Chờ tối đa CHO_THONG_BAO_GIAY rồi mới chốt, nên cửa sổ phải rộng hơn thế
 check("cửa sổ lọc rộng hơn thời gian chờ",
       _m is not None and int(_m.group(1)) * 60 > _tl.CHO_THONG_BAO_GIAY)
+
+# Luồng đăng PHẢI truyền số nhóm đã tick làm đích. Thiếu nó thì cho_va_thu
+# rơi về nhánh can_du=0, tức ngủ trọn trần y như bản cũ — sửa mà không ăn gì.
+check("có truyền đích để dừng sớm",
+      _re.search(r"cho_va_thu_thong_bao\(page,\s*can_du=_groups_posted", _src) is not None)
 
 # Nhóm slug cũng phải khớp ở regex permalink dùng cho nhật ký
 check("permalink nhóm slug",

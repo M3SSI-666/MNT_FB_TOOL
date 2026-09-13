@@ -33,7 +33,7 @@ from cookie_exporter import load_cookie
 from config import HEADLESS
 from utils import logger, jitter_ms, CookieDeadError
 from fb_common import (kiem_vi_pham, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
-                       bat_dau_canh_dialog)
+                       bat_dau_canh_dialog, dismiss_anon_dialog)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -63,44 +63,10 @@ async def _jwait(page, base_ms: int, pct: float = 0.3):
     await page.wait_for_timeout(jitter_ms(base_ms, pct))
 
 
-async def _dismiss_anon_dialog(page, wait_ms: int = 0) -> bool:
-    """
-    Đóng popup 'Anonymous post' / 'Bài viết ẩn danh' nếu xuất hiện.
-    wait_ms > 0: chủ động chờ tối đa wait_ms ms để dialog xuất hiện.
-    """
-    from playwright.async_api import TimeoutError as PWTimeout
-    selectors = [
-        "div[role='dialog']:has-text('Anonymous') div[role='button']:has-text('Got it')",
-        "div[role='dialog']:has-text('ẩn danh') div[role='button']:has-text('Hiểu rồi')",
-        "div[role='dialog']:has-text('ẩn danh') div[role='button']:has-text('OK')",
-        "div[role='button']:has-text('Got it')",
-        "div[role='button']:has-text('Hiểu rồi')",
-    ]
-    if wait_ms > 0:
-        for sel in selectors:
-            try:
-                btn = await page.wait_for_selector(sel, timeout=wait_ms, state="visible")
-                if btn:
-                    await btn.click()
-                    await asyncio.sleep(1.0)
-                    logger.info("    ℹ️  Dismiss 'Anonymous post'")
-                    return True
-            except PWTimeout:
-                continue
-            except Exception:
-                continue
-    else:
-        for sel in selectors:
-            try:
-                btn = await page.query_selector(sel)
-                if btn and await btn.is_visible():
-                    await btn.click()
-                    await asyncio.sleep(0.8)
-                    logger.info("    ℹ️  Dismiss 'Anonymous post'")
-                    return True
-            except Exception:
-                continue
-    return False
+# Dùng bản chung ở fb_common. Trước đây mỗi poster giữ một bản chép giống
+# hệt, nên khi sửa lỗi "dò 5 selector tuần tự tốn 15s" phải sửa ba nơi — đúng
+# kiểu sai sót đã từng xảy ra với bản vá dialog cảnh báo.
+_dismiss_anon_dialog = dismiss_anon_dialog
 
 
 async def _clipboard_paste(page, ctx, text: str):
