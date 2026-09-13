@@ -10,6 +10,36 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.10.1 — 13/09/2026
+
+**Sửa: lịch chết hàng loạt với lỗi "Page crashed"**
+
+Sáng 13/09 có 23 dòng lịch chết cùng một lỗi. Không phải lỗi đăng bài: tắt hết
+runner rồi chạy đúng một phiên thì thành công trọn vẹn, 9 nhóm, không một lỗi.
+
+Nguyên nhân là **số phiên chạy cùng lúc**. Đo được lúc đó: 7 phiên, mỗi phiên
+khoảng 1 GB, cộng nền hệ thống là chạm trần RAM của máy — Windows giết tiến
+trình trình duyệt để cứu máy, và phiên nào đang chạy thì chết theo.
+
+Vì sao tới hôm nay mới phát: bản **v2.10.0** làm phiên comment dài gấp đôi
+(5,3 → 11,9 phút), phần lớn do quãng nghỉ 20–45 giây giữa hai câu. Lịch vẫn
+nhả phiên đều 2–3 phút một lần, nên phiên dài gấp đôi thì số phiên chồng lên
+nhau cũng gấp đôi.
+
+Ba việc đã làm:
+
+- **Thêm trần số phiên cho cả máy: 3 phiên cùng lúc.** Trước đây mỗi loại lịch
+  tự đếm riêng, không loại nào biết loại kia đang chạy gì — 4 loại cùng bật thì
+  trần thật gấp bốn lần con số cài đặt. Giờ cả bốn dùng chung một bộ đếm. Quá
+  trần thì dòng lịch nằm chờ và tự thử lại, không bị bỏ.
+- **Rút nghỉ giữa hai câu comment còn 10–20 giây.** Phiên comment về lại khoảng
+  7–8 phút.
+- **Hạ số phiên tối đa mỗi loại từ 15 xuống 2.** Con số 15 chưa bao giờ có thật
+  — máy 16 GB chỉ chứa nổi 3 phiên.
+
+Nếu máy bạn nhiều RAM hơn và muốn chạy nhiều phiên hơn, báo người cung cấp
+phần mềm để nới trần.
+
 ## v2.10.0 — 11/09/2026
 
 **Comment: bài của chính mình được 2 câu, bài Page khác vẫn 1 câu**
