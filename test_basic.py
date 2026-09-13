@@ -769,6 +769,31 @@ check("nghỉ giữa 2 câu không ngắn hơn nghỉ giữa 2 bài",
 check("nghỉ giữa 2 câu vươn xa hơn ở cận trên",
       _cb.NGHI_GIUA_2_CAU[1] > _cb.DEFAULTS["comment_nghi_max"])
 
+# Mọi quãng nghỉ đều phải là KHOẢNG, không được là số cố định: comment đều tăm
+# tắp đúng một nhịp là dấu hiệu máy — chính thứ utils.jitter_ms sinh ra để tránh.
+check("nghỉ giữa 2 câu là một khoảng",  _cb.NGHI_GIUA_2_CAU[1] > _cb.NGHI_GIUA_2_CAU[0])
+check("nghỉ giữa 2 bài là một khoảng",
+      _cb.DEFAULTS["comment_nghi_max"] > _cb.DEFAULTS["comment_nghi_min"])
+
+# Dán thay vì gõ từng ký tự (theo yêu cầu rút gọn phiên). Khoá lại bằng test vì
+# đây là thay đổi CÓ ĐÁNH ĐỔI — gõ từng ký tự giống người hơn — nên nếu ai đó
+# đổi ngược lại thì phải là quyết định có ý thức, không phải vô tình.
+import inspect as _insp
+_src_gui = _insp.getsource(_cb._gui_mot_cau)
+check("comment DÁN, không gõ từng ký tự", "keyboard.type" not in _src_gui)
+check("có ghi clipboard trước khi dán",   "ghi_clipboard" in _src_gui)
+# Ghi clipboard PHẢI đứng trước cú bấm vào ô: nhánh dự phòng tạo <textarea> ẩn
+# rồi focus vào nó, làm ngược lại thì ô bình luận mất con trỏ, Ctrl+V rơi ra ngoài.
+check("ghi clipboard trước khi bấm vào ô",
+      _src_gui.index("ghi_clipboard") < _src_gui.index("box.click()"))
+check("dán bằng Ctrl+V",                  "Control+v" in _src_gui)
+
+# ctx phải đi xuyên tới _gui_mot_cau — thiếu nó thì không xin được quyền
+# clipboard và luôn rơi vào nhánh dự phòng.
+check("ctx truyền được tới hàm dán",
+      "ctx" in str(_insp.signature(_cb._gui_mot_cau))
+      and "ctx" in str(_insp.signature(_cb._comment_mot_bai)))
+
 # Thư viện câu
 check("tách câu bỏ dòng trống/trùng",
       _cb.tach_cau("a\n\n b \na\nc") == ["a", "b", "c"])

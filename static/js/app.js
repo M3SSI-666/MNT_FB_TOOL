@@ -2242,7 +2242,7 @@ async function openCommentSettings(){
         ${row("Số bài mỗi phiên", num("comment_so_bai",9),
               "Tối đa 1 bài mỗi nhóm — nên không bao giờ vượt quá số nhóm đang có trong danh sách")}
         ${row("Nghỉ giữa 2 bài (giây)",
-              `${num("comment_nghi_min",10)} — ${num("comment_nghi_max",15)}`,
+              `${num("comment_nghi_min",5)} — ${num("comment_nghi_max",7)}`,
               "Comment liên tiếp không nghỉ là dấu hiệu máy rõ nhất")}
 
         ${row("Số câu — bài của CHÍNH Page mình", num("comment_cau_chinh_chu",2),
@@ -2320,8 +2320,8 @@ async function saveCommentSettings(){
     const data={
         comment_ti_le:    gi("comment_ti_le",25),
         comment_so_bai:   gi("comment_so_bai",9),
-        comment_nghi_min: gi("comment_nghi_min",10),
-        comment_nghi_max: gi("comment_nghi_max",15),
+        comment_nghi_min: gi("comment_nghi_min",5),
+        comment_nghi_max: gi("comment_nghi_max",7),
         comment_cau_chinh_chu: gi("comment_cau_chinh_chu",2),
         comment_cau_khac:      gi("comment_cau_khac",1),
     };

@@ -11,12 +11,12 @@ sống để đẩy chúng lên.
 Cách hoạt động
 ──────────────
 Mỗi loại (homestay / thuê / bán) có một danh sách URL bài viết + một thư viện
-câu comment. Đến phiên, acc mở từng bài, gõ câu bốc ngẫu nhiên, gửi, nghỉ,
+câu comment. Đến phiên, acc mở từng bài, DÁN câu bốc ngẫu nhiên, gửi, nghỉ,
 sang bài kế tiếp.
 
 Số câu mỗi bài tách theo CHỦ SỞ HỮU bài đó: bài của chính Page mình được nhiều
 câu hơn (mặc định 2), bài của Page khác dè hơn (mặc định 1). Hai câu trên cùng
-một bài cách nhau 20–45s. Xem `comment_cau_chinh_chu` / `comment_cau_khac`.
+một bài cách nhau 5–8s. Xem `comment_cau_chinh_chu` / `comment_cau_khac`.
 
 Slot chạy phiên comment lấy từ chính lịch đăng bài — giống nuôi nick: cứ mỗi
 `comment_interval` phút thì một slot đăng của acc đó biến thành phiên comment.
@@ -49,7 +49,7 @@ from utils import logger, CookieDeadError
 from cookie_exporter import load_cookie
 from fb_common import (kiem_vi_pham, chua_dang_nhap, browser_launch_kwargs, find_profile_dir, human_delay,
                        dong_dialog_canh_bao, bat_dau_canh_dialog,
-                       view_stories, browse_and_like)
+                       view_stories, browse_and_like, ghi_clipboard)
 from nuoi_nick import pick_messages, is_messaging_restricted
 import db
 
@@ -60,8 +60,8 @@ DEFAULTS = {
     # Nghỉ giữa 2 bài (giây). Để một KHOẢNG chứ không một số cố định: comment
     # đều tăm tắp đúng một nhịp là dấu hiệu máy, chính thứ utils.jitter_ms sinh
     # ra để tránh.
-    "comment_nghi_min": 10,
-    "comment_nghi_max": 15,
+    "comment_nghi_min":  5,
+    "comment_nghi_max":  7,
     # Số câu comment cho MỘT bài, tách theo chủ sở hữu bài đó.
     #
     # Bài của chính Page mình thì comment dày hơn được: tự trả lời bài của mình
@@ -77,15 +77,16 @@ DEFAULTS = {
 
 # Nghỉ giữa hai câu TRÊN CÙNG MỘT BÀI (giây).
 #
-# Vẫn dài hơn nghỉ giữa 2 bài (10–15s), có chủ đích: hai comment nối đuôi nhau
-# trong vài giây dưới cùng một bài đọc ra là máy ngay.
+# Lịch sử hai lần rút, ghi lại để đừng quay về con số cũ:
+#   20–45s — chọn vì chống nhận diện, nhưng kéo phiên comment từ 5,3 lên 11,9
+#            phút. Phiên dài gấp đôi thì số phiên chồng lên nhau cũng gấp đôi,
+#            và ngày 13/09 máy cạn RAM, Chromium bị giết, 23 dòng lịch chết.
+#   10–20s — vẫn còn dài.
+#    5–8s  — hiện tại, theo yêu cầu rút gọn phiên.
 #
-# Từng để 20–45s. Phải rút lại vì nó kéo phiên comment từ 5,3 lên 11,9 phút
-# (đo trên log 18-20/08 so với 12-13/09) — phiên dài gấp đôi thì số phiên chồng
-# lên nhau cũng gấp đôi, và ngày 13/09 máy cạn RAM, Chromium bị giết, 23 dòng
-# lịch chết với "Page crashed". Nghỉ dài là tốt cho một phiên, nhưng trả giá
-# bằng cả cái máy thì không đáng.
-NGHI_GIUA_2_CAU = (10, 20)
+# Vẫn vươn xa hơn nghỉ giữa 2 bài ở cận trên (8 > 7), có chủ đích: hai comment
+# dưới CÙNG một bài dễ bị để ý hơn hai comment ở hai bài khác nhau.
+NGHI_GIUA_2_CAU = (5, 8)
 
 # Khởi động và kết phiên BÁM ĐÚNG luồng đăng bài Page — cùng một hành vi thì
 # cùng một khoảng thời gian, không có lý do gì để chỉnh riêng. Xem các bước
@@ -98,10 +99,9 @@ KET_LIKE   = 1            # [7/7] like tối đa 1 bài — chỗ DUY NHẤT có
 
 # Trần cứng cho một phiên comment.
 #
-# Từng là 900s khi mỗi bài chỉ một câu (phiên 9 bài mất ~6 phút). Nay bài chính
-# chủ nhận 2 câu, mỗi cặp câu còn nghỉ thêm 20–45s: 9 bài chính chủ × 2 câu tính
-# ra ~830s — sát trần cũ đến mức chỉ cần mạng chậm một chút là phiên bị cắt giữa
-# chừng. Nới lên 1500s để phần dư quay lại mức an toàn.
+# Nới từ 900s lên 1500s hồi bài chính chủ nhận nhiều câu và nghỉ giữa hai câu
+# còn là 20–45s. Nay nghỉ đã rút còn 5–8s nên phiên ngắn hơn nhiều, giữ 1500s
+# làm biên dự phòng chứ không phải mức sát.
 #
 # BẮT BUỘC phải có. Playwright không đặt timeout mặc định cho `page.evaluate`,
 # nên khi trang Facebook rơi vào trạng thái xấu thì `browse_and_like` treo vô
@@ -357,24 +357,48 @@ async def _ket_phien(page, acc_name: str = "") -> None:
         logger.warning(f"    ⚠️  Kết phiên không trọn vẹn: {e}")
 
 
-async def _gui_mot_cau(page, cau: str) -> None:
+async def _gui_mot_cau(page, ctx, cau: str) -> None:
     """
-    Gõ và gửi MỘT câu vào ô bình luận của trang đang mở.
+    DÁN và gửi MỘT câu vào ô bình luận của trang đang mở.
 
     Tìm lại ô mỗi lần gọi: gửi xong Facebook dựng lại vùng bình luận, locator cũ
-    trỏ vào phần tử đã bị gỡ nên câu thứ hai sẽ gõ vào hư không.
+    trỏ vào phần tử đã bị gỡ nên câu thứ hai sẽ rơi vào hư không.
+
+    Dán thay vì gõ từng ký tự — theo yêu cầu, để rút ngắn phiên. Đánh đổi: gõ
+    từng ký tự có độ trễ giống người hơn, dán cả câu một phát là dấu hiệu máy.
+    Câu comment ngắn (dưới 25 ký tự) nên phần tiết kiệm chủ yếu đến từ hai quãng
+    nghỉ, không phải từ tốc độ gõ.
+
+    THỨ TỰ quan trọng: ghi clipboard TRƯỚC, bấm vào ô SAU. Nhánh dự phòng của
+    ghi_clipboard tạo <textarea> ẩn rồi focus vào nó, nên làm ngược lại thì ô
+    bình luận mất con trỏ và Ctrl+V rơi ra ngoài.
     """
     box = await _tim_o_comment(page)
     if box is None:
         raise Exception("Không tìm thấy ô bình luận (bài bị xoá / FB đổi giao diện?)")
 
+    await ghi_clipboard(page, ctx, cau)
     await box.click()
-    await human_delay(600, 1400)
-    # Gõ từng ký tự có độ trễ — dán cả câu một phát là dấu hiệu máy rõ nhất.
-    await page.keyboard.type(cau, delay=random.randint(40, 110))
-    await human_delay(500, 1200)
+    await human_delay(400, 900)
+    await page.keyboard.press("Control+v")
+    await human_delay(500, 1000)
+
+    # KIỂM TRA DÁN CÓ ĂN KHÔNG — trước khi bấm Enter.
+    #
+    # Bắt buộc với cách dán, không cần với cách gõ. Dán hụt (clipboard bị từ
+    # chối quyền, con trỏ rơi ra ngoài, trình soạn của FB nuốt sự kiện paste) để
+    # lại ô RỖNG. Mà bước xác minh phía dưới coi ô rỗng là "đã gửi xong", nên
+    # không có chốt này thì mọi lượt dán hụt đều được ghi ✅ trong khi chẳng có
+    # comment nào lên.
+    try:
+        trong_o = (await box.inner_text()).strip()
+    except Exception:
+        trong_o = ""
+    if cau.strip() not in trong_o:
+        raise Exception(f"dán không vào ô (ô đang chứa {trong_o[:30]!r})")
+
     await page.keyboard.press("Enter")
-    await human_delay(2500, 4000)
+    await human_delay(2000, 3200)
 
     # XÁC MINH ĐÃ GỬI — gõ xong không lỗi KHÔNG có nghĩa là comment đã lên.
     # Gửi thành công thì Facebook xoá trắng ô nhập; gửi hỏng (mất mạng, bài bị
@@ -397,7 +421,7 @@ async def _gui_mot_cau(page, cau: str) -> None:
         pass
 
 
-async def _comment_mot_bai(page, url: str, cau_ds: list) -> int:
+async def _comment_mot_bai(page, ctx, url: str, cau_ds: list) -> int:
     """
     Mở một bài viết và gửi lần lượt các câu trong `cau_ds`. Trả về SỐ CÂU đã gửi.
 
@@ -433,7 +457,7 @@ async def _comment_mot_bai(page, url: str, cau_ds: list) -> int:
         if i:
             await asyncio.sleep(random.uniform(*NGHI_GIUA_2_CAU))
         try:
-            await _gui_mot_cau(page, cau)
+            await _gui_mot_cau(page, ctx, cau)
             da_gui += 1
         except (CommentRestricted, CookieDeadError):
             raise
@@ -511,7 +535,7 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
                         f"{'Page ' + page_name if la_page else 'acc cá nhân ' + acc_name}")
             for i, (b, cau_cum) in enumerate(zip(bai, cum), 1):
                 try:
-                    n_gui = await _comment_mot_bai(page, b["url"], cau_cum)
+                    n_gui = await _comment_mot_bai(page, ctx, b["url"], cau_cum)
                     # so_lan phải cộng ĐÚNG số câu đã lên, không phải cộng 1 mỗi
                     # bài: nó là khoá xếp hạng "bài nào ít comment nhất đi trước",
                     # đếm thiếu thì bài chính chủ cứ được bốc lại mãi.

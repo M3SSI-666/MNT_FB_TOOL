@@ -10,6 +10,28 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.10.4 — 13/09/2026
+
+**Phiên comment nhanh hơn gần một nửa**
+
+Một phiên comment 9 bài rút từ **11,6 phút xuống 7,4 phút**. Ba thay đổi:
+
+- **Dán bình luận thay vì gõ từng chữ.** Mỗi bài từ ~70 giây còn ~39 giây.
+- **Nghỉ giữa hai bình luận dưới cùng một bài: 10–20 → 5–8 giây.**
+- **Nghỉ khi chuyển sang bài kế: 10–15 → 5–7 giây.**
+
+Lưu ý về đánh đổi: gõ từng chữ trông giống người thật hơn, dán cả câu một phát
+là dấu hiệu máy. Câu bình luận vốn ngắn nên phần rút ngắn chủ yếu đến từ hai
+quãng nghỉ, không phải từ tốc độ gõ.
+
+Kèm theo một chốt an toàn mới: **kiểm tra chữ đã vào ô trước khi bấm gửi.** Dán
+hụt (mất quyền clipboard, con trỏ rơi ra ngoài) để lại ô trống, mà ô trống lại
+bị hiểu là "đã gửi xong" — nên nếu thiếu chốt này thì mọi lượt dán hụt đều được
+ghi ✅ trong khi thật ra chẳng có bình luận nào lên. Nay dán hụt báo lỗi rõ ràng.
+
+Đã kiểm chứng bằng cách mở lại bài trên Facebook sau khi chạy: cả 3 bình luận
+đều có mặt thật.
+
 ## v2.10.3 — 13/09/2026
 
 **Rút gọn thời gian chờ thu link — cách làm đơn giản hơn bản trước**

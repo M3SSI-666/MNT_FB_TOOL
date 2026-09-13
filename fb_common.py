@@ -637,8 +637,15 @@ async def cho_composer_dong(page, timeout_ms: int = 30000) -> bool:
         return False
 
 
-async def clipboard_paste(page, ctx, text: str):
-    """Ghi text vào clipboard rồi Ctrl+V."""
+async def ghi_clipboard(page, ctx, text: str):
+    """
+    Chỉ ghi text vào clipboard, KHÔNG dán.
+
+    Tách riêng vì nhánh dự phòng bên dưới tạo một <textarea> ẩn rồi focus vào
+    nó để copy — tức nó CƯỚP con trỏ khỏi ô đang nhập. Bên gọi nào cần con trỏ
+    nằm đúng chỗ thì phải ghi clipboard TRƯỚC rồi mới bấm vào ô, nên cần gọi
+    được riêng phần ghi.
+    """
     try:
         await ctx.grant_permissions(["clipboard-read", "clipboard-write"])
         await page.evaluate(
@@ -656,6 +663,11 @@ async def clipboard_paste(page, ctx, text: str):
             }""",
             text,
         )
+
+
+async def clipboard_paste(page, ctx, text: str):
+    """Ghi text vào clipboard rồi Ctrl+V vào ô đang có con trỏ."""
+    await ghi_clipboard(page, ctx, text)
     await page.keyboard.press("Control+v")
     await asyncio.sleep(0.6)
 
