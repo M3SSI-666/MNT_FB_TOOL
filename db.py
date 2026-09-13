@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from config import DB_PATH
 
 
-# 4 tiến trình scheduler × MAX_WORKERS luồng cùng ghi vào một file SQLite.
+# 4 tiến trình scheduler, mỗi cái nhiều luồng, cùng ghi vào một file SQLite.
 # Không có busy timeout thì luồng thứ hai vấp "database is locked" ngay lập tức,
 # nên cho nó chờ tới 15s để lấy khoá thay vì fail.
 BUSY_TIMEOUT_SEC = 15

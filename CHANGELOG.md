@@ -10,6 +10,37 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.13.0 — 13/09/2026
+
+**Bỏ nốt trần số phiên mỗi loại lịch — lịch chạy đủ 100%**
+
+Bản v2.12.0 đã gỡ trần chung cho cả máy, nhưng vẫn còn trần **2 phiên cho mỗi
+loại lịch**. Trần đó tiếp tục làm rơi khoảng **9%** số phiên:
+
+```
+22:43  ⚠️ Đã đạt 2 workers — bỏ qua STT 379
+22:44  ⚠️ Đã đạt 2 workers — bỏ qua STT 379
+22:45  ⚠️ Đã đạt 2 workers — bỏ qua STT 379
+       (hết 3 phút → mất hẳn)
+```
+
+Riêng lịch Homestay: cần **22 phiên/giờ** nhưng 2 worker chỉ chạy nổi **21**.
+Sát nút, nên mỗi giờ rơi khoảng một phiên.
+
+Nay **không còn trần nào**. Mọi dòng lịch đến giờ đều chạy ngay.
+
+⚠️ **Cần biết về giới hạn máy.** Đo ngày 13/09: mỗi phiên tốn khoảng **1,7 GB**.
+Máy 16 GB, nền hệ thống chiếm ~7 GB, nên quá **5 phiên cùng lúc** là Windows bắt
+đầu giết trình duyệt, và phiên đang chạy chết theo với lỗi "Page crashed" — sáng
+hôm đó đã làm chết 23 dòng lịch kiểu này.
+
+Kiểm khi nghi ngờ: vào tab **Logs**, tìm chữ `Page crashed`.
+
+Nếu lỗi đó xuất hiện, **cách xử lý đúng không phải đặt lại trần** — mà là **giảm
+tải**: tăng "Thời gian nghỉ" của từng tài khoản ở tab Tài khoản (ví dụ 12 → 15
+phút). Giảm tải không làm rơi dòng nào, còn đặt trần thì luôn làm rơi. Đó là bài
+học của hai lần gỡ trần này.
+
 ## v2.12.0 — 13/09/2026
 
 **Bỏ trần 3 phiên cho cả máy — lịch chạy đủ trở lại**

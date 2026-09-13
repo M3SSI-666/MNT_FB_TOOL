@@ -23,7 +23,7 @@ from db import (
 )
 from cookie_exporter import load_cookie
 from utils import logger, jitter, CookieDeadError, ComposerBiChan, classify_error
-from config import CHECK_EVERY_SEC, WINDOW_MINUTES, MAX_WORKERS
+from config import CHECK_EVERY_SEC, WINDOW_MINUTES
 
 # ── Cấu hình ─────────────────────────────────────────────────
 # Ưu tiên biến môi trường; server còn truyền thêm qua dòng lệnh để bên ngoài
@@ -541,7 +541,6 @@ def _check_refresh():
 # ── Main loop ─────────────────────────────────────────────────
 
 def main():
-    semaphore  = threading.Semaphore(MAX_WORKERS)
     running    = set()
     lock       = threading.Lock()
     active_threads = []
@@ -556,7 +555,6 @@ def main():
             _don_cache_sau_phien(item.get("ten_acc", ""))
             with lock:
                 running.discard(key)
-            semaphore.release()
 
     try:
         while True:
@@ -611,14 +609,13 @@ def main():
             if due:
                 logger.info(f"📋 {len(due)} dòng cần chạy")
                 for item in due:
+                    # Giữ nguyên chốt DUY NHẤT còn lại: một dòng lịch không bao giờ
+                    # được chạy hai lần cùng lúc. Cửa sổ ±3 phút khiến một dòng xuất
+                    # hiện ở nhiều vòng quét liên tiếp, thiếu chốt này là nó mở thêm
+                    # trình duyệt cho cùng một bài ở mỗi vòng.
                     with lock:
                         if item["id"] in running:
                             continue
-                    acquired = semaphore.acquire(blocking=False)
-                    if not acquired:
-                        logger.warning(f"⚠️  Đã đạt {MAX_WORKERS} workers — bỏ qua STT {item['stt']}")
-                        continue
-                    with lock:
                         running.add(item["id"])
                     t = threading.Thread(target=_worker, args=(item,), daemon=True)
                     t.start()

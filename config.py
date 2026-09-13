@@ -95,17 +95,26 @@ PORT = int(os.environ.get("PORT", "8080"))
 CHECK_EVERY_SEC = 60
 WINDOW_MINUTES  = 3
 
-# Số phiên tối đa MỘT runner chạy cùng lúc — và là chỗ chặn DUY NHẤT.
+# KHÔNG CÒN TRẦN SỐ PHIÊN CHẠY CÙNG LÚC.
 #
-# KHÔNG phải trần của cả máy: mỗi loại lịch là một tiến trình riêng với semaphore
-# riêng, nên trần thật = MAX_WORKERS × số runner đang bật. 4 runner × 2 = 8 phiên.
+# Mọi dòng lịch đến giờ đều được chạy ngay, không xếp hàng, không bỏ sót.
 #
-# Đo ngày 13/09/2026: mỗi phiên ~2 GB, máy 15,9 GB. 8 phiên là ~16 GB — vượt trần,
-# và đó chính là cấu hình đã gây 23 lần "Page crashed" sáng hôm đó. Đã từng có một
-# cổng chặn toàn máy (3 phiên, đếm qua SQLite) nhưng đã gỡ theo yêu cầu: nó chặn
-# đúng nhưng làm rơi 25% số phiên, vì lịch xếp 37 phiên/giờ trong khi công suất
-# chỉ 32, mà dòng bị hoãn chỉ sống được WINDOW_MINUTES rồi mất hẳn.
-MAX_WORKERS     = 2
+# Đây là lựa chọn CÓ Ý THỨC của chủ dự án, sau khi gỡ lần lượt hai lớp chặn:
+#   - cổng toàn máy 3 phiên (v2.10.1 → gỡ ở v2.12.0): chặn đúng nhưng làm rơi
+#     25% số phiên, vì dòng bị hoãn chỉ sống được WINDOW_MINUTES rồi mất hẳn
+#   - MAX_WORKERS mỗi runner (gỡ ở v2.13.0): vẫn làm rơi ~9%
+#
+# GIÁ PHẢI TRẢ, đã đo ngày 13/09/2026 — đừng xài lại cấu hình này mà không biết:
+# mỗi phiên tốn ~1,7 GB. Máy 15,9 GB, nền hệ thống chiếm ~7 GB. Quá 5 phiên
+# cùng lúc là Windows bắt đầu giết tiến trình render của Chromium, và phiên nào
+# đang chạy thì chết theo với lỗi "Page.goto: Page crashed" — sáng 13/09 đã làm
+# chết 23 dòng lịch kiểu đó.
+#
+# Cách kiểm khi nghi ngờ:  grep -c "Page crashed" logs/autopost_*.log
+#
+# Muốn chặn lại thì KHÔNG phải thêm trần ở đây — hãy GIẢM CẦU: tăng "Thời gian
+# nghỉ" của từng acc ở tab Tài khoản. Giảm cầu không làm rơi dòng nào, còn thêm
+# trần thì luôn làm rơi — đó là bài học của hai lần gỡ trên.
 
 # Media subdirs per content type
 CONTENT_MEDIA_DIRS = {
