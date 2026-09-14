@@ -563,19 +563,22 @@ check("URL rác -> nhóm rỗng",  db.tach_nhom_tu_url("abc") == "")
 
 # 3 nhóm × 5 bài, thêm theo thứ tự → order_idx tăng dần = tuổi
 _urls = [_lk(g, i) for i in range(5) for g in ("g1", "g2", "g3")]
-check("thêm 15 link",          db.them_comment_posts("homestay", _urls) == 15)
-check("thêm lại -> bỏ trùng",  db.them_comment_posts("homestay", _urls) == 0)
+check("thêm 15 link",          db.them_comment_posts("homestay", _urls, page="PG") == 15)
+check("thêm lại -> bỏ trùng",  db.them_comment_posts("homestay", _urls, page="PG") == 0)
 check("nhóm được lưu sẵn",
       {r["nhom"] for r in db.get_comment_posts("homestay")} == {"g1", "g2", "g3"})
 
 # Luật 1: tối đa 1 link MỖI NHÓM. 3 nhóm thì xin 9 vẫn chỉ được 3 —
 # bốc 2 bài cùng nhóm trong một phiên là 2 comment liên tiếp vào cùng nhóm.
-_b = db.boc_bai_de_comment("homestay", 9)
+_b = db.boc_bai_de_comment("homestay", 9, page="PG")
 check("xin 9 nhưng chỉ có 3 nhóm -> 3 bài", len(_b) == 3)
 check("mỗi nhóm đúng 1 bài",   len({r["nhom"] for r in _b}) == 3)
-_b2 = db.boc_bai_de_comment("homestay", 2)
+_b2 = db.boc_bai_de_comment("homestay", 2, page="PG")
 check("xin ít hơn số nhóm -> đúng số xin", len(_b2) == 2)
-check("xin 0 -> rỗng",         db.boc_bai_de_comment("homestay", 0) == [])
+check("xin 0 -> rỗng",         db.boc_bai_de_comment("homestay", 0, page="PG") == [])
+# Không truyền Page thì không có "chính chủ" nào để so — trả rỗng, tuyệt đối không
+# lấy bừa cả kho. Đi comment dưới bài của Page lạ khiến nick dính spam.
+check("không truyền Page -> rỗng", db.boc_bai_de_comment("homestay", 9) == [])
 
 # Luật 2: ưu tiên bài CŨ NHẤT (order_idx nhỏ nhất) trong mỗi nhóm
 _idx = {r["nhom"]: r["order_idx"] for r in _b}
@@ -587,7 +590,7 @@ check("bốc đúng bài cũ nhất mỗi nhóm", _idx == _min)
 # ...nhưng bài đã comment rồi phải nhường bài chưa comment, nếu không mỗi phiên
 # đều dội lại đúng một bài cho tới khi nó bị đẩy khỏi cửa sổ.
 db.ghi_nhan_comment(_b[0]["id"], True)
-_b3 = db.boc_bai_de_comment("homestay", 9)
+_b3 = db.boc_bai_de_comment("homestay", 9, page="PG")
 _cua_nhom = [r for r in _b3 if r["nhom"] == _b[0]["nhom"]][0]
 check("bài đã comment nhường bài chưa comment", _cua_nhom["id"] != _b[0]["id"])
 check("vẫn giữ 1 bài mỗi nhóm", len({r["nhom"] for r in _b3}) == 3)
@@ -661,7 +664,7 @@ check("trần không quá rộng (≤ 30 phút)",      _cb.GIOI_HAN_PHIEN_GIAY <
 # bao nhiêu câu, nghỉ bao lâu) mới được cấu hình.
 check("không thêm ô chỉnh thời lượng phiên",
       set(_cb.DEFAULTS) == {"comment_so_bai", "comment_nghi_min", "comment_nghi_max",
-                            "comment_cau_chinh_chu", "comment_cau_khac"})
+                            "comment_cau_chinh_chu"})
 check("thời lượng story khớp luồng đăng bài",  _cb.STORY_GIAY == (15, 20))
 check("thời lượng newsfeed khớp luồng đăng bài", _cb.FEED_GIAY == (20, 30))
 check("kết phiên khớp luồng đăng bài",        _cb.KET_GIAY == (15, 30))
@@ -682,11 +685,11 @@ check("nhận ra bài chính chủ",    _cb.la_chinh_chu(_BAI[0], _UID))
 check("bài Page khác không phải chính chủ", not _cb.la_chinh_chu(_BAI[1], _UID))
 check("không có Page -> không ai là chính chủ", not _cb.la_chinh_chu(_BAI[0], ""))
 
-_b, _c = _cb.chia_cau_cho_bai(_BAI, _POOL, 2, 1, _UID)
-check("giữ đủ 3 bài",              len(_b) == 3)
-check("chính chủ nhận 2 câu",      len(_c[0]) == 2 and len(_c[2]) == 2)
-check("Page khác nhận 1 câu",      len(_c[1]) == 1)
-check("tổng câu = 2+1+2",          sum(len(x) for x in _c) == 5)
+_b, _c = _cb.chia_cau_cho_bai(_BAI, _POOL, 3, _UID)
+check("chỉ giữ bài CHÍNH CHỦ",     [b["id"] for b in _b] == [1, 3])
+check("bài Page khác bị loại hẳn", all(_cb.la_chinh_chu(b, _UID) for b in _b))
+check("mỗi bài nhận đúng 3 câu",   all(len(x) == 3 for x in _c))
+check("tổng câu = 2 bài × 3",      sum(len(x) for x in _c) == 6)
 
 # Hai câu trên CÙNG một bài mà giống hệt nhau thì lộ ngay. pick_messages đảm bảo
 # không trùng liền kề, và vì cắt từ MỘT dãy chung nên ràng buộc đó xuyên qua cả
@@ -695,17 +698,21 @@ _phang = [x for cum in _c for x in cum]
 check("không câu nào trùng câu liền trước",
       all(_phang[i] != _phang[i - 1] for i in range(1, len(_phang))))
 
-# Đặt 0 = loại hẳn khỏi phiên, không mở trang rồi mới bỏ (mở trang cũng bị đếm).
-_b0, _c0 = _cb.chia_cau_cho_bai(_BAI, _POOL, 2, 0, _UID)
-check("khac=0 -> bỏ hẳn bài Page khác", [b["id"] for b in _b0] == [1, 3])
-check("khac=0 -> cụm câu khớp số bài",  len(_c0) == 2 and all(len(x) == 2 for x in _c0))
+# Không có bài chính chủ nào -> phiên rỗng, TUYỆT ĐỐI không lấp bằng bài Page
+# khác. Đi comment dưới bài của Page lạ khiến nick dính spam.
+_b0, _c0 = _cb.chia_cau_cho_bai([_BAI[1]], _POOL, 3, _UID)
+check("không có bài chính chủ -> rỗng", _b0 == [] and _c0 == [])
 
-_b1, _c1 = _cb.chia_cau_cho_bai(_BAI, _POOL, 0, 0, _UID)
-check("cả hai = 0 -> không còn bài nào", _b1 == [] and _c1 == [])
+_b1, _c1 = _cb.chia_cau_cho_bai(_BAI, _POOL, 0, _UID)
+check("số câu = 0 -> không còn bài nào", _b1 == [] and _c1 == [])
+
+# Không truyền Page thì không có "chính chủ" nào -> cũng rỗng
+_b2, _c2 = _cb.chia_cau_cho_bai(_BAI, _POOL, 3, "")
+check("không có Page -> rỗng", _b2 == [] and _c2 == [])
 
 # Thư viện ít câu hơn nhu cầu vẫn phải chạy được, không ném lỗi
-_b2, _c2 = _cb.chia_cau_cho_bai(_BAI, ["x", "y"], 2, 1, _UID)
-check("thư viện 2 câu vẫn đủ chia 5 lượt", sum(len(x) for x in _c2) == 5)
+_b3, _c3 = _cb.chia_cau_cho_bai(_BAI, ["x", "y"], 3, _UID)
+check("thư viện 2 câu vẫn đủ chia 6 lượt", sum(len(x) for x in _c3) == 6)
 
 # Hai comment dưới CÙNG một bài phải giãn hơn hai comment ở hai bài khác nhau —
 # cùng một Page gõ liền hai câu dưới một bài là thứ dễ thấy nhất.
@@ -1053,44 +1060,36 @@ db.them_comment_posts("ban", [_lk("gA", 1), _lk("gB", 2)], page="PAGE_1")
 db.them_comment_posts("ban", [_lk("gC", 3), _lk("gD", 4)], page="PAGE_2")
 check("lưu được Page của từng link",
       {r["page"] for r in db.get_comment_posts("ban")} == {"PAGE_1", "PAGE_2"})
-# `page` là THỨ TỰ ƯU TIÊN, không phải bộ lọc cứng: bài chính chủ đi trước rồi
-# LẤP ĐẦY bằng bài cùng hạng mục cho đủ số bài đã cài đặt.
+# `page` là BỘ LỌC CỨNG, không phải thứ tự ưu tiên. Hết bài chính chủ thì phiên
+# bỏ trống, tuyệt đối không lấp bằng bài của Page khác — đi comment dưới bài của
+# Page lạ khiến nick dính spam. (Từng làm ngược lại, đã bỏ theo yêu cầu.)
 _b1 = db.boc_bai_de_comment("ban", 9, page="PAGE_1")
-check("ưu tiên Page 1 vẫn lấy đủ 4 bài", len(_b1) == 4)
-check("2 bài đầu là của Page 1",
-      [r["page"] for r in _b1[:2]] == ["PAGE_1", "PAGE_1"])
-check("2 bài sau là Page khác",
-      all(r["page"] != "PAGE_1" for r in _b1[2:]))
-check("không ưu tiên ai -> vẫn lấy cả 4", len(db.boc_bai_de_comment("ban", 9)) == 4)
-# Page chưa có bài nào trong kho: KHÔNG bỏ phiên, lấy hết bài của hạng mục.
-check("Page lạ -> vẫn lấy đủ bài hạng mục",
-      len(db.boc_bai_de_comment("ban", 9, page="PAGE_9")) == 4)
+check("chỉ lấy bài của Page mình",      len(_b1) == 2)
+check("mọi bài đều đúng Page",          {r["page"] for r in _b1} == {"PAGE_1"})
+check("KHÔNG lấp bằng bài Page khác",   all(r["page"] != "PAGE_2" for r in _b1))
 
-# ĐÂY LÀ CA ĐÃ HỎNG: acc yếu chỉ đăng chéo được vào 1 nhóm nên cả kho chỉ có 1
-# link của nó. Lọc cứng thì mỗi phiên comment đúng 1 bài thay vì 10 — mất 90%
-# công suất. Nay phải lấy 1 của mình + phần còn lại của hạng mục.
+# Page lạ: không có bài nào của nó -> phiên rỗng, KHÔNG lùi về chung kho.
+check("Page lạ -> rỗng, không lùi về chung kho",
+      db.boc_bai_de_comment("ban", 9, page="PAGE_9") == [])
+check("không truyền Page -> rỗng",
+      db.boc_bai_de_comment("ban", 9) == [])
+
+# Acc yếu (chỉ đăng chéo được 1 nhóm) nay chỉ comment 1 bài mỗi phiên thay vì
+# được lấp cho đủ. ĐÁNH ĐỔI CÓ Ý THỨC: mất công suất còn hơn mất quyền comment.
 db.xoa_het_comment_posts("ban")
-db.them_comment_posts("ban", [_lk("yeu", 1)], page="PAGE_YEU")
-db.them_comment_posts("ban", [_lk(f"kho{i}", i) for i in range(2, 13)], page="PAGE_KHAC")
+db.them_comment_posts("ban", [_lk("gYeu", 1)], page="PAGE_YEU")
+db.them_comment_posts("ban", [_lk("gX", i) for i in range(9)], page="PAGE_KHAC")
 _by = db.boc_bai_de_comment("ban", 10, page="PAGE_YEU")
-check("acc yếu 1 link -> vẫn đủ 10 bài", len(_by) == 10)
-check("acc yếu: bài đầu là của chính nó", _by[0]["page"] == "PAGE_YEU")
-check("acc yếu: 9 bài sau của hạng mục",
-      sum(1 for r in _by[1:] if r["page"] == "PAGE_KHAC") == 9)
-check("acc yếu: vẫn 1 link mỗi nhóm",
-      len({r["nhom"] for r in _by}) == len(_by))
+check("acc yếu 1 link -> đúng 1 bài",   len(_by) == 1)
+check("acc yếu: không vơ bài Page khác", _by[0]["page"] == "PAGE_YEU")
 
-# Dựng lại dữ liệu cho các assertion phía dưới.
+# Link cũ chưa gắn Page (lưu từ bản trước) không thuộc Page nào -> không bốc.
 db.xoa_het_comment_posts("ban")
-db.them_comment_posts("ban", [_lk("gA", 1), _lk("gB", 2)], page="PAGE_1")
-db.them_comment_posts("ban", [_lk("gC", 3), _lk("gD", 4)], page="PAGE_2")
-db.them_comment_posts("ban", [_lk("gE", 5)])
-check("link chưa gắn Page vẫn được dùng",
-      len(db.boc_bai_de_comment("ban", 9, page="PAGE_1")) == 5)
-check("Page lạ: lùi về chung kho -> có bài",
-      len(db.boc_bai_de_comment("ban", 9)) == 5)
-check("lùi về chung kho vẫn giữ 1 link/nhóm",
-      len({r["nhom"] for r in db.boc_bai_de_comment("ban", 9)}) == 5)
+db.them_comment_posts("ban", [_lk("gCu", 1)])          # page rỗng
+db.them_comment_posts("ban", [_lk("gMoi", 2)], page="PAGE_1")
+_bc = db.boc_bai_de_comment("ban", 9, page="PAGE_1")
+check("link chưa gắn Page bị bỏ qua",
+      len(_bc) == 1 and _bc[0]["nhom"] == "gMoi")
 db.xoa_het_comment_posts("ban")
 
 # Thư viện câu

@@ -14,9 +14,9 @@ Mỗi loại (homestay / thuê / bán) có một danh sách URL bài viết + m�
 câu comment. Đến phiên, acc mở từng bài, DÁN câu bốc ngẫu nhiên, gửi, nghỉ,
 sang bài kế tiếp.
 
-Số câu mỗi bài tách theo CHỦ SỞ HỮU bài đó: bài của chính Page mình được nhiều
-câu hơn (mặc định 2), bài của Page khác dè hơn (mặc định 1). Hai câu trên cùng
-một bài cách nhau 5–8s. Xem `comment_cau_chinh_chu` / `comment_cau_khac`.
+CHỈ comment vào bài của CHÍNH Page mình, mỗi bài `comment_cau_chinh_chu` câu
+(mặc định 3), hai câu cách nhau 5–8s. Hết bài chính chủ thì thôi — comment
+dưới bài của Page lạ khiến nick dính spam.
 
 Slot chạy phiên comment lấy từ chính lịch đăng bài — giống nuôi nick: cứ mỗi
 `comment_interval` phút thì một slot đăng của acc đó biến thành phiên comment.
@@ -62,17 +62,15 @@ DEFAULTS = {
     # ra để tránh.
     "comment_nghi_min":  5,
     "comment_nghi_max":  7,
-    # Số câu comment cho MỘT bài, tách theo chủ sở hữu bài đó.
+    # Số câu comment cho MỘT bài.
     #
-    # Bài của chính Page mình thì comment dày hơn được: tự trả lời bài của mình
-    # là hành vi bình thường, và mỗi comment là một lần bài nổi lại lên đầu nhóm.
-    # Bài của Page khác thì dè hơn — người lạ vào comment liền hai câu dưới một
-    # bài là thứ admin nhóm nhìn thấy ngay.
+    # Phiên comment CHỈ động vào bài của chính Page mình — xem
+    # db.boc_bai_de_comment. Tự trả lời bài của mình là hành vi bình thường, và
+    # mỗi comment là một lần bài nổi lại lên đầu nhóm.
     #
-    # Đặt 0 cho `khac` = không comment bài Page khác nữa; những bài đó bị loại
-    # khỏi phiên luôn chứ không mở ra rồi bỏ đi.
-    "comment_cau_chinh_chu": 2,
-    "comment_cau_khac":      1,
+    # Từng có thêm `comment_cau_khac` cho bài của Page khác. ĐÃ BỎ: đi comment
+    # dưới bài của Page lạ khiến nick dính spam.
+    "comment_cau_chinh_chu": 3,
 }
 
 # Nghỉ giữa hai câu TRÊN CÙNG MỘT BÀI (giây).
@@ -160,23 +158,22 @@ def la_chinh_chu(bai: dict, page_uid: str) -> bool:
     return bool(page_uid) and (bai.get("page") or "") == page_uid
 
 
-def chia_cau_cho_bai(bai: list, pool: list, so_chinh_chu: int, so_khac: int,
+def chia_cau_cho_bai(bai: list, pool: list, so_cau: int,
                      page_uid: str, rng=random):
     """
     Chia câu comment cho từng bài. Trả về `(bài_còn_lại, [cụm_câu_từng_bài])`.
 
-    Bài của chính Page mình nhận `so_chinh_chu` câu, bài Page khác nhận
-    `so_khac`. Số nào bằng 0 thì những bài thuộc nhóm đó bị LOẠI KHỎI phiên —
-    không mở trang ra rồi mới bỏ đi, vì mở trang cũng là một lượt Facebook đếm.
+    Mọi bài đều nhận `so_cau` câu. VẪN lọc lại theo `la_chinh_chu` dù tầng chọn
+    bài đã lọc cứng rồi: hai tầng cùng giữ một luật thì lỡ một tầng hỏng vẫn
+    không comment nhầm sang bài của Page lạ — đúng thứ gây dính spam.
 
     Bốc MỘT dãy duy nhất cho cả phiên rồi mới cắt thành cụm. Bốc riêng từng bài
     thì `pick_messages` chỉ tránh trùng trong phạm vi bài đó, nên bài này vẫn có
     thể kết thúc bằng đúng câu mà bài kế tiếp mở đầu — hai comment giống hệt
     cách nhau mươi giây là thứ dễ thấy nhất.
     """
-    so = {True: max(0, int(so_chinh_chu or 0)), False: max(0, int(so_khac or 0))}
-    giu = [(b, so[la_chinh_chu(b, page_uid)]) for b in bai]
-    giu = [(b, k) for b, k in giu if k > 0]
+    k = max(0, int(so_cau or 0))
+    giu = [(b, k) for b in bai if k > 0 and la_chinh_chu(b, page_uid)]
     if not giu:
         return [], []
 
@@ -511,18 +508,14 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
         return {"da_comment": 0, "loi": 0, "bo_qua": "danh sách trống"}
 
     so_minh = max(0, int(st["comment_cau_chinh_chu"]))
-    so_khac = max(0, int(st["comment_cau_khac"]))
-    bai, cum = chia_cau_cho_bai(bai, pool, so_minh, so_khac, page_uid)
+    bai, cum = chia_cau_cho_bai(bai, pool, so_minh, page_uid)
     if not bai:
-        logger.warning("  ⏭️  Bỏ phiên — số câu đang đặt 0 cho mọi bài bốc được")
+        logger.warning("  ⏭️  Bỏ phiên — số câu đang đặt 0")
         return {"da_comment": 0, "loi": 0, "bo_qua": "số câu đặt 0"}
 
-    n_minh = sum(1 for b in bai if la_chinh_chu(b, page_uid))
-    nguon = (f"{n_minh} bài chính chủ ×{so_minh} câu + "
-             f"{len(bai) - n_minh} bài cùng hạng mục ×{so_khac} câu"
-             if page_uid else f"chung kho ×{so_khac} câu")
     logger.info(f"  💬 Phiên comment: {len(bai)}/{st['comment_so_bai']} bài | "
-                f"{sum(len(c) for c in cum)} câu | thư viện {len(pool)} câu | {nguon}")
+                f"{sum(len(c) for c in cum)} câu | thư viện {len(pool)} câu | "
+                f"tất cả là bài chính chủ ×{so_minh} câu")
 
     ok_n, loi_n, cau_n = 0, 0, 0        # bài xong / bài hỏng / TỔNG CÂU đã lên
     chet = []                                  # link chết gặp trong phiên này

@@ -10,6 +10,26 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.15.0 — 14/09/2026
+
+**Phiên comment chỉ động vào bài của chính Page mình**
+
+Trước đây mỗi phiên lấy hết bài của Page mình rồi **lấp đầy bằng bài của Page
+khác** cho đủ số bài đã cài (bài Page khác nhận 1 câu). Nay bỏ hẳn vế đó: đi
+comment dưới bài của Page lạ khiến nick dính spam.
+
+- Hết bài chính chủ thì **phiên bỏ trống**, không lấy bù ở đâu cả.
+- Ô cài đặt *"Số câu — bài của Page KHÁC"* đã gỡ khỏi màn hình Cài đặt comment.
+  Chỉ còn một ô: **Số câu mỗi bài** (mặc định 3).
+
+Đánh đổi cần biết: tài khoản nào chỉ đăng chéo được ít nhóm thì nay comment ít
+bài hơn, vì không còn được lấp thêm. Kiểm trên dữ liệu hiện tại thì **không tài
+khoản nào bị ảnh hưởng** — cả 10 tài khoản đang chạy đều có đủ 10 nhóm bài của
+chính mình, vẫn kín 9 bài mỗi phiên.
+
+Luật này được giữ ở **hai tầng** — tầng chọn bài và tầng chia câu — để lỡ một
+tầng hỏng thì vẫn không comment nhầm sang bài của Page lạ.
+
 ## v2.14.1 — 14/09/2026
 
 **Thử cookie: bắt thêm hai kiểu nhập nhầm**

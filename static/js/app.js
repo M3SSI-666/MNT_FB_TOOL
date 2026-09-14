@@ -2269,8 +2269,8 @@ async function openCommentSettings(){
             story cá nhân → newsfeed cá nhân → chuyển sang Page → <b>comment từng bài</b>
             → lướt newsfeed + like 1 bài → kết thúc.<br>
             Thời lượng các bước lấy đúng theo luồng đăng bài nên không cần chỉnh riêng.
-            Page luôn <b>ưu tiên comment bài của chính mình</b>; chưa có bài nào thì lùi về
-            dùng chung kho.
+            Page <b>CHỈ comment bài của chính mình</b>; hết bài chính chủ thì phiên bỏ trống,
+            không lấp bằng bài của Page khác.
         </div>
 
         ${row("Tỉ lệ comment của acc X_ (%)", num("comment_ti_le",25),
@@ -2281,10 +2281,8 @@ async function openCommentSettings(){
               `${num("comment_nghi_min",5)} — ${num("comment_nghi_max",7)}`,
               "Comment liên tiếp không nghỉ là dấu hiệu máy rõ nhất")}
 
-        ${row("Số câu — bài của CHÍNH Page mình", num("comment_cau_chinh_chu",2),
-              "Tự comment dưới bài của mình là bình thường. Hai câu cách nhau 20–45s, bốc ngẫu nhiên và không trùng nhau.")}
-        ${row("Số câu — bài của Page KHÁC", num("comment_cau_khac",1),
-              "Để 1 cho an toàn: người lạ comment liền hai câu dưới một bài là thứ admin nhóm nhìn thấy ngay. Đặt 0 = bỏ hẳn bài Page khác.")}
+        ${row("Số câu mỗi bài", num("comment_cau_chinh_chu",3),
+              "Phiên comment CHỈ vào bài của chính Page mình. Hết bài chính chủ thì thôi — comment dưới bài Page lạ khiến nick dính spam.")}
 
         <div style="display:flex;align-items:center;gap:8px;margin:16px 0 6px">
             <span style="font-size:12px;font-weight:700;color:var(--accent)">THƯ VIỆN CÂU THEO LOẠI</span>
@@ -2359,7 +2357,6 @@ async function saveCommentSettings(){
         comment_nghi_min: gi("comment_nghi_min",5),
         comment_nghi_max: gi("comment_nghi_max",7),
         comment_cau_chinh_chu: gi("comment_cau_chinh_chu",2),
-        comment_cau_khac:      gi("comment_cau_khac",1),
     };
     CMT_LOAI.forEach(([k])=>{ data["comment_pool_"+k]=g("comment_pool_"+k)?.value||""; });
     if(data.comment_nghi_min > data.comment_nghi_max){
@@ -2367,13 +2364,9 @@ async function saveCommentSettings(){
     }
     if(data.comment_so_bai < 1){ Toast.error("Số bài mỗi phiên phải từ 1 trở lên"); return; }
     if(data.comment_cau_chinh_chu < 1){
-        Toast.error("Số câu cho bài của chính mình phải từ 1 trở lên"); return;
+        Toast.error("Số câu mỗi bài phải từ 1 trở lên"); return;
     }
-    // Cả hai cùng 0 thì phiên mở trình duyệt ra rồi không làm gì — chặn ngay ở đây.
-    if(data.comment_cau_khac < 0){
-        Toast.error("Số câu cho bài Page khác không được âm"); return;
-    }
-    if(data.comment_cau_chinh_chu > 3 || data.comment_cau_khac > 3){
+    if(data.comment_cau_chinh_chu > 3){
         Toast.error("Trên 3 câu một bài là spam thấy rõ — nhóm sẽ đá acc"); return;
     }
     if(data.comment_ti_le < 0 || data.comment_ti_le > 100){
