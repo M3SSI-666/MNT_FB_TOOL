@@ -354,77 +354,6 @@ async def _ket_phien(page, acc_name: str = "") -> None:
         logger.warning(f"    ⚠️  Kết phiên không trọn vẹn: {e}")
 
 
-# Nút cảm xúc CỦA BÀI = nút "Thích" cao nhất trang.
-#
-# Trang bài viết có NHIỀU nút "Thích": một của bài, còn lại của từng bình luận.
-# Đo thật: nút của bài luôn nằm trên cùng (top nhỏ nhất), các nút kia nằm dưới
-# trong khu bình luận. Bấm nhầm nút của bình luận là thả tim cho bình luận
-# người khác — không hỏng gì nhưng cũng chẳng đẩy được bài lên.
-#
-# Bỏ qua nhãn dạng "Thích: 4 người" — đó là BỘ ĐẾM, không phải nút bấm.
-_JS_NUT_LIKE = r"""() => {
-  const ds = [...document.querySelectorAll('[role="button"][aria-label]')]
-    .filter(el => /^(Thích|Like)$/.test((el.getAttribute('aria-label') || '').trim()))
-    .map(el => ({el, y: el.getBoundingClientRect().top}))
-    .filter(x => x.y > 0)
-    .sort((a, b) => a.y - b.y);
-  return ds.length ? ds[0].el : null;
-}"""
-
-# Tổng số cảm xúc đang có trên bài, đọc từ các nhãn "Thích: 4 người".
-_JS_DEM_CX = r"""() => {
-  let t = 0;
-  for (const el of document.querySelectorAll('[aria-label]')) {
-    const m = (el.getAttribute('aria-label') || '').match(/:\s*(\d+)\s*(người|people)/);
-    if (m) t += parseInt(m[1], 10);
-  }
-  return t;
-}"""
-
-
-async def tha_like(page) -> str:
-    """
-    Thả Like cho bài đang mở. Trả về mô tả ngắn để ghi log.
-
-    Vì sao đọc BỘ ĐẾM trước/sau thay vì dò trạng thái nút: Facebook không đổi gì
-    trên nút sau khi thả — nhãn vẫn 'Thích', không có aria-pressed, màu và icon y
-    nguyên, outerHTML giống hệt (đo ngày 16/09). Thứ DUY NHẤT thay đổi là số
-    lượng cảm xúc, nên đó là cách kiểm chứng duy nhất còn lại.
-
-    Đếm GIẢM nghĩa là bài đã có cảm xúc sẵn và cú bấm vừa GỠ nó — bấm lại ngay
-    để trả về như cũ. Nhờ chốt này, bài bạn tự thả tay ngoài phần mềm cũng chỉ bị
-    chạm đúng một lần rồi thôi.
-
-    Dùng JS click, không dùng locator.click(): lớp phủ `__fb-dark-mode` của
-    Facebook chặn pointer event, đã đo thấy locator.hover/click hết giờ 30s.
-    """
-    try:
-        nut = (await page.evaluate_handle(_JS_NUT_LIKE)).as_element()
-        if not nut:
-            return "không thấy nút cảm xúc"
-
-        truoc = await page.evaluate(_JS_DEM_CX)
-        await page.evaluate("el => el.scrollIntoView({block:'center'})", nut)
-        await human_delay(400, 900)
-        await page.evaluate("el => el.click()", nut)
-        await human_delay(2000, 3000)
-        sau = await page.evaluate(_JS_DEM_CX)
-
-        if sau < truoc:
-            # Vừa gỡ mất cảm xúc có sẵn — bấm lại để khôi phục.
-            nut2 = (await page.evaluate_handle(_JS_NUT_LIKE)).as_element()
-            if nut2:
-                await page.evaluate("el => el.click()", nut2)
-                await human_delay(1500, 2500)
-            return "bài đã có cảm xúc sẵn — đã trả lại như cũ"
-        if sau > truoc:
-            return "đã thả 👍"
-        # Không đổi: có thể Facebook chưa cập nhật kịp, hoặc cú bấm trượt.
-        return "bấm rồi nhưng số cảm xúc không đổi"
-    except Exception as e:
-        return f"lỗi: {type(e).__name__}: {str(e)[:50]}"
-
-
 async def _gui_mot_cau(page, ctx, cau: str) -> None:
     """
     DÁN và gửi MỘT câu vào ô bình luận của trang đang mở.
@@ -489,8 +418,7 @@ async def _gui_mot_cau(page, ctx, cau: str) -> None:
         pass
 
 
-async def _comment_mot_bai(page, ctx, url: str, cau_ds: list,
-                           post_id: int = 0, da_tha: bool = False) -> int:
+async def _comment_mot_bai(page, ctx, url: str, cau_ds: list) -> int:
     """
     Mở một bài viết và gửi lần lượt các câu trong `cau_ds`. Trả về SỐ CÂU đã gửi.
 
@@ -520,17 +448,6 @@ async def _comment_mot_bai(page, ctx, url: str, cau_ds: list,
         raise CommentRestricted("Facebook đang hạn chế hoạt động của acc")
     if bai_da_chet(body):
         raise BaiDaChet("bài đã bị xoá hoặc đổi phạm vi hiển thị")
-
-    # Thả cảm xúc TRƯỚC khi comment — vào bài rồi mới tương tác, giống người thật.
-    #
-    # Đánh dấu vào DB ngay sau cú bấm, TRƯỚC khi comment: nếu phần comment phía
-    # dưới hỏng giữa chừng thì phiên sau vẫn biết bài này đã thả rồi. Bấm lần hai
-    # là gỡ mất cảm xúc, nên thà ghi thừa còn hơn ghi thiếu.
-    if not da_tha:
-        kq_like = await tha_like(page)
-        if post_id:
-            db.danh_dau_da_tha_cx(post_id)
-        logger.info(f"       👍 {kq_like}")
 
     da_gui = 0
     for i, cau in enumerate(cau_ds):
@@ -611,9 +528,7 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
                         f"{'Page ' + page_name if la_page else 'acc cá nhân ' + acc_name}")
             for i, (b, cau_cum) in enumerate(zip(bai, cum), 1):
                 try:
-                    n_gui = await _comment_mot_bai(
-                        page, ctx, b["url"], cau_cum,
-                        post_id=b["id"], da_tha=bool(b.get("da_tha_cx")))
+                    n_gui = await _comment_mot_bai(page, ctx, b["url"], cau_cum)
                     # so_lan phải cộng ĐÚNG số câu đã lên, không phải cộng 1 mỗi
                     # bài: nó là khoá xếp hạng "bài nào ít comment nhất đi trước",
                     # đếm thiếu thì bài chính chủ cứ được bốc lại mãi.

@@ -714,44 +714,6 @@ check("không có Page -> rỗng", _b2 == [] and _c2 == [])
 _b3, _c3 = _cb.chia_cau_cho_bai(_BAI, ["x", "y"], 3, _UID)
 check("thư viện 2 câu vẫn đủ chia 6 lượt", sum(len(x) for x in _c3) == 6)
 
-# ── Thả cảm xúc trước khi comment ─────────────────────────────────────────
-# Facebook KHÔNG đổi gì trên nút sau khi thả — nhãn vẫn 'Thích', không có
-# aria-pressed, màu và icon y nguyên, outerHTML giống hệt (đo 16/09). Nên phải
-# tự ghi nhớ trong DB, và kiểm chứng bằng BỘ ĐẾM cảm xúc trước/sau.
-import inspect as _ins3
-_src_like = _ins3.getsource(_cb.tha_like)
-
-check("đọc bộ đếm TRƯỚC khi bấm",  "truoc = await page.evaluate" in _src_like)
-check("đọc bộ đếm SAU khi bấm",    "sau = await page.evaluate" in _src_like)
-# Đếm GIẢM = vừa gỡ mất cảm xúc có sẵn -> phải bấm lại ngay để trả về như cũ.
-check("đếm giảm -> bấm lại khôi phục", "if sau < truoc" in _src_like)
-# JS click, KHÔNG locator.click(): lớp phủ __fb-dark-mode chặn pointer event,
-# đã đo locator.hover/click hết giờ 30s trên trang bài viết.
-check("dùng JS click",             "el => el.click()" in _src_like)
-# Nút của BÀI là nút 'Thích' cao nhất — nút thấp hơn là của từng bình luận.
-check("lấy nút cao nhất trang",    "a.y - b.y" in _cb._JS_NUT_LIKE)
-check("bỏ qua nhãn bộ đếm",        "người|people" in _cb._JS_DEM_CX)
-
-# Đánh dấu vào DB phải xảy ra TRƯỚC vòng gửi câu: comment hỏng giữa chừng thì
-# phiên sau vẫn phải biết bài này đã thả rồi. Bấm lần hai là gỡ mất cảm xúc.
-_src_bai = _ins3.getsource(_cb._comment_mot_bai)
-check("bỏ qua nếu đã thả",         "if not da_tha" in _src_bai)
-check("đánh dấu ngay sau khi bấm", "danh_dau_da_tha_cx" in _src_bai)
-check("đánh dấu TRƯỚC khi gửi câu",
-      _src_bai.index("danh_dau_da_tha_cx") < _src_bai.index("_gui_mot_cau"))
-
-db.xoa_het_comment_posts("ban")
-db.them_comment_posts("ban", [_lk("gCx", 1)], page="PG_CX")
-_rcx = db.get_comment_posts("ban")[0]
-check("mặc định chưa thả cảm xúc", not _rcx["da_tha_cx"])
-db.danh_dau_da_tha_cx(_rcx["id"])
-check("đánh dấu rồi thì đọc ra 1", db.get_comment_posts("ban")[0]["da_tha_cx"] == 1)
-db.danh_dau_da_tha_cx(_rcx["id"])
-check("đánh dấu lại không nổ",     db.get_comment_posts("ban")[0]["da_tha_cx"] == 1)
-db.danh_dau_da_tha_cx(999999)
-check("id lạ không nổ",            True)
-db.xoa_het_comment_posts("ban")
-
 # Hai comment dưới CÙNG một bài phải giãn hơn hai comment ở hai bài khác nhau —
 # cùng một Page gõ liền hai câu dưới một bài là thứ dễ thấy nhất.
 #

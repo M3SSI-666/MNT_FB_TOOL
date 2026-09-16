@@ -10,6 +10,19 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.16.1 — 17/09/2026
+
+**Gỡ bỏ việc thả 👍 trước khi bình luận**
+
+Tính năng vừa thêm ở v2.16.0 đã được gỡ theo yêu cầu. Phiên comment trở lại
+đúng như v2.15.0: mở bài → dán bình luận → sang bài kế, không thả cảm xúc.
+
+Nếu bạn đang ở v2.16.0 thì cập nhật bản này là xong, không phải làm gì thêm.
+
+> Ghi chú kỹ thuật: cột `da_tha_cx` trong bảng link comment không còn được dùng
+> tới nữa. Để nguyên, không xoá — nó không ảnh hưởng gì, và nếu sau này cần lại
+> tính năng thì đã có sẵn.
+
 ## v2.16.0 — 17/09/2026
 
 **Phiên comment: thả 👍 cho bài trước khi bình luận**
