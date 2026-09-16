@@ -326,6 +326,13 @@ def init_db():
         # chỉ thu hẹp còn "một trong hai". Bài bị Facebook gỡ mà không biết acc
         # nào đăng thì tín hiệu đó vô dụng.
         _add_col("comment_posts", "acc", "acc TEXT DEFAULT ''")
+        # Đã thả cảm xúc cho bài này chưa (1 = rồi).
+        #
+        # PHẢI tự ghi nhớ, không dò được trên trang: đo thật ngày 16/09 thì nút
+        # cảm xúc của Facebook KHÔNG đổi gì sau khi thả — aria-label vẫn 'Thích',
+        # không có aria-pressed, màu chữ và icon y nguyên, outerHTML giống hệt.
+        # Mà bấm lần hai là GỠ mất cảm xúc, nên đoán mò thì tệ hơn không làm.
+        _add_col("comment_posts", "da_tha_cx", "da_tha_cx INTEGER DEFAULT 0")
         for r in con.execute("SELECT id, url FROM comment_posts "
                              "WHERE COALESCE(nhom,'') = ''").fetchall():
             con.execute("UPDATE comment_posts SET nhom=? WHERE id=?",
@@ -1634,6 +1641,20 @@ def boc_bai_de_comment(loai: str, so_bai: int, page: str = "") -> list[dict]:
             ung_vien[nhom] = (k, r)
 
     return [r for _, r in sorted(ung_vien.values(), key=lambda x: x[0])[:n]]
+
+
+def danh_dau_da_tha_cx(post_id: int) -> None:
+    """
+    Đánh dấu ĐÃ thả cảm xúc cho bài này — để phiên sau không bấm lại.
+
+    Ghi NGAY sau cú bấm, kể cả khi phần còn lại của phiên hỏng. Bấm lần hai là
+    gỡ mất cảm xúc, nên thà ghi thừa (bỏ lỡ một lượt thả) còn hơn ghi thiếu.
+    """
+    try:
+        with _conn() as con:
+            con.execute("UPDATE comment_posts SET da_tha_cx=1 WHERE id=?", (post_id,))
+    except Exception:
+        pass
 
 
 def ghi_nhan_comment(post_id: int, ok: bool, ghi_chu: str = "", chet: bool = False,

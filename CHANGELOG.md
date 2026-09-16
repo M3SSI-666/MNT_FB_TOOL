@@ -10,6 +10,34 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.16.0 — 17/09/2026
+
+**Phiên comment: thả 👍 cho bài trước khi bình luận**
+
+Vào bài rồi mới tương tác — giống người thật hơn, và thêm một lần đẩy bài lên.
+
+Chạy thử một phiên thật: **8/9 bài thả thành công**, 9 bài / 27 câu, 0 lỗi.
+Phiên dài thêm khoảng 1 phút (7,4 → 8,7 phút).
+
+**Đã thả rồi thì không bấm lại**, vì bấm lần hai là *gỡ mất* cảm xúc. Chỗ này
+khó hơn tưởng: đo thực tế thì Facebook **không để lại dấu vết nào** trên nút sau
+khi thả — nhãn vẫn "Thích", màu chữ và biểu tượng y nguyên, mã trang giống hệt.
+Nên phần mềm **tự ghi nhớ** bài nào đã thả.
+
+Kèm một chốt tự sửa: nó đếm số cảm xúc của bài **trước và sau** cú bấm.
+
+- Số **tăng** → thả thành công.
+- Số **giảm** → vừa lỡ gỡ mất cảm xúc có sẵn, **bấm lại ngay** để trả về như cũ.
+
+Nhờ chốt đó, bài bạn đã tự thả tay ngoài phần mềm cũng chỉ bị chạm đúng một lần
+rồi thôi.
+
+Chỉ thả **Thích**, không dùng Wow hay trái tim — mở bảng chọn cảm xúc đòi phải
+rê chuột thật, mà lớp phủ giao diện của Facebook chặn thao tác đó.
+
+Một hạn chế cần biết: kho link là cửa sổ trượt 300 link. Bài bị đẩy ra rồi quay
+lại sẽ mất dấu và có thể bị thả lại một lần — chốt đếm ở trên sẽ bắt được.
+
 ## v2.15.0 — 14/09/2026
 
 **Phiên comment chỉ động vào bài của chính Page mình**
