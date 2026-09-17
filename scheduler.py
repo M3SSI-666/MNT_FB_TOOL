@@ -171,7 +171,7 @@ def _attempt_post(item: dict) -> str:
             c_user=acc_data.get("c_user", ""),
         )
         if not ok:
-            raise Exception("Đăng tường Page thất bại")
+            raise Exception("Đăng tường Page về kết quả rỗng mà không báo lỗi bước nào")
         return ""
 
     # ── MODE HYBRID / PAGEVIA ─────────────────────────────────
@@ -198,7 +198,10 @@ def _attempt_post(item: dict) -> str:
             loai_comment=LOAI,
         )
         if not count:
-            raise Exception("Hybrid thất bại")
+            # Lưới an toàn. Mọi bước hỏng trong poster nay đều ném LoiBuoc kèm
+            # tên bước, nên nhánh này chỉ chạy khi có đường thoát nào đó lọt
+            # lưới — ghi rõ như vậy thay vì lặp lại "Hybrid thất bại" vô nghĩa.
+            raise Exception("Đăng chéo về 0 nhóm mà không báo lỗi bước nào")
         return f" ({count} nhóm)"
 
     # ── MODE VIA ──────────────────────────────────────────────
@@ -526,7 +529,11 @@ def _run_one(item: dict):
                     f"🖥️  STT {stt}: lỗi máy/mạng — KHÔNG tính vào sức khoẻ "
                     f"acc '{acc_name}'")
                 return
-            _bao_suc_khoe(stt, acc_name, *db.ghi_nhan_phien_dang(acc_name, False))
+            # Truyền NHÃN LỖI xuống cùng. Nhãn này đi thẳng ra cột Trạng thái
+            # và báo cáo Telegram, để nhìn là biết hỏng ở bước nào — thay vì
+            # chỉ đếm được "5 lỗi liên tiếp" rồi phải đi đào file log.
+            _bao_suc_khoe(stt, acc_name,
+                          *db.ghi_nhan_phien_dang(acc_name, False, ly_do_loi=label))
             return
 
 

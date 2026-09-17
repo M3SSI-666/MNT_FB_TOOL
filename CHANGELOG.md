@@ -10,6 +10,42 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.20.0 — 18/09/2026
+
+**Phiên hỏng giờ nói rõ hỏng ở BƯỚC NÀO**
+
+Trước đây một phiên hỏng chỉ để lại chừng này thông tin:
+
+```
+Bảng lịch : ❌ 21:14 Hybrid thất bại
+Trạng thái: 😴 Nghỉ tới 22:14
+Telegram  : 'Vân Anh' nghỉ — 5 lỗi liên tiếp
+```
+
+Không chỗ nào nói hỏng ở đâu. Lý do thật chỉ nằm trong file log, lẫn giữa hàng
+nghìn dòng — nên biết là hỏng mà không biết sửa cái gì.
+
+Lý do kỹ thuật: mỗi bước trong phần đăng bài khi hỏng chỉ trả về "thất bại",
+không kèm gì. Nơi gọi thấy "0 nhóm" nên báo chung một câu "Hybrid thất bại".
+
+Từ bản này, **12 bước** đều có tên riêng và tên đó đi thẳng ra giao diện:
+
+```
+Bảng lịch : ❌ 21:14 Không mở được ô soạn bài (nhóm 434990041885698)
+Trạng thái: 😴 Nghỉ tới 22:14
+            5 lỗi liên tiếp · Không mở được ô soạn bài (nhóm 4349...)
+Telegram  : 'Vân Anh' — Nghỉ (5 lỗi liên tiếp · Không mở được ô soạn bài…)
+```
+
+Các bước được đặt tên: không có cookie · không mở được ô soạn bài · mở được
+nhưng không dán được nội dung · không thấy ô tìm nhóm · không thấy nút Xong ·
+không thấy nút Đăng · bấm Đăng rồi mà ô soạn bài không đóng · dòng lịch thiếu
+UID nhóm đầu — mỗi cái cho cả luồng đăng nhóm lẫn luồng đăng tường Page.
+
+**Không phải đợi đủ 5 lỗi mới biết.** Lỗi ngay từ phiên hỏng ĐẦU TIÊN đã được
+ghi lại; rê chuột vào cột Trạng thái của một nick đang Active là thấy "Lỗi gần
+nhất: …". Nick chạy được một phiên là xoá sạch.
+
 ## v2.19.0 — 17/09/2026
 
 **Sửa: hộp xin phép cookie của Facebook chặn đứng cả phiên đăng bài**

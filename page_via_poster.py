@@ -45,7 +45,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cookie_exporter import load_cookie
 from storage import prepare_images_for_post as smart_download, cleanup_temp
 from config import HEADLESS
-from utils import logger, ComposerBiChan, jitter_ms, CookieDeadError
+from utils import logger, ComposerBiChan, jitter_ms, CookieDeadError, LoiBuoc
 from fb_common import (kiem_vi_pham, composer_bi_chan, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, browser_launch_kwargs)
 
@@ -366,7 +366,7 @@ async def _run_page_via(
         if not cookie_data:
             logger.error(f"❌ [{acc_name}] Không có cookie!")
             await ctx.close()
-            return False
+            raise LoiBuoc("Không có cookie trong máy")
 
         _ci = []
         for name, key in [("c_user", "c_user"), ("xs", "xs")]:
@@ -477,7 +477,7 @@ async def _run_page_via(
         if not opened:
             logger.error(f"  ❌ Không mở được composer!")
             await ctx.close()
-            return False
+            raise LoiBuoc(f"Không mở được ô soạn bài (nhóm {first_group_uid})")
 
         # Paste nội dung
         logger.info(f"    📋 Paste nội dung ({len(message)}c)...")
@@ -511,7 +511,7 @@ async def _run_page_via(
                 raise ComposerBiChan("Chặn Composer")
             logger.error(f"  ❌ Không paste được nội dung!")
             await ctx.close()
-            return False
+            raise LoiBuoc("Mở được ô soạn bài nhưng không dán được nội dung")
 
         # Upload ảnh
         if local_photos:
@@ -603,7 +603,7 @@ async def _run_page_via(
             if not search_input:
                 logger.error(f"  ❌ Không tìm thấy ô tìm kiếm nhóm!")
                 await ctx.close()
-                return False
+                raise LoiBuoc("Không thấy ô tìm nhóm ở bước đăng chéo")
 
             await search_input.click()
             await _human_delay(400, 600)
@@ -704,7 +704,7 @@ async def _run_page_via(
             if not xong_clicked:
                 logger.error(f"  ❌ Không tìm thấy nút Xong!")
                 await ctx.close()
-                return False
+                raise LoiBuoc("Không thấy nút Xong sau khi tick nhóm")
 
         # Bắt link bài vừa đăng từ phản hồi mạng. Gắn TRƯỚC khi bấm Đăng, vì
         # phản hồi chứa ID bài về ngay sau cú bấm. Toàn bộ bọc try/except —
@@ -739,7 +739,7 @@ async def _run_page_via(
         if not posted:
             logger.error(f"  ❌ Không tìm thấy nút Đăng!")
             await ctx.close()
-            return False
+            raise LoiBuoc("Không thấy nút Đăng")
 
         # Chờ ô soạn bài đóng = Facebook đã nhận bài
         if await cho_composer_dong(page):
@@ -889,7 +889,7 @@ async def _run_page_wall(
         if not cookie_data:
             logger.error(f"❌ [{acc_name}] Không có cookie!")
             await ctx.close()
-            return False
+            raise LoiBuoc("Không có cookie trong máy")
 
         _ci = []
         for name, key in [("c_user", "c_user"), ("xs", "xs")]:
@@ -983,7 +983,7 @@ async def _run_page_wall(
         if not opened:
             logger.error(f"  ❌ Không mở được composer!")
             await ctx.close()
-            return False
+            raise LoiBuoc(f"Không mở được ô soạn bài trên tường Page {page_uid}")
 
         # Paste nội dung
         logger.info(f"    📋 Paste nội dung ({len(message)}c)...")
@@ -1017,7 +1017,7 @@ async def _run_page_wall(
                 raise ComposerBiChan("Chặn Composer")
             logger.error(f"  ❌ Không paste được nội dung!")
             await ctx.close()
-            return False
+            raise LoiBuoc("Mở được ô soạn bài tường Page nhưng không dán được nội dung")
 
         # Upload ảnh
         if local_photos:
@@ -1097,7 +1097,7 @@ async def _run_page_wall(
         if not posted:
             logger.error(f"  ❌ Không tìm thấy nút Đăng!")
             await ctx.close()
-            return False
+            raise LoiBuoc("Không thấy nút Đăng (tường Page)")
 
         # 5c. Popup "Tạo điều kiện để dễ liên hệ..." (WhatsApp) → click "Lúc khác"
         await _human_delay(1500, 2500)
@@ -1123,7 +1123,7 @@ async def _run_page_wall(
         else:
             logger.warning(f"  ⚠️  Không chắc kết quả — kiểm tra thủ công trên Facebook")
             await ctx.close()
-            return False
+            raise LoiBuoc("Bấm Đăng rồi nhưng ô soạn bài không đóng — không chắc bài đã lên")
 
         # Cooldown nhẹ rồi đóng — đang là Page, like tối đa 1 bài
         await _browse_and_like(page, duration_sec=random.randint(10, 20), max_likes=1)
@@ -1231,7 +1231,7 @@ def post_page_via(
 
     if not first_group_uid:
         logger.error("❌ Thiếu first_group_uid — không biết mở composer ở nhóm nào")
-        return False
+        raise LoiBuoc("Dòng lịch thiếu UID nhóm đầu")
 
     try:
         ok = asyncio.run(_run_page_via(

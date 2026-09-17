@@ -14,6 +14,9 @@ logs/*.log
 # bản xoay vòng: autopost.log.1, autopost.log.2 ...
 logs/*.log.*
 .runner_*.pid
+# Khoá "một loại lịch — một runner". Runner đang sống thì Windows KHOÁ CỨNG file
+# này, git đọc vào là báo Permission denied và cả lệnh add hỏng theo.
+.runner_*.lock
 debug_*.png
 *.png
 

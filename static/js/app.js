@@ -954,12 +954,24 @@ function _trangThaiAcc(r){
     if(_dangNghi(r)){
         const t=new Date(r.nghi_den);
         const hh=String(t.getHours()).padStart(2,"0"), mm=String(t.getMinutes()).padStart(2,"0");
-        return {nhan:`😴 Nghỉ tới ${hh}:${mm}`, mau:"var(--warning)", dam:false,
-                chiTiet:`Lỗi liên tiếp nên tạm nghỉ, sau đó tự chạy lại. ${hong}`};
+        // Hiện LÝ DO ngay trên bảng. Trước đây ô này chỉ ghi "😴 Nghỉ tới HH:MM"
+        // và rê chuột vào cũng chỉ thấy "Lỗi liên tiếp nên tạm nghỉ" — đúng thì
+        // đúng, nhưng không nói hỏng ở bước nào nên chẳng sửa được gì.
+        const ly=(r.ly_do_nghi||"").trim();
+        return {nhan:`😴 Nghỉ tới ${hh}:${mm}`
+                     +(ly?`<div style="font-weight:400;font-size:11px;opacity:.85">`
+                          +`${_escapeHtml(ly)}</div>`:""),
+                mau:"var(--warning)", dam:false,
+                chiTiet:(ly?`${ly}. `:"Lỗi liên tiếp nên tạm nghỉ. ")
+                        +`Sau đó tự chạy lại. ${hong}`};
     }
+    // Acc vẫn Active nhưng phiên gần nhất hỏng: nói luôn hỏng ở đâu, đừng đợi
+    // gom đủ 5 lỗi mới cho người ta biết có chuyện.
+    const loi=(r.loi_gan_nhat||"").trim();
+    const phu=loi?` Lỗi gần nhất: ${loi}`:"";
     if(val==="Active")
-        return {nhan:val, mau:"var(--text-secondary)", dam:false, chiTiet:hong};
-    return {nhan:val||"-", mau:"var(--text-secondary)", dam:false, chiTiet:hong};
+        return {nhan:val, mau:"var(--text-secondary)", dam:false, chiTiet:hong+phu};
+    return {nhan:val||"-", mau:"var(--text-secondary)", dam:false, chiTiet:hong+phu};
 }
 
 // Scheduler chạy ở tiến trình riêng nên không bắn toast thẳng lên được; nó ghi

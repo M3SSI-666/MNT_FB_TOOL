@@ -175,7 +175,7 @@ check("post_via_crosspost ném lỗi thật lên",
 
 _src_sch = Path("scheduler.py").read_text(encoding="utf-8")
 _i_tran  = _src_sch.find('if cat == "transient":\n                logger.warning')
-_i_suc   = _src_sch.find("_bao_suc_khoe(stt, acc_name, *db.ghi_nhan_phien_dang")
+_i_suc   = _src_sch.find("_bao_suc_khoe(stt, acc_name,")
 check("scheduler thoát sớm khi lỗi transient, trước khi ghi sức khoẻ",
       _i_tran != -1 and _i_suc != -1 and _i_tran < _i_suc)
 
@@ -224,6 +224,61 @@ check("tắt phần mềm có diệt runner theo khoá",
       _src_srv.find("kr.pid_dang_giu(loai)") != -1)
 check("runner trùng loại thì tự thoát",
       "khoa_runner.giu_khoa(LOAI)" in Path("scheduler.py").read_text(encoding="utf-8"))
+
+# ── Phiên hỏng phải nói rõ HỎNG Ở BƯỚC NÀO ─────────────────────────────────
+# Trước đây mọi bước hỏng chỉ `return False`, nơi gọi ném Exception("Hybrid
+# thất bại"). Bảng lịch ghi "Hybrid thất bại", Telegram ghi "5 lỗi liên tiếp" —
+# không chỗ nào nói hỏng ở đâu. Lý do thật chỉ nằm trong file log, lẫn giữa
+# hàng nghìn dòng, nên người quản trị không biết phải sửa cái gì.
+from utils import LoiBuoc as _LoiBuoc
+
+_cat_b, _nhan_b = classify_error(_LoiBuoc("Không mở được ô soạn bài (nhóm 4349)"))
+check("LoiBuoc -> loại 'buoc'", _cat_b == "buoc")
+check("LoiBuoc giữ nguyên tên bước",
+      _nhan_b == "Không mở được ô soạn bài (nhóm 4349)")
+# Nhãn là câu tiếng Việt do mình viết; rơi vào bộ dò từ khoá thì "Không tìm
+# thấy nút Đăng" sẽ bị gán nhãn chung chung, mất sạch chi tiết vừa ghi.
+check("LoiBuoc không bị bộ dò từ khoá nuốt mất",
+      classify_error(_LoiBuoc("Không thấy nút Đăng"))[1] == "Không thấy nút Đăng")
+check("LoiBuoc KHÔNG được thử lại (không phải lỗi mạng)",
+      scheduler._should_retry("buoc", 1) is False)
+
+for _f in ("page_via_poster.py", "via_poster.py"):
+    _s = Path(_f).read_text(encoding="utf-8")
+    check(f"{_f}: không còn `return False` nuốt lý do", "return False" not in _s)
+    check(f"{_f}: mỗi bước hỏng có tên riêng", _s.count("raise LoiBuoc(") >= 6)
+check("không còn ném 'Hybrid thất bại' trống rỗng",
+      'raise Exception("Hybrid thất bại")' not in Path("scheduler.py").read_text(encoding="utf-8"))
+check("scheduler truyền nhãn lỗi xuống DB",
+      "ly_do_loi=label" in Path("scheduler.py").read_text(encoding="utf-8"))
+
+_ten_tl = "__TestBaoLoi__"
+_id_tl  = db.upsert_account({"ten_acc": _ten_tl, "trang_thai": "Active"})
+try:
+    _ly_tl = "Không mở được ô soạn bài (nhóm 4349)"
+    _hd_tl, _ = db.ghi_nhan_phien_dang(_ten_tl, False, ly_do_loi=_ly_tl)
+    _r_tl = db.get_account_by_name(_ten_tl)
+    check("lỗi ĐẦU TIÊN đã ghi lại, không đợi đủ 5",
+          _ly_tl in (_r_tl.get("loi_gan_nhat") or "") and _hd_tl == "")
+    for _ in range(4):
+        _hd_tl, _lydo_tl = db.ghi_nhan_phien_dang(_ten_tl, False, ly_do_loi=_ly_tl)
+    _r_tl = db.get_account_by_name(_ten_tl)
+    check("đủ 5 lỗi thì nghỉ", _hd_tl == "nghi")
+    check("lý do nghỉ có CẢ số lần LẪN tên bước",
+          "5 lỗi liên tiếp" in _lydo_tl and _ly_tl in _lydo_tl)
+    check("lý do ra tới cột Trạng thái + Telegram",
+          _ly_tl in (_r_tl.get("ly_do_nghi") or ""))
+    db.ghi_nhan_phien_dang(_ten_tl, True)
+    _r_tl = db.get_account_by_name(_ten_tl)
+    check("chạy lại được thì xoá sạch lý do cũ",
+          not (_r_tl.get("ly_do_nghi") or "") and not (_r_tl.get("loi_gan_nhat") or ""))
+finally:
+    db.delete_account(_id_tl)
+
+_app_js = Path("static/js/app.js").read_text(encoding="utf-8")
+check("bảng acc hiện lý do nghỉ chứ không chỉ 'Nghỉ tới HH:MM'",
+      "r.ly_do_nghi||\"\").trim()" in _app_js and "😴 Nghỉ tới" in _app_js)
+check("acc còn Active cũng hiện lỗi gần nhất", "loi_gan_nhat" in _app_js)
 
 # ── Hộp xin phép cookie của Facebook ───────────────────────────────────────
 # Nhìn tận mắt lúc 23:09 ngày 17/09 trên nick 'Xuan Khoa': hộp "Cho phép sử

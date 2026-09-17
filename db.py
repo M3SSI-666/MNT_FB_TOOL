@@ -304,6 +304,10 @@ def init_db():
         # mọi kiểu nghỉ nhìn giống hệt nhau ("Nghỉ tới 23:57"), trong khi
         # "Lỗi Composer" và "lỗi liên tiếp" cần xử lý khác hẳn nhau.
         _add_col("accounts",  "ly_do_nghi",    "ly_do_nghi TEXT DEFAULT ''")
+        # Lỗi của phiên hỏng GẦN NHẤT, dạng "HH:MM · <tên bước>". Ghi ngay lúc
+        # phiên hỏng chứ không đợi tới lúc cho nghỉ: bốn lỗi đầu trong chuỗi
+        # cũng cần nhìn thấy, không thì tới lỗi thứ năm mới biết có chuyện.
+        _add_col("accounts",  "loi_gan_nhat",  "loi_gan_nhat TEXT DEFAULT ''")
         _add_col("schedules", "hoat_dong",     "hoat_dong TEXT DEFAULT 'dang_bai'")
 
         # ── Migration: bỏ 2 cột cờ comment ──────────────────────────────
@@ -639,7 +643,7 @@ def acc_duoc_chay(ten_acc: str, hoat_dong: str = "dang_bai") -> tuple[bool, str]
     return True, ""
 
 
-def ghi_nhan_phien_dang(ten_acc: str, ok: bool) -> tuple[str, str]:
+def ghi_nhan_phien_dang(ten_acc: str, ok: bool, ly_do_loi: str = "") -> tuple[str, str]:
     """
     Ghi kết quả một phiên đăng bài và áp quyết định của `suc_khoe_acc.danh_gia`.
 
@@ -667,24 +671,38 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool) -> tuple[str, str]:
         moi = sk.them_ket_qua(r["lich_su_phien"] or "", ok)
         con.execute("UPDATE accounts SET lich_su_phien=? WHERE id=?", (moi, r["id"]))
 
+        # Nhớ lỗi của phiên vừa hỏng. Không nhớ thì tới lúc cho nghỉ chỉ còn
+        # con số "5 lỗi liên tiếp" — người quản trị đọc xong vẫn không biết
+        # phải sửa cái gì, phải tự đi đào file log.
+        if not ok and ly_do_loi:
+            con.execute("UPDATE accounts SET loi_gan_nhat=? WHERE id=?",
+                        (f"{datetime.now():%H:%M} · {ly_do_loi}"[:160], r["id"]))
+
         hanh_dong, ly_do = sk.danh_gia(moi)
         if hanh_dong == "nghi":
+            if ly_do_loi:
+                ly_do = f"{ly_do} · {ly_do_loi}"
             moc = datetime.now() + timedelta(minutes=sk.THAM_DO_PHUT)
             # Ghi dấu ngắt chứ không xoá lịch sử. Dấu ngắt có HAI việc: cắt
             # chuỗi lỗi liên tiếp, và đánh mốc để `danh_gia` nhận ra phiên kế
             # tiếp là phiên THĂM DÒ (hỏng thì nghỉ lại ngay). Cửa sổ trượt vẫn
             # giữ các "x" cũ để tầng 2 còn tích đủ mà kết luận acc chết.
+            # `ly_do_nghi` hiện thẳng ở cột Trạng thái và trong báo cáo
+            # Telegram. Trước đây chỉ đường Spam mới ghi cột này, nên nghỉ vì
+            # lỗi kỹ thuật hiện ra trống trơn — nhìn bảng chỉ thấy "Nghỉ tới
+            # 00:30", không biết vì sao.
             con.execute(
-                "UPDATE accounts SET nghi_den=?, lich_su_phien=?, canh_bao_moi=? "
-                "WHERE id=?",
+                "UPDATE accounts SET nghi_den=?, lich_su_phien=?, canh_bao_moi=?, "
+                "ly_do_nghi=? WHERE id=?",
                 (moc.isoformat(timespec="seconds"), sk.danh_dau_nghi(moi),
                  f"'{ten_acc}' nghỉ, thăm dò lại lúc {moc:%H:%M} — {ly_do}",
-                 r["id"]))
+                 ly_do[:160], r["id"]))
         elif ok:
             # Phiên chạy được → xoá mốc nghỉ cũ cho sạch. Không xoá thì cột
             # nghi_den giữ một mốc quá khứ vô nghĩa, và giao diện phải tự đoán
             # xem nó còn hiệu lực hay không.
-            con.execute("UPDATE accounts SET nghi_den='' WHERE id=? "
+            con.execute("UPDATE accounts SET nghi_den='', ly_do_nghi='', "
+                        "loi_gan_nhat='' WHERE id=? "
                         "AND COALESCE(nghi_den,'') != ''", (r["id"],))
         if hanh_dong == "nghi":
             # Đánh 'X😴' các slot còn lại hôm nay để nhìn bảng lịch là biết ngay

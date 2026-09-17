@@ -90,13 +90,32 @@ class ComposerBiChan(PostError):
     """
 
 
+class LoiBuoc(PostError):
+    """
+    Phiên dừng ở một bước cụ thể. Thông điệp CHÍNH LÀ tên bước, viết sẵn bằng
+    tiếng Việt cho người đọc — ví dụ "Không mở được ô soạn bài (nhóm 4349...)".
+
+    Vì sao cần: trước đây mỗi bước hỏng chỉ `return False`, nơi gọi thấy "0
+    nhóm" nên ném `Exception("Hybrid thất bại")`. Bảng lịch ghi "Hybrid thất
+    bại", Telegram ghi "5 lỗi liên tiếp" — không chỗ nào nói hỏng ở ĐÂU, nên
+    người quản trị không biết phải sửa cái gì. Lý do thật chỉ nằm trong file
+    log, lẫn giữa hàng nghìn dòng.
+    """
+
+
 def classify_error(exc) -> tuple:
     """
     Đoán loại lỗi từ exception → (category, nhãn tiếng Việt) để hiển thị.
-    category: 'cookie' | 'ratelimit' | 'transient' | 'selector' | 'other'
+    category: 'cookie' | 'buoc' | 'ratelimit' | 'transient' | 'selector' | 'other'
     """
     if isinstance(exc, CookieDeadError):
         return ("cookie", "Cookie hết hạn")
+    # Đặt TRƯỚC phần dò từ khoá: nhãn của LoiBuoc là câu tiếng Việt do mình
+    # viết, để nó rơi vào bộ dò từ khoá thì "Không tìm thấy nút Đăng" sẽ bị
+    # gán nhãn chung chung "Không thấy nút (FB đổi giao diện?)", mất sạch chi
+    # tiết vừa ghi.
+    if isinstance(exc, LoiBuoc):
+        return ("buoc", str(exc)[:70])
     msg = str(exc).lower()
     if any(k in msg for k in ("cookie", "logged out", "log in", "checkpoint", "đăng nhập", "login")):
         return ("cookie", "Cookie hết hạn")

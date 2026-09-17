@@ -31,7 +31,7 @@ import unicodedata
 
 from cookie_exporter import load_cookie
 from config import HEADLESS
-from utils import logger, jitter_ms, CookieDeadError
+from utils import logger, jitter_ms, CookieDeadError, LoiBuoc
 from fb_common import (kiem_vi_pham, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, browser_launch_kwargs)
 
@@ -240,7 +240,7 @@ async def _run_crosspost(
         if not cookie_data:
             logger.error(f"❌ [{acc_name}] Không có cookie!")
             await ctx.close()
-            return False
+            raise LoiBuoc("Không có cookie trong máy")
 
         _ci = []
         for name, key in [("c_user", "c_user"), ("xs", "xs")]:
@@ -345,7 +345,7 @@ async def _run_crosspost(
         if not opened:
             logger.error(f"  ❌ Không mở được composer!")
             await ctx.close()
-            return False
+            raise LoiBuoc(f"Không mở được ô soạn bài (nhóm {first_group_uid})")
 
         # Paste nội dung
         logger.info(f"    📋 Paste nội dung ({len(message)}c)...")
@@ -369,7 +369,7 @@ async def _run_crosspost(
         if not typed:
             logger.error(f"  ❌ Không paste được nội dung!")
             await ctx.close()
-            return False
+            raise LoiBuoc("Mở được ô soạn bài nhưng không dán được nội dung")
 
         # Upload ảnh
         if local_photos:
@@ -459,7 +459,7 @@ async def _run_crosspost(
             if not search_input:
                 logger.error(f"  ❌ Không tìm thấy ô tìm kiếm nhóm!")
                 await ctx.close()
-                return False
+                raise LoiBuoc("Không thấy ô tìm nhóm ở bước đăng chéo")
 
             await search_input.click()
             await _human_delay(400, 600)
@@ -568,7 +568,7 @@ async def _run_crosspost(
             if not xong_clicked:
                 logger.error(f"  ❌ Không tìm thấy nút Xong!")
                 await ctx.close()
-                return False
+                raise LoiBuoc("Không thấy nút Xong sau khi tick nhóm")
 
         # Click "Đăng"
         await _human_delay(2000, 3000)
@@ -592,7 +592,7 @@ async def _run_crosspost(
         if not posted:
             logger.error(f"  ❌ Không tìm thấy nút Đăng!")
             await ctx.close()
-            return False
+            raise LoiBuoc("Không thấy nút Đăng")
 
         # Chờ ô soạn bài đóng = Facebook đã nhận bài
         if await cho_composer_dong(page):
@@ -644,7 +644,7 @@ def post_via_crosspost(
     """
     if not first_group_uid:
         logger.error("❌ Thiếu first_group_uid — không biết mở composer ở nhóm nào")
-        return False
+        raise LoiBuoc("Dòng lịch thiếu UID nhóm đầu")
 
     local_photos = []
     temp_dir     = None
