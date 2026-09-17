@@ -562,6 +562,20 @@ def _check_refresh():
 # ── Main loop ─────────────────────────────────────────────────
 
 def main():
+    # CHỐT ĐẦU TIÊN, trước cả khi mở DB: một loại lịch chỉ được có một runner.
+    #
+    # Bộ quét runner mồ côi của server dò bằng dòng lệnh, mà dòng lệnh đọc ra
+    # `null` khi phần mềm do Task Scheduler khởi chạy — nên nó mù, và mỗi lần mở
+    # lại phần mềm là 4 runner cũ vẫn sống trong khi 4 runner mới được bật thêm.
+    # Đo lúc 19:50 ngày 17/09: 16 runner thay vì 4, mỗi cái ~1,1 GB Chrome.
+    # Xem ghi chú đầy đủ trong `khoa_runner.py`.
+    import khoa_runner
+    if not khoa_runner.giu_khoa(LOAI):
+        cu = khoa_runner.pid_dang_giu(LOAI)
+        logger.warning(f"⛔ Đã có runner '{LOAI}' đang chạy"
+                       f"{f' (PID {cu})' if cu else ''} — thoát, không chạy trùng.")
+        return
+
     running    = set()
     lock       = threading.Lock()
     active_threads = []

@@ -276,6 +276,12 @@ RUNNER_LOAI_MAP = {
 STAGGER = {"homestay": 0, "thue": 8, "ban": 16, "page": 24, "nuoi": 32}
 
 
+def _khoa_runner():
+    """Nạp muộn — server import rất nhiều thứ, đừng thêm vòng phụ thuộc."""
+    import khoa_runner
+    return khoa_runner
+
+
 def _runner_pid(loai):
     pf = BASE_DIR / RUNNER_CFG[loai]["pid_file"]
     try:
@@ -360,12 +366,17 @@ def _kill_pids(pids) -> list:
 
 def _runner_running(loai):
     pid = _runner_pid(loai)
-    if not pid:
-        return False
-    if _pid_alive(pid):
+    if pid and _pid_alive(pid):
         return True
-    (BASE_DIR / RUNNER_CFG[loai]["pid_file"]).unlink(missing_ok=True)
-    return False
+    if pid:
+        (BASE_DIR / RUNNER_CFG[loai]["pid_file"]).unlink(missing_ok=True)
+
+    # File pid mất không có nghĩa là runner đã chết. Nó bị xoá mỗi lần tắt phần
+    # mềm, mà việc taskkill kèm theo thì KHÔNG phải lúc nào cũng thành công —
+    # và bộ quét mồ côi dò bằng dòng lệnh thì mù (xem `khoa_runner.py`). Runner
+    # sống sót vì thế trở nên vô hình, nên 'Lịch của máy' lại bật thêm một cái
+    # nữa. Khoá file thì ngược lại: hệ điều hành chỉ nhả khi tiến trình chết.
+    return _khoa_runner().pid_dang_giu(loai) is not None
 
 
 def _kill_all_runners():
@@ -385,7 +396,21 @@ def _kill_all_runners():
                 pass
             pf.unlink(missing_ok=True)
 
-    # Bước 2: quét mọi scheduler.py mồ côi (không còn pid file)
+    # Bước 2: diệt theo FILE KHOÁ. Đây mới là bước bắt được runner mồ côi.
+    #
+    # Bước 3 bên dưới dò bằng dòng lệnh, và dòng lệnh đọc ra `null` khi phần mềm
+    # do Task Scheduler khởi chạy — đo lúc 19:50 ngày 17/09: máy có 18 tiến
+    # trình pythonw, bước đó tìm ra đúng 0. Khoá thì không phụ thuộc quyền đọc
+    # dòng lệnh: runner nào còn sống là còn giữ, chết là hệ điều hành nhả.
+    kr = _khoa_runner()
+    for loai in RUNNER_CFG:
+        pid = kr.pid_dang_giu(loai)
+        if pid:
+            for da in _kill_pids([pid]):
+                logger.info(f"  Đã diệt runner '{loai}' mồ côi PID {da}")
+
+    # Bước 3: quét theo dòng lệnh. Giữ lại vì nó bắt được runner chạy từ bản cũ
+    # (chưa có file khoá) và runner khởi động dở dang chưa kịp ghi pid.
     for pid in _kill_pids(_find_python_pids(*_dau_hieu("scheduler.py"))):
         logger.info(f"  Đã diệt scheduler mồ côi PID {pid}")
 

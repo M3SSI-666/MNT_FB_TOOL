@@ -179,6 +179,73 @@ _i_suc   = _src_sch.find("_bao_suc_khoe(stt, acc_name, *db.ghi_nhan_phien_dang")
 check("scheduler thoát sớm khi lỗi transient, trước khi ghi sức khoẻ",
       _i_tran != -1 and _i_suc != -1 and _i_tran < _i_suc)
 
+# ── Chốt "một loại lịch — một runner" ──────────────────────────────────────
+# Bộ quét runner mồ côi dò bằng dòng lệnh, mà WMI trả CommandLine = null cho
+# tiến trình do Task Scheduler khởi chạy: đo lúc 19:50 ngày 17/09, máy có 18
+# tiến trình pythonw và bộ quét tìm ra đúng 0. Mỗi lần mở lại phần mềm là thêm
+# 4 runner nữa, tới 16 runner × ~1,1 GB Chrome thì RAM cạn.
+import subprocess as _sp
+import khoa_runner as _kr
+
+_LOAI_THU = "_test_khoa"
+try:
+    os.unlink(_kr.duong_dan(_LOAI_THU))
+except OSError:
+    pass
+
+check("giành được khoá khi chưa ai giữ", _kr.giu_khoa(_LOAI_THU) is True)
+check("gọi lại trong cùng tiến trình vẫn OK", _kr.giu_khoa(_LOAI_THU) is True)
+check("đọc được pid người đang giữ", _kr.pid_dang_giu(_LOAI_THU) == os.getpid())
+
+# Tiến trình KHÁC phải bị chặn — đây mới là điều duy nhất đáng kiểm.
+_ma = (f"import sys; sys.path.insert(0, {os.getcwd()!r}); "
+       f"import khoa_runner; "
+       f"sys.exit(0 if khoa_runner.giu_khoa({_LOAI_THU!r}) else 7)")
+_kq = _sp.run([sys.executable, "-c", _ma], capture_output=True, timeout=60)
+check("tiến trình thứ hai KHÔNG giành được khoá", _kq.returncode == 7)
+
+# Nhả ra thì người sau phải vào được, nếu không thì mỗi lần khởi động lại máy
+# là runner thật bị chặn oan.
+_fd = _kr._DANG_GIU.pop(_LOAI_THU)
+os.close(_fd)
+_kq2 = _sp.run([sys.executable, "-c", _ma], capture_output=True, timeout=60)
+check("nhả khoá rồi thì tiến trình sau vào được", _kq2.returncode == 0)
+check("chủ khoá đã thoát -> pid_dang_giu trả None",
+      _kr.pid_dang_giu(_LOAI_THU) is None)
+try:
+    os.unlink(_kr.duong_dan(_LOAI_THU))
+except OSError:
+    pass
+
+_src_srv = Path("server.py").read_text(encoding="utf-8")
+check("server dò runner sống bằng khoá, không chỉ bằng file pid",
+      "pid_dang_giu(loai) is not None" in _src_srv)
+check("tắt phần mềm có diệt runner theo khoá",
+      _src_srv.find("kr.pid_dang_giu(loai)") != -1)
+check("runner trùng loại thì tự thoát",
+      "khoa_runner.giu_khoa(LOAI)" in Path("scheduler.py").read_text(encoding="utf-8"))
+
+# ── Cờ Chromium: một bản duy nhất, và phải bớt RAM ─────────────────────────
+import fb_common as _fbc
+
+for _co in ("BackForwardCache", "--disable-background-networking",
+            "--disable-component-update", "--disable-breakpad",
+            "--mute-audio", "--disk-cache-size"):
+    check(f"cờ bớt RAM có '{_co}'", any(_co in a for a in _fbc.ARGS_CHUNG))
+# Cờ này đã làm sập renderer một lần rồi — đừng để ai thêm lại.
+check("KHÔNG có --disable-software-rasterizer",
+      not any("software-rasterizer" in a for a in _fbc.ARGS_CHUNG))
+check("vẫn giữ --disable-gpu (vẽ bằng phần mềm)",
+      "--disable-gpu" in _fbc.ARGS_CHUNG)
+
+# Ba file poster từng mỗi chỗ chép một bản args giống hệt, nên sửa một chỗ là
+# quên hai chỗ kia. Giờ tất cả phải gọi chung một hàm.
+for _f in ("page_via_poster.py", "via_poster.py", "comment_bai.py", "nuoi_nick.py"):
+    _s = Path(_f).read_text(encoding="utf-8")
+    check(f"{_f} dùng cờ chung", "browser_launch_kwargs(" in _s)
+    check(f"{_f} không còn tự liệt kê cờ",
+          "--disable-blink-features=AutomationControlled" not in _s)
+
 # ── scheduler: parse UID nhóm đầu ──────────────────────────────────────────
 _pfg = scheduler._parse_first_group_uid
 check("parse URL nhóm -> uid",         _pfg("https://facebook.com/groups/123456789/") == "123456789")

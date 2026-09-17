@@ -29,27 +29,43 @@ UA = (
 )
 
 
-def browser_launch_kwargs(headless: bool) -> dict:
-    """
-    Tham số khởi chạy Chromium cho phiên nuôi nick — GIỮ GIỐNG HỆT cấu hình
-    của poster (via_poster / page_via_poster) để hành vi đồng nhất một chỗ.
+# Cờ khởi chạy Chromium — MỘT bản duy nhất cho mọi phiên (đăng bài, comment,
+# nuôi nick). Trước đây via_poster và page_via_poster mỗi chỗ giữ một bản chép
+# tay giống hệt; sửa ở đây mà quên hai chỗ kia là chuyện đã xảy ra rồi.
+ARGS_CHUNG = [
+    "--disable-blink-features=AutomationControlled",
+    "--no-sandbox",
+    "--disable-infobars",
+    "--start-maximized",
+    "--disable-notifications",
+    # Ép Chromium vẽ bằng phần mềm (SwiftShader) → sửa lỗi renderer sập khi
+    # headless trên Windows. TUYỆT ĐỐI KHÔNG kèm --disable-software-rasterizer:
+    # cờ đó tắt luôn phần vẽ dự phòng, không còn gì để render → sập nặng hơn.
+    "--disable-gpu",
 
-    Chỉ thêm đúng MỘT cờ so với bản gốc: --disable-gpu. Nó ép Chromium vẽ bằng
-    phần mềm (SwiftShader) → sửa lỗi renderer sập khi headless trên Windows.
-    TUYỆT ĐỐI KHÔNG kèm --disable-software-rasterizer: cờ đó tắt luôn phần vẽ
-    dự phòng, khiến không còn gì để render → sập nặng hơn (lỗi cũ đã gây ra).
-    """
+    # ── Bớt RAM. Không cờ nào dưới đây đụng tới cách trang được vẽ ──────────
+    # Máy 16 GB chạy nhiều phiên song song thì Windows giết Chromium; ngày
+    # 17/09 có 51 phiên chết trong chưa tới 5 giây vì không khởi động nổi.
+    # Đây là phần cắt AN TOÀN: tắt mấy thứ chạy nền mà phần mềm không dùng.
+    #
+    # BackForwardCache giữ nguyên cả trang cũ trong bộ nhớ sau khi chuyển
+    # trang. Một phiên đi qua newsfeed → Page → nhóm → composer, nên nó ôm lại
+    # đúng những trang nặng nhất mà không bao giờ quay lui.
+    "--disable-features=BackForwardCache,Translate,MediaRouter,OptimizationHints",
+    "--disable-background-networking",   # tự cập nhật, ping Safe Browsing
+    "--disable-component-update",
+    "--disable-breakpad",                # bộ báo lỗi sập
+    "--mute-audio",                      # story có video, khỏi dựng ống âm thanh
+    "--disk-cache-size=52428800",        # 50 MB, thay vì để Chromium tự phình
+]
+
+
+def browser_launch_kwargs(headless: bool) -> dict:
+    """Tham số khởi chạy Chromium — dùng chung cho MỌI loại phiên."""
     return dict(
         headless=headless,
         slow_mo=120,
-        args=[
-            "--disable-blink-features=AutomationControlled",
-            "--no-sandbox",
-            "--disable-infobars",
-            "--start-maximized",
-            "--disable-notifications",
-            "--disable-gpu",
-        ],
+        args=list(ARGS_CHUNG),
         user_agent=UA,
         viewport={"width": 1920, "height": 1080},
         no_viewport=True,

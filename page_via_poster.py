@@ -47,7 +47,7 @@ from storage import prepare_images_for_post as smart_download, cleanup_temp
 from config import HEADLESS
 from utils import logger, ComposerBiChan, jitter_ms, CookieDeadError
 from fb_common import (kiem_vi_pham, composer_bi_chan, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
-                       bat_dau_canh_dialog, dismiss_anon_dialog)
+                       bat_dau_canh_dialog, dismiss_anon_dialog, browser_launch_kwargs)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -348,22 +348,7 @@ async def _run_page_via(
     async with async_playwright() as p:
         ctx = await p.chromium.launch_persistent_context(
             user_data_dir=profile_dir,
-            headless=HEADLESS,
-            slow_mo=120,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-infobars",
-                "--start-maximized",
-                "--disable-notifications",
-                # Ép Chromium vẽ bằng phần mềm → sửa headless sập renderer trên
-                # Windows. KHÔNG thêm --disable-software-rasterizer (sẽ mất luôn
-                # phần vẽ dự phòng → sập nặng hơn).
-                "--disable-gpu",
-            ],
-            user_agent=_UA,
-            viewport={"width": 1920, "height": 1080},
-            no_viewport=True,
+            **browser_launch_kwargs(HEADLESS),
         )
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         # Vòng canh nền: Facebook bật lại dialog cảnh báo bất cứ lúc nào, không
@@ -871,22 +856,7 @@ async def _run_page_wall(
     async with async_playwright() as p:
         ctx = await p.chromium.launch_persistent_context(
             user_data_dir=profile_dir,
-            headless=HEADLESS,
-            slow_mo=120,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-infobars",
-                "--start-maximized",
-                "--disable-notifications",
-                # Ép Chromium vẽ bằng phần mềm → sửa headless sập renderer trên
-                # Windows. KHÔNG thêm --disable-software-rasterizer (sẽ mất luôn
-                # phần vẽ dự phòng → sập nặng hơn).
-                "--disable-gpu",
-            ],
-            user_agent=_UA,
-            viewport={"width": 1920, "height": 1080},
-            no_viewport=True,
+            **browser_launch_kwargs(HEADLESS),
         )
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         # Vòng canh nền: Facebook bật lại dialog cảnh báo bất cứ lúc nào, không

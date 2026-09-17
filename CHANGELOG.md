@@ -10,6 +10,43 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.18.0 — 17/09/2026
+
+**Sửa: mỗi lần mở lại phần mềm là máy gánh thêm 4 runner nữa**
+
+Đây là lý do máy nặng dần và hết RAM.
+
+Khi tắt phần mềm, nó có một bước quét "runner mồ côi" để diệt nốt những tiến
+trình còn sót. Bước đó dò bằng **dòng lệnh** của tiến trình — mà Windows **không
+cho đọc dòng lệnh** của tiến trình do Task Scheduler khởi chạy. Đo lúc 19:50
+ngày 17/09: máy đang chạy **18 tiến trình**, bộ quét tìm ra **đúng 0**.
+
+Nên mỗi lần mở lại phần mềm: 4 runner cũ vẫn sống, 4 runner mới vẫn được bật.
+Sau 4 lần mở lại là **16 runner thay vì 4**. Mỗi runner tự mở phiên Chrome riêng
+~1,1 GB, nên RAM 16 GB cạn sạch → Windows giết Chromium → phiên hỏng hàng loạt →
+acc bị báo "nghỉ" oan (đúng lỗi đã sửa ở v2.17.0). Chưa kể **cùng một dòng lịch
+bị hai runner đăng hai lần** — Facebook nhìn vào là thấy spam.
+
+Từ bản này, mỗi loại lịch giữ một **khoá file**. Runner nào mở trước thì giữ
+khoá; runner trùng loại mở sau không lấy được khoá và tự thoát ngay. Khoá do
+Windows nhả khi tiến trình chết — kể cả bị tắt cứng hay mất điện — nên không bao
+giờ kẹt lại chặn oan runner thật. Nút tắt phần mềm giờ cũng diệt theo khoá thay
+vì dò dòng lệnh.
+
+**Bớt RAM cho mỗi phiên Chrome**
+
+Thêm mấy cờ tắt phần chạy nền mà phần mềm không dùng tới: bộ nhớ đệm trang cũ
+(giữ nguyên cả trang đã rời đi trong RAM), tự cập nhật, ping nền, bộ báo lỗi
+sập, âm thanh, và giới hạn bộ đệm đĩa còn 50 MB. Không cờ nào đụng tới cách
+trang được vẽ.
+
+Đồng thời gộp cấu hình Chrome về **một chỗ duy nhất**. Trước đây ba file poster
+mỗi file giữ một bản chép giống hệt — sửa một chỗ là quên hai chỗ kia, đã xảy ra
+thật với bản vá hộp thoại cảnh báo.
+
+> **Sau khi cập nhật nên khởi động lại máy một lần.** Những runner thừa đang
+> chạy dở là từ bản cũ, chúng không có khoá nên phần mềm mới vẫn chưa dọn được.
+
 ## v2.17.0 — 17/09/2026
 
 **Sửa: acc khoẻ vẫn bị báo "nghỉ"**
