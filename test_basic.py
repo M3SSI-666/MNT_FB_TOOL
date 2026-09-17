@@ -3062,10 +3062,33 @@ _src_sv = Path("server.py").read_text(encoding="utf-8")
 # là thiếu — đúng lỗi bài kiểm này vừa mắc.
 _vt = [i for i in range(len(_src_sv))
        if _src_sv.startswith('subprocess.run(["taskkill"', i)]
-check(f"tìm thấy các lời gọi taskkill ({len(_vt)})", len(_vt) >= 4)
+check(f"tìm thấy các lời gọi taskkill.run ({len(_vt)})", len(_vt) >= 2)
 _thieu = [_src_sv[i:i + 50] for i in _vt if "timeout=" not in _src_sv[i:i + 240]]
-check("MỌI lời gọi taskkill đều có hạn chờ" +
+check("MỌI lời gọi taskkill.run đều có hạn chờ" +
       (f" — thiếu {len(_thieu)}" if _thieu else ""), not _thieu)
+
+# `_kill_pids` giờ bắn Popen song song thay vì run() nối đuôi. Cùng một mối
+# nguy, chỉ đổi cách chặn: phải có hạn chờ, và TUYỆT ĐỐI không dùng ống dữ
+# liệu — có ống là phải đợi mọi tiến trình con của Chrome nhả đầu ghi, đúng
+# chỗ từng làm việc tắt phần mềm đứng hình.
+_i_kp  = _src_sv.index("def _kill_pids(")
+_than  = _src_sv[_i_kp:_src_sv.index("\ndef ", _i_kp + 10)]
+check("_kill_pids: bắn taskkill bằng Popen (song song)",
+      'subprocess.Popen(\n                ["taskkill"' in _than)
+check("_kill_pids: chờ có hạn", "tt.wait(timeout=" in _than)
+check("_kill_pids: KHÔNG dùng ống dữ liệu",
+      "capture_output=" not in _than and "subprocess.DEVNULL" in _than)
+check("_kill_pids: bắn HẾT rồi mới chờ, không chờ từng cái",
+      _than.index("subprocess.Popen") < _than.index("tt.wait(timeout="))
+check("_kill_pids: lọc PID trùng trước khi bắn", "dict.fromkeys(pids)" in _than)
+
+# Lúc tắt: chỉ được quét PowerShell MỘT lần rồi diệt MỘT lượt. Hai lần quét
+# (~0,4s mỗi lần) cộng taskkill nối đuôi chính là cảm giác lag lúc đóng app.
+_i_sd   = _src_sv.index("def _shutdown_all(")
+_than_sd = _src_sv[_i_sd:_src_sv.index("\ndef ", _i_sd + 10)]
+check("tắt app: chỉ quét tiến trình một lần", _than_sd.count("_quet_python()") == 1)
+check("tắt app: gom runner + join worker rồi diệt một lượt",
+      _than_sd.count("_kill_pids(") == 1 and "join_groups_worker" in _than_sd)
 
 check("tắt phần mềm: dọn dẹp chạy trong luồng riêng có hạn chờ",
       "don.join(timeout=" in _src_sv)

@@ -317,50 +317,97 @@ def _pid_alive(pid: int) -> bool:
         return False
 
 
-def _find_python_pids(*needles) -> list:
+def _quet_python() -> list:
     """
-    Tìm PID tiến trình python có dòng lệnh chứa TẤT CẢ chuỗi trong `needles`.
+    Quét MỘT LẦN, trả `[(pid, dòng lệnh)]` của mọi tiến trình python của phần
+    mềm. Mỗi lần gọi phải bật một PowerShell, tốn ~0,4s đo thật — nên tách ra
+    để lúc tắt phần mềm quét một lần dùng cho cả runner lẫn join worker, thay
+    vì hai lần nối đuôi.
 
-    Dùng PowerShell/CIM thay cho `wmic`: Microsoft đang gỡ dần wmic khỏi Windows
-    11. Mất nó thì không diệt được scheduler mồ côi, dẫn tới hai runner cùng chạy
-    trên một profile Chrome — đúng thứ làm hỏng phiên đăng nhập.
+    Dòng lệnh đọc ra rỗng với tiến trình do Task Scheduler khởi chạy (mức toàn
+    vẹn cao hơn). Đó là lý do phải có thêm đường khoá file — xem `khoa_runner`.
     """
     if sys.platform != "win32":
         return []
-    dk = " -and ".join(f"$_.CommandLine -like '*{n}*'" for n in needles)
-    # Bản đã biên dịch chạy runner bằng chính file exe, tên tiến trình không
-    # còn là python.exe. Lọc sai tên thì không tìm ra runner mồ côi nào, và hậu
-    # quả đúng như ghi chú dưới: hai runner cùng chạy trên một profile Chrome.
     ten_tt = " OR ".join(f"Name='{t}'" for t in _TEN_TIEN_TRINH)
-    ps = ("Get-CimInstance Win32_Process "
-          f"-Filter \"{ten_tt}\" | "
-          f"Where-Object {{ {dk} }} | ForEach-Object {{ $_.ProcessId }}")
+    ps = (f"Get-CimInstance Win32_Process -Filter \"{ten_tt}\" | "
+          "ForEach-Object { \"$($_.ProcessId)|$($_.CommandLine)\" }")
     try:
         r = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
             capture_output=True, text=True, timeout=15,
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
-        return [int(x) for x in r.stdout.split() if x.strip().isdigit()]
     except Exception as e:
-        logger.warning(f"Không dò được PID python: {e}")
+        logger.warning(f"Không dò được tiến trình python: {e}")
+        return []
+    ds = []
+    for dong in r.stdout.splitlines():
+        pid, _, lenh = dong.partition("|")
+        if pid.strip().isdigit():
+            ds.append((int(pid.strip()), lenh))
+    return ds
+
+
+def _loc_pid(ds, needles) -> list:
+    """PID trong `ds` có dòng lệnh chứa TẤT CẢ chuỗi trong `needles`."""
+    return [pid for pid, lenh in ds
+            if lenh and all(n.lower() in lenh.lower() for n in needles)]
+
+
+def _find_python_pids(*needles) -> list:
+    """
+    Tìm PID tiến trình python có dòng lệnh chứa TẤT CẢ chuỗi trong `needles`.
+
+    Vỏ mỏng quanh `_quet_python` + `_loc_pid`, giữ lại cho những nơi chỉ cần
+    hỏi một câu. Nơi nào hỏi hai câu trở lên thì gọi `_quet_python()` một lần
+    rồi tự lọc — đỡ được một lần bật PowerShell.
+    """
+    return _loc_pid(_quet_python(), needles)
+
+
+def _kill_pids(pids, han_giay: float = 15) -> list:
+    """
+    taskkill /F /T các PID — BẮN MỘT LƯỢT rồi mới chờ, không xếp hàng.
+
+    Bản cũ chờ xong cây tiến trình này mới diệt cây kế tiếp. Mỗi runner kéo
+    theo một node + 4–5 tiến trình Chromium, nên tắt phần mềm là ngồi nhìn
+    từng cửa sổ tắt lần lượt. Bắn song song thì tổng thời gian bằng đúng cây
+    lâu nhất, thay vì bằng tổng của tất cả.
+
+    Lọc trùng trước khi bắn: PID hay xuất hiện ở cả ba đường dò (file pid, khoá
+    runner, quét dòng lệnh) — diệt lại cây đã chết là trả tiền hai lần cho
+    không.
+
+    Dùng DEVNULL chứ không phải `capture_output`: có ống dữ liệu thì phải chờ
+    tới khi mọi tiến trình giữ đầu ghi thoát hết, mà tiến trình con của Chrome
+    lại giữ đúng cái đó — đây chính là chỗ từng làm việc tắt phần mềm đứng hình.
+    """
+    pids = [int(p) for p in dict.fromkeys(pids) if p]
+    if not pids:
         return []
 
-
-def _kill_pids(pids) -> list:
-    """taskkill /F /T từng PID, trả về danh sách đã diệt."""
-    da_diet = []
+    dang_chay = []
     for pid in pids:
         try:
-            # timeout BAT BUOC: `capture_output` cho tới khi ống dữ liệu đóng,
-            # mà tiến trình con của Chrome giữ ống đó — không có hạn chờ thì
-            # hàm này treo vĩnh viễn và cả việc tắt phần mềm đứng theo.
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
-                           capture_output=True, timeout=15,
-                           creationflags=subprocess.CREATE_NO_WINDOW)
-            da_diet.append(int(pid))
+            dang_chay.append((pid, subprocess.Popen(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW)))
         except Exception:
             pass
+
+    han = time.time() + han_giay
+    da_diet = []
+    for pid, tt in dang_chay:
+        try:
+            tt.wait(timeout=max(0.5, han - time.time()))
+            da_diet.append(pid)
+        except Exception:
+            try:
+                tt.kill()
+            except Exception:
+                pass
     return da_diet
 
 
@@ -379,40 +426,46 @@ def _runner_running(loai):
     return _khoa_runner().pid_dang_giu(loai) is not None
 
 
-def _kill_all_runners():
-    """Kill tất cả scheduler process — kể cả orphan không có pid file."""
-    # Bước 1: kill theo pid file
+def _gom_pid_runner(ds_quet=None) -> list:
+    """
+    Gom PID của MỌI runner còn sống, qua cả ba đường dò. Không diệt gì cả —
+    tách ra để nơi gọi bắn taskkill một lượt thay vì ba lượt nối đuôi nhau.
+    """
+    pids = []
+
+    # 1) File pid — đường thường, runner do chính server này bật.
     for loai, cfg in RUNNER_CFG.items():
         pf = BASE_DIR / cfg["pid_file"]
         if pf.exists():
             try:
-                pid = int(pf.read_text().strip())
-                if sys.platform == "win32":
-                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
-                                   capture_output=True, timeout=15)
-                else:
-                    os.kill(pid, 15)
+                pids.append(int(pf.read_text().strip()))
             except Exception:
                 pass
             pf.unlink(missing_ok=True)
 
-    # Bước 2: diệt theo FILE KHOÁ. Đây mới là bước bắt được runner mồ côi.
+    # 2) File khoá — đường bắt được runner MỒ CÔI.
     #
-    # Bước 3 bên dưới dò bằng dòng lệnh, và dòng lệnh đọc ra `null` khi phần mềm
-    # do Task Scheduler khởi chạy — đo lúc 19:50 ngày 17/09: máy có 18 tiến
-    # trình pythonw, bước đó tìm ra đúng 0. Khoá thì không phụ thuộc quyền đọc
-    # dòng lệnh: runner nào còn sống là còn giữ, chết là hệ điều hành nhả.
+    # Cách 3 dò bằng dòng lệnh, mà dòng lệnh đọc ra `null` khi phần mềm do Task
+    # Scheduler khởi chạy: đo lúc 19:50 ngày 17/09, máy có 18 tiến trình
+    # pythonw và cách đó tìm ra đúng 0. Khoá thì không phụ thuộc quyền đọc dòng
+    # lệnh — runner nào còn sống là còn giữ, chết là hệ điều hành nhả.
     kr = _khoa_runner()
     for loai in RUNNER_CFG:
         pid = kr.pid_dang_giu(loai)
         if pid:
-            for da in _kill_pids([pid]):
-                logger.info(f"  Đã diệt runner '{loai}' mồ côi PID {da}")
+            pids.append(pid)
 
-    # Bước 3: quét theo dòng lệnh. Giữ lại vì nó bắt được runner chạy từ bản cũ
-    # (chưa có file khoá) và runner khởi động dở dang chưa kịp ghi pid.
-    for pid in _kill_pids(_find_python_pids(*_dau_hieu("scheduler.py"))):
-        logger.info(f"  Đã diệt scheduler mồ côi PID {pid}")
+    # 3) Quét dòng lệnh. Giữ lại vì nó bắt được runner của bản CŨ (chưa có file
+    # khoá) và runner khởi động dở dang chưa kịp ghi pid.
+    ds = _quet_python() if ds_quet is None else ds_quet
+    pids += _loc_pid(ds, _dau_hieu("scheduler.py"))
+    return pids
+
+
+def _kill_all_runners():
+    """Kill tất cả scheduler process — kể cả orphan không có pid file."""
+    for pid in _kill_pids(_gom_pid_runner()):
+        logger.info(f"  Đã diệt runner PID {pid}")
 
 
 def _kill_join_workers():
@@ -425,8 +478,13 @@ def _shutdown_all():
     """Tắt sạch: server (đang tự thoát) + runner đăng nền + join worker."""
     logger.info("🛑 Đóng app — tắt toàn bộ runner nền...")
     try:
-        _kill_all_runners()
-        _kill_join_workers()
+        # Quét một lần, diệt một lượt. Trước đây là hai lần quét PowerShell
+        # (~0,4s mỗi lần) rồi taskkill nối đuôi từng cây tiến trình — đó là
+        # cảm giác "tắt dần lần lượt từng cửa sổ" lúc đóng phần mềm.
+        ds   = _quet_python()
+        pids = _gom_pid_runner(ds) + _loc_pid(ds, _dau_hieu("join_groups_worker"))
+        for pid in _kill_pids(pids):
+            logger.info(f"  Đã diệt PID {pid}")
     except Exception as e:
         logger.warning(f"shutdown lỗi: {e}")
 

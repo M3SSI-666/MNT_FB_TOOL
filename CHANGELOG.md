@@ -10,6 +10,38 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.20.1 — 18/09/2026
+
+**Mở và đóng phần mềm đỡ giật**
+
+Đúng như bạn thấy: lúc đóng, các cửa sổ tắt **lần lượt từng cái một**. Vì phần
+mềm diệt tiến trình theo kiểu xếp hàng — diệt xong cây này mới quay sang cây kế
+tiếp. Mỗi runner kéo theo một trình điều khiển và 4–5 tiến trình Chromium, nên
+tổng thời gian bằng tổng của tất cả.
+
+Cùng lúc đó, bước dò tiến trình phải bật PowerShell, mỗi lần tốn ~0,4 giây, mà
+lại chạy **hai lần** (một lần cho runner, một lần cho tiến trình vào nhóm).
+
+Và lúc **mở** cũng trả đúng khoản tiền đó: trước khi cửa sổ hiện lên, phần mềm
+dọn sạch runner cũ bằng chính đoạn mã chậm này.
+
+Từ bản này: bắn lệnh tắt cho **tất cả cùng một lượt** rồi mới chờ, quét tiến
+trình **một lần duy nhất**, và bỏ qua tiến trình nào bị dò trùng ở nhiều đường
+(trước đây có cái bị diệt hai lần cho không).
+
+Đo thật trên 5 cây tiến trình:
+
+| | thời gian |
+|---|---|
+| Cũ — diệt lần lượt | 0,61s |
+| Mới — bắn một lượt | **0,19s** |
+
+Với Chromium thật (nặng hơn nhiều so với phép đo trên) khoảng cách còn lớn hơn.
+
+> Một phần cảm giác chậm lúc mở là do cửa sổ ứng dụng dùng WebView2 của
+> Windows, lần đầu bật trong phiên máy thì nó phải khởi động — chỗ đó nằm ngoài
+> phần mềm, không sửa được.
+
 ## v2.20.0 — 18/09/2026
 
 **Phiên hỏng giờ nói rõ hỏng ở BƯỚC NÀO**
