@@ -225,6 +225,39 @@ check("tắt phần mềm có diệt runner theo khoá",
 check("runner trùng loại thì tự thoát",
       "khoa_runner.giu_khoa(LOAI)" in Path("scheduler.py").read_text(encoding="utf-8"))
 
+# ── Hộp xin phép cookie của Facebook ───────────────────────────────────────
+# Nhìn tận mắt lúc 23:09 ngày 17/09 trên nick 'Xuan Khoa': hộp "Cho phép sử
+# dụng cookie của Facebook trên trình duyệt này?" đè lên trang Page. Nó là lớp
+# phủ MODAL — ô "Bạn viết gì đi..." vẫn nằm trong DOM và vẫn tính là visible,
+# nhưng mọi cú bấm đều bị nuốt. Đó là lỗi "❌ Không mở được composer!".
+#
+# Số liệu khớp: 2078 lượt mở composer, lượt XONG trung bình 4s (chậm nhất 15s),
+# lượt HỎNG nhanh nhất 18s (trung bình 41s). Không có vùng giữa → không phải
+# trang tải chậm, mà là dò hết 6 kiểu nút rồi mới chịu thua.
+_src_fbc = Path("fb_common.py").read_text(encoding="utf-8")
+check("có hàm đóng hộp cookie", hasattr(_fbc_mod := __import__("fb_common"), "dong_hop_cookie"))
+check("bấm 'Cho phép tất cả cookie'",
+      "cho phép tất cả cookie" in _src_fbc and "allow all cookies" in _src_fbc)
+check("chỉ đụng dialog có chữ 'cookie'", "includes('cookie')" in _src_fbc)
+check("bấm bằng Playwright, không bấm bằng JS", "await nut.click(timeout=4000)" in _src_fbc)
+check("chỉ báo thành công khi hộp đã biến mất",
+      "return not await _con_hop_cookie(page)" in _src_fbc
+      and _src_fbc.count("_con_hop_cookie(page)") >= 4)
+check("có lối thoát: bấm phần tử sâu nhất", "hop[hop.length - 1].click()" in _src_fbc)
+check("vòng canh nền cũng dọn hộp cookie",
+      _src_fbc.find("await dong_hop_cookie(page)") < _src_fbc.find("dlg, text = await _tim_dialog_canh_bao(page)\n\n            if dlg is None:\n                continue")
+      or "Đã đóng hộp xin phép cookie (vòng canh)" in _src_fbc)
+
+for _f in ("page_via_poster.py", "via_poster.py"):
+    _s = Path(_f).read_text(encoding="utf-8")
+    check(f"{_f}: dọn hộp cookie trước khi dò ô soạn bài",
+          "await dong_hop_cookie(page)\n            for sel in [" in _s)
+    check(f"{_f}: chưa mở được thì dọn lớp phủ rồi thử lại",
+          "da_don = await dong_hop_cookie(page)" in _s)
+    check(f"{_f}: dọn ngay sau khi login", "🍪 Đã đóng hộp xin phép cookie" in _s)
+check("page_via_poster: dọn trước khi bấm nút Chuyển",
+      "[Switch] 🍪" in Path("page_via_poster.py").read_text(encoding="utf-8"))
+
 # ── Cờ Chromium: một bản duy nhất, và phải bớt RAM ─────────────────────────
 import fb_common as _fbc
 

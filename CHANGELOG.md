@@ -10,6 +10,48 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.19.0 — 17/09/2026
+
+**Sửa: hộp xin phép cookie của Facebook chặn đứng cả phiên đăng bài**
+
+Đây là nguyên nhân thật của lỗi `❌ Không mở được composer!`.
+
+Facebook bật hộp **"Cho phép sử dụng cookie của Facebook trên trình duyệt
+này?"** trên profile đang đăng nhập. Nó là một lớp phủ: ô "Bạn viết gì đi..."
+vẫn nằm nguyên đó, phần mềm vẫn TÌM THẤY — nhưng mọi cú bấm đều bị hộp nuốt.
+Phần mềm dò hết 6 kiểu nút rồi mới chịu thua, mất khoảng 41 giây, rồi ghi là
+phiên hỏng. Đủ 5 lần là nick bị cho nghỉ, dù nick hoàn toàn khoẻ.
+
+Hộp này không tự tắt. Nên một khi nó hiện ra trên profile nào, profile đó hỏng
+**mọi phiên**, liên tục nhiều ngày, cho tới khi có người bấm tay.
+
+Số liệu khớp chính xác — 2078 lượt mở ô soạn bài:
+
+| | trung bình | nhanh nhất | chậm nhất |
+|---|---|---|---|
+| Mở được | 4 giây | 0 giây | **15 giây** |
+| Không mở được | 41 giây | **18 giây** | 56 giây |
+
+Không có vùng giữa. Tức là không phải mạng chậm hay máy yếu — mà là cú bấm bị
+chặn.
+
+Từ bản này phần mềm tự bấm **"Cho phép tất cả cookie"**, ở bốn chỗ: ngay sau khi
+đăng nhập, trước khi bấm nút Chuyển sang Trang, trước khi mở ô soạn bài, và một
+vòng canh nền quét lại mỗi 5 giây phòng khi hộp bật lên giữa chừng.
+
+Đã chạy thử thật trên nick 'Xuan Khoa' — nick hỏng 15/15 phiên trong ngày: sau
+khi vá, đăng **thành công 9 nhóm, thu 10 link**, mở ô soạn bài chỉ mất 3 giây.
+
+> Ghi chú kỹ thuật: phải bấm bằng Playwright chứ không bấm bằng JS. Trong hộp có
+> BỐN phần tử cùng mang chữ "Cho phép tất cả cookie" / "Từ chối cookie không bắt
+> buộc", hai cặp nằm chồng đúng một toạ độ — vỏ bọc bên ngoài thừa hưởng chữ của
+> nút con. `el.click()` của JS chộp phải cái vỏ nên không có gì xảy ra mà vẫn
+> báo là đã bấm. Hàm này giờ bấm xong PHẢI kiểm tra hộp đã biến mất chưa.
+
+**Nút Chuyển sang Trang cũng từng bị chính hộp này che.** Log cũ đầy dòng "Không
+tìm thấy nút Chuyển — giả định đã ở Page context": nút vẫn ở đó, chỉ là không
+bấm tới được.
+
 ## v2.18.0 — 17/09/2026
 
 **Sửa: mỗi lần mở lại phần mềm là máy gánh thêm 4 runner nữa**

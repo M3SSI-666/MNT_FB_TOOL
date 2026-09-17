@@ -571,6 +571,91 @@ async def dong_dialog_canh_bao(page, so_lan: int = 3, cho_escape: bool = True) -
     return canh_bao
 
 
+# ── Hộp "Cho phép sử dụng cookie của Facebook trên trình duyệt này?" ───────
+# Facebook bật hộp này bất chợt, kể cả trên profile đã đăng nhập từ lâu. Nó là
+# một lớp phủ MODAL: mọi thứ phía sau vẫn nằm nguyên trong DOM — ô "Bạn viết gì
+# đi..." vẫn tìm thấy, vẫn tính là "visible" — nhưng không bấm được nữa.
+#
+# Đó chính là lỗi "❌ Không mở được composer!". Đo trên 2078 lượt mở composer:
+# lượt THÀNH CÔNG trung bình 4 giây, chậm nhất 15 giây; lượt HỎNG nhanh nhất
+# 18 giây, trung bình 41 giây. Không có vùng giữa — tức là không phải trang tải
+# chậm, mà là cú bấm bị một lớp phủ nuốt mất, dò hết 6 kiểu nút rồi mới chịu
+# thua. Nhìn tận mắt lúc 23:09 ngày 17/09: hộp cookie đang đè lên trang Page.
+_NUT_CHO_PHEP = (
+    "cho phép tất cả cookie",
+    "allow all cookies",
+)
+_DAU_HIEU_HOP_COOKIE = (
+    "cookie", "cookies",
+)
+
+
+_CON_HOP_COOKIE = ("() => [...document.querySelectorAll(\"div[role='dialog']\")]"
+                   ".some(d => (d.innerText || '').toLowerCase().includes('cookie'))")
+
+
+async def _con_hop_cookie(page) -> bool:
+    try:
+        return bool(await page.evaluate(_CON_HOP_COOKIE))
+    except Exception:
+        return False
+
+
+async def dong_hop_cookie(page) -> bool:
+    """
+    Bấm "Cho phép tất cả cookie" nếu hộp xin phép cookie đang che trang.
+
+    Trả True CHỈ KHI hộp đã thật sự biến mất. Không có hộp thì trả False ngay,
+    rẻ tiền, nên gọi thoải mái ở mọi bước.
+
+    PHẢI bấm bằng Playwright, không bấm bằng JS. Soi thật lúc 23:18 ngày 17/09:
+    trong hộp có BỐN phần tử cùng mang chữ "Cho phép tất cả cookie" / "Từ chối
+    cookie không bắt buộc", hai cặp nằm chồng đúng một toạ độ — vỏ bọc bên
+    ngoài cũng thừa hưởng chữ của nút con. `el.click()` của JS chộp phải cái vỏ
+    nên không có gì xảy ra, mà vẫn báo là đã bấm. Bản đầu của hàm này mắc đúng
+    lỗi đó: log ghi "đã đóng hộp cookie" mỗi 5 giây suốt cả phiên trong khi hộp
+    vẫn nằm nguyên, và phiên vẫn hỏng ở bước mở composer.
+
+    Playwright thì tự tìm phần tử nhận được cú bấm thật, nên gõ một phát là
+    xong — đã thử tay, hộp tắt ngay.
+    """
+    if not await _con_hop_cookie(page):
+        return False
+
+    for nhan in _NUT_CHO_PHEP:
+        try:
+            nut = page.locator(
+                "div[role='dialog'] :is([role='button'],button)"
+                f':has-text("{nhan}")').filter(visible=True).first
+            await nut.click(timeout=4000)
+            await page.wait_for_timeout(1200)
+        except Exception:
+            continue
+        if not await _con_hop_cookie(page):
+            return True
+
+    # Lối thoát cuối: bấm thẳng vào phần tử SÂU NHẤT mang đúng chữ đó — tức là
+    # cái không còn con nào cũng mang chữ ấy, nên chắc chắn không phải vỏ bọc.
+    try:
+        await page.evaluate(
+            """(nhan) => {
+                for (const d of document.querySelectorAll("div[role='dialog']")) {
+                    if (!(d.innerText || '').toLowerCase().includes('cookie')) continue;
+                    const hop = [...d.querySelectorAll("[role='button'],button")].filter(b => {
+                        const s = (b.innerText || '').trim().toLowerCase();
+                        if (!nhan.some(n => s.includes(n))) return false;
+                        return ![...b.querySelectorAll("[role='button'],button")].some(c =>
+                            nhan.some(n => (c.innerText || '').trim().toLowerCase().includes(n)));
+                    });
+                    if (hop.length) { hop[hop.length - 1].click(); return; }
+                }
+            }""", list(_NUT_CHO_PHEP))
+        await page.wait_for_timeout(1200)
+    except Exception:
+        return False
+    return not await _con_hop_cookie(page)
+
+
 async def _vong_canh(page, chu_ky: float):
     """Vòng lặp nền của bat_dau_canh_dialog — xem chú thích ở hàm đó."""
     while True:
@@ -578,6 +663,12 @@ async def _vong_canh(page, chu_ky: float):
             await asyncio.sleep(chu_ky)
             if page.is_closed():
                 return
+
+            # Hộp cookie đi kèm vòng canh vì nó cũng bật lên bất chợt giữa
+            # phiên, và khác dialog cảnh báo ở chỗ nó CHẶN thao tác chứ không
+            # chỉ che tầm nhìn — sót một lần là hỏng cả phiên.
+            if await dong_hop_cookie(page):
+                logger.info("    🍪 Đã đóng hộp xin phép cookie (vòng canh)")
 
             dlg, text = await _tim_dialog_canh_bao(page)
             if dlg is None:

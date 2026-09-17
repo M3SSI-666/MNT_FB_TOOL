@@ -48,7 +48,7 @@ from config import HEADLESS
 from utils import logger, CookieDeadError
 from cookie_exporter import load_cookie
 from fb_common import (kiem_vi_pham, chua_dang_nhap, browser_launch_kwargs, find_profile_dir, human_delay,
-                       dong_dialog_canh_bao, bat_dau_canh_dialog,
+                       dong_dialog_canh_bao, bat_dau_canh_dialog, dong_hop_cookie,
                        view_stories, browse_and_like, ghi_clipboard)
 from nuoi_nick import pick_messages, is_messaging_restricted
 import db

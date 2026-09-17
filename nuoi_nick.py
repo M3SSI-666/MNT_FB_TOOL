@@ -35,7 +35,7 @@ from utils import logger, CookieDeadError
 from config import HEADLESS
 from cookie_exporter import load_cookie
 from fb_common import (chua_dang_nhap, browser_launch_kwargs, find_profile_dir, human_delay,
-                       jwait, view_stories, browse_and_like,
+                       jwait, view_stories, browse_and_like, dong_hop_cookie,
                        dong_dialog_canh_bao, bat_dau_canh_dialog)
 
 

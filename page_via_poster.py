@@ -47,7 +47,7 @@ from storage import prepare_images_for_post as smart_download, cleanup_temp
 from config import HEADLESS
 from utils import logger, ComposerBiChan, jitter_ms, CookieDeadError
 from fb_common import (kiem_vi_pham, composer_bi_chan, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
-                       bat_dau_canh_dialog, dismiss_anon_dialog, browser_launch_kwargs)
+                       bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, browser_launch_kwargs)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -258,6 +258,12 @@ async def _switch_to_page(page, ctx, page_uid: str) -> bool:
     await _jwait(page, 3000)   # ~2–4s rồi nhấn
     logger.info(f"    [Switch] Page load {time.time()-t0:.1f}s")
 
+    # Hộp cookie bật đúng trên trang Page và đè lên nút "Chuyển". Đó là lý do
+    # log đầy dòng "Không tìm thấy nút Chuyển — giả định đã ở Page context":
+    # nút vẫn ở đó, chỉ là không bấm tới được.
+    if await dong_hop_cookie(page):
+        logger.info("    [Switch] 🍪 Đã đóng hộp xin phép cookie")
+
     # b) Dismiss popup "Dùng Trang" nếu có (thử nhanh, không chờ lâu)
     for sel in [
         'div[role="dialog"] div[role="button"]:has-text("Dùng Trang")',
@@ -388,6 +394,11 @@ async def _run_page_via(
             raise CookieDeadError(acc_name)
 
         logger.info(f"  ✅ Login OK")
+        # Hộp xin phép cookie hay bật ngay sau khi vào facebook.com và chặn
+        # MỌI cú bấm phía sau: bấm story trượt, bấm "Chuyển" trượt, bấm ô
+        # soạn bài trượt. Dọn một lần ở đây rẻ hơn chữa từng bước.
+        if await dong_hop_cookie(page):
+            logger.info("  🍪 Đã đóng hộp xin phép cookie")
 
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 2 — Xem story 15-20s
@@ -433,6 +444,10 @@ async def _run_page_via(
         # Lượt đầu trượt thì dọn lại rồi thử tiếp — bám theo triệu chứng thay vì
         # cầu may đúng thời điểm.
         for _luot in range(2):
+            # Hộp cookie là lớp phủ MODAL: ô soạn bài vẫn nằm trong DOM và vẫn
+            # tính là "visible", nhưng mọi cú bấm đều bị nó nuốt. Dọn TRƯỚC khi
+            # dò nút, nếu không thì dò đủ 6 kiểu nút rồi mới thua sau ~41 giây.
+            await dong_hop_cookie(page)
             for sel in [
                 ':text("Bạn viết gì đi")', ':text("Write something")',
                 ':text("Bạn đang nghĩ gì?")',
@@ -451,7 +466,13 @@ async def _run_page_via(
                 except PWTimeout:
                     continue
             # Không có dialog cảnh báo nào để dọn → trượt vì lý do khác, thử lại vô ích
-            if opened or _luot == 1 or not await dong_dialog_canh_bao(page):
+            # Thử lại khi vừa dọn được MỘT lớp phủ nào đó — hộp cookie hoặc
+            # dialog cảnh báo. Bản cũ chỉ hỏi dialog cảnh báo, nên gặp hộp
+            # cookie là bỏ cuộc ngay sau lượt đầu.
+            if opened or _luot == 1:
+                break
+            da_don = await dong_hop_cookie(page)
+            if not (da_don or await dong_dialog_canh_bao(page)):
                 break
         if not opened:
             logger.error(f"  ❌ Không mở được composer!")
@@ -892,6 +913,11 @@ async def _run_page_wall(
             await ctx.close()
             raise CookieDeadError(acc_name)
         logger.info(f"  ✅ Login OK")
+        # Hộp xin phép cookie hay bật ngay sau khi vào facebook.com và chặn
+        # MỌI cú bấm phía sau: bấm story trượt, bấm "Chuyển" trượt, bấm ô
+        # soạn bài trượt. Dọn một lần ở đây rẻ hơn chữa từng bước.
+        if await dong_hop_cookie(page):
+            logger.info("  🍪 Đã đóng hộp xin phép cookie")
 
         # ── BƯỚC 2 — Warm-up nhẹ (story + scroll, không like — trang cá nhân) ─
         logger.info(f"  [2/5] 📖 Xem story + scroll newsfeed...")
@@ -924,6 +950,10 @@ async def _run_page_wall(
         # Lượt đầu trượt thì dọn lại rồi thử tiếp — bám theo triệu chứng thay vì
         # cầu may đúng thời điểm.
         for _luot in range(2):
+            # Hộp cookie là lớp phủ MODAL: ô soạn bài vẫn nằm trong DOM và vẫn
+            # tính là "visible", nhưng mọi cú bấm đều bị nó nuốt. Dọn TRƯỚC khi
+            # dò nút, nếu không thì dò đủ 6 kiểu nút rồi mới thua sau ~41 giây.
+            await dong_hop_cookie(page)
             for sel in [
                 ':text("Bạn viết gì đi")', ':text("Write something")',
                 ':text("Bạn đang nghĩ gì?")',
@@ -942,7 +972,13 @@ async def _run_page_wall(
                 except PWTimeout:
                     continue
             # Không có dialog cảnh báo nào để dọn → trượt vì lý do khác, thử lại vô ích
-            if opened or _luot == 1 or not await dong_dialog_canh_bao(page):
+            # Thử lại khi vừa dọn được MỘT lớp phủ nào đó — hộp cookie hoặc
+            # dialog cảnh báo. Bản cũ chỉ hỏi dialog cảnh báo, nên gặp hộp
+            # cookie là bỏ cuộc ngay sau lượt đầu.
+            if opened or _luot == 1:
+                break
+            da_don = await dong_hop_cookie(page)
+            if not (da_don or await dong_dialog_canh_bao(page)):
                 break
         if not opened:
             logger.error(f"  ❌ Không mở được composer!")
