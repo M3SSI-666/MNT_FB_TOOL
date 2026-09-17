@@ -671,8 +671,9 @@ def post_via_crosspost(
     except CookieDeadError:
         raise
     except Exception as e:
+        # Ném tiếp — xem ghi chú ở `page_via_poster.post_page_via`.
         logger.error(f"❌ [{acc_name}] Lỗi Via: {e}")
-        return False
+        raise
     finally:
         if temp_dir:
             try:

@@ -1176,8 +1176,9 @@ def post_page_wall(
     except CookieDeadError:
         raise
     except Exception as e:
+        # Ném tiếp — xem ghi chú ở `post_page_via`.
         logger.error(f"❌ [{acc_name}] Lỗi đăng tường Page: {e}")
-        return False
+        raise
     finally:
         if temp_dir:
             try:
@@ -1241,8 +1242,15 @@ def post_page_via(
     except CookieDeadError:
         raise
     except Exception as e:
+        # NÉM TIẾP, đừng nuốt thành False.
+        #
+        # Nuốt ở đây thì nơi gọi chỉ thấy "0 nhóm" và ném lại một Exception
+        # trống rỗng ("Hybrid thất bại"). Lúc đó `classify_error` không còn gì
+        # để đọc nên xếp vào 'other' — mất cả hai thứ: không thử lại (chỉ
+        # 'transient' mới được thử lại), và bị cộng vào lịch sử hỏng của acc.
+        # Một sự cố mạng 30 giây do đó biến thành acc bị cho nghỉ một tiếng.
         logger.error(f"❌ [{acc_name}] Lỗi PageVia: {e}")
-        return False
+        raise
     finally:
         if temp_dir:
             try:
@@ -1319,14 +1327,19 @@ if __name__ == "__main__":
     print()
 
     # ── 4. Chạy ──────────────────────────────────────────────────────────────
-    result = post_page_via(
-        acc_name=ACC_NAME,
-        page_uid=page_uid,
-        first_group_uid=first_group_uid,
-        search_kw=SEARCH_KW,
-        message=message,
-        image_url=image_url,
-    )
+    try:
+        result = post_page_via(
+            acc_name=ACC_NAME,
+            page_uid=page_uid,
+            first_group_uid=first_group_uid,
+            search_kw=SEARCH_KW,
+            message=message,
+            image_url=image_url,
+        )
+    except Exception as e:
+        # Hàm này ném lỗi lên cho scheduler phân loại; ở đây chỉ cần in ra.
+        result = False
+        print(f"\n❌ {type(e).__name__}: {e}")
 
     print()
     print("✅ Thành công!" if result else "❌ Thất bại!")

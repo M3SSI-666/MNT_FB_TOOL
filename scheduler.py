@@ -505,6 +505,27 @@ def _run_one(item: dict):
                 label = f"{label} (đã thử {MAX_ATTEMPTS} lần)"
             _update_status(sid, f"❌ {ts2} {label}")
             logger.error(f"❌ STT {stt} lỗi [{cat}]: {e}")
+
+            # Lỗi MÁY/MẠNG không nói gì về acc — đừng tính vào sức khoẻ.
+            #
+            # Ngày 17/09 có hai đợt máy hết RAM: 51 phiên hỏng trong chưa tới 5
+            # giây vì Chromium còn chẳng khởi động nổi ("Connection closed while
+            # reading from the driver"), 44 phiên khác không mở nổi
+            # facebook.com. Mọi acc hỏng cùng lúc, hết đợt thì mọi acc chạy lại
+            # 9/9 nhóm. Nhưng 5 lần hỏng liên tiếp là đủ để bộ sức khoẻ cho acc
+            # NGHỈ, rồi phiên thăm dò kế tiếp rơi đúng vào đợt đó nên hỏng nốt →
+            # nghỉ lại ngay. Kết quả: 41 lượt nghỉ trong một ngày, 30 lượt là
+            # "thăm dò vẫn hỏng", acc 'Xuan Khoa' nghỉ 12 lần liên tiếp dù vào
+            # kiểm tra tay thì đăng bình thường.
+            #
+            # Bộ sức khoẻ sinh ra để phát hiện FACEBOOK CHẶN acc. Tín hiệu đó đi
+            # đường khác: ComposerBiChan và "bài bị gỡ" đều có nhánh riêng ở
+            # trên. Một cái timeout mạng thì không phải bằng chứng gì về acc cả.
+            if cat == "transient":
+                logger.warning(
+                    f"🖥️  STT {stt}: lỗi máy/mạng — KHÔNG tính vào sức khoẻ "
+                    f"acc '{acc_name}'")
+                return
             _bao_suc_khoe(stt, acc_name, *db.ghi_nhan_phien_dang(acc_name, False))
             return
 

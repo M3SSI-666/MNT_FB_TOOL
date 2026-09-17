@@ -10,6 +10,37 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.17.0 — 17/09/2026
+
+**Sửa: acc khoẻ vẫn bị báo "nghỉ"**
+
+Nếu bạn thấy nick không hề dính spam, vào kiểm tra tay thì đăng bình thường, mà
+phần mềm cứ báo về trạng thái **nghỉ** — đây chính là lỗi đó.
+
+Nguyên nhân: khi **máy hết RAM hoặc mạng chập**, trình duyệt không mở nổi. Phần
+mềm cũ đọc nhầm đấy là "acc hỏng" nên cộng vào lịch sử sức khoẻ; đủ 5 lần liên
+tiếp là cho acc nghỉ một tiếng. Tệ hơn: phiên **thăm dò** ngay sau đó cũng rơi
+vào đúng đợt sự cố nên hỏng nốt → nghỉ tiếp → lặp mãi.
+
+Đo trên log ngày 17/09: hai đợt sự cố (11h–12h và 18h–19h), **51 phiên hỏng
+trong chưa tới 5 giây** vì Chromium còn chẳng khởi động được. Mọi acc hỏng cùng
+lúc, hết đợt thì mọi acc chạy lại đủ 9/9 nhóm — nhưng đã kịp phát ra **41 lượt
+cho nghỉ**, trong đó 30 lượt là "thăm dò vẫn hỏng". Có nick bị nghỉ 20 lần liên
+tiếp.
+
+Từ bản này:
+
+* Lỗi **máy/mạng** không còn được tính vào sức khoẻ acc. Bộ sức khoẻ chỉ để phát
+  hiện Facebook chặn nick — mà tín hiệu đó đi đường riêng (composer rỗng, bài bị
+  gỡ), không phải một cái timeout mạng.
+* Phần đăng bài không còn nuốt lỗi thật thành "Hybrid thất bại". Nhờ vậy sự cố
+  mạng được **tự thử lại 3 lần** thay vì bỏ luôn slot.
+
+Mốc nghỉ oan đang có sẵn trong máy đã được gỡ khi cập nhật.
+
+> Vẫn nên xử lý gốc: máy 16 GB chạy quá nhiều phiên cùng lúc thì Chromium bị hệ
+> điều hành giết. Cách giảm là nới **Thời gian nghỉ** hoặc bớt slot mỗi ngày.
+
 ## v2.16.1 — 17/09/2026
 
 **Gỡ bỏ việc thả 👍 trước khi bình luận**

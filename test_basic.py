@@ -125,6 +125,60 @@ check("cookie KHÔNG retry",            scheduler._should_retry("cookie", 1) is 
 check("selector KHÔNG retry",          scheduler._should_retry("selector", 1) is False)
 check("backoff tăng dần",              scheduler._retry_delay(2) > scheduler._retry_delay(1) * 0.9)
 
+# ── Lỗi máy/mạng KHÔNG được tính vào sức khoẻ acc ──────────────────────────
+# Ngày 17/09 máy hết RAM hai đợt: 51 phiên hỏng trong chưa tới 5 giây vì
+# Chromium không khởi động nổi. Mọi acc hỏng cùng lúc, hết đợt thì mọi acc chạy
+# lại 9/9 nhóm — nhưng 41 lượt "cho acc nghỉ" đã kịp phát ra. Hai chỗ hỏng:
+#
+#   1. poster nuốt lỗi thật thành `return False`, nơi gọi ném lại
+#      Exception("Hybrid thất bại") → classify_error chỉ còn 'other' → không
+#      thử lại, và bị cộng vào lịch sử hỏng của acc.
+#   2. scheduler cộng cả lỗi 'transient' vào sức khoẻ acc.
+check("'Connection closed' -> transient",
+      classify_error(Exception("Connection closed while reading from the driver"))[0]
+      == "transient")
+
+def _gia_run(coro):
+    """Thay asyncio.run: đóng coroutine rồi ném đúng lỗi máy chết."""
+    try:
+        coro.close()
+    except Exception:
+        pass
+    raise RuntimeError("Connection closed while reading from the driver")
+
+import page_via_poster as _pvp
+import via_poster as _vp
+
+def _co_nem(mod, goi):
+    that = mod.asyncio.run
+    mod.asyncio.run = _gia_run
+    try:
+        goi()
+        return False
+    except RuntimeError:
+        return True
+    except Exception:
+        return False
+    finally:
+        mod.asyncio.run = that
+
+check("post_page_via ném lỗi thật lên, không nuốt thành False",
+      _co_nem(_pvp, lambda: _pvp.post_page_via(
+          acc_name="T", page_uid="1", first_group_uid="2",
+          search_kw="k", message="m")))
+check("post_page_wall ném lỗi thật lên",
+      _co_nem(_pvp, lambda: _pvp.post_page_wall(
+          acc_name="T", page_uid="1", message="m")))
+check("post_via_crosspost ném lỗi thật lên",
+      _co_nem(_vp, lambda: _vp.post_via_crosspost(
+          acc_name="T", search_kw="k", message="m", first_group_uid="2")))
+
+_src_sch = Path("scheduler.py").read_text(encoding="utf-8")
+_i_tran  = _src_sch.find('if cat == "transient":\n                logger.warning')
+_i_suc   = _src_sch.find("_bao_suc_khoe(stt, acc_name, *db.ghi_nhan_phien_dang")
+check("scheduler thoát sớm khi lỗi transient, trước khi ghi sức khoẻ",
+      _i_tran != -1 and _i_suc != -1 and _i_tran < _i_suc)
+
 # ── scheduler: parse UID nhóm đầu ──────────────────────────────────────────
 _pfg = scheduler._parse_first_group_uid
 check("parse URL nhóm -> uid",         _pfg("https://facebook.com/groups/123456789/") == "123456789")
