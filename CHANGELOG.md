@@ -48,9 +48,9 @@ khi vá, đăng **thành công 9 nhóm, thu 10 link**, mở ô soạn bài chỉ
 > nút con. `el.click()` của JS chộp phải cái vỏ nên không có gì xảy ra mà vẫn
 > báo là đã bấm. Hàm này giờ bấm xong PHẢI kiểm tra hộp đã biến mất chưa.
 
-**Nút Chuyển sang Trang cũng từng bị chính hộp này che.** Log cũ đầy dòng "Không
-tìm thấy nút Chuyển — giả định đã ở Page context": nút vẫn ở đó, chỉ là không
-bấm tới được.
+> Dòng "Không tìm thấy nút Chuyển — giả định đã ở Page context" trong log thì
+> KHÔNG phải do hộp này: phiên chạy thử sau khi vá, không còn hộp cookie nào,
+> vẫn ghi đúng dòng đó rồi đăng bình thường. Nó là chuyện khác, chưa tìm ra.
 
 ## v2.18.0 — 17/09/2026
 
