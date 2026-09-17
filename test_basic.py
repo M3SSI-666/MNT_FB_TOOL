@@ -3087,6 +3087,31 @@ check("_kill_pids: lọc PID trùng trước khi bắn", "dict.fromkeys(pids)" i
 _i_sd   = _src_sv.index("def _shutdown_all(")
 _than_sd = _src_sv[_i_sd:_src_sv.index("\ndef ", _i_sd + 10)]
 check("tắt app: chỉ quét tiến trình một lần", _than_sd.count("_quet_python()") == 1)
+
+# Diệt xong phải HỎI LẠI hệ điều hành. Lúc 00:35:24 ngày 18/09 log ghi "Đã diệt
+# runner PID 22352/9848/13836/17268" mà cả bốn vẫn sống tới 00:47 — vì chỉ chờ
+# taskkill thoát rồi coi là xong. File pid bị xoá theo, nên 'Lịch của máy'
+# tưởng runner chết và cứ 20 giây bật thêm một cái, cái nào cũng đụng khoá rồi
+# tự thoát. Log runner có đúng 12 dòng "Đã có runner ... — thoát" vì chuyện này.
+check("_kill_pids: hỏi lại HĐH chứ không tin taskkill",
+      "if _pid_alive(pid):" in _than and "KHÔNG diệt được PID" in _than)
+_i_wait = _than.index("tt.wait(timeout=")
+check("_kill_pids: kiểm tra SAU khi chờ", _than.index("if _pid_alive(pid):") > _i_wait)
+
+# Mở app KHÔNG được cắt ngang phiên đang chạy. Khoá đã bảo đảm một loại một
+# runner, nên runner còn giữ khoá là runner lành — để yên.
+_i_dr   = _src_sv.index("def _don_runner_la(")
+_than_dr = _src_sv[_i_dr:_src_sv.index("\ndef ", _i_dr + 10)]
+check("mở app: giữ nguyên runner đang giữ khoá",
+      "pid not in giu" in _than_dr and "Giữ nguyên runner đang chạy" in _than_dr)
+check("mở app: vá lại file pid cho runner lành",
+      'RUNNER_CFG[loai]["pid_file"]).write_text(str(pid))' in _than_dr)
+_i_main = _src_sv.index('if "--lam" in sys.argv:')
+check("khởi động gọi _don_runner_la, KHÔNG diệt sạch",
+      "_don_runner_la()" in _src_sv[_i_main:]
+      and "_kill_all_runners()" not in _src_sv[_i_main:])
+# Nút "Tắt phần mềm" và nút X thì vẫn phải diệt sạch — lúc đó là thật sự dừng.
+check("tắt app vẫn diệt sạch", "_gom_pid_runner(ds)" in _than_sd)
 check("tắt app: gom runner + join worker rồi diệt một lượt",
       _than_sd.count("_kill_pids(") == 1 and "join_groups_worker" in _than_sd)
 

@@ -10,6 +10,44 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.21.0 — 18/09/2026
+
+**Mở phần mềm lên không còn làm runner tự tắt**
+
+Đúng như bạn thấy. Trước đây **mỗi lần mở app là diệt sạch runner rồi bật lại từ
+đầu** — kể cả khi bạn chỉ mở lên nhìn bảng lịch một cái. Phiên đăng bài đang
+chạy dở bị cắt ngang, không lời nào.
+
+Từ bản này, mở app chỉ dọn runner **lạ**. Khoá file (v2.18.0) đã bảo đảm mỗi
+loại lịch chỉ có đúng một runner, nên runner nào còn giữ khoá là runner lành —
+để yên cho nó chạy tiếp. Mở app giờ ghi rõ trong log:
+
+```
+▶ Giữ nguyên runner đang chạy: ban (PID 13836), homestay (PID 22352), ...
+```
+
+Nút **Tắt phần mềm** và nút **X** thì vẫn dừng hết như cũ — lúc đó là thật sự
+muốn dừng.
+
+**Sửa: log báo "đã diệt" trong khi tiến trình vẫn sống**
+
+Lúc 00:35:24 ngày 18/09, log ghi *"Đã diệt runner PID 22352 / 9848 / 13836 /
+17268"*. Kiểm tra lúc 00:47 thì **cả bốn vẫn đang chạy**. Vì phần mềm chỉ chờ
+lệnh tắt chạy xong rồi coi là xong, không hỏi lại xem nó có làm được không.
+
+Hậu quả không chỉ là log sai. File pid bị xoá theo, nên **"Lịch của máy" tưởng
+runner đã chết và cứ 20 giây lại bật thêm một cái nữa** — cái nào cũng đụng khoá
+rồi tự thoát ngay. Log runner có đúng 12 dòng "Đã có runner … — thoát" vì chuyện
+này.
+
+Giờ diệt xong phải hỏi lại hệ điều hành. Không diệt được thì ghi thẳng:
+
+```
+⚠️  KHÔNG diệt được PID 22352 — vẫn đang chạy
+```
+
+và **giữ nguyên file pid**, để không ai tưởng nhầm là còn chỗ trống mà bật thêm.
+
 ## v2.20.1 — 18/09/2026
 
 **Mở và đóng phần mềm đỡ giật**

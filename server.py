@@ -402,12 +402,23 @@ def _kill_pids(pids, han_giay: float = 15) -> list:
     for pid, tt in dang_chay:
         try:
             tt.wait(timeout=max(0.5, han - time.time()))
-            da_diet.append(pid)
         except Exception:
             try:
                 tt.kill()
             except Exception:
                 pass
+        # HỎI LẠI HỆ ĐIỀU HÀNH, đừng tin taskkill đã chạy xong là xong.
+        #
+        # Lúc 00:35:24 ngày 18/09: log ghi "Đã diệt runner PID 22352/9848/
+        # 13836/17268" mà cả bốn tiến trình đó vẫn sống nguyên tới 00:47 — vì
+        # chỗ này chỉ chờ taskkill THOÁT rồi coi là xong, không xem nó làm được
+        # hay không. Hậu quả không chỉ là log sai: file pid bị xoá theo, nên
+        # 'Lịch của máy' tưởng runner đã chết và cứ 20 giây lại bật thêm một
+        # cái nữa — cái nào cũng đụng khoá rồi tự thoát ngay.
+        if _pid_alive(pid):
+            logger.warning(f"  ⚠️  KHÔNG diệt được PID {pid} — vẫn đang chạy")
+        else:
+            da_diet.append(pid)
     return da_diet
 
 
@@ -466,6 +477,57 @@ def _kill_all_runners():
     """Kill tất cả scheduler process — kể cả orphan không có pid file."""
     for pid in _kill_pids(_gom_pid_runner()):
         logger.info(f"  Đã diệt runner PID {pid}")
+
+
+def _don_runner_la():
+    """
+    Lúc MỞ phần mềm: chỉ dọn runner LẠ, giữ nguyên runner đang chạy lành lặn.
+
+    Trước đây mở app là diệt sạch runner rồi bật lại từ đầu. Nghĩa là mỗi lần
+    mở giao diện lên xem — kể cả chỉ để nhìn bảng lịch — là cắt ngang phiên
+    đăng bài đang chạy dở. Đúng thứ người dùng thấy: "các runner tự động tắt".
+
+    Không cần diệt nữa. Khoá file đã bảo đảm một loại lịch chỉ có đúng một
+    runner, nên runner nào còn giữ khoá là runner LÀNH — để yên cho nó chạy.
+    Chỉ những cái KHÔNG giữ khoá mới đáng ngờ: bản cũ chưa có khoá, hoặc tiến
+    trình chết dở.
+
+    Hàm này còn VÁ LẠI file pid cho runner lành. Cần, vì lần mở trước có thể đã
+    xoá mất file pid trong khi tiến trình vẫn sống — và đó chính là tình trạng
+    khiến 'Lịch của máy' cứ 20 giây lại bật thêm một runner rồi nó tự thoát.
+    """
+    kr  = _khoa_runner()
+    giu = {}
+    for loai in RUNNER_CFG:
+        pid = kr.pid_dang_giu(loai)
+        if pid:
+            giu[pid] = loai
+
+    la = []
+    for loai, cfg in RUNNER_CFG.items():
+        pf = BASE_DIR / cfg["pid_file"]
+        if not pf.exists():
+            continue
+        try:
+            pid = int(pf.read_text().strip())
+        except Exception:
+            pf.unlink(missing_ok=True)
+            continue
+        if pid not in giu:
+            la.append(pid)
+            pf.unlink(missing_ok=True)
+
+    la += [p for p in _find_python_pids(*_dau_hieu("scheduler.py")) if p not in giu]
+
+    for pid in _kill_pids(la):
+        logger.info(f"  Đã dọn runner lạ PID {pid}")
+
+    for pid, loai in giu.items():
+        (BASE_DIR / RUNNER_CFG[loai]["pid_file"]).write_text(str(pid))
+    if giu:
+        logger.info("  ▶ Giữ nguyên runner đang chạy: "
+                    + ", ".join(f"{l} (PID {p})"
+                                for p, l in sorted(giu.items(), key=lambda x: x[1])))
 
 
 def _kill_join_workers():
@@ -2416,7 +2478,10 @@ if __name__ == "__main__":
         print(f"[LỖI] Không biết việc {_viec!r}", file=sys.stderr)
         sys.exit(2)
 
-    _kill_all_runners()
+    # Mở app thì chỉ DỌN runner lạ, không diệt runner đang chạy lành lặn —
+    # xem chú thích ở `_don_runner_la`. Nút "Tắt phần mềm" và nút X vẫn diệt
+    # sạch bằng `_kill_all_runners`, vì lúc đó là thật sự muốn dừng hết.
+    _don_runner_la()
 
     # --browser  : mở bằng trình duyệt mặc định (chế độ web cũ, để debug)
     # --no-browser: chỉ chạy server, không mở gì (server chạy ẩn)
