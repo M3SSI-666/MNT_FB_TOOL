@@ -674,6 +674,9 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool, ly_do_loi: str = "") -> tuple[st
         # Nhớ lỗi của phiên vừa hỏng. Không nhớ thì tới lúc cho nghỉ chỉ còn
         # con số "5 lỗi liên tiếp" — người quản trị đọc xong vẫn không biết
         # phải sửa cái gì, phải tự đi đào file log.
+        # Gộp xuống MỘT dòng. Lỗi Playwright kèm cả khối "Call log:" nhiều dòng,
+        # để nguyên thì ô Ghi chú trên bảng bị kéo cao mấy dòng trống.
+        ly_do_loi = " ".join((ly_do_loi or "").split())
         if not ok and ly_do_loi:
             con.execute("UPDATE accounts SET loi_gan_nhat=? WHERE id=?",
                         (f"{datetime.now():%H:%M} · {ly_do_loi}"[:160], r["id"]))

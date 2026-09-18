@@ -307,9 +307,37 @@ finally:
     db.delete_account(_id_tl)
 
 _app_js = Path("static/js/app.js").read_text(encoding="utf-8")
-check("bảng acc hiện lý do nghỉ chứ không chỉ 'Nghỉ tới HH:MM'",
-      "r.ly_do_nghi||\"\").trim()" in _app_js and "😴 Nghỉ tới" in _app_js)
-check("acc còn Active cũng hiện lỗi gần nhất", "loi_gan_nhat" in _app_js)
+# Lý do phải nằm ở cột GHI CHÚ, KHÔNG nhét vào ô Trạng thái. Cột Trạng thái hẹp
+# nên câu dài bị bẻ thành một cột chữ dọc và kéo cao cả hàng — nhìn bảng còn khó
+# hơn lúc chưa có lý do.
+_i_nghi = _app_js.index("😴 Nghỉ tới")
+check("ô Trạng thái chỉ ghi giờ, không chèn lý do dài",
+      "ly_do_nghi" not in _app_js[_i_nghi:_i_nghi + 320])
+check("cột Ghi chú hiện lý do nghỉ / lỗi gần nhất",
+      'f.key==="ghi_chu"' in _app_js
+      and "r.ly_do_nghi||r.loi_gan_nhat" in _app_js)
+# Ghi chú là ô SỬA ĐƯỢC. Dòng cảnh báo chỉ để nhìn — `data-val` phải giữ ghi chú
+# thật, không thì bấm vào sửa là nuốt mất chữ người dùng tự viết.
+_i_gc = _app_js.index('f.key==="ghi_chu"')
+_o_gc = _app_js[_i_gc:_i_gc + 1000]
+check("sửa Ghi chú không nuốt mất chữ người dùng tự viết",
+      'data-val="${esc}"' in _o_gc and "startAccEdit(this)" in _o_gc)
+check("mỗi dòng trong ô Ghi chú bị cắt gọn, không kéo cao hàng",
+      "text-overflow:ellipsis;white-space:nowrap" in _o_gc)
+
+# Lỗi Playwright kèm cả khối "Call log:" nhiều dòng — để nguyên thì ô Ghi chú
+# bị kéo cao mấy dòng trống.
+_ten_gd = "__TestGopDong__"
+_id_gd  = db.upsert_account({"ten_acc": _ten_gd, "trang_thai": "Active"})
+try:
+    db.ghi_nhan_phien_dang(_ten_gd, False,
+                           ly_do_loi="Page crashed\nCall log:\n  - navigating to x")
+    _r_gd = db.get_account_by_name(_ten_gd)
+    check("lý do lỗi được gộp về MỘT dòng",
+          "\n" not in (_r_gd.get("loi_gan_nhat") or "")
+          and "Call log: - navigating to x" in (_r_gd.get("loi_gan_nhat") or ""))
+finally:
+    db.delete_account(_id_gd)
 
 # ── Hộp xin phép cookie của Facebook ───────────────────────────────────────
 # Nhìn tận mắt lúc 23:09 ngày 17/09 trên nick 'Xuan Khoa': hộp "Cho phép sử

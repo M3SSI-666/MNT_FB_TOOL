@@ -954,13 +954,11 @@ function _trangThaiAcc(r){
     if(_dangNghi(r)){
         const t=new Date(r.nghi_den);
         const hh=String(t.getHours()).padStart(2,"0"), mm=String(t.getMinutes()).padStart(2,"0");
-        // Hiện LÝ DO ngay trên bảng. Trước đây ô này chỉ ghi "😴 Nghỉ tới HH:MM"
-        // và rê chuột vào cũng chỉ thấy "Lỗi liên tiếp nên tạm nghỉ" — đúng thì
-        // đúng, nhưng không nói hỏng ở bước nào nên chẳng sửa được gì.
+        // Lý do nằm ở cột GHI CHÚ, không nhét vào đây. Nhét vào thì ô Trạng
+        // thái phải xuống mấy dòng và kéo cao cả hàng — cột này hẹp, chữ dồn
+        // thành một cột dọc lê thê, nhìn bảng còn khó hơn lúc chưa có.
         const ly=(r.ly_do_nghi||"").trim();
-        return {nhan:`😴 Nghỉ tới ${hh}:${mm}`
-                     +(ly?`<div style="font-weight:400;font-size:11px;opacity:.85">`
-                          +`${_escapeHtml(ly)}</div>`:""),
+        return {nhan:`😴 Nghỉ tới ${hh}:${mm}`,
                 mau:"var(--warning)", dam:false,
                 chiTiet:(ly?`${ly}. `:"Lỗi liên tiếp nên tạm nghỉ. ")
                         +`Sau đó tự chạy lại. ${hong}`};
@@ -1098,6 +1096,25 @@ function renderAccTable(data){
                 return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}"
                     style="${center}font-size:12px;font-weight:${t.dam?"600":"400"};color:${t.mau}"
                     title="${_escapeHtml(t.chiTiet)}" onclick="startAccEdit(this)">${t.nhan}</td>`;
+            }
+            // Ghi chú kiêm luôn chỗ báo vì sao acc đang nghỉ / hỏng ở bước nào.
+            // Đây là cột RỘNG nhất và nội dung của nó vốn là chữ tự do, nên
+            // chịu được câu dài; nhét vào ô Trạng thái thì nó kéo cao cả hàng.
+            //
+            // Dòng lý do chỉ để NHÌN, không ghi xuống DB: `data-val` vẫn là ghi
+            // chú thật của người dùng, nên bấm vào sửa không nuốt mất nó.
+            if(f.key==="ghi_chu"){
+                const bao=(r.ly_do_nghi||r.loi_gan_nhat||"").trim();
+                const mot=`display:block;max-width:230px;overflow:hidden;`
+                         +`text-overflow:ellipsis;white-space:nowrap`;
+                const than=(bao?`<span style="${mot};color:var(--warning);font-size:11px"`
+                               +`>⚠️ ${_escapeHtml(bao)}</span>`:"")
+                          +(val?`<span style="${mot}">${_escapeHtml(val)}</span>`
+                               :(bao?"":"-"));
+                return `<td class="editable" data-id="${r.id}" data-field="${f.key}"
+                    data-val="${esc}" style="${center}font-size:12px;color:var(--text-secondary)"
+                    title="${_escapeHtml(bao?bao+(val?"\n\n"+val:""):val)}"
+                    onclick="startAccEdit(this)">${than}</td>`;
             }
             return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}" style="${style}" title="${esc}" onclick="startAccEdit(this)">${val||"-"}</td>`;
         }).join("");

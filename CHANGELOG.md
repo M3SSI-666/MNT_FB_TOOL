@@ -10,6 +10,25 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.21.2 — 19/09/2026
+
+**Lý do nghỉ chuyển sang cột Ghi chú**
+
+Ở v2.20.0 lý do được nhét vào ô **Trạng thái**. Cột đó hẹp nên câu dài bị bẻ
+thành một cột chữ dọc, kéo cao cả hàng và làm bảng khó đọc hơn lúc chưa có lý do.
+
+Giờ:
+
+* **Trạng thái** chỉ còn `😴 Nghỉ tới 02:48` — ngắn như cũ.
+* **Ghi chú** hiện thêm một dòng `⚠️ <lý do>` phía trên ghi chú của bạn, cắt gọn
+  vừa một dòng; rê chuột vào là thấy đủ.
+
+Ghi chú bạn tự viết **không bị đụng tới** — dòng cảnh báo chỉ để nhìn, bấm vào
+sửa vẫn ra đúng chữ cũ của bạn.
+
+Kèm theo: lý do lỗi được gộp về một dòng trước khi lưu. Lỗi Playwright vốn kèm cả
+khối "Call log:" nhiều dòng, để nguyên thì ô Ghi chú bị kéo cao mấy dòng trống.
+
 ## v2.21.1 — 19/09/2026
 
 **Sửa: một loại lịch có thể chết im mà phần mềm vẫn báo "đang chạy"**
