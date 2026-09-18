@@ -434,7 +434,11 @@ def _runner_running(loai):
     # và bộ quét mồ côi dò bằng dòng lệnh thì mù (xem `khoa_runner.py`). Runner
     # sống sót vì thế trở nên vô hình, nên 'Lịch của máy' lại bật thêm một cái
     # nữa. Khoá file thì ngược lại: hệ điều hành chỉ nhả khi tiến trình chết.
-    return _khoa_runner().pid_dang_giu(loai) is not None
+    # Hỏi KHOÁ, không hỏi PID. File khoá cũ trỏ vào một PID mà Windows đã
+    # cấp lại cho tiến trình khác thì hỏi PID sẽ trả lời 'còn chạy' mãi mãi,
+    # và runner không bao giờ được bật lại — lịch Thuê đã chết im gần 4
+    # tiếng đêm 18/09 vì đúng chuyện này.
+    return _khoa_runner().dang_giu(loai)
 
 
 def _gom_pid_runner(ds_quet=None) -> list:

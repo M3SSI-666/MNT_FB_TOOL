@@ -33,6 +33,7 @@ nó để diệt runner mồ côi thay cho việc dò dòng lệnh.
 """
 import os
 import sys
+import time
 
 from config import BASE_DIR
 
@@ -60,12 +61,60 @@ def _khoa_byte_dau(fd) -> bool:
         return False
 
 
+def _mo_khoa(fd):
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    except OSError:
+        pass
+
+
+def dang_giu(loai: str) -> bool:
+    """
+    Có runner nào ĐANG GIỮ khoá loại này không.
+
+    Hỏi thẳng hệ điều hành bằng cách thử giành khoá một nhịp rồi nhả ra ngay —
+    KHÔNG đọc PID trong file rồi xem PID đó còn sống hay không.
+
+    Vì sao: Windows dùng lại số PID. File khoá cũ trỏ vào một PID mà hệ thống
+    đã cấp cho tiến trình khác thì phần mềm tưởng runner còn chạy và KHÔNG BAO
+    GIỜ bật lại. Đã xảy ra thật: `.runner_thue.lock` giữ PID 1244 chết từ
+    21:53 ngày 18/09, `/api/run/status` vẫn báo `thue: running=True`, và lịch
+    Thuê nằm im gần 4 tiếng mà không một dòng lỗi nào.
+
+    Khoá thì không nói dối: hệ điều hành chỉ nhả khi tiến trình giữ nó chết.
+    """
+    if loai in _DANG_GIU:
+        return True                      # chính tiến trình này đang giữ
+    try:
+        fd = os.open(duong_dan(loai), os.O_CREAT | os.O_RDWR)
+    except OSError:
+        return False
+    try:
+        if _khoa_byte_dau(fd):
+            _mo_khoa(fd)                 # giành được ⇒ chẳng ai giữ cả
+            return False
+        return True
+    finally:
+        os.close(fd)
+
+
 def giu_khoa(loai: str) -> bool:
     """
     Giành quyền chạy cho `loai`. Trả True nếu được chạy, False nếu đã có runner
     cùng loại đang sống.
 
     Gọi một lần lúc runner khởi động. Không cần nhả — tiến trình chết là xong.
+
+    Thử lại vài nhịp trước khi chịu thua: `dang_giu` cũng giành khoá trong tích
+    tắc rồi nhả, mà giao diện lại hỏi trạng thái mỗi 10 giây. Đâm đúng vào cái
+    tích tắc đó rồi bỏ cuộc thì runner thật không khởi động được — đúng loại
+    lỗi mà hàm này sinh ra để chống.
     """
     if loai in _DANG_GIU:
         return True
@@ -76,8 +125,13 @@ def giu_khoa(loai: str) -> bool:
         # còn hơn không có runner nào.
         return True
     if not _khoa_byte_dau(fd):
-        os.close(fd)
-        return False
+        for _ in range(3):
+            time.sleep(0.3)
+            if _khoa_byte_dau(fd):
+                break
+        else:
+            os.close(fd)
+            return False
     try:
         so = f"{os.getpid()}\n".encode()
         os.lseek(fd, 0, os.SEEK_SET)
@@ -93,13 +147,17 @@ def pid_dang_giu(loai: str) -> int | None:
     """
     PID runner đang giữ khoá loại này, đọc từ file — KHÔNG giành khoá.
 
-    Trả None khi chưa có file, chưa ghi kịp pid, hoặc pid đã chết. Nhờ vậy nơi
-    gọi không phải tự lọc tiến trình ma.
+    Trả None khi KHÔNG CÓ AI đang giữ khoá — kể cả lúc file còn nguyên và pid
+    ghi trong đó trỏ vào một tiến trình đang sống, vì Windows dùng lại số PID
+    (xem `dang_giu`). Ai đang giữ mới là câu hỏi đúng; pid chỉ để biết diệt cái
+    nào.
 
     PHẢI nhảy qua byte 0 rồi mới đọc. Windows từ chối mọi lượt đọc chạm vào vùng
     đang bị khoá, nên `f.read()` từ đầu file sẽ ném PermissionError đúng lúc
     khoá đang có chủ — tức là đúng lúc ta cần đọc nhất.
     """
+    if not dang_giu(loai):
+        return None
     try:
         with open(duong_dan(loai), "rb") as f:
             f.seek(1)

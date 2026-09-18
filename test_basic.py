@@ -217,9 +217,40 @@ try:
 except OSError:
     pass
 
+# File khoá CŨ còn nguyên nhưng chẳng ai giữ → phải coi là KHÔNG chạy.
+# Đây là cái bẫy đã làm lịch Thuê chết im gần 4 tiếng đêm 18/09: file
+# `.runner_thue.lock` giữ PID 1244 đã chết, phần mềm đọc PID rồi hỏi "PID này
+# còn sống không". Windows dùng lại số PID, nên câu hỏi đó không bao giờ đáng
+# tin — hỏi KHOÁ mới đúng, vì hệ điều hành chỉ nhả khoá khi chủ nó chết.
+_LOAI_MA = "_test_khoa_ma"
+with open(_kr.duong_dan(_LOAI_MA), "wb") as _f:
+    _f.write(b"#999999\n")           # pid không thể tồn tại
+check("file khoá mồ côi → dang_giu = False", _kr.dang_giu(_LOAI_MA) is False)
+check("file khoá mồ côi → pid_dang_giu = None", _kr.pid_dang_giu(_LOAI_MA) is None)
+check("file khoá mồ côi KHÔNG chặn runner thật", _kr.giu_khoa(_LOAI_MA) is True)
+check("giành xong thì dang_giu = True", _kr.dang_giu(_LOAI_MA) is True)
+os.close(_kr._DANG_GIU.pop(_LOAI_MA))
+check("nhả rồi thì dang_giu = False", _kr.dang_giu(_LOAI_MA) is False)
+# `dang_giu` giành khoá trong tích tắc rồi nhả — tuyệt đối không được để lại
+# dấu vết, nếu không thì mỗi lần giao diện hỏi trạng thái là một lần phá khoá.
+_kr.giu_khoa(_LOAI_MA)
+_ma_kq = (_kr.dang_giu(_LOAI_MA), _kr.dang_giu(_LOAI_MA), _kr.pid_dang_giu(_LOAI_MA))
+check("hỏi trạng thái nhiều lần không làm mất khoá của chủ",
+      _ma_kq == (True, True, os.getpid()))
+os.close(_kr._DANG_GIU.pop(_LOAI_MA))
+try:
+    os.unlink(_kr.duong_dan(_LOAI_MA))
+except OSError:
+    pass
+
 _src_srv = Path("server.py").read_text(encoding="utf-8")
 check("server dò runner sống bằng khoá, không chỉ bằng file pid",
-      "pid_dang_giu(loai) is not None" in _src_srv)
+      "dang_giu(loai)" in _src_srv)
+# Phải hỏi KHOÁ chứ không hỏi PID: Windows dùng lại số PID, file khoá cũ trỏ
+# vào PID đã được cấp cho tiến trình khác thì hỏi PID trả lời "còn chạy" mãi
+# mãi. Lịch Thuê chết im gần 4 tiếng đêm 18/09 vì đúng chuyện này.
+check("server KHÔNG còn hỏi PID để biết runner sống",
+      "pid_dang_giu(loai) is not None" not in _src_srv)
 check("tắt phần mềm có diệt runner theo khoá",
       _src_srv.find("kr.pid_dang_giu(loai)") != -1)
 check("runner trùng loại thì tự thoát",

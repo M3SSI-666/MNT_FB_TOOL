@@ -10,6 +10,33 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.21.1 — 19/09/2026
+
+**Sửa: một loại lịch có thể chết im mà phần mềm vẫn báo "đang chạy"**
+
+Đêm 18/09, runner Thuê chết lúc 21:53. Từ đó tới 01:42 hôm sau nó **không bao
+giờ được bật lại**, và "Lịch của máy" cũng không bật hộ — vì
+`/api/run/status` vẫn một mực báo `thue: đang chạy`. Không một dòng lỗi nào.
+Mất **26 slot** chỉ riêng từ 00:02 tới 01:42.
+
+Nguyên nhân: để biết runner còn sống hay không, phần mềm đọc **số PID ghi trong
+file khoá** rồi hỏi "PID này còn chạy không". Windows **dùng lại số PID**. File
+`.runner_thue.lock` giữ PID 1244 đã chết; số đó được hệ thống cấp cho một tiến
+trình khác, thế là câu trả lời thành "còn chạy" — mãi mãi.
+
+Từ bản này, phần mềm hỏi thẳng **cái khoá** chứ không hỏi PID: thử giành khoá
+một nhịp rồi nhả ra ngay. Giành được nghĩa là chẳng ai giữ. Hệ điều hành chỉ nhả
+khoá khi tiến trình giữ nó chết, nên câu trả lời không bao giờ sai — kể cả khi
+file khoá cũ còn nằm đó.
+
+Kèm theo: lúc runner khởi động, nếu khoá đang bận thì thử lại vài nhịp rồi mới
+chịu thua. Việc hỏi trạng thái cũng giành khoá trong tích tắc, mà giao diện hỏi
+mỗi 10 giây — đâm đúng vào tích tắc đó rồi bỏ cuộc thì runner thật không khởi
+động được, đúng loại lỗi mà cái khoá sinh ra để chống.
+
+> Nếu bạn thấy một loại lịch nằm im mà nút vẫn xanh: cập nhật bản này, tắt phần
+> mềm rồi mở lại là xong. Không cần xoá file gì bằng tay.
+
 ## v2.21.0 — 18/09/2026
 
 **Mở phần mềm lên không còn làm runner tự tắt**
