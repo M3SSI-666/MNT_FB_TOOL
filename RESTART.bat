@@ -5,7 +5,11 @@ echo ============================================================
 
 :: Tim PID server dang giu cong 8080 (netstat nhanh, khong treo)
 set SV_PID=
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8080 ^| findstr LISTENING 2^>nul') do set SV_PID=%%a
+:: GOM HET, khong chi lay dong cuoi. Ngay 19/09 co HAI server cung nghe cong
+:: 8080 (PID 13680 tu 15:07 va PID 21480 tu 21:34): lan truoc diet truot cai cu
+:: ma cai moi van bind duoc vi Flask bat SO_REUSEADDR. Vong lap cu chi giu dong
+:: CUOI nen se diet nham cai vua khoi dong, con cai cu song tiep.
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8080 ^| findstr LISTENING 2^>nul') do call set SV_PID=%%SV_PID%% %%a
 
 :: Dung server + runner bang dung_het.py.
 ::

@@ -3173,6 +3173,29 @@ check("nút Dừng vẫn tra file pid", "_runner_pid(loai)" in _than_st)
 # chưa xong, còn chụp ảnh tiến trình bằng Toolhelp32 mất 0,006 giây cho cả 270
 # tiến trình. Bỏ được vì từ v2.18.0 runner nào cũng giữ khoá.
 check("nút Dừng KHÔNG quét WMI/PowerShell", "_find_python_pids(" not in _than_st)
+
+# HAI server cùng nghe một cổng là chuyện có thật: Flask bật SO_REUSEADDR nên
+# trên Windows bản mới bind đè được lên bản cũ mà không ai báo lỗi. Đo lúc
+# 21:4x ngày 19/09, netstat thấy hai dòng LISTENING trên 8080 — PID 13680 từ
+# 15:07 và PID 21480 từ 21:34. Giao diện hỏi trúng cái CŨ nên cập nhật xong vẫn
+# hiện số hiệu bản cũ, người dùng tưởng bản vá không ăn.
+_i_sc    = _src_sv.index("def _don_server_cu(")
+_than_sc = _src_sv[_i_sc:_src_sv.index(chr(10) + "def ", _i_sc + 10)]
+check("khởi động: dọn server cũ trước khi bind cổng",
+      "_pid_nghe_cong(PORT)" in _than_sc and "_kill_pids(cu" in _than_sc)
+check("dọn xong còn sót thì báo lỗi rõ", "Vẫn còn server cũ" in _than_sc)
+_i_main2 = _src_sv.index('if "--lam" in sys.argv:')
+check("gọi _don_server_cu TRƯỚC khi mở server",
+      _src_sv.index("_don_server_cu()", _i_main2) < _src_sv.index("_don_runner_la()", _i_main2))
+check("tìm PID theo cổng bằng netstat, không dùng WMI",
+      'subprocess.run(["netstat", "-ano"]' in _src_sv)
+
+# RESTART.bat phải gom HẾT pid nghe cổng 8080, không chỉ dòng cuối — dòng cuối
+# thường là server VỪA bật, diệt nó thì cái cũ sống tiếp.
+for _b2 in ("RESTART.bat", "UPDATE.bat"):
+    _s_b2 = Path(_b2).read_text(encoding="utf-8", errors="replace")
+    check(f"{_b2}: gom hết PID cổng 8080",
+          "call set SV_PID=%%SV_PID%% %%a" in _s_b2)
 check("lưới vét WMI có hạn chờ ngắn", "timeout=5," in _src_sv)
 check("nút Dừng báo THẤT BẠI khi runner vẫn còn giữ khoá",
       "kr.dang_giu(loai)" in _than_st and '"ok": False' in _than_st)

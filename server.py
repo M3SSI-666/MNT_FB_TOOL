@@ -582,6 +582,50 @@ def _kill_all_runners():
         logger.info(f"  Đã diệt runner PID {pid}")
 
 
+def _pid_nghe_cong(cong: int) -> list:
+    """PID đang NGHE trên cổng này. Dùng netstat — nhanh, không đụng WMI."""
+    try:
+        r = subprocess.run(["netstat", "-ano"], capture_output=True, text=True,
+                           timeout=20, creationflags=subprocess.CREATE_NO_WINDOW)
+    except Exception:
+        return []
+    ra = []
+    for d in r.stdout.splitlines():
+        if f":{cong}" in d and "LISTENING" in d.upper():
+            x = d.split()[-1]
+            if x.isdigit() and int(x) != os.getpid():
+                ra.append(int(x))
+    return list(dict.fromkeys(ra))
+
+
+def _don_server_cu():
+    """
+    Diệt server CŨ còn sót trước khi mình bind cổng.
+
+    Bắt buộc phải có, vì Flask bật SO_REUSEADDR: trên Windows cờ đó cho phép
+    bind đè lên một cổng đang có người nghe, nên hai server sống song song mà
+    không ai báo lỗi. Đo lúc 21:4x ngày 19/09 — netstat thấy HAI dòng LISTENING
+    trên 8080:
+
+        PID 13680  khởi động 15:07   (bản cũ, RESTART.bat diệt trượt vì
+                                      taskkill treo)
+        PID 21480  khởi động 21:34   (bản mới vừa bật)
+
+    Giao diện hỏi trúng cái CŨ nên cập nhật xong vẫn hiện số hiệu bản cũ, và
+    người dùng tưởng bản vá không ăn. Tệ hơn: hai server thì hai 'Lịch của máy'
+    cùng bật runner.
+    """
+    cu = _pid_nghe_cong(PORT)
+    if not cu:
+        return
+    logger.warning(f"⚠️  Cổng {PORT} đang có server cũ: PID {cu} — dọn trước khi bật")
+    for pid in _kill_pids(cu, han_giay=8):
+        logger.info(f"  Đã dọn server cũ PID {pid}")
+    con = _pid_nghe_cong(PORT)
+    if con:
+        logger.error(f"❌ Vẫn còn server cũ ở PID {con} — hai bản sẽ chạy song song")
+
+
 def _don_runner_la():
     """
     Lúc MỞ phần mềm: chỉ dọn runner LẠ, giữ nguyên runner đang chạy lành lặn.
@@ -2604,6 +2648,8 @@ if __name__ == "__main__":
             sys.exit(0)
         print(f"[LỖI] Không biết việc {_viec!r}", file=sys.stderr)
         sys.exit(2)
+
+    _don_server_cu()
 
     # Mở app thì chỉ DỌN runner lạ, không diệt runner đang chạy lành lặn —
     # xem chú thích ở `_don_runner_la`. Nút "Tắt phần mềm" và nút X vẫn diệt

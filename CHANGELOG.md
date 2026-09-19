@@ -10,6 +10,36 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.23.2 — 19/09/2026
+
+**Sửa: cập nhật xong vẫn hiện số hiệu bản cũ**
+
+Bấm Restart, mở lại, mà góc trái vẫn ghi bản cũ — vì **hai server cùng chạy trên
+cổng 8080**. Đo lúc 21:4x ngày 19/09:
+
+```
+PID 13680   khởi động 15:07   ← bản cũ, RESTART.bat diệt trượt
+PID 21480   khởi động 21:34   ← bản mới vừa bật
+```
+
+Lẽ ra bản thứ hai phải báo lỗi "cổng đang bận" rồi thoát. Nó không báo, vì Flask
+bật `SO_REUSEADDR` — trên Windows cờ đó cho phép bind đè lên cổng đang có người
+nghe. Hai server sống song song, giao diện hỏi trúng cái **cũ** nên hiện số hiệu
+cũ, và mọi bản vá trông như không ăn.
+
+Tệ hơn: hai server thì hai "Lịch của máy" cùng bật runner.
+
+Hai chỗ đã sửa:
+
+* **Lúc mở phần mềm**, nếu cổng đã có người nghe thì dọn sạch trước khi bind.
+  Dọn không nổi thì ghi hẳn lỗi ra log thay vì im lặng chạy chồng.
+* **RESTART.bat / UPDATE.bat** gom **hết** PID đang nghe cổng 8080. Trước đây
+  vòng lặp chỉ giữ dòng cuối — mà dòng cuối thường là server vừa bật, nên nó
+  diệt nhầm cái mới còn cái cũ sống tiếp.
+
+> Nếu bạn vừa cập nhật mà số hiệu không đổi: chạy `RESTART.bat` một lần nữa với
+> bản này là xong.
+
 ## v2.23.1 — 19/09/2026
 
 **Nút Dừng runner: bấm là xong ngay**
