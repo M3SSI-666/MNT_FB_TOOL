@@ -10,6 +10,42 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.22.0 — 19/09/2026
+
+**Sửa: bấm Dừng từng runner không ăn**
+
+Hai lỗi cộng lại, nên nút bấm mấy lần cũng không nhúc nhích mà vẫn báo "Đã dừng".
+
+**1. `taskkill` không giết được tiến trình.** Đo tận tay trên chính runner Bán
+(PID 6212):
+
+| | kết quả |
+|---|---|
+| `taskkill /F /T /PID 6212` | **treo hơn 20 giây**, chạy hai lần, tiến trình **vẫn sống** |
+| `TerminateProcess(6212)` | **chết trong 0,00 giây** |
+
+`taskkill /T` phải tự đi duyệt cây tiến trình của cả máy; máy này lúc tải nặng có
+hơn hai trăm tiến trình nên nó nghẽn ở đó. Từ bản này phần mềm gọi thẳng hàm của
+Windows, giết con trước rồi mới tới cha — không để Chromium mồ côi ở lại ăn RAM.
+
+Đây cũng là lý do log từng ghi hàng loạt dòng "KHÔNG diệt được PID …".
+
+**2. Nút Dừng chỉ tìm runner theo file pid.** Mà file pid có thể biến mất trong
+khi runner vẫn sống: lúc 02:2x `.runner_ban.pid` không còn, runner Bán thật vẫn
+chạy ở PID 6212. Không có pid để diệt, còn bước dò theo dòng lệnh thì vừa mù vừa
+quá hạn — nên nút Dừng chẳng diệt gì cả.
+
+Giờ nút Dừng tìm theo **khoá** trước tiên (hệ điều hành chỉ nhả khoá khi tiến
+trình chết), rồi mới tới file pid và dòng lệnh. Việc hỏi trạng thái cũng **vá
+lại file pid** cho runner nào bị mất.
+
+**3. Giao diện báo thật.** Trước đây luôn hiện "⏹ Đã dừng" bất kể server trả về
+gì. Giờ dừng trượt thì hiện đỏ:
+
+```
+Không dừng được runner ban (PID 6212 vẫn chạy)
+```
+
 ## v2.21.2 — 19/09/2026
 
 **Lý do nghỉ chuyển sang cột Ghi chú**

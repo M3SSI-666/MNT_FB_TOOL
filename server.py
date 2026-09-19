@@ -366,55 +366,134 @@ def _find_python_pids(*needles) -> list:
     return _loc_pid(_quet_python(), needles)
 
 
+def _ban_do_cha_con() -> dict:
+    """
+    {pid cha: [pid con, ...]} — chụp một ảnh danh sách tiến trình của Windows.
+
+    Chạy ngay trong tiến trình này, không bật cửa sổ con nào, nên nhanh và
+    không bao giờ treo — khác hẳn `taskkill /T` và PowerShell.
+    """
+    if sys.platform != "win32":
+        return {}
+    import ctypes
+    from ctypes import wintypes
+
+    class TIEN_TRINH(ctypes.Structure):
+        _fields_ = [("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD),
+                    ("th32ProcessID", wintypes.DWORD),
+                    ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+                    ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
+                    ("th32ParentProcessID", wintypes.DWORD),
+                    ("pcPriClassBase", ctypes.c_long), ("dwFlags", wintypes.DWORD),
+                    ("szExeFile", ctypes.c_char * 260)]
+
+    k32  = ctypes.windll.kernel32
+    snap = k32.CreateToolhelp32Snapshot(0x00000002, 0)     # TH32CS_SNAPPROCESS
+    if snap == -1:
+        return {}
+    ra = {}
+    try:
+        e = TIEN_TRINH()
+        e.dwSize = ctypes.sizeof(TIEN_TRINH)
+        if k32.Process32First(snap, ctypes.byref(e)):
+            while True:
+                ra.setdefault(e.th32ParentProcessID, []).append(e.th32ProcessID)
+                if not k32.Process32Next(snap, ctypes.byref(e)):
+                    break
+    finally:
+        k32.CloseHandle(snap)
+    return ra
+
+
+def _ca_cay(pids) -> list:
+    """`pids` cùng toàn bộ con cháu, con xếp TRƯỚC cha."""
+    ban = _ban_do_cha_con()
+    ra, xet = [], list(pids)
+    while xet:
+        p = xet.pop()
+        if p in ra:
+            continue
+        ra.append(p)
+        xet.extend(ban.get(p, []))
+    ra.reverse()                 # con trước, cha sau
+    return ra
+
+
+def _diet_mot(pid: int) -> bool:
+    """Giết đúng MỘT tiến trình bằng TerminateProcess."""
+    if sys.platform != "win32":
+        try:
+            os.kill(pid, 9)
+            return True
+        except OSError:
+            return not _pid_alive(pid)
+    import ctypes
+    k32 = ctypes.windll.kernel32
+    h = k32.OpenProcess(0x0001, False, pid)        # PROCESS_TERMINATE
+    if not h:
+        return not _pid_alive(pid)                 # đã chết rồi thì coi như xong
+    try:
+        return bool(k32.TerminateProcess(h, 1))
+    finally:
+        k32.CloseHandle(h)
+
+
 def _kill_pids(pids, han_giay: float = 15) -> list:
     """
-    taskkill /F /T các PID — BẮN MỘT LƯỢT rồi mới chờ, không xếp hàng.
+    Giết các PID cùng toàn bộ con cháu, bằng TerminateProcess của Windows.
 
-    Bản cũ chờ xong cây tiến trình này mới diệt cây kế tiếp. Mỗi runner kéo
-    theo một node + 4–5 tiến trình Chromium, nên tắt phần mềm là ngồi nhìn
-    từng cửa sổ tắt lần lượt. Bắn song song thì tổng thời gian bằng đúng cây
-    lâu nhất, thay vì bằng tổng của tất cả.
+    KHÔNG dùng `taskkill /F /T` nữa. Đo tận tay lúc 02:3x ngày 19/09 trên chính
+    runner Bán (PID 6212):
 
-    Lọc trùng trước khi bắn: PID hay xuất hiện ở cả ba đường dò (file pid, khoá
-    runner, quét dòng lệnh) — diệt lại cây đã chết là trả tiền hai lần cho
-    không.
+        taskkill /F /T /PID 6212   → treo >20 giây, chạy hai lần, tiến trình
+                                     VẪN SỐNG
+        TerminateProcess(6212)     → chết trong 0,00 giây
 
-    Dùng DEVNULL chứ không phải `capture_output`: có ống dữ liệu thì phải chờ
-    tới khi mọi tiến trình giữ đầu ghi thoát hết, mà tiến trình con của Chrome
-    lại giữ đúng cái đó — đây chính là chỗ từng làm việc tắt phần mềm đứng hình.
+    Đó là lý do log từng ghi "KHÔNG diệt được PID …" hàng loạt, và là lý do bấm
+    nút Dừng mãi không ăn. `taskkill /T` phải tự đi duyệt cây tiến trình của cả
+    máy; máy này lúc tải nặng có hơn hai trăm tiến trình nên nó nghẽn ở đó.
+    TerminateProcess thì tác động thẳng vào đúng một tiến trình, không duyệt gì.
+
+    Con diệt TRƯỚC cha: giết cha trước thì Chromium mồ côi ở lại, vẫn ăn RAM và
+    vẫn giữ thư mục profile.
+
+    Lọc trùng trước khi bắn — PID hay xuất hiện ở cả ba đường dò (file pid,
+    khoá runner, quét dòng lệnh).
     """
-    pids = [int(p) for p in dict.fromkeys(pids) if p]
-    if not pids:
+    goc = [int(p) for p in dict.fromkeys(pids) if p]
+    if not goc:
         return []
 
-    dang_chay = []
-    for pid in pids:
+    # Tự vệ: đừng giết chính mình hay TỔ TIÊN của mình.
+    #
+    # Phải là tổ tiên, tuyệt đối không phải con cháu: runner chính là con của
+    # server, chặn con cháu thì nút Dừng không diệt được gì nữa.
+    cam = {os.getpid()}
+    try:
+        cha = {}
+        for c, ds in _ban_do_cha_con().items():
+            for d in ds:
+                cha[d] = c
+        p = os.getpid()
+        while p in cha and cha[p] not in cam:
+            p = cha[p]
+            cam.add(p)
+    except Exception:
+        pass
+
+    for pid in _ca_cay(goc):
+        if pid in cam or pid <= 4:          # 0/4 là tiến trình hệ thống
+            continue
         try:
-            dang_chay.append((pid, subprocess.Popen(
-                ["taskkill", "/F", "/T", "/PID", str(pid)],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                creationflags=subprocess.CREATE_NO_WINDOW)))
+            _diet_mot(pid)
         except Exception:
             pass
 
     han = time.time() + han_giay
     da_diet = []
-    for pid, tt in dang_chay:
-        try:
-            tt.wait(timeout=max(0.5, han - time.time()))
-        except Exception:
-            try:
-                tt.kill()
-            except Exception:
-                pass
-        # HỎI LẠI HỆ ĐIỀU HÀNH, đừng tin taskkill đã chạy xong là xong.
-        #
-        # Lúc 00:35:24 ngày 18/09: log ghi "Đã diệt runner PID 22352/9848/
-        # 13836/17268" mà cả bốn tiến trình đó vẫn sống nguyên tới 00:47 — vì
-        # chỗ này chỉ chờ taskkill THOÁT rồi coi là xong, không xem nó làm được
-        # hay không. Hậu quả không chỉ là log sai: file pid bị xoá theo, nên
-        # 'Lịch của máy' tưởng runner đã chết và cứ 20 giây lại bật thêm một
-        # cái nữa — cái nào cũng đụng khoá rồi tự thoát ngay.
+    for pid in goc:
+        while _pid_alive(pid) and time.time() < han:
+            time.sleep(0.15)
         if _pid_alive(pid):
             logger.warning(f"  ⚠️  KHÔNG diệt được PID {pid} — vẫn đang chạy")
         else:
@@ -438,7 +517,21 @@ def _runner_running(loai):
     # cấp lại cho tiến trình khác thì hỏi PID sẽ trả lời 'còn chạy' mãi mãi,
     # và runner không bao giờ được bật lại — lịch Thuê đã chết im gần 4
     # tiếng đêm 18/09 vì đúng chuyện này.
-    return _khoa_runner().dang_giu(loai)
+    kr = _khoa_runner()
+    if not kr.dang_giu(loai):
+        return False
+
+    # VÁ LẠI file pid. Runner thật vẫn sống mà mất file pid là chuyện có thật:
+    # đo lúc 02:2x ngày 19/09, `.runner_ban.pid` không còn trong khi PID 6212
+    # vẫn đang giữ khoá. Nút "Dừng" hồi đó chỉ tìm theo file pid nên bấm mãi
+    # không ăn. Để nguyên thì mỗi vòng hỏi trạng thái lại bỏ lỡ một lần vá.
+    con = kr.pid_dang_giu(loai)
+    if con:
+        try:
+            (BASE_DIR / RUNNER_CFG[loai]["pid_file"]).write_text(str(con))
+        except OSError:
+            pass
+    return True
 
 
 def _gom_pid_runner(ds_quet=None) -> list:
@@ -619,28 +712,42 @@ def run_start(loai):
 def run_stop(loai):
     if loai not in RUNNER_CFG:
         return jsonify({"ok": False, "error": "Loại không hợp lệ"})
-    killed = []
-    # Kill theo pid file
+    kr   = _khoa_runner()
+    ung  = []
+
+    # 1) File pid. KHÔNG được là đường duy nhất: đo lúc 02:2x ngày 19/09,
+    # `.runner_ban.pid` đã biến mất trong khi runner Bán thật vẫn sống và giữ
+    # khoá ở PID 6212. Bấm "Dừng" lúc đó không diệt gì cả — không có pid để
+    # diệt, còn bước quét dòng lệnh thì mù — nên nút bấm mãi không ăn.
     pid = _runner_pid(loai)
     if pid:
-        try:
-            if sys.platform == "win32":
-                subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
-                               capture_output=True, timeout=15)
-            else:
-                os.kill(pid, 15)
-            killed.append(pid)
-        except Exception:
-            pass
+        ung.append(pid)
         (BASE_DIR / RUNNER_CFG[loai]["pid_file"]).unlink(missing_ok=True)
 
-    # Quét orphan CÙNG LOẠI (pid file mất/cũ). Nhận ra nhau nhờ `loai` nằm trên
-    # dòng lệnh — trước đây lọc theo loai nhưng loai chỉ có trong biến môi
-    # trường nên bộ lọc không bao giờ khớp, phần này coi như vô tác dụng.
-    # Khớp cụm LIỀN "scheduler.py <loai>" đúng như lúc khởi chạy, thay vì hai
-    # chuỗi rời — rời rạc thì một tiến trình python bất kỳ nhắc tới cả hai chữ
-    # cũng bị tính là runner.
-    killed += _kill_pids(_find_python_pids(*_dau_hieu("scheduler.py", RUNNER_LOAI_MAP[loai])))
+    # 2) KHOÁ — đường đáng tin nhất. Hệ điều hành chỉ nhả khi tiến trình chết,
+    # nên ai đang giữ khoá chính là runner thật, bất kể file pid còn hay mất.
+    pid_khoa = kr.pid_dang_giu(loai)
+    if pid_khoa:
+        ung.append(pid_khoa)
+
+    # 3) Quét dòng lệnh — bắt runner của bản cũ (chưa có khoá). Khớp cụm LIỀN
+    # "scheduler.py <loai>" đúng như lúc khởi chạy, thay vì hai chuỗi rời: rời
+    # rạc thì một tiến trình python bất kỳ nhắc tới cả hai chữ cũng bị tính là
+    # runner.
+    ung += _find_python_pids(*_dau_hieu("scheduler.py", RUNNER_LOAI_MAP[loai]))
+
+    killed = _kill_pids(ung)
+
+    # Nói thật kết quả. Khoá còn người giữ nghĩa là CHƯA dừng được — báo "ok"
+    # lúc đó thì giao diện đổi nút thành "Run" trong khi runner vẫn chạy.
+    if kr.dang_giu(loai):
+        con = kr.pid_dang_giu(loai)
+        logger.warning(f"⚠️  Dừng runner '{loai}' KHÔNG thành công — PID {con} vẫn chạy")
+        return jsonify({"ok": False, "killed": killed,
+                        "error": f"Không dừng được runner {loai}"
+                                 + (f" (PID {con} vẫn chạy)" if con else "")})
+    logger.info(f"⏹ Đã dừng runner '{loai}'"
+                + (f" — PID {', '.join(map(str, killed))}" if killed else ""))
     return jsonify({"ok": True, "killed": killed})
 
 
@@ -2386,9 +2493,10 @@ def api_join_stop(sched_id):
     if pf.exists():
         try:
             pid = int(pf.read_text().strip())
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
-                               capture_output=True, timeout=15)
-            killed = True
+            # Dùng chung đường diệt với runner: `taskkill /F /T` treo hơn 20
+            # giây rồi bỏ cuộc trên máy này (đo 19/09), TerminateProcess thì
+            # xong tức thì — xem ghi chú ở `_kill_pids`.
+            killed = bool(_kill_pids([pid]))
         except Exception:
             pass
         pf.unlink(missing_ok=True)

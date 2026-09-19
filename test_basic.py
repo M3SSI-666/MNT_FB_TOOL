@@ -3116,51 +3116,41 @@ check("giao diện có nút sửa khi lệch giờ", "lmCaiDanhThuc" in _ajs_lm)
 # treo vĩnh viễn, và `os._exit(0)` phía sau không bao giờ chạy.
 _src_sv = Path("server.py").read_text(encoding="utf-8")
 
-# Soi theo VỊ TRÍ chứ không bằng biểu thức chính quy: dấu ")" đầu tiên là của
-# `str(pid)`, nên regex kiểu [^)]* sẽ cắt trước khi tới `timeout=` và báo nhầm
-# là thiếu — đúng lỗi bài kiểm này vừa mắc.
-_vt = [i for i in range(len(_src_sv))
-       if _src_sv.startswith('subprocess.run(["taskkill"', i)]
-check(f"tìm thấy các lời gọi taskkill.run ({len(_vt)})", len(_vt) >= 2)
-_thieu = [_src_sv[i:i + 50] for i in _vt if "timeout=" not in _src_sv[i:i + 240]]
-check("MỌI lời gọi taskkill.run đều có hạn chờ" +
-      (f" — thiếu {len(_thieu)}" if _thieu else ""), not _thieu)
+# Tắt phải THẬT SỰ tắt, và phải nhanh. Đo tận tay lúc 02:3x ngày 19/09 trên
+# chính runner Bán (PID 6212):
+#     taskkill /F /T /PID 6212  -> treo >20 giây, chạy HAI lần, tiến trình VẪN SỐNG
+#     TerminateProcess(6212)    -> chết trong 0,00 giây
+# `taskkill /T` phải tự duyệt cây tiến trình của cả máy; máy này lúc tải nặng có
+# hơn hai trăm tiến trình nên nó nghẽn ở đó.
+check("KHÔNG còn gọi taskkill ở đâu nữa", '["taskkill"' not in _src_sv)
 
-# `_kill_pids` giờ bắn Popen song song thay vì run() nối đuôi. Cùng một mối
-# nguy, chỉ đổi cách chặn: phải có hạn chờ, và TUYỆT ĐỐI không dùng ống dữ
-# liệu — có ống là phải đợi mọi tiến trình con của Chrome nhả đầu ghi, đúng
-# chỗ từng làm việc tắt phần mềm đứng hình.
 _i_kp  = _src_sv.index("def _kill_pids(")
-_than  = _src_sv[_i_kp:_src_sv.index("\ndef ", _i_kp + 10)]
-check("_kill_pids: bắn taskkill bằng Popen (song song)",
-      'subprocess.Popen(\n                ["taskkill"' in _than)
-check("_kill_pids: chờ có hạn", "tt.wait(timeout=" in _than)
-check("_kill_pids: KHÔNG dùng ống dữ liệu",
-      "capture_output=" not in _than and "subprocess.DEVNULL" in _than)
-check("_kill_pids: bắn HẾT rồi mới chờ, không chờ từng cái",
-      _than.index("subprocess.Popen") < _than.index("tt.wait(timeout="))
+_than = _src_sv[_i_kp:_src_sv.index(chr(10) + "def ", _i_kp + 10)]
+check("_kill_pids: giết bằng TerminateProcess", "_diet_mot(pid)" in _than)
+check("_kill_pids: giết cả cây con cháu", "_ca_cay(goc)" in _than)
 check("_kill_pids: lọc PID trùng trước khi bắn", "dict.fromkeys(pids)" in _than)
+check("_kill_pids: chờ có hạn rồi hỏi lại HĐH",
+      "time.time() < han" in _than and "KHÔNG diệt được PID" in _than)
+# Runner LÀ con của server. Chặn nhầm con cháu thì nút Dừng không diệt được gì.
+check("_kill_pids: tự vệ theo TỔ TIÊN, không phải con cháu",
+      "cha[p]" in _than and "_ca_cay([os.getpid()])" not in _than)
 
-# Lúc tắt: chỉ được quét PowerShell MỘT lần rồi diệt MỘT lượt. Hai lần quét
-# (~0,4s mỗi lần) cộng taskkill nối đuôi chính là cảm giác lag lúc đóng app.
-_i_sd   = _src_sv.index("def _shutdown_all(")
-_than_sd = _src_sv[_i_sd:_src_sv.index("\ndef ", _i_sd + 10)]
+_i_ct = _src_sv.index("def _ca_cay(")
+_than_ct = _src_sv[_i_ct:_src_sv.index(chr(10) + "def ", _i_ct + 10)]
+check("_ca_cay: xếp con TRƯỚC cha (đừng để Chromium mồ côi)",
+      "ra.reverse()" in _than_ct)
+
+# Lúc tắt: chỉ được quét PowerShell MỘT lần rồi diệt MỘT lượt.
+_i_sd    = _src_sv.index("def _shutdown_all(")
+_than_sd = _src_sv[_i_sd:_src_sv.index(chr(10) + "def ", _i_sd + 10)]
 check("tắt app: chỉ quét tiến trình một lần", _than_sd.count("_quet_python()") == 1)
-
-# Diệt xong phải HỎI LẠI hệ điều hành. Lúc 00:35:24 ngày 18/09 log ghi "Đã diệt
-# runner PID 22352/9848/13836/17268" mà cả bốn vẫn sống tới 00:47 — vì chỉ chờ
-# taskkill thoát rồi coi là xong. File pid bị xoá theo, nên 'Lịch của máy'
-# tưởng runner chết và cứ 20 giây bật thêm một cái, cái nào cũng đụng khoá rồi
-# tự thoát. Log runner có đúng 12 dòng "Đã có runner ... — thoát" vì chuyện này.
-check("_kill_pids: hỏi lại HĐH chứ không tin taskkill",
-      "if _pid_alive(pid):" in _than and "KHÔNG diệt được PID" in _than)
-_i_wait = _than.index("tt.wait(timeout=")
-check("_kill_pids: kiểm tra SAU khi chờ", _than.index("if _pid_alive(pid):") > _i_wait)
+check("tắt app: gom runner + join worker rồi diệt một lượt",
+      _than_sd.count("_kill_pids(") == 1 and "join_groups_worker" in _than_sd)
 
 # Mở app KHÔNG được cắt ngang phiên đang chạy. Khoá đã bảo đảm một loại một
 # runner, nên runner còn giữ khoá là runner lành — để yên.
-_i_dr   = _src_sv.index("def _don_runner_la(")
-_than_dr = _src_sv[_i_dr:_src_sv.index("\ndef ", _i_dr + 10)]
+_i_dr    = _src_sv.index("def _don_runner_la(")
+_than_dr = _src_sv[_i_dr:_src_sv.index(chr(10) + "def ", _i_dr + 10)]
 check("mở app: giữ nguyên runner đang giữ khoá",
       "pid not in giu" in _than_dr and "Giữ nguyên runner đang chạy" in _than_dr)
 check("mở app: vá lại file pid cho runner lành",
@@ -3169,10 +3159,27 @@ _i_main = _src_sv.index('if "--lam" in sys.argv:')
 check("khởi động gọi _don_runner_la, KHÔNG diệt sạch",
       "_don_runner_la()" in _src_sv[_i_main:]
       and "_kill_all_runners()" not in _src_sv[_i_main:])
-# Nút "Tắt phần mềm" và nút X thì vẫn phải diệt sạch — lúc đó là thật sự dừng.
-check("tắt app vẫn diệt sạch", "_gom_pid_runner(ds)" in _than_sd)
-check("tắt app: gom runner + join worker rồi diệt một lượt",
-      _than_sd.count("_kill_pids(") == 1 and "join_groups_worker" in _than_sd)
+
+# Nút "Dừng" của TỪNG runner phải tìm theo KHOÁ, không chỉ theo file pid. Đo
+# lúc 02:2x ngày 19/09: `.runner_ban.pid` đã biến mất trong khi runner Bán thật
+# vẫn sống ở PID 6212 và đang giữ khoá. Nút Dừng hồi đó không có pid để diệt,
+# còn bước quét dòng lệnh thì vừa mù vừa quá hạn — nên bấm mãi không ăn.
+_i_st    = _src_sv.index("def run_stop(")
+_than_st = _src_sv[_i_st:_src_sv.index(chr(10) + "@app.route", _i_st + 10)]
+check("nút Dừng tìm runner theo khoá", "kr.pid_dang_giu(loai)" in _than_st)
+check("nút Dừng vẫn tra cả file pid và dòng lệnh",
+      "_runner_pid(loai)" in _than_st and "_find_python_pids(" in _than_st)
+check("nút Dừng báo THẤT BẠI khi runner vẫn còn giữ khoá",
+      "kr.dang_giu(loai)" in _than_st and '"ok": False' in _than_st)
+check("giao diện đọc kết quả thật của nút Dừng",
+      "const r=await API.runStop(loai)" in _app_js and "if(r.ok)" in _app_js)
+
+# Runner sống mà mất file pid là chuyện có thật — phải vá lại, không thì mỗi
+# vòng hỏi trạng thái lại bỏ lỡ một lần vá và nút Dừng mãi không tìm ra nó.
+_i_rr    = _src_sv.index("def _runner_running(")
+_than_rr = _src_sv[_i_rr:_src_sv.index(chr(10) + "def ", _i_rr + 10)]
+check("hỏi trạng thái thì vá lại file pid từ khoá",
+      'RUNNER_CFG[loai]["pid_file"]).write_text(str(con))' in _than_rr)
 
 check("tắt phần mềm: dọn dẹp chạy trong luồng riêng có hạn chờ",
       "don.join(timeout=" in _src_sv)

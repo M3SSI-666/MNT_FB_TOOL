@@ -868,7 +868,16 @@ async function runnerStart(loai){
 }
 async function runnerStop(loai){
     if(!confirm(`Dừng runner ${RUNNER_LABELS[loai]?.title}?`)) return;
-    try{ await API.runStop(loai); Toast.success(`⏹ Đã dừng ${loai}`); await loadRunnerStatus(); }
+    // Đọc kết quả THẬT. Bản cũ báo "Đã dừng" bất kể server trả về gì, nên lúc
+    // diệt trượt thì người dùng thấy thông báo xanh mà runner vẫn chạy, bấm
+    // mấy lần cũng thế — không hiểu nổi phần mềm đang làm gì.
+    try{
+        const r=await API.runStop(loai);
+        if(r.ok) Toast.success(`⏹ Đã dừng ${loai}`
+                               +(r.killed?.length?` (PID ${r.killed.join(", ")})`:""));
+        else Toast.error(r.error||`Không dừng được runner ${loai}`, 12000);
+        await loadRunnerStatus();
+    }
     catch(e){ Toast.error(e.message); }
 }
 async function shutdownApp(){
