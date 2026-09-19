@@ -3181,6 +3181,44 @@ _than_rr = _src_sv[_i_rr:_src_sv.index(chr(10) + "def ", _i_rr + 10)]
 check("hỏi trạng thái thì vá lại file pid từ khoá",
       'RUNNER_CFG[loai]["pid_file"]).write_text(str(con))' in _than_rr)
 
+# RESTART.bat / UPDATE.bat cũng phải bỏ taskkill. Đo trên máy thật 19/09: cửa
+# sổ cmd đứng im ở dòng "Kill Flask server PID 13680" — `taskkill /F /PID` treo,
+# và `Get-CimInstance` lọc theo CommandLine thì 30 giây chưa xong lúc máy tải
+# nặng. Người dùng tưởng máy treo.
+import dung_het as _dh
+
+for _b in ("RESTART.bat", "UPDATE.bat"):
+    _s_b = Path(_b).read_text(encoding="utf-8", errors="replace")
+    # Bỏ dòng chú thích: chính chỗ này GHI LẠI vì sao không dùng taskkill nữa,
+    # nên soi cả file thì phép kiểm tự báo động vì đọc trúng lời giải thích.
+    _lenh_b = "\n".join(l for l in _s_b.splitlines()
+                        if not l.strip().startswith("::")
+                        and not l.strip().lower().startswith("rem "))
+    check(f"{_b}: không còn taskkill", "taskkill" not in _lenh_b)
+    check(f"{_b}: không quét Get-CimInstance nữa", "Get-CimInstance" not in _lenh_b)
+    check(f"{_b}: gọi dung_het.py", "dung_het.py" in _lenh_b)
+
+check("dung_het: giết bằng TerminateProcess",
+      "TerminateProcess" in Path("dung_het.py").read_text(encoding="utf-8"))
+check("dung_het: tìm runner qua khoá, không chỉ file pid",
+      hasattr(_dh, "pid_giu_khoa") and hasattr(_dh, "pid_tu_file"))
+check("dung_het: xếp con TRƯỚC cha", _dh.ca_cay.__doc__ and "CON XẾP TRƯỚC CHA" in _dh.ca_cay.__doc__)
+
+# Giết thật một cây tiến trình rồi đo — đây là điều duy nhất đáng tin.
+_cay = _sp.Popen(["cmd", "/c", "start /b timeout /t 90 >nul & timeout /t 90 >nul"],
+                 stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
+                 creationflags=getattr(_sp, "CREATE_NO_WINDOW", 0)) if sys.platform == "win32" else None
+if _cay:
+    _time.sleep(1.0)
+    _n_cay = len(_dh.ca_cay([_cay.pid]))
+    _t0 = _time.time()
+    for _p in _dh.ca_cay([_cay.pid]):
+        _dh.diet(_p)
+    _mat = _time.time() - _t0
+    _time.sleep(0.4)
+    check(f"dung_het giết sạch cây {_n_cay} tiến trình", not _dh.con_song(_cay.pid))
+    check(f"… và nhanh ({_mat:.2f}s, taskkill từng treo >20s)", _mat < 2.0)
+
 check("tắt phần mềm: dọn dẹp chạy trong luồng riêng có hạn chờ",
       "don.join(timeout=" in _src_sv)
 _i_join = _src_sv.index("don.join(timeout=")

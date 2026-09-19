@@ -3,20 +3,25 @@ echo ============================================================
 echo  Dang tat toan bo server + scheduler cu...
 echo ============================================================
 
-:: Kill Flask server (port 8080) — KHONG dung /T de tranh diet chrome.exe con
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8080 ^| findstr LISTENING 2^>nul') do (
-    echo  Kill Flask server PID %%a
-    taskkill /F /PID %%a >nul 2>&1
-)
+:: Tim PID server dang giu cong 8080 (netstat nhanh, khong treo)
+set SV_PID=
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8080 ^| findstr LISTENING 2^>nul') do set SV_PID=%%a
 
-:: Kill orphan scheduler.py + join_groups_worker.py (ca python.exe lan pythonw.exe)
-:: Dung PowerShell/CIM thay cho wmic — Microsoft dang go dan wmic khoi Windows 11,
-:: mat no thi khong diet duoc runner cu -> 2 runner cung chay tren 1 profile Chrome.
-echo  Kill orphan scheduler / join worker...
-:: Luu y cu phap: chi dung NHAY DON ben trong. Trong batch, dau | nam trong
-:: ngoac kep khong can ^ (viet ^| thi PowerShell nhan dung ky tu ^| va bao loi),
-:: va \" cung khong phai escape hop le cua cmd.
-powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'python' -and ($_.CommandLine -like '*scheduler.py*' -or $_.CommandLine -like '*join_groups_worker*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
+:: Dung server + runner bang dung_het.py.
+::
+:: KHONG dung taskkill va KHONG quet Get-CimInstance nua. Do tren may that ngay
+:: 19/09: taskkill /F /PID <server> TREO (cua so cmd dung im o dong "Kill Flask
+:: server PID ..."), taskkill /F /T /PID <runner> treo >20s ma tien trinh van
+:: song, con Get-CimInstance loc theo CommandLine thi 30s chua xong luc may tai
+:: nang. Ca ba deu phai duyet tien trinh cua CA MAY qua RPC/WMI.
+::
+:: dung_het.py chup mot anh danh sach tien trinh roi goi thang TerminateProcess:
+:: cung phep do do, chet trong 0,00 giay. No con tim runner qua FILE KHOA nen
+:: khong phu thuoc file pid con hay mat.
+echo  Dang dung server + runner...
+call "%~dp0_TIM_PYTHON.bat"
+if errorlevel 1 exit /b 1
+%PY% -X utf8 "%~dp0dung_het.py" %SV_PID%
 
 ping -n 3 127.0.0.1 >nul
 

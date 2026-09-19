@@ -10,6 +10,35 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.23.0 — 19/09/2026
+
+**Sửa: bấm Restart thì cửa sổ đen treo đơ**
+
+Cửa sổ cmd đứng im ở dòng `Kill Flask server PID 13680` rồi không nhúc nhích.
+Không phải máy treo — là chính `RESTART.bat` bị kẹt.
+
+Nó dùng ba cách diệt tiến trình, và trên máy đang chạy nhiều phiên thì **cả ba
+đều nghẽn**:
+
+| Lệnh | Đo trên máy thật |
+|---|---|
+| `taskkill /F /PID <server>` | **treo**, cmd đứng im ở đúng dòng đó |
+| `taskkill /F /T /PID <runner>` | treo hơn 20 giây, chạy hai lần, tiến trình **vẫn sống** |
+| `Get-CimInstance Win32_Process` lọc theo dòng lệnh | 30 giây chưa xong |
+
+Lý do chung: cả ba phải đi hỏi vòng qua RPC/WMI rồi duyệt tiến trình của **cả
+máy**. Lúc chạy nhiều phiên, máy có hơn hai trăm tiến trình.
+
+Từ bản này, `RESTART.bat` và `UPDATE.bat` gọi **`dung_het.py`**: chụp một ảnh
+danh sách tiến trình rồi tắt thẳng từng cái, con trước cha. Cùng phép đo đó —
+**0,01 giây**, kể cả thời gian khởi động Python là 0,17 giây.
+
+`dung_het.py` còn tìm runner qua **file khoá**, nên không phụ thuộc file pid còn
+hay mất — cái đã làm nút Dừng vô dụng ở v2.22.0.
+
+> Nếu cửa sổ đen của bạn đang đứng im: cứ đóng nó đi, an toàn. Tiến trình chưa
+> chết thì bản này sẽ dọn ở lần chạy sau.
+
 ## v2.22.0 — 19/09/2026
 
 **Sửa: bấm Dừng từng runner không ăn**
