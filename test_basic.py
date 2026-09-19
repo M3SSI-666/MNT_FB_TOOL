@@ -3167,8 +3167,13 @@ check("khởi động gọi _don_runner_la, KHÔNG diệt sạch",
 _i_st    = _src_sv.index("def run_stop(")
 _than_st = _src_sv[_i_st:_src_sv.index(chr(10) + "@app.route", _i_st + 10)]
 check("nút Dừng tìm runner theo khoá", "kr.pid_dang_giu(loai)" in _than_st)
-check("nút Dừng vẫn tra cả file pid và dòng lệnh",
-      "_runner_pid(loai)" in _than_st and "_find_python_pids(" in _than_st)
+check("nút Dừng vẫn tra file pid", "_runner_pid(loai)" in _than_st)
+# Nút này người ta vừa bấm và đang ngồi nhìn, nên KHÔNG được quét WMI. Đo lúc
+# 21:2x ngày 19/09 trên máy thật: Get-CimInstance Win32_Process quá 120 GIÂY
+# chưa xong, còn chụp ảnh tiến trình bằng Toolhelp32 mất 0,006 giây cho cả 270
+# tiến trình. Bỏ được vì từ v2.18.0 runner nào cũng giữ khoá.
+check("nút Dừng KHÔNG quét WMI/PowerShell", "_find_python_pids(" not in _than_st)
+check("lưới vét WMI có hạn chờ ngắn", "timeout=5," in _src_sv)
 check("nút Dừng báo THẤT BẠI khi runner vẫn còn giữ khoá",
       "kr.dang_giu(loai)" in _than_st and '"ok": False' in _than_st)
 check("giao diện đọc kết quả thật của nút Dừng",

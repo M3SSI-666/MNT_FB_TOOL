@@ -10,6 +10,30 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.23.1 — 19/09/2026
+
+**Nút Dừng runner: bấm là xong ngay**
+
+Ở v2.22.0 nút Dừng đã tìm đúng runner, nhưng vẫn còn một bước quét dự phòng bật
+PowerShell hỏi WMI. Đo trên máy thật lúc 21:2x ngày 19/09, ngay lúc máy đang chạy
+nhiều phiên:
+
+| Cách lấy danh sách tiến trình | Thời gian |
+|---|---|
+| `Get-CimInstance Win32_Process` (WMI) | **quá 120 giây chưa xong** |
+| Chụp ảnh tiến trình (Toolhelp32) | **0,006 giây** — thấy đủ 270 tiến trình |
+
+Không phải phần mềm chậm — WMI trên máy này đang nghẽn. Mà đây là nút người ta
+vừa bấm và đang ngồi nhìn.
+
+Từ bản này nút Dừng chỉ dùng **khoá** và **file pid**, cả hai đều đọc thẳng từ
+đĩa. Bỏ được bước quét kia vì từ v2.18.0 runner nào cũng giữ khoá, mà khoá thì hệ
+điều hành chỉ nhả khi tiến trình chết. Việc dọn runner của bản cũ để lúc mở phần
+mềm lo, không bắt nút bấm gánh.
+
+Lưới vét WMI còn lại (lúc mở và lúc tắt phần mềm) hạ hạn chờ từ 15 xuống 5 giây —
+thà bỏ sót còn hơn bắt đợi.
+
 ## v2.23.0 — 19/09/2026
 
 **Sửa: bấm Restart thì cửa sổ đen treo đơ**

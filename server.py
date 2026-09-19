@@ -335,7 +335,13 @@ def _quet_python() -> list:
     try:
         r = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
-            capture_output=True, text=True, timeout=15,
+            # Hạn chờ NGẮN. Câu hỏi này đi qua WMI, và WMI trên máy đang chạy
+            # nhiều phiên có thể treo rất lâu — đo lúc 21:2x ngày 19/09:
+            # Get-CimInstance Win32_Process quá 120 giây chưa xong, trong khi
+            # chụp ảnh tiến trình bằng Toolhelp32 chỉ mất 0,006 giây cho cả 270
+            # tiến trình. Đây chỉ là lưới vét runner của bản CŨ (chưa có khoá),
+            # nên thà bỏ sót còn hơn bắt người dùng ngồi đợi.
+            capture_output=True, text=True, timeout=5,
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
     except Exception as e:
@@ -734,7 +740,16 @@ def run_stop(loai):
     # "scheduler.py <loai>" đúng như lúc khởi chạy, thay vì hai chuỗi rời: rời
     # rạc thì một tiến trình python bất kỳ nhắc tới cả hai chữ cũng bị tính là
     # runner.
-    ung += _find_python_pids(*_dau_hieu("scheduler.py", RUNNER_LOAI_MAP[loai]))
+    # 3) KHÔNG quét dòng lệnh ở đây. Đây là nút người ta vừa bấm và đang ngồi
+    # nhìn, nên phải xong ngay. Mà bước quét ấy bật PowerShell hỏi WMI — đo trên
+    # máy thật lúc 21:2x ngày 19/09:
+    #
+    #     Get-CimInstance Win32_Process   → QUÁ 120 GIÂY chưa xong
+    #     chụp ảnh tiến trình (Toolhelp32) → 0,006 giây, thấy đủ 270 tiến trình
+    #
+    # Bỏ được vì từ v2.18.0 runner nào cũng giữ khoá, mà khoá thì hệ điều hành
+    # chỉ nhả khi tiến trình chết — bước (2) đã đủ. Việc dọn runner của bản cũ
+    # (chưa có khoá) để lúc mở phần mềm lo, không bắt nút bấm gánh.
 
     killed = _kill_pids(ung)
 
