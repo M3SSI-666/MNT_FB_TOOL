@@ -677,9 +677,12 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool, ly_do_loi: str = "") -> tuple[st
         # Gộp xuống MỘT dòng. Lỗi Playwright kèm cả khối "Call log:" nhiều dòng,
         # để nguyên thì ô Ghi chú trên bảng bị kéo cao mấy dòng trống.
         ly_do_loi = " ".join((ly_do_loi or "").split())
+        # Ghi cả NGÀY, không chỉ giờ. Chỉ có "20:51" thì lỗi từ hôm trước nhìn
+        # y hệt lỗi vừa nãy — đúng chuyện đã xảy ra với 'Sa Tran Anh' ngày
+        # 19/09: ghi chú "20:51 · Page crashed" thực ra là của 20:51 HÔM 18/09.
         if not ok and ly_do_loi:
             con.execute("UPDATE accounts SET loi_gan_nhat=? WHERE id=?",
-                        (f"{datetime.now():%H:%M} · {ly_do_loi}"[:160], r["id"]))
+                        (f"{datetime.now():%d/%m %H:%M} · {ly_do_loi}"[:160], r["id"]))
 
         hanh_dong, ly_do = sk.danh_gia(moi)
         if hanh_dong == "nghi":
@@ -701,12 +704,16 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool, ly_do_loi: str = "") -> tuple[st
                  f"'{ten_acc}' nghỉ, thăm dò lại lúc {moc:%H:%M} — {ly_do}",
                  ly_do[:160], r["id"]))
         elif ok:
-            # Phiên chạy được → xoá mốc nghỉ cũ cho sạch. Không xoá thì cột
-            # nghi_den giữ một mốc quá khứ vô nghĩa, và giao diện phải tự đoán
-            # xem nó còn hiệu lực hay không.
+            # Phiên chạy được → xoá sạch dấu vết hỏng cũ.
+            #
+            # `loi_gan_nhat` phải xoá theo MỌI phiên chạy được, không kèm điều
+            # kiện gì. Bản cũ chỉ xoá khi acc từng bị cho nghỉ (`nghi_den != ''`),
+            # nên acc hỏng ĐÚNG MỘT lần — chưa đủ 5 để phải nghỉ — thì mang cái
+            # ghi chú đó suốt đời. Thấy thật ngày 19/09: 'Sa Tran Anh' chạy
+            # 20/20 phiên gần nhất đều tốt mà ô Ghi chú vẫn treo lỗi từ HÔM
+            # TRƯỚC, người dùng nhìn tưởng nick đang hỏng.
             con.execute("UPDATE accounts SET nghi_den='', ly_do_nghi='', "
-                        "loi_gan_nhat='' WHERE id=? "
-                        "AND COALESCE(nghi_den,'') != ''", (r["id"],))
+                        "loi_gan_nhat='' WHERE id=?", (r["id"],))
         if hanh_dong == "nghi":
             # Đánh 'X😴' các slot còn lại hôm nay để nhìn bảng lịch là biết ngay
             # acc này nghỉ — không phải đợi từng slot tới giờ mới đổi thành 😴.

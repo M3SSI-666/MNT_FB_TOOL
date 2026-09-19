@@ -291,6 +291,20 @@ try:
     _r_tl = db.get_account_by_name(_ten_tl)
     check("lỗi ĐẦU TIÊN đã ghi lại, không đợi đủ 5",
           _ly_tl in (_r_tl.get("loi_gan_nhat") or "") and _hd_tl == "")
+    # Ghi cả NGÀY: chỉ có "20:51" thì lỗi hôm trước nhìn y hệt lỗi vừa nãy —
+    # 'Sa Tran Anh' ngày 19/09 treo ghi chú "20:51 · Page crashed" thực ra là
+    # của 20:51 HÔM 18/09, người dùng tưởng nick đang hỏng.
+    check("ghi chú lỗi có cả ngày, không chỉ giờ",
+          __import__("re").match(r"^\d{2}/\d{2} \d{2}:\d{2} · ",
+                                 _r_tl.get("loi_gan_nhat") or ""))
+    # Hỏng MỘT lần rồi chạy lại được thì phải xoá ghi chú, dù chưa hề bị cho
+    # nghỉ. Bản cũ chỉ xoá khi acc từng nghỉ, nên acc hỏng đúng một lần mang
+    # ghi chú đó suốt đời: 'Sa Tran Anh' chạy 20/20 phiên tốt mà vẫn treo lỗi.
+    db.ghi_nhan_phien_dang(_ten_tl, True)
+    _r_tl = db.get_account_by_name(_ten_tl)
+    check("hỏng 1 lần rồi chạy lại được → xoá ghi chú (dù chưa từng nghỉ)",
+          not (_r_tl.get("loi_gan_nhat") or ""))
+    _hd_tl, _ = db.ghi_nhan_phien_dang(_ten_tl, False, ly_do_loi=_ly_tl)
     for _ in range(4):
         _hd_tl, _lydo_tl = db.ghi_nhan_phien_dang(_ten_tl, False, ly_do_loi=_ly_tl)
     _r_tl = db.get_account_by_name(_ten_tl)

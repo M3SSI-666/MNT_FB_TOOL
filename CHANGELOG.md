@@ -10,6 +10,29 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.23.3 — 19/09/2026
+
+**Sửa: ghi chú lỗi treo lại mãi trên nick đã khoẻ**
+
+Nick chạy tốt hàng chục phiên liền mà ô Ghi chú vẫn treo một lỗi cũ, nhìn vào cứ
+tưởng nick đang hỏng.
+
+Hai chỗ sai:
+
+* **Không xoá khi nick hồi phục.** Ghi chú chỉ được xoá nếu nick từng bị *cho
+  nghỉ*. Nick hỏng đúng **một** lần — chưa đủ 5 để phải nghỉ — thì mang ghi chú
+  đó suốt đời. Thấy thật: `Sa Tran Anh` chạy **20/20 phiên gần nhất đều tốt** mà
+  vẫn treo lỗi.
+* **Không ghi ngày.** Ghi chú chỉ có `20:51`, nên lỗi từ **hôm trước** nhìn y hệt
+  lỗi vừa nãy. Đúng trường hợp trên: `20:51 · Page crashed` thực ra là 20:51
+  ngày 18/09.
+
+Từ bản này: mỗi phiên chạy được là xoá sạch ghi chú lỗi, không kèm điều kiện gì;
+và ghi chú mới có dạng `19/09 21:22 · …`.
+
+Ghi chú rác đang có sẵn trong máy đã được dọn khi cập nhật — chỉ giữ lại của nick
+mà phiên gần nhất vẫn đang hỏng thật.
+
 ## v2.23.2 — 19/09/2026
 
 **Sửa: cập nhật xong vẫn hiện số hiệu bản cũ**
