@@ -10,6 +10,37 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.24.0 — 20/09/2026
+
+**Dọn mã nguồn — bớt 416 dòng, hết hẳn việc phải vá hai nơi**
+
+Không đổi gì về cách dùng. Tính năng **VIA vẫn giữ nguyên** để sau này dùng.
+
+**Gộp 5 hàm bị chép đôi giữa hai file đăng bài.** `_view_stories`,
+`_browse_and_like`, `_clipboard_paste`, `_human_delay`, `_jwait` — mỗi file giữ
+một bản giống hệt, nên mỗi lần vá phải nhớ vá cả hai. Và chúng **đã trôi khác
+nhau**: bản `_view_stories` ở một file chờ bằng `page.wait_for_timeout(1500)`,
+bản kia dùng `_jwait(page, 1500)` — lệch đúng một dòng, đủ để hai nick hành xử
+khác nhau mà không ai biết. Đây chính là kiểu sai sót từng làm bản vá hộp cookie
+bị sót một file.
+
+**Tách phần xử lý tiến trình ra `tien_trinh.py`.** `server.py` và `dung_het.py`
+mỗi nơi giữ một bản chép của bốn hàm tắt tiến trình. Giờ dùng chung một bản.
+
+**Xoá 11 hàm không ai gọi** và mấy thứ vụn: 1 API không nơi nào gọi, 1 hàm giao
+diện, 1 hằng số, 3 khoá cài đặt.
+
+| | trước | sau |
+|---|---|---|
+| `page_via_poster.py` | 1351 | 1209 |
+| `via_poster.py` | 683 | 550 |
+| `server.py` | 2707 | 2538 |
+| `dung_het.py` | 193 | 89 |
+| `tien_trinh.py` (mới) | — | 184 |
+
+Kiểm lại sau khi dọn: **0 hàm chết, 0 nhóm hàm trùng lặp**. 968 phép kiểm đều
+qua, và 5 hàm vừa gộp đã chạy thật qua Chromium.
+
 ## v2.23.3 — 19/09/2026
 
 **Sửa: ghi chú lỗi treo lại mãi trên nick đã khoẻ**

@@ -33,7 +33,9 @@ from cookie_exporter import load_cookie
 from config import HEADLESS
 from utils import logger, jitter_ms, CookieDeadError, LoiBuoc
 from fb_common import (kiem_vi_pham, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
-                       bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, browser_launch_kwargs)
+                       bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, browser_launch_kwargs,
+                       human_delay, jwait, clipboard_paste,
+                       view_stories, browse_and_like)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -54,158 +56,22 @@ _UA = (
 _find_profile_dir = find_profile_dir
 
 
-async def _human_delay(min_ms: int = 800, max_ms: int = 2000):
-    await asyncio.sleep(random.randint(min_ms, max_ms) / 1000)
-
-
-async def _jwait(page, base_ms: int, pct: float = 0.3):
-    """Chờ base_ms nhưng dao động ±pct (mặc định ±30%) — tránh nhịp cố định."""
-    await page.wait_for_timeout(jitter_ms(base_ms, pct))
+# Vỏ mỏng gọi sang fb_common — TRƯỚC ĐÂY LÀ NĂM BẢN SAO NGUYÊN VĂN.
+# Hai file poster mỗi file giữ một bộ giống hệt nhau, nên mỗi lần vá phải nhớ vá
+# cả hai. Thực tế đã trôi: bản `_view_stories` ở đây chờ bằng
+# `page.wait_for_timeout(1500)` còn bản kia dùng `_jwait(page, 1500)` — lệch đúng
+# một dòng, đủ để hai nick hành xử khác nhau mà không ai biết.
+_human_delay     = human_delay
+_jwait           = jwait
+_clipboard_paste = clipboard_paste
+_view_stories    = view_stories
+_browse_and_like = browse_and_like
 
 
 # Dùng bản chung ở fb_common. Trước đây mỗi poster giữ một bản chép giống
 # hệt, nên khi sửa lỗi "dò 5 selector tuần tự tốn 15s" phải sửa ba nơi — đúng
 # kiểu sai sót đã từng xảy ra với bản vá dialog cảnh báo.
 _dismiss_anon_dialog = dismiss_anon_dialog
-
-
-async def _clipboard_paste(page, ctx, text: str):
-    """Ghi text vào clipboard rồi Ctrl+V."""
-    try:
-        await ctx.grant_permissions(["clipboard-read", "clipboard-write"])
-        await page.evaluate(
-            "async (t) => { await navigator.clipboard.writeText(t); }", text
-        )
-    except Exception:
-        await page.evaluate(
-            """(t) => {
-                const el = Object.assign(document.createElement('textarea'),
-                    {value: t, style: 'position:fixed;opacity:0'});
-                document.body.appendChild(el);
-                el.focus(); el.select();
-                document.execCommand('copy');
-                document.body.removeChild(el);
-            }""",
-            text,
-        )
-    await page.keyboard.press("Control+v")
-    await asyncio.sleep(0.6)
-
-
-async def _view_stories(page, duration_sec: int = None):
-    """
-    Click vào story đầu tiên trong newsfeed, xem duration_sec giây rồi đóng.
-    Bỏ qua nếu không tìm thấy story (không raise lỗi).
-    """
-    from playwright.async_api import TimeoutError as PWTimeout
-    if duration_sec is None:
-        duration_sec = random.randint(15, 20)
-    logger.info(f"    📖 Xem story ~{duration_sec}s...")
-
-    # Dọn dialog cảnh báo TRƯỚC: nó đè lên newfeed nên cú bấm vào story trúng
-    # nền mờ, Playwright ném lỗi và cả bước xem story bị bỏ qua.
-    await dong_dialog_canh_bao(page)
-
-    try:
-        story_el = await page.evaluate_handle("""() => {
-            for (const a of document.querySelectorAll('a[href]')) {
-                const href = a.href || '';
-                if (!href.includes('/stories/')) continue;
-                if (href.includes('create') || href.includes('compose') || href.includes('add')) continue;
-                const txt = (a.textContent || '').trim().toLowerCase();
-                if (txt.includes('tạo tin') || txt.includes('create')) continue;
-                if (!a.querySelector('image,img,svg')) continue;
-                return a;
-            }
-            return null;
-        }""")
-        story_elem = story_el.as_element()
-        if story_elem:
-            await story_elem.click()
-            # Facebook hay bật dialog cảnh báo NGAY khi vừa mở trình xem story
-            # và đè lên nó. cho_escape=False vì Escape lúc này sẽ tắt luôn story.
-            await dong_dialog_canh_bao(page, cho_escape=False)
-            await page.wait_for_timeout(duration_sec * 1000)
-            await dong_dialog_canh_bao(page, cho_escape=False)
-            for csel in ["[aria-label='Đóng']", "[aria-label='Close']"]:
-                try:
-                    btn = await page.wait_for_selector(csel, timeout=2000, state="visible")
-                    if btn:
-                        # timeout=3000: không có nó thì cú bấm bị chặn đứng hết 30s
-                        # mặc định của Playwright rồi mới chịu thua.
-                        await btn.click(timeout=3000)
-                        break
-                except PWTimeout:
-                    continue
-            await page.keyboard.press("Escape")
-            await _jwait(page, 1500)
-            logger.info(f"    ✅ Đã xem story")
-        else:
-            logger.info(f"    ⏭️  Không tìm thấy story — bỏ qua")
-    except Exception as e:
-        # Kèm LÝ DO: bản cũ chỉ ghi "bỏ qua" nên lúc dialog cảnh báo chặn mất
-        # cú bấm, log trông y hệt khi nick đó không có story nào.
-        logger.info(f"    ⏭️  Story: bỏ qua ({type(e).__name__}: {str(e)[:80]})")
-
-
-async def _browse_and_like(page, duration_sec: int, max_likes: int = 1):
-    """
-    Scroll feed trang hiện tại trong duration_sec giây, like tối đa max_likes bài.
-    Dùng JS evaluate để tránh click overlay.
-    """
-    liked   = 0
-    elapsed = 0.0
-    if max_likes > 0:
-        logger.info(f"    📜 Scroll + like {duration_sec}s (max {max_likes} like)...")
-    else:
-        logger.info(f"    📜 Scroll {duration_sec}s (không like)...")
-
-    # Dialog cảnh báo khoá cứng việc cuộn trang và nuốt mọi cú bấm like
-    await dong_dialog_canh_bao(page)
-
-    while elapsed < duration_sec:
-        px = random.randint(300, 600)
-        await page.evaluate(f"window.scrollBy(0, {px})")
-        wait = random.uniform(1.5, 3.5)
-        await page.wait_for_timeout(int(wait * 1000))
-        elapsed += wait
-
-        if liked >= max_likes:
-            continue
-
-        # Xác suất 15% mỗi lần scroll mới thử like — thưa, tự nhiên hơn
-        if random.random() > 0.15:
-            continue
-
-        try:
-            like_btn = await page.evaluate_handle("""() => {
-                const allDivs = document.querySelectorAll('div[aria-label]');
-                const candidates = [];
-                for (const el of allDivs) {
-                    const label = (el.getAttribute('aria-label') || '').trim();
-                    if (label !== 'Thích' && label !== 'Like') continue;
-                    const rect = el.getBoundingClientRect();
-                    if (rect.top >= 0 && rect.bottom <= window.innerHeight &&
-                        rect.width > 0 && rect.height > 0) {
-                        candidates.push({el, top: rect.top});
-                    }
-                }
-                if (candidates.length === 0) return null;
-                candidates.sort((a, b) => a.top - b.top);
-                return candidates[0].el;
-            }""")
-            like_el = like_btn.as_element()
-            if like_el:
-                await page.evaluate("el => el.scrollIntoView({block:'center'})", like_el)
-                await page.wait_for_timeout(300)
-                await page.evaluate("el => el.click()", like_el)
-                liked += 1
-                logger.info(f"    👍 Like #{liked}")
-                await page.wait_for_timeout(random.randint(800, 1500))
-        except Exception:
-            pass
-
-    logger.info(f"    ✅ Browse xong — liked {liked} bài")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -235,14 +235,3 @@ def cleanup_temp(temp_dir: Optional[str]):
 # List images in a content folder
 # ═══════════════════════════════════════════════════════════════
 
-def list_content_images(loai: str, content_id: int = None) -> list[str]:
-    """Trả về list URL path ảnh trong thư mục content."""
-    folder = Path(CONTENT_MEDIA_DIRS.get(loai, str(MEDIA_DIR / "uploads")))
-    if not folder.exists():
-        return []
-    urls = []
-    for f in sorted(folder.iterdir()):
-        if f.suffix.lower() in ALLOWED_EXTS:
-            rel = f.relative_to(MEDIA_DIR.parent)
-            urls.append("/" + str(rel).replace("\\", "/"))
-    return urls

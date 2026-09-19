@@ -1148,7 +1148,6 @@ function renderAccTable(data){
     }).join("");
 }
 
-function filterAccounts(){ renderAccTable(_accData); }
 
 async function toggleAccCheck(e, id, field){
     const on = e.target.checked;

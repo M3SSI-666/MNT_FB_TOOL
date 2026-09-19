@@ -144,21 +144,3 @@ def jitter_ms(base_ms: int, pct: float = 0.3, floor_ms: int = 200) -> int:
     return int(jitter(base_ms, pct, floor_ms))
 
 
-def truncate_text(text: str, max_len: int = 60) -> str:
-    return text[:max_len] + "..." if len(text) > max_len else text
-
-
-def format_full_timestamp() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-
-def is_time_to_post(gio_dang: str, window_minutes: int = 3) -> bool:
-    """Kiểm tra giờ đăng có trong cửa sổ ±window_minutes không."""
-    try:
-        h, m   = map(int, gio_dang.strip().split(":"))
-        now    = datetime.now()
-        target = now.replace(hour=h, minute=m, second=0, microsecond=0)
-        diff   = (now - target).total_seconds() / 60
-        return 0 <= diff <= window_minutes
-    except Exception:
-        return False

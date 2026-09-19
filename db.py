@@ -1510,14 +1510,6 @@ def update_schedule_field(schedule_id: int, field: str, value: str):
         )
 
 
-def reset_daily_schedules():
-    """Reset ✅ → Chờ lúc 00:01 mỗi ngày."""
-    with _conn() as con:
-        con.execute(
-            "UPDATE schedules SET trang_thai='Chờ' WHERE trang_thai LIKE '✅%'"
-        )
-
-
 # ═══════════════════════════════════════════════════════════════
 # Settings
 # ═══════════════════════════════════════════════════════════════

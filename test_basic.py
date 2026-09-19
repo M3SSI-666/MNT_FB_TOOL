@@ -3138,21 +3138,37 @@ _src_sv = Path("server.py").read_text(encoding="utf-8")
 # hơn hai trăm tiến trình nên nó nghẽn ở đó.
 check("KHÔNG còn gọi taskkill ở đâu nữa", '["taskkill"' not in _src_sv)
 
-_i_kp  = _src_sv.index("def _kill_pids(")
-_than = _src_sv[_i_kp:_src_sv.index(chr(10) + "def ", _i_kp + 10)]
-check("_kill_pids: giết bằng TerminateProcess", "_diet_mot(pid)" in _than)
-check("_kill_pids: giết cả cây con cháu", "_ca_cay(goc)" in _than)
-check("_kill_pids: lọc PID trùng trước khi bắn", "dict.fromkeys(pids)" in _than)
-check("_kill_pids: chờ có hạn rồi hỏi lại HĐH",
-      "time.time() < han" in _than and "KHÔNG diệt được PID" in _than)
-# Runner LÀ con của server. Chặn nhầm con cháu thì nút Dừng không diệt được gì.
-check("_kill_pids: tự vệ theo TỔ TIÊN, không phải con cháu",
-      "cha[p]" in _than and "_ca_cay([os.getpid()])" not in _than)
+# Việc xử lý tiến trình nay nằm ở `tien_trinh.py`, dùng chung giữa server và
+# `dung_het.py` (RESTART.bat gọi file đó, không nên nạp cả Flask chỉ để tắt một
+# tiến trình). Trước đây mỗi nơi giữ một bản chép của bốn hàm này.
+import tien_trinh as _tt
 
-_i_ct = _src_sv.index("def _ca_cay(")
-_than_ct = _src_sv[_i_ct:_src_sv.index(chr(10) + "def ", _i_ct + 10)]
-check("_ca_cay: xếp con TRƯỚC cha (đừng để Chromium mồ côi)",
-      "ra.reverse()" in _than_ct)
+def _chi_ma(src: str) -> str:
+    """Bỏ docstring và dòng chú thích — chính chỗ đó GHI LẠI vì sao không dùng
+    WMI/taskkill nữa, nên soi cả file thì phép kiểm đọc trúng lời giải thích."""
+    import re as _r
+    src = _r.sub(r'"""[\s\S]*?"""', "", src)
+    return chr(10).join(l for l in src.splitlines()
+                        if not l.strip().startswith("#"))
+
+_src_tt = Path("tien_trinh.py").read_text(encoding="utf-8")
+check("tien_trinh: giết bằng TerminateProcess", "TerminateProcess" in _src_tt)
+check("tien_trinh: dựng cây bằng Toolhelp32, không WMI",
+      "CreateToolhelp32Snapshot" in _src_tt and "CimInstance" not in _chi_ma(_src_tt))
+check("tien_trinh: lọc PID trùng trước khi bắn", "dict.fromkeys(pids)" in _src_tt)
+check("tien_trinh: chờ có hạn rồi hỏi lại HĐH",
+      "time.time() < han" in _src_tt and "KHÔNG diệt được PID" in _src_tt)
+check("tien_trinh: xếp con TRƯỚC cha (đừng để Chromium mồ côi)",
+      "ra.reverse()" in _src_tt)
+# Runner LÀ con của server. Chặn nhầm con cháu thì nút Dừng không diệt được gì.
+_ban_tt = _tt.ban_do_cha_con()
+check("to_tien trả tổ tiên, KHÔNG trả con cháu",
+      os.getpid() in _tt.to_tien(ban=_ban_tt)
+      and not (set(_ban_tt.get(os.getpid(), [])) & _tt.to_tien(ban=_ban_tt)))
+check("server + dung_het dùng chung, không ai chép lại",
+      "tien_trinh.diet_cay" in _src_sv
+      and "tien_trinh.diet_cay" in Path("dung_het.py").read_text(encoding="utf-8")
+      and "TerminateProcess" not in _chi_ma(_src_sv))
 
 # Lúc tắt: chỉ được quét PowerShell MỘT lần rồi diệt MỘT lượt.
 _i_sd    = _src_sv.index("def _shutdown_all(")
@@ -3240,11 +3256,11 @@ for _b in ("RESTART.bat", "UPDATE.bat"):
     check(f"{_b}: không quét Get-CimInstance nữa", "Get-CimInstance" not in _lenh_b)
     check(f"{_b}: gọi dung_het.py", "dung_het.py" in _lenh_b)
 
-check("dung_het: giết bằng TerminateProcess",
-      "TerminateProcess" in Path("dung_het.py").read_text(encoding="utf-8"))
 check("dung_het: tìm runner qua khoá, không chỉ file pid",
       hasattr(_dh, "pid_giu_khoa") and hasattr(_dh, "pid_tu_file"))
-check("dung_het: xếp con TRƯỚC cha", _dh.ca_cay.__doc__ and "CON XẾP TRƯỚC CHA" in _dh.ca_cay.__doc__)
+# dung_het KHÔNG được chép lại phần xử lý tiến trình — dùng chung `tien_trinh`.
+check("dung_het dùng chung tien_trinh, không tự chép",
+      "tien_trinh.diet_cay" in Path("dung_het.py").read_text(encoding="utf-8"))
 
 # Giết thật một cây tiến trình rồi đo — đây là điều duy nhất đáng tin.
 _cay = _sp.Popen(["cmd", "/c", "start /b timeout /t 90 >nul & timeout /t 90 >nul"],
@@ -3252,13 +3268,13 @@ _cay = _sp.Popen(["cmd", "/c", "start /b timeout /t 90 >nul & timeout /t 90 >nul
                  creationflags=getattr(_sp, "CREATE_NO_WINDOW", 0)) if sys.platform == "win32" else None
 if _cay:
     _time.sleep(1.0)
-    _n_cay = len(_dh.ca_cay([_cay.pid]))
+    _n_cay = len(_tt.ca_cay([_cay.pid]))
     _t0 = _time.time()
-    for _p in _dh.ca_cay([_cay.pid]):
-        _dh.diet(_p)
+    for _p in _tt.ca_cay([_cay.pid]):
+        _tt.diet_mot(_p)
     _mat = _time.time() - _t0
     _time.sleep(0.4)
-    check(f"dung_het giết sạch cây {_n_cay} tiến trình", not _dh.con_song(_cay.pid))
+    check(f"tien_trinh giết sạch cây {_n_cay} tiến trình", not _tt.con_song(_cay.pid))
     check(f"… và nhanh ({_mat:.2f}s, taskkill từng treo >20s)", _mat < 2.0)
 
 check("tắt phần mềm: dọn dẹp chạy trong luồng riêng có hạn chờ",

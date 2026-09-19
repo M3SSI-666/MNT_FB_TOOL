@@ -17,6 +17,7 @@ sys.path.insert(0, str(BASE_DIR))
 os.chdir(str(BASE_DIR))
 
 from config import VERSION, PORT, LOG_DIR, MEDIA_DIR
+import tien_trinh
 import capnhat
 import chromium_tai
 import db
@@ -290,31 +291,15 @@ def _runner_pid(loai):
         return None
 
 
-def _pid_alive(pid: int) -> bool:
-    """
-    Kiểm tra PID còn sống — KHÔNG dùng os.kill(pid, 0).
-    Trên Windows os.kill(pid,0) gọi GenerateConsoleCtrlEvent (gửi Ctrl+C),
-    raise lỗi khi server chạy dưới pythonw (không console) → false dương tính.
-    """
-    if sys.platform == "win32":
-        import ctypes
-        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-        STILL_ACTIVE = 259
-        k32 = ctypes.windll.kernel32
-        h = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
-        if not h:
-            return False
-        try:
-            code = ctypes.c_ulong()
-            ok = k32.GetExitCodeProcess(h, ctypes.byref(code))
-            return bool(ok) and code.value == STILL_ACTIVE
-        finally:
-            k32.CloseHandle(h)
-    try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
+# Việc xử lý tiến trình nằm ở `tien_trinh.py` — dùng chung với `dung_het.py`
+# (RESTART.bat gọi file đó, không nên nạp cả Flask chỉ để tắt một tiến trình).
+# Trước đây mỗi nơi giữ một bản chép của bốn hàm này.
+_pid_alive = tien_trinh.con_song
+
+
+def _kill_pids(pids, han_giay: float = 15) -> list:
+    """Giết các PID cùng con cháu. Xem `tien_trinh.diet_cay`."""
+    return tien_trinh.diet_cay(pids, han_giay, ghi=logger.warning)
 
 
 def _quet_python() -> list:
@@ -370,141 +355,6 @@ def _find_python_pids(*needles) -> list:
     rồi tự lọc — đỡ được một lần bật PowerShell.
     """
     return _loc_pid(_quet_python(), needles)
-
-
-def _ban_do_cha_con() -> dict:
-    """
-    {pid cha: [pid con, ...]} — chụp một ảnh danh sách tiến trình của Windows.
-
-    Chạy ngay trong tiến trình này, không bật cửa sổ con nào, nên nhanh và
-    không bao giờ treo — khác hẳn `taskkill /T` và PowerShell.
-    """
-    if sys.platform != "win32":
-        return {}
-    import ctypes
-    from ctypes import wintypes
-
-    class TIEN_TRINH(ctypes.Structure):
-        _fields_ = [("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD),
-                    ("th32ProcessID", wintypes.DWORD),
-                    ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
-                    ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
-                    ("th32ParentProcessID", wintypes.DWORD),
-                    ("pcPriClassBase", ctypes.c_long), ("dwFlags", wintypes.DWORD),
-                    ("szExeFile", ctypes.c_char * 260)]
-
-    k32  = ctypes.windll.kernel32
-    snap = k32.CreateToolhelp32Snapshot(0x00000002, 0)     # TH32CS_SNAPPROCESS
-    if snap == -1:
-        return {}
-    ra = {}
-    try:
-        e = TIEN_TRINH()
-        e.dwSize = ctypes.sizeof(TIEN_TRINH)
-        if k32.Process32First(snap, ctypes.byref(e)):
-            while True:
-                ra.setdefault(e.th32ParentProcessID, []).append(e.th32ProcessID)
-                if not k32.Process32Next(snap, ctypes.byref(e)):
-                    break
-    finally:
-        k32.CloseHandle(snap)
-    return ra
-
-
-def _ca_cay(pids) -> list:
-    """`pids` cùng toàn bộ con cháu, con xếp TRƯỚC cha."""
-    ban = _ban_do_cha_con()
-    ra, xet = [], list(pids)
-    while xet:
-        p = xet.pop()
-        if p in ra:
-            continue
-        ra.append(p)
-        xet.extend(ban.get(p, []))
-    ra.reverse()                 # con trước, cha sau
-    return ra
-
-
-def _diet_mot(pid: int) -> bool:
-    """Giết đúng MỘT tiến trình bằng TerminateProcess."""
-    if sys.platform != "win32":
-        try:
-            os.kill(pid, 9)
-            return True
-        except OSError:
-            return not _pid_alive(pid)
-    import ctypes
-    k32 = ctypes.windll.kernel32
-    h = k32.OpenProcess(0x0001, False, pid)        # PROCESS_TERMINATE
-    if not h:
-        return not _pid_alive(pid)                 # đã chết rồi thì coi như xong
-    try:
-        return bool(k32.TerminateProcess(h, 1))
-    finally:
-        k32.CloseHandle(h)
-
-
-def _kill_pids(pids, han_giay: float = 15) -> list:
-    """
-    Giết các PID cùng toàn bộ con cháu, bằng TerminateProcess của Windows.
-
-    KHÔNG dùng `taskkill /F /T` nữa. Đo tận tay lúc 02:3x ngày 19/09 trên chính
-    runner Bán (PID 6212):
-
-        taskkill /F /T /PID 6212   → treo >20 giây, chạy hai lần, tiến trình
-                                     VẪN SỐNG
-        TerminateProcess(6212)     → chết trong 0,00 giây
-
-    Đó là lý do log từng ghi "KHÔNG diệt được PID …" hàng loạt, và là lý do bấm
-    nút Dừng mãi không ăn. `taskkill /T` phải tự đi duyệt cây tiến trình của cả
-    máy; máy này lúc tải nặng có hơn hai trăm tiến trình nên nó nghẽn ở đó.
-    TerminateProcess thì tác động thẳng vào đúng một tiến trình, không duyệt gì.
-
-    Con diệt TRƯỚC cha: giết cha trước thì Chromium mồ côi ở lại, vẫn ăn RAM và
-    vẫn giữ thư mục profile.
-
-    Lọc trùng trước khi bắn — PID hay xuất hiện ở cả ba đường dò (file pid,
-    khoá runner, quét dòng lệnh).
-    """
-    goc = [int(p) for p in dict.fromkeys(pids) if p]
-    if not goc:
-        return []
-
-    # Tự vệ: đừng giết chính mình hay TỔ TIÊN của mình.
-    #
-    # Phải là tổ tiên, tuyệt đối không phải con cháu: runner chính là con của
-    # server, chặn con cháu thì nút Dừng không diệt được gì nữa.
-    cam = {os.getpid()}
-    try:
-        cha = {}
-        for c, ds in _ban_do_cha_con().items():
-            for d in ds:
-                cha[d] = c
-        p = os.getpid()
-        while p in cha and cha[p] not in cam:
-            p = cha[p]
-            cam.add(p)
-    except Exception:
-        pass
-
-    for pid in _ca_cay(goc):
-        if pid in cam or pid <= 4:          # 0/4 là tiến trình hệ thống
-            continue
-        try:
-            _diet_mot(pid)
-        except Exception:
-            pass
-
-    han = time.time() + han_giay
-    da_diet = []
-    for pid in goc:
-        while _pid_alive(pid) and time.time() < han:
-            time.sleep(0.15)
-        if _pid_alive(pid):
-            logger.warning(f"  ⚠️  KHÔNG diệt được PID {pid} — vẫn đang chạy")
-        else:
-            da_diet.append(pid)
-    return da_diet
 
 
 def _runner_running(loai):
@@ -675,12 +525,6 @@ def _don_runner_la():
         logger.info("  ▶ Giữ nguyên runner đang chạy: "
                     + ", ".join(f"{l} (PID {p})"
                                 for p, l in sorted(giu.items(), key=lambda x: x[1])))
-
-
-def _kill_join_workers():
-    """Kill mọi tiến trình join_groups_worker.py đang chạy."""
-    for pid in _kill_pids(_find_python_pids(*_dau_hieu("join_groups_worker"))):
-        logger.info(f"  Đã diệt join worker PID {pid}")
 
 
 def _shutdown_all():
@@ -1617,11 +1461,6 @@ CONTENT_CATEGORIES = [
 ]
 
 
-@app.route("/api/content-categories")
-def api_content_categories():
-    return jsonify({"ok": True, "data": CONTENT_CATEGORIES})
-
-
 # ═══════════════════════════════════════════════════════════════
 # API — UID Groups
 # ═══════════════════════════════════════════════════════════════
@@ -2128,15 +1967,6 @@ def api_schedule_page_gen():
     return jsonify({"ok": True, "total": len(schedule),
                     "from": schedule[0]["gio_dang"],
                     "to":   schedule[-1]["gio_dang"]})
-
-
-def _hhmm_to_min(s: str, mac_dinh: int) -> int:
-    """'05:00' → 300. Chuỗi hỏng thì lấy mặc định."""
-    try:
-        h, m = map(int, str(s).split(":"))
-        return h * 60 + m
-    except Exception:
-        return mac_dinh
 
 
 @app.route("/api/schedule/<loai>/gen-data")

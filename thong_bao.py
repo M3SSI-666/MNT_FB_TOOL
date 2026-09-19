@@ -253,25 +253,6 @@ def gui(text: str) -> None:
         logger.debug(f"Xếp tin Telegram hỏng: {e}")
 
 
-@atexit.register
-def _xa_hang():
-    """
-    Tiến trình sắp thoát thì cố gửi nốt, tối đa 10 giây.
-
-    Cần thật: phiên tham gia nhóm chạy trong tiến trình con sống rất ngắn. Không
-    có đoạn này thì tin 'Cookie hết hạn' xếp vào hàng xong là tiến trình chết,
-    tin bay theo.
-    """
-    try:
-        if _luong_gui is None or not _luong_gui.is_alive():
-            return
-        han = time.time() + 10
-        while not _hang.empty() and time.time() < han:
-            time.sleep(0.2)
-    except Exception:
-        pass
-
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Báo khi acc đổi trạng thái
 # ═══════════════════════════════════════════════════════════════════════════

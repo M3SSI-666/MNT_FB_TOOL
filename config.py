@@ -75,14 +75,6 @@ DB_PATH    = DATA_DIR / "app.db"
 COOKIES_DIR  = DATA_ROOT / "cookies"
 PROFILES_DIR = DATA_ROOT / "profiles"
 
-# Log files per runner
-LOG_FILES = {
-    "homestay": str(LOG_DIR / "autopost_homestay.log"),
-    "thue":     str(LOG_DIR / "autopost_thue.log"),
-    "ban":      str(LOG_DIR / "autopost_ban.log"),
-    "page":     str(LOG_DIR / "autopost_page.log"),
-    "nuoi":     str(LOG_DIR / "autopost_nuoi.log"),
-}
 LOG_FILE = str(LOG_DIR / "autopost.log")
 
 # Headless browser
