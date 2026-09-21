@@ -1665,7 +1665,8 @@ _DLG_SPAM = ("Sự việc 13 tháng 8, 2026 Chúng tôi đã gỡ một số n�
              + "Spam Đã gỡ bài viết 13 tháng 8, 2026 " * 5
              + "Xem tất cả (12)")
 
-check("đọc được số vụ từ 'Xem tất cả'", _sk.doc_vi_pham(_DLG_SPAM) == {"so": 12, "spam": True})
+check("đọc được số vụ từ 'Xem tất cả'",
+      _sk.doc_vi_pham(_DLG_SPAM)["so"] == 12 and _sk.doc_vi_pham(_DLG_SPAM)["spam"] is True)
 check("nhận ra là do spam",             _sk.doc_vi_pham(_DLG_SPAM)["spam"] is True)
 # Không có "Xem tất cả" thì đếm số dòng.
 check("thiếu 'Xem tất cả' -> đếm dòng",
@@ -1688,6 +1689,72 @@ check("lần đo đầu KHÔNG gắn cờ",        _sk.co_vu_moi(-1, 12) is Fals
 check("số vụ tăng -> có vụ mới",        _sk.co_vu_moi(12, 13) is True)
 check("số vụ đứng yên -> không",        _sk.co_vu_moi(12, 12) is False)
 check("số vụ giảm -> không",            _sk.co_vu_moi(12, 9) is False)
+
+# ── Vụ mang NGÀY HÔM NAY: đường phát hiện CHÍNH ────────────────────────────
+# Chỉ so số với lần đo trước là không đủ, vì con số đó TỤT XUỐNG ĐƯỢC. Đo thật
+# trên nick 'Nguyen Ngan': 10 → 4 → 10 trong một ngày (Facebook cho vụ cũ rụng
+# khỏi danh sách; và khi chưa kịp hiện "Xem tất cả (N)" thì phần đếm dự phòng
+# chỉ đếm được mấy dòng đang nhìn thấy).
+#
+# Hậu quả của luật cũ: mốc lưu 10, mọi lần đo sau ra 4 đều bị coi là "không có
+# gì mới" → nick MIỄN NHIỄM VĨNH VIỄN, cứ đăng tiếp trong khi Facebook gỡ bài
+# liên tục. Đúng thứ người dùng báo ngày 22/09.
+from datetime import datetime as _dt_vp
+_HN = f"{_dt_vp.now().day} tháng {_dt_vp.now().month}, {_dt_vp.now().year}"
+_DLG_HOM_NAY = (f"Sự việc {_HN} Chúng tôi đã gỡ một số nội dung hoặc tin nhắn "
+                + f"Spam Đã gỡ bài viết {_HN} " * 4 + "Xem tất cả (4)")
+_DLG_CU_HET  = _DLG_HOM_NAY.replace(_HN, "15 tháng 8, 2026")
+
+check("đếm được vụ mang ngày hôm nay", _sk.co_vu_hom_nay(_DLG_HOM_NAY) >= 4)
+check("dialog toàn vụ cũ -> 0 vụ hôm nay", _sk.co_vu_hom_nay(_DLG_CU_HET) == 0)
+check("doc_vi_pham trả kèm 'hom_nay'",
+      _sk.doc_vi_pham(_DLG_HOM_NAY)["hom_nay"] >= 4)
+
+# Đây là ca THẬT đã bỏ lọt: mốc lưu 10, Facebook báo 4 — nhưng cả 4 là của
+# HÔM NAY.
+check("mốc 10 / đo 4 / hôm nay có -> PHẢI gắn cờ",
+      _sk.co_vu_moi(10, 4, _sk.doc_vi_pham(_DLG_HOM_NAY)["hom_nay"]) is True)
+check("mốc 10 / đo 4 / toàn vụ cũ -> KHÔNG gắn cờ oan",
+      _sk.co_vu_moi(10, 4, _sk.doc_vi_pham(_DLG_CU_HET)["hom_nay"]) is False)
+check("lần đo ĐẦU vẫn chỉ ghi mốc, dù có vụ hôm nay",
+      _sk.co_vu_moi(-1, 4, 4) is False)
+
+# ── Vòng canh KHÔNG được nuốt mất bằng chứng ───────────────────────────────
+# Vòng canh nền quét mỗi 5 giây và ĐÓNG dialog ngay khi thấy. `kiem_vi_pham`
+# chạy cuối phiên, mở facebook.com rồi chờ 4–6 giây mới dò — quãng đó vòng canh
+# đã kịp đóng mất. Đếm trên log tới 22/09: vòng canh thấy 252 lần,
+# `kiem_vi_pham` chỉ đọc được 65 lần; riêng nick 'Nguyen Ngan' đúng 3 lần trong
+# khi Facebook gỡ bài của nó liên tục. Log vì thế đầy dòng
+# "✅ Không thấy cảnh báo gỡ bài" trong đúng những phiên vừa bị gỡ bài.
+import fb_common as _fbc_vp
+
+
+class _TrangGia:
+    pass
+
+
+_tg = _TrangGia()
+_fbc_vp._nho_canh_bao(_tg, "Spam Đã gỡ bài viết")
+check("vòng canh ghi lại được chữ cảnh báo",
+      _fbc_vp._CANH_BAO_DA_THAY.get(id(_tg)) == "Spam Đã gỡ bài viết")
+_fbc_vp._nho_canh_bao(_tg, "ngắn")
+check("giữ bản DÀI nhất, không để bản sau đè mất",
+      _fbc_vp._CANH_BAO_DA_THAY.get(id(_tg)) == "Spam Đã gỡ bài viết")
+_fbc_vp._quen_canh_bao(_tg)
+check("đóng trang thì xoá, không rò sang phiên sau",
+      id(_tg) not in _fbc_vp._CANH_BAO_DA_THAY)
+
+_src_fb = Path("fb_common.py").read_text(encoding="utf-8")
+check("CẢ HAI đường đóng dialog đều ghi lại trước khi đóng",
+      _src_fb.count("_nho_canh_bao(page") >= 2)
+_i_vc = _src_fb.index("async def _vong_canh(")
+_than_vc = _src_fb[_i_vc:_src_fb.index(chr(10) + "def ", _i_vc + 10)]
+check("vòng canh ghi lại TRƯỚC khi bấm đóng",
+      _than_vc.index("_nho_canh_bao(page") < _than_vc.index("btn.click("))
+check("kiem_vi_pham dùng lại chữ vòng canh đã thấy",
+      "_CANH_BAO_DA_THAY.get(id(page)" in _src_fb
+      and "Dùng lại cảnh báo vòng canh" in _src_fb)
+check("truyền 'hom_nay' xuống tận db", 'vp.get("hom_nay", 0)' in _src_fb)
 
 # ── Spam: tầng DB ──────────────────────────────────────────────────────────
 _sid = db.upsert_account({"ten_acc": "SPAM Test", "trang_thai": "Active",

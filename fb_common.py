@@ -491,6 +491,32 @@ async def composer_bi_chan(page, giay_cho: int = 10) -> bool:
     return True
 
 
+# Chữ của dialog cảnh báo GẦN NHẤT thấy trong phiên, theo từng trang.
+#
+# Vì sao phải nhớ lại: vòng canh nền quét mỗi 5 giây và ĐÓNG dialog ngay khi
+# thấy. `kiem_vi_pham` chạy ở cuối phiên, mở facebook.com rồi chờ 4–6 giây mới
+# dò — trong quãng đó vòng canh đã kịp đóng mất. Đo trên log tới 22/09: vòng
+# canh thấy dialog 252 lần, `kiem_vi_pham` chỉ đọc được 65 lần, và riêng nick
+# 'Nguyen Ngan' chỉ 3 lần trong khi Facebook gỡ bài của nó liên tục.
+#
+# Hậu quả đúng như người dùng thấy: nick bị gỡ bài suốt mà phần mềm vẫn báo
+# "✅ Không thấy cảnh báo gỡ bài" rồi cho đăng tiếp.
+_CANH_BAO_DA_THAY: dict = {}
+
+
+def _nho_canh_bao(page, txt: str):
+    """Giữ lại chữ cảnh báo dài nhất đã thấy trên trang này."""
+    if not txt:
+        return
+    cu = _CANH_BAO_DA_THAY.get(id(page), "")
+    if len(txt) > len(cu):
+        _CANH_BAO_DA_THAY[id(page)] = txt
+
+
+def _quen_canh_bao(page):
+    _CANH_BAO_DA_THAY.pop(id(page), None)
+
+
 async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
     """Sau mỗi phiên đăng bài / comment: xem Facebook có vừa gỡ gì không.
 
@@ -517,11 +543,21 @@ async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
         txt = await dong_dialog_canh_bao(page)
         vp = _sk.doc_vi_pham(txt)
         if not vp:
+            # Dò tại chỗ không thấy → dùng chữ vòng canh đã ghi lại trong
+            # phiên. Không có bước này thì hầu hết vi phạm bị bỏ lọt, vì vòng
+            # canh gần như luôn đóng dialog trước (xem `_CANH_BAO_DA_THAY`).
+            cu = _CANH_BAO_DA_THAY.get(id(page), "")
+            vp = _sk.doc_vi_pham(cu)
+            if vp:
+                logger.warning("  🔁 Dùng lại cảnh báo vòng canh đã thấy giữa phiên")
+        if not vp:
             logger.info("  ✅ Không thấy cảnh báo gỡ bài")
             return False
-        moi, cu = _db.ghi_nhan_vi_pham(acc_name, vp["so"], vp["spam"])
+        moi, cu = _db.ghi_nhan_vi_pham(acc_name, vp["so"], vp["spam"],
+                                       vp.get("hom_nay", 0))
         logger.warning(f"  ⚠️  FB đã gỡ {vp['so']} bài của '{acc_name}'"
-                       f" (lần đo trước: {'chưa đo' if cu < 0 else cu})")
+                       f" (lần đo trước: {'chưa đo' if cu < 0 else cu}"
+                       f" | hôm nay: {vp.get('hom_nay', 0)})")
         if moi:
             n, moc = _db.danh_dau_spam(acc_name, f"{vp['so'] - cu} bài mới bị gỡ")
             logger.error(
@@ -562,6 +598,7 @@ async def dong_dialog_canh_bao(page, so_lan: int = 3, cho_escape: bool = True) -
             # nút "Xem tất cả (N)". Đó chính là dữ liệu suc_khoe_acc.doc_vi_pham
             # cần để biết acc vừa bị gỡ mấy bài.
             canh_bao = " ".join(text.split())[:1200]
+            _nho_canh_bao(page, canh_bao)
             logger.warning(f"    ⚠️  FB cảnh báo nick này: {canh_bao[:110]}")
 
         await _thu_dong(page, dlg, buoc=lan, cho_escape=cho_escape)
@@ -678,6 +715,9 @@ async def _vong_canh(page, chu_ky: float):
             if btn is None:
                 continue        # để lời gọi trực tiếp (có Escape) xử lý
 
+            # GHI LẠI TRƯỚC KHI ĐÓNG. Đây là chỗ bằng chứng từng bị mất:
+            # đóng xong là `kiem_vi_pham` ở cuối phiên không còn gì để đọc.
+            _nho_canh_bao(page, " ".join(text.split())[:1200])
             logger.warning(f"    ⚠️  FB cảnh báo (vòng canh): "
                            f"{' '.join(text.split())[:90]}")
             try:
@@ -713,7 +753,7 @@ def bat_dau_canh_dialog(page, chu_ky_giay: float = 5.0):
     """
     task = asyncio.create_task(_vong_canh(page, chu_ky_giay))
     try:
-        page.once("close", lambda *_: task.cancel())
+        page.once("close", lambda *_: (task.cancel(), _quen_canh_bao(page)))
     except Exception:
         pass
     return task

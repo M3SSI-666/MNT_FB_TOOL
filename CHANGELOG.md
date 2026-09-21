@@ -10,6 +10,50 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.25.0 — 22/09/2026
+
+**Sửa: nick bị Facebook gỡ bài liên tục mà phần mềm không phát hiện**
+
+Nick `Nguyen Ngan` (Page *Alo Homestay Đây*) bị gỡ bài suốt ngày 22/09 mà vẫn
+được cho đăng tiếp, không hề chuyển sang trạng thái Spam. Có **hai lỗi chồng
+nhau**, phải sửa cả hai.
+
+**1. Vòng canh nền nuốt mất bằng chứng.**
+
+Vòng canh quét mỗi 5 giây và đóng hộp cảnh báo ngay khi thấy. Nhưng phần kiểm
+tra vi phạm lại chạy ở *cuối phiên*: mở facebook.com, chờ 4–6 giây rồi mới dò —
+lúc đó vòng canh đã đóng mất từ lâu.
+
+Đếm trên log: vòng canh thấy hộp cảnh báo **252 lần**, phần kiểm tra chỉ đọc
+được **65 lần**. Riêng nick trên đúng **3 lần**. Log vì thế đầy dòng *"✅ Không
+thấy cảnh báo gỡ bài"* ngay trong những phiên vừa bị gỡ bài.
+
+Từ bản này, vòng canh **ghi lại nội dung trước khi đóng**, và phần kiểm tra cuối
+phiên dùng lại nội dung đó nếu tự dò không thấy.
+
+**2. Bộ đếm chỉ tăng mới báo — mà số của Facebook tụt xuống được.**
+
+Luật cũ: chỉ coi là vụ mới khi *số vụ lớn hơn lần đo trước*. Nhưng con số ấy
+không đơn điệu. Đo thật trên chính nick đó:
+
+```
+20/09  Facebook báo 10 vụ   (lần đầu → chỉ ghi mốc)
+21/09  Facebook báo  4 vụ   → 4 > 10 sai → bỏ qua
+21/09  Facebook báo 10 vụ   → bắt được
+22/09  Facebook báo  4 vụ   → 4 > 10 sai → bỏ qua, trong khi cả 4 vụ là CỦA HÔM ĐÓ
+```
+
+Mốc lưu là 10, nên mọi lần đo ra 4 đều bị coi là "không có gì mới" — nick **miễn
+nhiễm vĩnh viễn** với việc phát hiện spam.
+
+Từ bản này, đường phát hiện chính là **ngày tháng**: một dòng trong hộp cảnh báo
+mang **ngày hôm nay** thì chắc chắn là vụ vừa xảy ra, bất kể con số tổng là bao
+nhiêu. Luật so số cũ vẫn giữ làm đường phụ.
+
+Đã kiểm bằng đúng nội dung hộp cảnh báo người dùng chụp được: luật cũ trả *không
+có gì mới*, luật mới trả *dính spam*. Và hộp cảnh báo toàn vụ cũ vẫn không bị
+gắn cờ oan.
+
 ## v2.24.0 — 20/09/2026
 
 **Dọn mã nguồn — bớt 416 dòng, hết hẳn việc phải vá hai nơi**

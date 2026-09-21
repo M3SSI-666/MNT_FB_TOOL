@@ -725,7 +725,8 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool, ly_do_loi: str = "") -> tuple[st
         return hanh_dong, ly_do
 
 
-def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool) -> tuple[bool, int]:
+def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool,
+                     hom_nay: int = 0) -> tuple[bool, int]:
     """
     Ghi số vụ Facebook gỡ bài đo được sau một phiên đăng.
 
@@ -742,7 +743,7 @@ def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool) -> tuple[bool, in
             return False, -1
         so_cu = r["so_vi_pham"] if r["so_vi_pham"] is not None else -1
         con.execute("UPDATE accounts SET so_vi_pham=? WHERE id=?", (so_moi, r["id"]))
-        vua_dinh = la_spam and sk.co_vu_moi(so_cu, so_moi)
+        vua_dinh = la_spam and sk.co_vu_moi(so_cu, so_moi, hom_nay)
     return vua_dinh, so_cu
 
 

@@ -146,20 +146,55 @@ def doc_vi_pham(text: str) -> dict | None:
         return None
     m = _RE_XEM_TAT_CA.search(thap)
     so = int(m.group(1)) if m else sum(thap.count(k) for k in _MOC_GO_BAI)
-    return {"so": max(so, 1), "spam": any(k in thap for k in _MOC_SPAM)}
+    return {"so": max(so, 1), "spam": any(k in thap for k in _MOC_SPAM),
+            "hom_nay": co_vu_hom_nay(thap)}
 
 
-def co_vu_moi(so_cu: int, so_moi: int) -> bool:
+def _ngay_hom_nay() -> tuple:
+    """Các cách Facebook có thể viết ngày HÔM NAY, đã chuẩn hoá chữ thường."""
+    from datetime import datetime
+    h = datetime.now()
+    thang_en = ("january", "february", "march", "april", "may", "june", "july",
+                "august", "september", "october", "november", "december")
+    return (f"{h.day} tháng {h.month}, {h.year}",      # 22 tháng 9, 2026
+            f"{thang_en[h.month - 1]} {h.day}, {h.year}")
+
+
+def co_vu_hom_nay(text: str) -> int:
     """
-    Có vụ gỡ bài MỚI so với lần đo trước không.
+    Đếm số vụ trong dialog mang ngày HÔM NAY.
+
+    Đây là tín hiệu ĐÁNG TIN NHẤT, và là lý do hàm này tồn tại. Dialog liệt kê
+    cả vụ cũ lẫn mới suốt nhiều ngày, nên "có dialog" không nói lên gì; nhưng
+    một dòng ĐỀ NGÀY HÔM NAY thì chắc chắn là vụ vừa xảy ra.
+    """
+    if not text:
+        return 0
+    thap = " ".join(text.split()).lower()
+    return max(thap.count(n) for n in _ngay_hom_nay())
+
+
+def co_vu_moi(so_cu: int, so_moi: int, hom_nay: int = 0) -> bool:
+    """
+    Có vụ gỡ bài MỚI không.
 
     `so_cu < 0` nghĩa là chưa từng đo acc này — lần đầu chỉ ghi mốc, KHÔNG gắn
     cờ. Thiếu bước này thì ngay phiên đầu tiên sau khi bật tính năng, mọi acc có
     sẵn vi phạm cũ đều bị đánh spam cùng lúc.
+
+    `hom_nay > 0` là đường CHÍNH. Chỉ so số với lần đo trước là không đủ, vì con
+    số ấy TỤT XUỐNG ĐƯỢC: Facebook cho vụ cũ rụng khỏi danh sách, và khi dialog
+    chưa kịp hiện nút "Xem tất cả (N)" thì phần đếm dự phòng chỉ đếm được mấy
+    dòng đang nhìn thấy. Đo thật trên nick 'Nguyen Ngan': 10 → 4 → 10 trong
+    vòng một ngày.
+
+    Hậu quả của luật cũ: mốc lưu là 10, mọi lần đo sau ra 4 đều bị coi là "không
+    có gì mới" — nick MIỄN NHIỄM VĨNH VIỄN với việc phát hiện spam, cứ thế đăng
+    tiếp trong khi Facebook gỡ bài liên tục. Đúng thứ người dùng báo ngày 22/09.
     """
     if so_cu < 0:
         return False
-    return so_moi > so_cu
+    return hom_nay > 0 or so_moi > so_cu
 
 
 def danh_gia(lich_su: str) -> tuple[str, str]:
