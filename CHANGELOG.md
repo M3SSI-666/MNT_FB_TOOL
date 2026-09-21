@@ -10,6 +10,36 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.25.1 — 22/09/2026
+
+**Sửa: nick vừa bị đánh Spam lại tự thả chính mình ra sau 20 giây**
+
+Telegram bắn hai tin **cùng một phút**:
+
+```
+01:51  🔴 Nguyen Ngan: Active → Spam    nghỉ tới 02:51
+01:51  🟢 Nguyen Ngan: Spam → Active    thăm dò thành công, đăng lại được
+```
+
+Nghỉ một tiếng thành nghỉ hai mươi giây.
+
+Nguyên nhân là thứ tự: phần kiểm tra vi phạm chạy ở **cuối phiên**, ngay trước
+khi phiên báo kết quả. Nên chuỗi thật là:
+
+```
+01:51:04  đăng xong 9 nhóm → phát hiện bị gỡ bài → đánh Spam, nghỉ tới 02:51
+01:51:26  phiên báo THÀNH CÔNG
+          → phần ghi nhận thấy nick đang Spam + phiên thành công
+          → tưởng đây là "phiên thăm dò sau khi nghỉ" → thả ra
+```
+
+Phần ghi nhận không phân biệt được *dấu Spam vừa được đóng trong chính phiên
+này* với *dấu Spam từ một tiếng trước*. Từ bản này nó xem mốc nghỉ: còn trong
+giờ nghỉ thì dấu Spam là mới, không thả.
+
+> Lỗi này có từ lâu nhưng nằm im, vì trước v2.25.0 phần phát hiện gần như không
+> bao giờ nổ. Vá xong phần phát hiện thì nó lộ ra ngay ở lần bắt đầu tiên.
+
 ## v2.25.0 — 22/09/2026
 
 **Sửa: nick bị Facebook gỡ bài liên tục mà phần mềm không phát hiện**

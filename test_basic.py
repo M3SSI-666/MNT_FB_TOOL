@@ -1917,6 +1917,43 @@ with db._conn() as _c:
     _ls = _c.execute("SELECT lich_su_phien FROM accounts WHERE id=?", (_sid,)).fetchone()[0]
 check("thăm dò hỏng KHÔNG vào lịch sử", "x" not in (_ls or ""))
 
+# ── Phiên VỪA bị đánh Spam không được tự thả chính mình ────────────────────
+# `kiem_vi_pham` chạy ở CUỐI phiên, trước khi phiên báo thành công. Nên thứ tự
+# thật là: đăng xong 9 nhóm → phát hiện bị gỡ bài → đánh Spam → phiên báo
+# thành công → `ghi_nhan_phien_dang(ok=True)`. Nếu nhánh Spam coi đó là "thăm
+# dò thành công" thì nick vừa bị phạt tự thả mình ra ngay.
+#
+# Thấy thật lúc 01:51 ngày 22/09 trên nick 'Nguyen Ngan':
+#     01:51:04  🚫 DÍNH SPAM — nhử lại lúc 02:51
+#     01:51:26  ✅ STT 312 hoàn thành (9 nhóm)   → Spam → Active
+# Telegram bắn hai tin cùng một phút: "Active → Spam" rồi "Spam → Active".
+# Nghỉ một tiếng thành nghỉ hai mươi giây.
+_tid = db.upsert_account({"ten_acc": "THAMDO Test", "trang_thai": "Active"})
+db.danh_dau_spam("THAMDO Test", "vừa bị gỡ bài")      # nghỉ tới +60 phút
+_hd_vua, _ = db.ghi_nhan_phien_dang("THAMDO Test", True)
+_a_vua = db.get_account_by_name("THAMDO Test")
+check("vừa đánh Spam + phiên OK -> KHÔNG thả",
+      _hd_vua == "" and _a_vua["trang_thai"] == db.TRANG_THAI_SPAM)
+check("… và mốc nghỉ giữ nguyên", (_a_vua["nghi_den"] or "") != "")
+
+# Hết giờ nghỉ thì mới thật sự là phiên thăm dò.
+with db._conn() as _c:
+    _c.execute("UPDATE accounts SET nghi_den=? WHERE id=?",
+               ((_dt.now() - _td(minutes=5)).isoformat(timespec="seconds"), _tid))
+_hd_that, _ = db.ghi_nhan_phien_dang("THAMDO Test", True)
+check("hết giờ nghỉ + phiên OK -> mới thả",
+      _hd_that == "het_spam"
+      and db.get_account_by_name("THAMDO Test")["trang_thai"] == "Active")
+
+# Và thăm dò thật mà hỏng thì nghỉ thêm một lượt.
+db.danh_dau_spam("THAMDO Test", "lại hỏng")
+with db._conn() as _c:
+    _c.execute("UPDATE accounts SET nghi_den=? WHERE id=?",
+               ((_dt.now() - _td(minutes=5)).isoformat(timespec="seconds"), _tid))
+_hd_hong, _ = db.ghi_nhan_phien_dang("THAMDO Test", False)
+check("hết giờ nghỉ + phiên hỏng -> nghỉ thêm", _hd_hong == "tham_do_hong")
+db.delete_account(_tid)
+
 # Thăm dò ĐƯỢC -> thả hẳn.
 with db._conn() as _c: _c.execute("UPDATE accounts SET nghi_den=? WHERE id=?",
     ((_dt.now() - _td(minutes=1)).isoformat(timespec="seconds"), _sid))

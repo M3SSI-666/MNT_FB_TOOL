@@ -651,7 +651,7 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool, ly_do_loi: str = "") -> tuple[st
     """
     import suc_khoe_acc as sk
     with _conn() as con:
-        r = con.execute("SELECT id, lich_su_phien, trang_thai FROM accounts "
+        r = con.execute("SELECT id, lich_su_phien, trang_thai, nghi_den FROM accounts "
                         "WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
         if not r:
             return "", ""
@@ -661,6 +661,21 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool, ly_do_loi: str = "") -> tuple[st
     # là chuyện dự kiến, để nó dồn vào cửa sổ trượt thì acc sẽ bị "tắt hẳn" oan
     # chỉ vì đang chờ Facebook thả.
     if (r["trang_thai"] or "") == TRANG_THAI_SPAM:
+        # NHƯNG: còn trong giờ nghỉ nghĩa là dấu Spam VỪA ĐƯỢC ĐÓNG trong CHÍNH
+        # phiên này — `kiem_vi_pham` chạy ở cuối phiên, trước khi phiên báo
+        # thành công. Coi đó là "thăm dò thành công" thì phiên vừa bị Facebook
+        # gỡ bài lại tự thả chính mình ra ngay lập tức.
+        #
+        # Thấy thật lúc 01:51:04 ngày 22/09 trên nick 'Nguyen Ngan':
+        #     01:51:04  🚫 DÍNH SPAM — nhử lại lúc 02:51
+        #     01:51:26  ✅ STT 312 hoàn thành (9 nhóm)   → Spam → Active
+        # Telegram bắn hai tin liền nhau cùng một phút: "Active → Spam" rồi
+        # "Spam → Active". Nghỉ một tiếng thành nghỉ hai mươi giây.
+        #
+        # Lỗi này có từ lâu nhưng nằm im, vì trước v2.25.0 phần phát hiện gần
+        # như không bao giờ nổ. Vá xong phần phát hiện thì nó lộ ra ngay.
+        if _moc_nghi(r["nghi_den"]) is not None:
+            return "", ""
         if ok:
             n = het_spam(ten_acc)
             return "het_spam", f"thăm dò thành công — trả {n} slot về Chờ"
