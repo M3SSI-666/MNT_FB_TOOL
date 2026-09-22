@@ -12,13 +12,17 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ## v2.28.0 — 23/09/2026
 
-**Phát hiện spam: chỉ tính cảnh báo MỚI XUẤT HIỆN sau khi đăng**
+**Phát hiện spam: chỉ còn MỘT luật**
 
-Đây là luật đúng, và nó thay cho toàn bộ mấy cách đoán trước đó.
+> Đăng bài xong, nếu có thông báo gỡ bài hiện lên thì nick đó bị spam.
+> Thông báo hiện **trước** khi đăng không kết luận được gì — đó là hệ quả của
+> phiên trước, chỉ việc bấm X tắt đi rồi làm tiếp.
 
-Hộp "Sự việc" **dính dai** — nó hiện lại suốt nhiều ngày sau một vụ gỡ bài. Nên
-*"thấy hộp thoại sau khi đăng"* chưa nói lên gì: hộp đó có thể đã mở sẵn từ lúc
-đăng nhập. Phải là cảnh báo **mới xuất hiện** — trước khi đăng chưa hề thấy.
+Hết. Không so số, không đếm ngày, không giới hạn số lần trong ngày. Bị gỡ bài
+mấy lần thì nghỉ mấy lần.
+
+Phần mềm vốn đã tắt hộp thoại ở đầu mỗi phiên, nên một thông báo hiện lên **sau**
+khi đăng đúng là thông báo mới.
 
 Đếm trên log 21–22/09, số phiên có cảnh báo sau khi đăng:
 
@@ -28,8 +32,8 @@ Hộp "Sự việc" **dính dai** — nó hiện lại suốt nhiều ngày sau 
 | Ngân Nấm | **0** | 3 |
 | Thị Sữa | 6 | 1 |
 
-`Ngân Nấm` **chưa một lần nào** nhận cảnh báo mới sau khi đăng — cả 3 lần đều là
-hộp thoại cũ còn đang mở. Đúng như người dùng khẳng định: đó là nick khoẻ.
+`Ngân Nấm` chưa một lần nào nhận cảnh báo mới sau khi đăng — cả 3 lần đều là hộp
+thoại cũ còn đang mở.
 
 Chạy lại hai ngày dữ liệu thật:
 
@@ -40,13 +44,14 @@ Chạy lại hai ngày dữ liệu thật:
 | 22/09 | Nguyen Ngan | 16 | 8 |
 | 22/09 | **Ngân Nấm** | 3 | **0** |
 
-**Bỏ hai cách đoán cũ.** Tín hiệu *"có vụ đề ngày hôm nay"* không còn tự gắn cờ:
-hễ trong ngày có một vụ là hộp thoại mang ngày hôm nay suốt cả ngày. Và chốt
-*"chỉ báo một lần mỗi ngày"* cũng bỏ — không cần nữa, mà nó còn bỏ sót vụ gỡ bài
-thứ hai trong cùng một ngày.
+**Đã bỏ hẳn ba cách đoán cũ**, vì đo ra là chúng sai: so số vụ với lần trước (con
+số đó là nhiễu — cùng một ngày đọc ra 13, 19, 6, 19, 20, 20, 15, 8, 17, 10 trong
+khi số vụ thật không đổi), đếm vụ đề ngày hôm nay (hộp thoại mang ngày hôm nay
+suốt cả ngày), và chốt chỉ báo một lần mỗi ngày.
 
-Khi hộp thoại đã mở sẵn từ trước, phần mềm chỉ kết luận nếu **tổng số vụ tăng**
-(đọc từ nút "Xem tất cả (N)").
+> Đánh đổi đã biết: phiên nào mà hộp thoại cũ lỡ bật lên trước khi đăng thì bỏ
+> qua, kể cả khi trong phiên đó có vụ gỡ bài thật. Thà bỏ sót còn hơn đổ oan cho
+> nick khoẻ — nick bị gỡ bài thật vẫn bị bắt ở những phiên khác.
 
 Log ghi rõ từng lần: `MỚI hiện sau khi đăng` hay `hộp thoại cũ đã mở sẵn`.
 

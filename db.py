@@ -783,23 +783,25 @@ def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool,
         if chac_chan:
             con.execute("UPDATE accounts SET so_vi_pham=? WHERE id=?", (so_moi, r["id"]))
 
-        if moi_hien:
-            # ĐƯỜNG CHÍNH: cảnh báo MỚI XUẤT HIỆN sau khi phiên đăng xong. Đây
-            # là bằng chứng trực tiếp nhất — không cần so số, không giới hạn
-            # một lần mỗi ngày. Bị gỡ bài mấy lần thì nghỉ mấy lần, đúng vậy.
-            vua_dinh = bool(la_spam)
-        elif chac_chan:
-            # Hộp thoại đã mở sẵn từ trước: CHỈ kết luận khi TỔNG SỐ VỤ tăng.
-            #
-            # Tuyệt đối không dùng tín hiệu "có vụ đề ngày hôm nay" ở đây. Hộp
-            # thoại dính dai: hễ trong ngày có một vụ là nó mang ngày hôm nay
-            # suốt cả ngày, nên mọi phiên sau đều đọc ra y hệt. Đó chính là thứ
-            # đã đánh oan 'Ngân Nấm' — nick chưa một lần nào nhận cảnh báo MỚI
-            # sau khi đăng, mà vẫn bị gắn cờ.
-            vua_dinh = la_spam and sk.co_vu_moi(so_cu, so_moi)
-        else:
-            # Vừa là hộp thoại cũ, vừa không đọc được tổng số → không kết luận.
-            vua_dinh = False
+        # LUẬT DUY NHẤT: cảnh báo gỡ bài MỚI XUẤT HIỆN sau khi phiên đăng xong.
+        #
+        # Cảnh báo thấy TRƯỚC khi đăng không kết luận được gì — đó là hệ quả của
+        # phiên trước, phần mềm chỉ việc bấm X tắt đi rồi làm tiếp. Chính vì
+        # luôn tắt nó ở đầu phiên nên một cảnh báo hiện lên SAU khi đăng mới thật
+        # sự là cảnh báo mới.
+        #
+        # Đã bỏ hẳn hai cách đoán từng dùng ở đây, vì đo ra là chúng sai:
+        #   · "số vụ lớn hơn lần đo trước" — con số ấy là nhiễu. Cùng một ngày,
+        #     12 lần đo của 'Nguyen Ngan' cho 13, 19, 6, 19, 20, 20, 20, 15, 8,
+        #     17, 10, 20 trong khi số vụ thật không đổi.
+        #   · "có vụ đề ngày hôm nay" — hộp thoại mang ngày hôm nay suốt cả
+        #     ngày, nên mọi phiên sau đều đọc ra y hệt (`hom_nay=6` ở cả 12 lần).
+        #
+        # Đánh đổi đã biết và chấp nhận: phiên nào mà hộp thoại cũ lỡ bật lên
+        # trước khi đăng thì bỏ qua, kể cả khi trong phiên đó có vụ gỡ bài thật.
+        # Thà bỏ sót còn hơn đổ oan cho nick khoẻ — nick bị gỡ bài thật vẫn bị
+        # bắt ở những phiên khác ('Nguyen Ngan' ngày 22/09: bắt được 8 phiên).
+        vua_dinh = bool(la_spam and moi_hien)
 
         if vua_dinh:
             con.execute("UPDATE accounts SET vi_pham_ngay=? WHERE id=?", (ngay, r["id"]))

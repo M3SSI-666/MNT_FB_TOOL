@@ -1764,7 +1764,9 @@ check("đếm mò KHÔNG ghi đè mốc",
 _m4, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 19, True, hom_nay=0, chac_chan=False)
 check("đếm mò tăng -> KHÔNG gắn cờ", _m4 is False)
 _m5, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 19, True, hom_nay=0, chac_chan=True)
-check("số CHẮC CHẮN tăng -> vẫn gắn cờ như cũ", _m5 is True)
+check("số chắc chắn tăng nhưng hộp thoại cũ -> không kết luận", _m5 is False)
+_m6, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 19, True, 0, True, moi_hien=True)
+check("cảnh báo MỚI hiện sau khi đăng -> gắn cờ, khỏi cần so số", _m6 is True)
 db.delete_account(_nid)
 
 check("log ghi rõ số là chắc chắn hay đếm mò",
@@ -1843,8 +1845,10 @@ check("bị gỡ lần nữa trong ngày -> vẫn gắn cờ (không giới hạ
 _v3, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 20, True, 6, True, moi_hien=False)
 check("hộp thoại cũ + số không tăng -> KHÔNG gắn cờ (ca 'Ngân Nấm')",
       _v3 is False)
+# Hộp thoại đã mở TRƯỚC khi đăng thì KHÔNG kết luận gì — kể cả khi tổng số vụ
+# đọc ra có tăng. Đó là hệ quả của phiên trước; phần mềm chỉ bấm X tắt đi.
 _v4, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 25, True, 0, True, moi_hien=False)
-check("hộp thoại cũ nhưng TỔNG SỐ tăng -> vẫn gắn cờ", _v4 is True)
+check("hộp thoại cũ + tổng số tăng -> VẪN không kết luận", _v4 is False)
 _v5, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 99, True, 6, False, moi_hien=False)
 check("hộp thoại cũ + số đếm mò -> KHÔNG kết luận", _v5 is False)
 db.delete_account(_vid)
@@ -1891,12 +1895,18 @@ with db._conn() as _c:
                    "trang_thai,hoat_dong) VALUES ('homestay',900,'X',?,?,'Chờ',?)",
                    ("SPAM Test", _g, _hd))
 
-_moi1, _cu1 = db.ghi_nhan_vi_pham("SPAM Test", 12, True)
-check("lần đo đầu chỉ ghi mốc",         _moi1 is False and _cu1 == -1)
-_moi2, _cu2 = db.ghi_nhan_vi_pham("SPAM Test", 12, True)
-check("đo lại cùng số -> không dính",   _moi2 is False and _cu2 == 12)
-_moi3, _cu3 = db.ghi_nhan_vi_pham("SPAM Test", 15, True)
-check("số vụ tăng -> vừa dính spam",    _moi3 is True and _cu3 == 12)
+# Luật DUY NHẤT: cảnh báo MỚI xuất hiện sau khi phiên đăng xong.
+# Không còn "lần đo đầu chỉ ghi mốc" — luật cũ cần nó để khỏi đánh spam hàng
+# loạt lúc mới bật tính năng, nhưng luật mới vốn đã là tín hiệu theo TỪNG PHIÊN
+# nên không thể nổ vì dữ liệu cũ.
+_moi1, _cu1 = db.ghi_nhan_vi_pham("SPAM Test", 12, True, moi_hien=True)
+check("cảnh báo MỚI sau khi đăng -> dính spam ngay",
+      _moi1 is True and _cu1 == -1)
+_moi2, _cu2 = db.ghi_nhan_vi_pham("SPAM Test", 12, True, moi_hien=False)
+check("hộp thoại cũ -> không kết luận",  _moi2 is False and _cu2 == 12)
+_moi3, _cu3 = db.ghi_nhan_vi_pham("SPAM Test", 15, True, moi_hien=False)
+check("hộp thoại cũ dù số vụ tăng -> vẫn không kết luận",
+      _moi3 is False and _cu3 == 12)
 
 _n_slot, _moc_spam = db.danh_dau_spam("SPAM Test", "3 bài mới bị gỡ", gio=_GIO_MOC)
 check("chuyển trạng thái sang Spam",
