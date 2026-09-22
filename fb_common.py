@@ -521,27 +521,49 @@ def danh_dau_da_dang(page):
 
 
 def _nho_canh_bao(page, txt: str):
-    """Giữ lại chữ cảnh báo dài nhất đã thấy, KÈM thời điểm thấy."""
+    """Ghi lại MỌI lần thấy cảnh báo trong phiên, kèm thời điểm."""
     if not txt:
         return
     import time as _t
-    cu = _CANH_BAO_DA_THAY.get(id(page))
-    if cu is None or len(txt) > len(cu[0]):
-        _CANH_BAO_DA_THAY[id(page)] = (txt, _t.time())
+    _CANH_BAO_DA_THAY.setdefault(id(page), []).append((_t.time(), txt))
+
+
+def da_thay_truoc_khi_dang(page) -> bool:
+    """
+    Hộp cảnh báo ĐÃ MỞ SẴN trước khi phiên này đăng gì chưa?
+
+    Đây là phép phân biệt quan trọng nhất của cả cơ chế. Hộp "Sự việc" dính
+    dai: nó hiện lại suốt nhiều ngày sau vụ gỡ bài, nên "thấy hộp thoại sau khi
+    đăng" KHÔNG đồng nghĩa với "vừa bị gỡ bài". Phải là cảnh báo MỚI XUẤT HIỆN
+    — tức trước khi đăng chưa hề thấy.
+
+    Đếm trên log 21–22/09, số phiên có cảnh báo sau khi đăng:
+
+        nick             chỉ-sau-khi-đăng   đã-mở-từ-trước
+        Nguyen Ngan              8                 8
+        Ngân Nấm                 0                 3
+        Thị Sữa                  6                 1
+
+    'Ngân Nấm' — nick người dùng khẳng định là khoẻ — chưa một lần nào nhận
+    cảnh báo MỚI sau khi đăng; cả 3 lần đều là hộp thoại cũ còn đang mở. Thiếu
+    phép phân biệt này thì nó bị đánh spam oan, còn 'Nguyen Ngan' (bị gỡ thật)
+    thì lẫn vào cùng một rổ.
+    """
+    moc = _MOC_DA_DANG.get(id(page))
+    ds  = _CANH_BAO_DA_THAY.get(id(page)) or []
+    if moc is None:
+        return bool(ds)          # chưa đăng gì thì mọi cảnh báo đều là cũ
+    return any(ts < moc for ts, _ in ds)
 
 
 def _canh_bao_sau_khi_dang(page) -> str:
-    """
-    Chữ cảnh báo đã thấy SAU khi phiên đưa nội dung lên. Rỗng nếu không có.
-
-    Chưa đánh mốc (phiên không đăng gì, hoặc đăng hỏng) thì trả rỗng: lúc đó
-    mọi cảnh báo nhìn thấy đều là của chuyện cũ.
-    """
+    """Chữ cảnh báo DÀI NHẤT thấy sau khi phiên đưa nội dung lên."""
     moc = _MOC_DA_DANG.get(id(page))
-    ghi = _CANH_BAO_DA_THAY.get(id(page))
-    if moc is None or ghi is None:
+    ds  = _CANH_BAO_DA_THAY.get(id(page)) or []
+    if moc is None:
         return ""
-    return ghi[0] if ghi[1] >= moc else ""
+    sau = [t for ts, t in ds if ts >= moc]
+    return max(sau, key=len) if sau else ""
 
 
 def _quen_canh_bao(page):
@@ -584,16 +606,22 @@ async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
         if not vp:
             logger.info("  ✅ Không thấy cảnh báo gỡ bài")
             return False
+        # Cảnh báo MỚI XUẤT HIỆN sau khi đăng = chắc chắn phiên này bị gỡ bài.
+        # Hộp thoại đã mở sẵn từ trước thì không kết luận được gì — xem
+        # `da_thay_truoc_khi_dang`.
+        moi_hien = not da_thay_truoc_khi_dang(page)
         moi, cu = _db.ghi_nhan_vi_pham(acc_name, vp["so"], vp["spam"],
                                        vp.get("hom_nay", 0),
-                                       vp.get("chac_chan", True))
+                                       vp.get("chac_chan", True),
+                                       moi_hien)
         # Ghi cả `chắc chắn`: không có nó thì nhìn log không phân biệt được con
         # số lấy từ nút "Xem tất cả (N)" với con số đếm mò mấy dòng đang hiện —
         # mà hai thứ đó được xử lý khác hẳn nhau.
         logger.warning(f"  ⚠️  FB đã gỡ {vp['so']} bài của '{acc_name}'"
                        f" (lần đo trước: {'chưa đo' if cu < 0 else cu}"
                        f" | hôm nay: {vp.get('hom_nay', 0)}"
-                       f" | {'chắc chắn' if vp.get('chac_chan') else 'ĐẾM MÒ'})")
+                       f" | {'chắc chắn' if vp.get('chac_chan') else 'ĐẾM MÒ'}"
+                       f" | {'MỚI hiện sau khi đăng' if moi_hien else 'hộp thoại cũ đã mở sẵn'})")
         if moi:
             n, moc = _db.danh_dau_spam(acc_name, f"{vp['so'] - cu} bài mới bị gỡ")
             logger.error(

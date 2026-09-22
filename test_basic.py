@@ -1742,14 +1742,16 @@ check("lần đo ĐẦU vẫn chỉ ghi mốc, dù có vụ hôm nay",
 _nid = db.upsert_account({"ten_acc": "NGAYSPAM Test", "trang_thai": "Active"})
 with db._conn() as _c:
     _c.execute("UPDATE accounts SET so_vi_pham=10 WHERE id=?", (_nid,))
+# Tín hiệu "có vụ đề ngày hôm nay" KHÔNG còn là đường gắn cờ. Hộp thoại dính
+# dai: hễ trong ngày có một vụ là nó mang ngày hôm nay suốt cả ngày, nên mọi
+# phiên sau đều đọc ra y hệt — log cho thấy `hom_nay=6` ở cả 12 lần đo của
+# 'Nguyen Ngan' ngày 22/09, không đổi một đơn vị. Thay bằng phép phân biệt
+# "cảnh báo MỚI hiện sau khi đăng", vừa không đọc lại vừa không bỏ sót vụ thứ
+# hai trong cùng ngày.
 _m1, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 4, True, hom_nay=6, chac_chan=True)
-check("vụ hôm nay lần ĐẦU -> gắn cờ", _m1 is True)
 _m2, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 4, True, hom_nay=6, chac_chan=True)
-_m3, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 4, True, hom_nay=6, chac_chan=True)
-check("cùng sự việc đó -> KHÔNG báo lại", _m2 is False and _m3 is False)
-check("có ghi lại ngày đã báo",
-      (db.get_account_by_name("NGAYSPAM Test").get("vi_pham_ngay") or "")
-      == __import__("datetime").datetime.now().strftime("%Y-%m-%d"))
+check("hộp thoại cũ mang ngày hôm nay -> KHÔNG còn tự gắn cờ",
+      _m1 is False and _m2 is False)
 
 # Con số ĐẾM MÒ không được ghi đè mốc, cũng không được dùng để so.
 # 12 lần đo cùng ngày cho 13,19,6,19,20,20,20,15,8,17,10,20 trong khi số vụ
@@ -1785,10 +1787,14 @@ class _TrangGia:
 _tg = _TrangGia()
 _fbc_vp._nho_canh_bao(_tg, "Spam Đã gỡ bài viết")
 check("vòng canh ghi lại được chữ cảnh báo",
-      _fbc_vp._CANH_BAO_DA_THAY.get(id(_tg), ("",))[0] == "Spam Đã gỡ bài viết")
+      any(t == "Spam Đã gỡ bài viết"
+          for _ts, t in _fbc_vp._CANH_BAO_DA_THAY.get(id(_tg), [])))
 _fbc_vp._nho_canh_bao(_tg, "ngắn")
-check("giữ bản DÀI nhất, không để bản sau đè mất",
-      _fbc_vp._CANH_BAO_DA_THAY.get(id(_tg), ("",))[0] == "Spam Đã gỡ bài viết")
+_fbc_vp.danh_dau_da_dang(_tg)
+_fbc_vp._nho_canh_bao(_tg, "Spam Đã gỡ bài viết — bản DÀI hơn sau khi đăng")
+check("lấy bản DÀI nhất trong số thấy sau khi đăng",
+      "bản DÀI hơn" in _fbc_vp._canh_bao_sau_khi_dang(_tg))
+_fbc_vp._MOC_DA_DANG.pop(id(_tg), None)
 
 # ── Cảnh báo thấy TRƯỚC khi đăng KHÔNG phải của phiên này ─────────────────
 # Đếm trên toàn bộ log: 512 lần hộp cảnh báo bật lên, thì 276 lần (54%) rơi vào
@@ -1797,12 +1803,54 @@ check("giữ bản DÀI nhất, không để bản sau đè mất",
 # gỡ bài có thể do nick khác gây ra (nhiều nick dùng chung một Page).
 check("chưa đánh mốc đăng -> KHÔNG dùng cảnh báo cũ",
       _fbc_vp._canh_bao_sau_khi_dang(_tg) == "")
+check("thấy cảnh báo khi CHƯA đăng -> tính là 'đã mở sẵn'",
+      _fbc_vp.da_thay_truoc_khi_dang(_tg) is True)
 _fbc_vp.danh_dau_da_dang(_tg)          # phiên vừa đăng xong
 check("cảnh báo thấy TRƯỚC khi đăng -> vẫn bỏ qua",
       _fbc_vp._canh_bao_sau_khi_dang(_tg) == "")
 _fbc_vp._nho_canh_bao(_tg, "Spam Đã gỡ bài viết — vụ MỚI sau khi đăng")
 check("cảnh báo thấy SAU khi đăng -> mới dùng",
       "vụ MỚI sau khi đăng" in _fbc_vp._canh_bao_sau_khi_dang(_tg))
+# Hộp thoại đã mở TRƯỚC khi đăng thì vẫn phải nhớ là "mở sẵn", dù sau đó có
+# thấy lại nữa — đó là hộp cũ dính dai, không phải vụ mới.
+check("mở sẵn từ trước -> vẫn là 'đã mở sẵn'",
+      _fbc_vp.da_thay_truoc_khi_dang(_tg) is True)
+
+_tg2 = _TrangGia()
+_fbc_vp.danh_dau_da_dang(_tg2)
+_fbc_vp._nho_canh_bao(_tg2, "Spam Đã gỡ bài viết — chỉ hiện SAU khi đăng")
+check("chỉ hiện sau khi đăng -> KHÔNG phải 'mở sẵn'",
+      _fbc_vp.da_thay_truoc_khi_dang(_tg2) is False)
+_fbc_vp._quen_canh_bao(_tg2)
+
+# ── Đường CHÍNH: cảnh báo MỚI hiện sau khi đăng ───────────────────────────
+# Đếm trên log 21–22/09, số phiên có cảnh báo sau khi đăng:
+#     nick             chỉ-sau-khi-đăng   đã-mở-từ-trước
+#     Nguyen Ngan              8                 8
+#     Ngân Nấm                 0                 3
+#     Thị Sữa                  6                 1
+# 'Ngân Nấm' — nick người dùng khẳng định là khoẻ — chưa MỘT LẦN nào nhận cảnh
+# báo mới sau khi đăng. Thiếu phép phân biệt này thì nó bị đánh oan, còn
+# 'Nguyen Ngan' (bị gỡ thật, chỉ thu về 2/9 link) thì lẫn vào cùng một rổ.
+_vid = db.upsert_account({"ten_acc": "VIPHAM Test", "trang_thai": "Active"})
+with db._conn() as _c:
+    _c.execute("UPDATE accounts SET so_vi_pham=20 WHERE id=?", (_vid,))
+_v1, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 20, True, 6, True, moi_hien=True)
+check("cảnh báo MỚI hiện sau khi đăng -> gắn cờ NGAY", _v1 is True)
+_v2, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 20, True, 6, True, moi_hien=True)
+check("bị gỡ lần nữa trong ngày -> vẫn gắn cờ (không giới hạn 1 lần/ngày)",
+      _v2 is True)
+_v3, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 20, True, 6, True, moi_hien=False)
+check("hộp thoại cũ + số không tăng -> KHÔNG gắn cờ (ca 'Ngân Nấm')",
+      _v3 is False)
+_v4, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 25, True, 0, True, moi_hien=False)
+check("hộp thoại cũ nhưng TỔNG SỐ tăng -> vẫn gắn cờ", _v4 is True)
+_v5, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 99, True, 6, False, moi_hien=False)
+check("hộp thoại cũ + số đếm mò -> KHÔNG kết luận", _v5 is False)
+db.delete_account(_vid)
+
+check("log ghi rõ cảnh báo mới hiện hay hộp thoại cũ",
+      "MỚI hiện sau khi đăng" in Path("fb_common.py").read_text(encoding="utf-8"))
 
 _fbc_vp._quen_canh_bao(_tg)
 check("đóng trang thì xoá, không rò sang phiên sau",

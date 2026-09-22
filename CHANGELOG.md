@@ -10,6 +10,46 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.28.0 — 23/09/2026
+
+**Phát hiện spam: chỉ tính cảnh báo MỚI XUẤT HIỆN sau khi đăng**
+
+Đây là luật đúng, và nó thay cho toàn bộ mấy cách đoán trước đó.
+
+Hộp "Sự việc" **dính dai** — nó hiện lại suốt nhiều ngày sau một vụ gỡ bài. Nên
+*"thấy hộp thoại sau khi đăng"* chưa nói lên gì: hộp đó có thể đã mở sẵn từ lúc
+đăng nhập. Phải là cảnh báo **mới xuất hiện** — trước khi đăng chưa hề thấy.
+
+Đếm trên log 21–22/09, số phiên có cảnh báo sau khi đăng:
+
+| Nick | Chỉ hiện **sau** khi đăng | Hộp thoại **đã mở từ trước** |
+|---|---|---|
+| Nguyen Ngan | **8** | 8 |
+| Ngân Nấm | **0** | 3 |
+| Thị Sữa | 6 | 1 |
+
+`Ngân Nấm` **chưa một lần nào** nhận cảnh báo mới sau khi đăng — cả 3 lần đều là
+hộp thoại cũ còn đang mở. Đúng như người dùng khẳng định: đó là nick khoẻ.
+
+Chạy lại hai ngày dữ liệu thật:
+
+| Ngày | Nick | Luật cũ | Luật mới |
+|---|---|---|---|
+| 21/09 | Nguyen Ngan | 12 | 3 |
+| 21/09 | **Ngân Nấm** | 2 | **0** |
+| 22/09 | Nguyen Ngan | 16 | 8 |
+| 22/09 | **Ngân Nấm** | 3 | **0** |
+
+**Bỏ hai cách đoán cũ.** Tín hiệu *"có vụ đề ngày hôm nay"* không còn tự gắn cờ:
+hễ trong ngày có một vụ là hộp thoại mang ngày hôm nay suốt cả ngày. Và chốt
+*"chỉ báo một lần mỗi ngày"* cũng bỏ — không cần nữa, mà nó còn bỏ sót vụ gỡ bài
+thứ hai trong cùng một ngày.
+
+Khi hộp thoại đã mở sẵn từ trước, phần mềm chỉ kết luận nếu **tổng số vụ tăng**
+(đọc từ nút "Xem tất cả (N)").
+
+Log ghi rõ từng lần: `MỚI hiện sau khi đăng` hay `hộp thoại cũ đã mở sẵn`.
+
 ## v2.27.1 — 23/09/2026
 
 **Bảng Tài khoản: mọi hàng cao bằng nhau**

@@ -746,7 +746,8 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool, ly_do_loi: str = "") -> tuple[st
 
 
 def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool,
-                     hom_nay: int = 0, chac_chan: bool = True) -> tuple[bool, int]:
+                     hom_nay: int = 0, chac_chan: bool = True,
+                     moi_hien: bool = False) -> tuple[bool, int]:
     """
     Ghi số vụ Facebook gỡ bài đo được sau một phiên đăng.
 
@@ -774,17 +775,31 @@ def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool,
             return False, -1
         so_cu = r["so_vi_pham"] if r["so_vi_pham"] is not None else -1
 
-        # Đã gắn cờ hôm nay rồi thì tắt tín hiệu "vụ hôm nay" đi, để khỏi báo
-        # lại đúng sự việc ấy ở mọi phiên còn lại của ngày.
-        if (r["vi_pham_ngay"] or "") == ngay:
-            hom_nay = 0
+        # `vi_pham_ngay` nay chỉ để GHI LẠI ngày gắn cờ gần nhất, không còn
+        # dùng làm chốt chặn: phép phân biệt "cảnh báo MỚI hiện sau khi đăng"
+        # đã tự loại được việc đọc lại cùng một sự việc, mà lại không bỏ sót
+        # vụ gỡ bài thứ hai trong cùng một ngày.
 
         if chac_chan:
             con.execute("UPDATE accounts SET so_vi_pham=? WHERE id=?", (so_moi, r["id"]))
-            vua_dinh = la_spam and sk.co_vu_moi(so_cu, so_moi, hom_nay)
+
+        if moi_hien:
+            # ĐƯỜNG CHÍNH: cảnh báo MỚI XUẤT HIỆN sau khi phiên đăng xong. Đây
+            # là bằng chứng trực tiếp nhất — không cần so số, không giới hạn
+            # một lần mỗi ngày. Bị gỡ bài mấy lần thì nghỉ mấy lần, đúng vậy.
+            vua_dinh = bool(la_spam)
+        elif chac_chan:
+            # Hộp thoại đã mở sẵn từ trước: CHỈ kết luận khi TỔNG SỐ VỤ tăng.
+            #
+            # Tuyệt đối không dùng tín hiệu "có vụ đề ngày hôm nay" ở đây. Hộp
+            # thoại dính dai: hễ trong ngày có một vụ là nó mang ngày hôm nay
+            # suốt cả ngày, nên mọi phiên sau đều đọc ra y hệt. Đó chính là thứ
+            # đã đánh oan 'Ngân Nấm' — nick chưa một lần nào nhận cảnh báo MỚI
+            # sau khi đăng, mà vẫn bị gắn cờ.
+            vua_dinh = la_spam and sk.co_vu_moi(so_cu, so_moi)
         else:
-            # Số không đáng tin: không ghi đè mốc, và chỉ còn đường "vụ hôm nay".
-            vua_dinh = la_spam and hom_nay > 0 and so_cu >= 0
+            # Vừa là hộp thoại cũ, vừa không đọc được tổng số → không kết luận.
+            vua_dinh = False
 
         if vua_dinh:
             con.execute("UPDATE accounts SET vi_pham_ngay=? WHERE id=?", (ngay, r["id"]))
