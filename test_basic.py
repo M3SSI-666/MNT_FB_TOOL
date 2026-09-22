@@ -1954,6 +1954,25 @@ _hd_hong, _ = db.ghi_nhan_phien_dang("THAMDO Test", False)
 check("hết giờ nghỉ + phiên hỏng -> nghỉ thêm", _hd_hong == "tham_do_hong")
 db.delete_account(_tid)
 
+# ── Phiên thăm dò chạy ở SLOT KẾ TIẾP, không phải đúng mốc hết nghỉ ────────
+# Ngày 22/09 nick 'Ngân Nấm' hết nghỉ lúc 20:10, nhưng slot gần nhất của nó là
+# 20:18 — nên tới 20:18 phiên thăm dò mới chạy, 20:22 mới được thả. Người dùng
+# nhìn ô "dò lúc 20:10" rồi đợi tới 20:15 không thấy gì, tưởng hỏng.
+#
+# Chữ cũ hứa một mốc chính xác rồi không giữ lời. Phải nói "dò TỪ".
+_ajs_td = Path("static/js/app.js").read_text(encoding="utf-8")
+check("ô Trạng thái ghi 'dò từ', không hứa 'dò lúc'",
+      "dò từ" in _ajs_td and "dò lúc" not in _ajs_td)
+check("chú thích nói rõ phải đợi slot kế tiếp",
+      "SLOT KẾ TIẾP của nick chạy thử" in _ajs_td)
+
+# `mo_duong_tham_do` trả acc kể cả khi mở 0 slot (acc không còn dòng 'Nghỉ
+# Spam' nào), mà scheduler quét mỗi 60 giây × 5 runner. Riêng câu log ấy đã ghi
+# 3649 dòng trong ngày 22/09, lấp mất những dòng thật sự cần đọc.
+_src_sch_td = Path("scheduler.py").read_text(encoding="utf-8")
+check("chỉ ghi log khi THẬT SỰ mở được slot",
+      'if _hs["so_slot"]:' in _src_sch_td)
+
 # Thăm dò ĐƯỢC -> thả hẳn.
 with db._conn() as _c: _c.execute("UPDATE accounts SET nghi_den=? WHERE id=?",
     ((_dt.now() - _td(minutes=1)).isoformat(timespec="seconds"), _sid))

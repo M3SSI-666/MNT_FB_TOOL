@@ -10,6 +10,33 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.25.2 — 22/09/2026
+
+**Ô Trạng thái không còn hứa sai giờ thăm dò**
+
+Nick đang Spam hiện `🚫 Spam · dò lúc 20:10`. Qua 20:10 mà không thấy gì, nhìn
+tưởng hỏng.
+
+Thật ra không hỏng: **20:10 là lúc HẾT NGHỈ**, còn phiên thăm dò chạy ở **slot kế
+tiếp của nick**. Ngày 22/09 nick `Ngân Nấm` hết nghỉ 20:10, slot gần nhất là
+20:18 — nên:
+
+```
+20:18:26   ▶ STT 230 | Ngân Nấm | Mode=HYBRID      ← phiên thăm dò
+20:20:40   ✅ ĐĂNG THÀNH CÔNG
+20:22:34   ✅ hoàn thành (9 nhóm)  → Spam → Active
+```
+
+Chữ cũ hứa một mốc chính xác rồi không giữ lời. Giờ ghi `dò từ 20:10`, và rê
+chuột vào sẽ thấy: *"Hết 20:10 thì SLOT KẾ TIẾP của nick chạy thử — không phải
+đúng 20:10, phải đợi tới giờ của slot gần nhất."*
+
+**Bớt 3649 dòng log rác mỗi ngày**
+
+Câu `'X' hết giờ nghỉ spam — mở 0 slot` được ghi mỗi 60 giây, nhân 5 runner, cho
+mỗi nick đang chờ thăm dò. Riêng ngày 22/09 nó chiếm **3649 dòng**, lấp mất
+những dòng thật sự cần đọc. Giờ chỉ ghi khi thật sự mở được slot.
+
 ## v2.25.1 — 22/09/2026
 
 **Sửa: nick vừa bị đánh Spam lại tự thả chính mình ra sau 20 giây**

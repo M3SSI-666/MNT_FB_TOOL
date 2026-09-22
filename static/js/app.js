@@ -951,12 +951,18 @@ function _trangThaiAcc(r){
                     chiTiet:`${r.ly_do_nghi.trim()} — nghỉ đăng và comment, mỗi 60 phút `
                            +`tự chạy 1 phiên thăm dò. Được thì chạy lại bình thường. Không cần làm gì.`};
         }
-        return {nhan:`🚫 Spam${den?" · dò lúc"+den.replace(" tới",""):""}`,
+        // "dò TỪ 20:10", KHÔNG phải "dò LÚC 20:10". 20:10 là lúc HẾT NGHỈ;
+        // phiên thăm dò chạy ở SLOT KẾ TIẾP của nick, nên trễ hơn — thực tế
+        // ngày 22/09 nick 'Ngân Nấm' hết nghỉ 20:10 mà slot gần nhất là 20:18.
+        // Chữ cũ hứa một mốc chính xác rồi không giữ lời, nhìn tưởng hỏng.
+        return {nhan:`🚫 Spam${den?" · dò từ"+den.replace(" tới",""):""}`,
                 mau:"var(--danger)", dam:true,
                 chiTiet:`Facebook đã gỡ ${r.so_vi_pham>0?r.so_vi_pham+" bài":"bài"} của nick này. `
                        +`Nghỉ đăng và comment; nuôi nick vẫn chạy. `
-                       +`Mỗi 60 phút tự chạy 1 phiên thăm dò — được thì chạy lại `
-                       +`bình thường, chưa được thì nghỉ tiếp. Không cần làm gì.`};
+                       +`Hết ${gio||"giờ nghỉ"} thì SLOT KẾ TIẾP của nick chạy thử — `
+                       +`không phải đúng ${gio||"mốc đó"}, phải đợi tới giờ của slot gần nhất. `
+                       +`Được thì chạy lại bình thường, chưa được thì nghỉ thêm 60 phút. `
+                       +`Không cần làm gì.`};
     }
     if(val==="Cookie hết hạn")
         return {nhan:val, mau:"var(--danger)", dam:false, chiTiet:"Cần đăng nhập lại"};

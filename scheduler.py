@@ -640,8 +640,14 @@ def main():
             # hỏng thì tự nghỉ thêm một lượt. Quét mỗi vòng (60s).
             try:
                 for _hs in db.mo_duong_tham_do():
-                    logger.info(f"🔍 '{_hs['ten_acc']}' hết giờ nghỉ spam — mở "
-                                f"{_hs['so_slot']} slot để chạy phiên thăm dò")
+                    # CHỈ ghi khi thật sự mở được slot. Acc hết giờ nghỉ mà
+                    # không còn slot nào ở trạng thái 'Nghỉ Spam' thì lần quét
+                    # nào cũng trả về nó với so_slot=0 — mà quét mỗi 60 giây,
+                    # nhân 5 runner. Riêng câu này đã ghi 3649 dòng trong ngày
+                    # 22/09, lấp mất những dòng thật sự cần đọc.
+                    if _hs["so_slot"]:
+                        logger.info(f"🔍 '{_hs['ten_acc']}' hết giờ nghỉ spam — mở "
+                                    f"{_hs['so_slot']} slot để chạy phiên thăm dò")
             except Exception as e:
                 logger.warning(f"⚠️  Không mở được đường thăm dò: {e}")
 
