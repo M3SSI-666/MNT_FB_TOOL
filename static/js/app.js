@@ -940,24 +940,19 @@ function _trangThaiAcc(r){
         const t=r.nghi_den?new Date(r.nghi_den):null;
         const gio=(t&&!isNaN(t))?`${String(t.getHours()).padStart(2,"0")}:`
                                  +`${String(t.getMinutes()).padStart(2,"0")}`:"";
-        const den=gio?` tới ${gio}`:"";
-        // Có lý do cụ thể (vd "Lỗi Composer") thì cho nó lên dòng trên, giờ nghỉ
-        // xuống dòng dưới — nhìn bảng là biết ngay vì sao, không phải rê chuột
-        // vào mới thấy. Không có lý do thì hiện "Spam" như cũ.
-        if((r.ly_do_nghi||"").trim()){
-            return {nhan:`🚫 ${_escapeHtml(r.ly_do_nghi.trim())}`
-                         +(gio?`<div style="font-weight:400;font-size:11px;opacity:.85">Nghỉ tới ${gio}</div>`:""),
-                    mau:"var(--danger)", dam:true,
-                    chiTiet:`${r.ly_do_nghi.trim()} — nghỉ đăng và comment, mỗi 60 phút `
-                           +`tự chạy 1 phiên thăm dò. Được thì chạy lại bình thường. Không cần làm gì.`};
-        }
+        // Ô Trạng thái CHỈ ghi "Spam", đúng MỘT dòng ngắn. Lý do và giờ thăm
+        // dò nằm ở cột Ghi chú — cột này hẹp, nhét thêm vào là chữ dồn thành
+        // cột dọc và kéo cao cả hàng, làm hàng của nick đó lệch hẳn so với
+        // các hàng khác.
+        //
         // "dò TỪ 20:10", KHÔNG phải "dò LÚC 20:10". 20:10 là lúc HẾT NGHỈ;
         // phiên thăm dò chạy ở SLOT KẾ TIẾP của nick, nên trễ hơn — thực tế
         // ngày 22/09 nick 'Ngân Nấm' hết nghỉ 20:10 mà slot gần nhất là 20:18.
-        // Chữ cũ hứa một mốc chính xác rồi không giữ lời, nhìn tưởng hỏng.
-        return {nhan:`🚫 Spam${den?" · dò từ"+den.replace(" tới",""):""}`,
-                mau:"var(--danger)", dam:true,
-                chiTiet:`Facebook đã gỡ ${r.so_vi_pham>0?r.so_vi_pham+" bài":"bài"} của nick này. `
+        const ly=(r.ly_do_nghi||"").trim();
+        return {nhan:"🚫 Spam", mau:"var(--danger)", dam:true,
+                phu:(ly?ly+" · ":"")+(gio?`dò từ ${gio}`:""),
+                chiTiet:(ly?ly+". ":"")
+                       +`Facebook đã gỡ ${r.so_vi_pham>0?r.so_vi_pham+" bài":"bài"} của nick này. `
                        +`Nghỉ đăng và comment; nuôi nick vẫn chạy. `
                        +`Hết ${gio||"giờ nghỉ"} thì SLOT KẾ TIẾP của nick chạy thử — `
                        +`không phải đúng ${gio||"mốc đó"}, phải đợi tới giờ của slot gần nhất. `
@@ -974,7 +969,7 @@ function _trangThaiAcc(r){
         // thành một cột dọc lê thê, nhìn bảng còn khó hơn lúc chưa có.
         const ly=(r.ly_do_nghi||"").trim();
         return {nhan:`😴 Nghỉ tới ${hh}:${mm}`,
-                mau:"var(--warning)", dam:false,
+                mau:"var(--warning)", dam:false, phu:ly,
                 chiTiet:(ly?`${ly}. `:"Lỗi liên tiếp nên tạm nghỉ. ")
                         +`Sau đó tự chạy lại. ${hong}`};
     }
@@ -1109,7 +1104,7 @@ function renderAccTable(data){
                 // ô này sửa được, mà "😴 Nghỉ tới 14:20" không phải giá trị hợp lệ
                 // để ghi ngược xuống cột trang_thai.
                 return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}"
-                    style="${center}font-size:12px;font-weight:${t.dam?"600":"400"};color:${t.mau}"
+                    style="${center}font-size:12px;font-weight:${t.dam?"600":"400"};color:${t.mau};white-space:nowrap"
                     title="${_escapeHtml(t.chiTiet)}" onclick="startAccEdit(this)">${t.nhan}</td>`;
             }
             // Ghi chú kiêm luôn chỗ báo vì sao acc đang nghỉ / hỏng ở bước nào.
@@ -1119,16 +1114,30 @@ function renderAccTable(data){
             // Dòng lý do chỉ để NHÌN, không ghi xuống DB: `data-val` vẫn là ghi
             // chú thật của người dùng, nên bấm vào sửa không nuốt mất nó.
             if(f.key==="ghi_chu"){
-                const bao=(r.ly_do_nghi||r.loi_gan_nhat||"").trim();
-                const mot=`display:block;max-width:230px;overflow:hidden;`
-                         +`text-overflow:ellipsis;white-space:nowrap`;
-                const than=(bao?`<span style="${mot};color:var(--warning);font-size:11px"`
-                               +`>⚠️ ${_escapeHtml(bao)}</span>`:"")
-                          +(val?`<span style="${mot}">${_escapeHtml(val)}</span>`
-                               :(bao?"":"-"));
+                // Gộp TẤT CẢ vào ĐÚNG MỘT DÒNG, cắt gọn bằng "…".
+                //
+                // Mỗi ô một dòng thì mọi hàng cao bằng nhau. Trước đây ô này
+                // xuống hai dòng khi nick vừa có cảnh báo vừa có ghi chú tay,
+                // còn ô Trạng thái xuống ba dòng khi nick dính Spam — hàng của
+                // nick đó cao gấp đôi hàng bên cạnh, nhìn bảng rất lệch.
+                //
+                // Rê chuột vào vẫn thấy đủ, và bấm vào sửa vẫn ra đúng ghi chú
+                // thật của người dùng (`data-val` không đổi).
+                const t   = _trangThaiAcc(r);
+                const bao = [(t.phu||"").trim(), (r.loi_gan_nhat||"").trim()]
+                            .filter(Boolean)[0] || "";
+                const than = (bao||val)
+                    ? `<span style="display:block;max-width:250px;overflow:hidden;`
+                      + `text-overflow:ellipsis;white-space:nowrap">`
+                      + (bao ? `<span style="color:var(--warning)">⚠️ ${_escapeHtml(bao)}</span>` : "")
+                      + (bao && val ? " · " : "")
+                      + (val ? _escapeHtml(val) : "") + `</span>`
+                    : "-";
                 return `<td class="editable" data-id="${r.id}" data-field="${f.key}"
                     data-val="${esc}" style="${center}font-size:12px;color:var(--text-secondary)"
-                    title="${_escapeHtml(bao?bao+(val?"\n\n"+val:""):val)}"
+                    title="${_escapeHtml(bao ? bao + (val ? String.fromCharCode(10,10) + val : "") : val)}"
+
+" + val : "") : val)}"
                     onclick="startAccEdit(this)">${than}</td>`;
             }
             return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}" style="${style}" title="${esc}" onclick="startAccEdit(this)">${val||"-"}</td>`;

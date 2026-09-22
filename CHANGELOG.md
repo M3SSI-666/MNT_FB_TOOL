@@ -10,6 +10,23 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.27.1 — 23/09/2026
+
+**Bảng Tài khoản: mọi hàng cao bằng nhau**
+
+Ô **Trạng thái** của nick dính Spam bị bẻ thành ba dòng (`🚫 Spam` / `· dò từ` /
+`23:51`) vì cột hẹp, làm hàng đó cao gấp rưỡi hàng bên cạnh. `Cookie hết hạn`
+cũng bị bẻ làm hai dòng.
+
+Từ bản này:
+
+* **Trạng thái** chỉ còn `🚫 Spam` — một dòng, và không bao giờ xuống dòng nữa.
+* Giờ thăm dò chuyển sang **Ghi chú**: `⚠️ dò từ 23:51`.
+* Ô Ghi chú gộp cảnh báo và ghi chú tay vào **đúng một dòng**, cắt gọn bằng "…";
+  rê chuột vào vẫn thấy đủ, bấm vào sửa vẫn ra đúng chữ của bạn.
+
+Đo trên giao diện thật, cả 17 hàng: **45–46px**, trước đó là 45–53px.
+
 ## v2.27.0 — 23/09/2026
 
 **Sửa: quy kết spam cho sai nick**

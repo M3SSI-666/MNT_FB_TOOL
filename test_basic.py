@@ -327,13 +327,29 @@ _app_js = Path("static/js/app.js").read_text(encoding="utf-8")
 _i_nghi = _app_js.index("😴 Nghỉ tới")
 check("ô Trạng thái chỉ ghi giờ, không chèn lý do dài",
       "ly_do_nghi" not in _app_js[_i_nghi:_i_nghi + 320])
+
+# ── Mọi hàng trong bảng Tài khoản phải cao BẰNG NHAU ───────────────────────
+# Ô Trạng thái của nick dính Spam từng xuống BA dòng ("🚫 Spam", "· dò từ",
+# "23:51") vì cột hẹp, làm hàng đó cao gấp đôi hàng bên cạnh. "Cookie hết hạn"
+# cũng bị bẻ làm hai dòng. Đo trên giao diện thật sau khi sửa: 45–46px cho cả
+# 17 hàng, thay vì 45–53px.
+check("ô Trạng thái Spam CHỈ ghi 'Spam'", 'nhan:"🚫 Spam"' in _app_js)
+check("giờ thăm dò chuyển sang cột Ghi chú qua `phu`",
+      "phu:(ly?ly" in _app_js and "dò từ ${gio}" in _app_js)
+check("ô Trạng thái không bao giờ xuống dòng",
+      "color:${t.mau};white-space:nowrap" in _app_js)
+_i_gc2 = _app_js.index('f.key==="ghi_chu"')
+_o_gc2 = _app_js[_i_gc2:_i_gc2 + 1400]
+check("ô Ghi chú gộp về ĐÚNG MỘT dòng",
+      "white-space:nowrap" in _o_gc2 and _o_gc2.count("display:block") == 1)
+check("ô Ghi chú lấy `phu` của Trạng thái", "_trangThaiAcc(r)" in _o_gc2)
 check("cột Ghi chú hiện lý do nghỉ / lỗi gần nhất",
       'f.key==="ghi_chu"' in _app_js
-      and "r.ly_do_nghi||r.loi_gan_nhat" in _app_js)
+      and "r.loi_gan_nhat" in _app_js and "(t.phu" in _app_js)
 # Ghi chú là ô SỬA ĐƯỢC. Dòng cảnh báo chỉ để nhìn — `data-val` phải giữ ghi chú
 # thật, không thì bấm vào sửa là nuốt mất chữ người dùng tự viết.
 _i_gc = _app_js.index('f.key==="ghi_chu"')
-_o_gc = _app_js[_i_gc:_i_gc + 1000]
+_o_gc = _app_js[_i_gc:_i_gc + 1800]
 check("sửa Ghi chú không nuốt mất chữ người dùng tự viết",
       'data-val="${esc}"' in _o_gc and "startAccEdit(this)" in _o_gc)
 check("mỗi dòng trong ô Ghi chú bị cắt gọn, không kéo cao hàng",
