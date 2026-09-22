@@ -10,6 +10,41 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.27.0 — 23/09/2026
+
+**Sửa: quy kết spam cho sai nick**
+
+Nick khoẻ vẫn bị đánh Spam, vì phần mềm đọc hộp cảnh báo ở **cuối phiên** rồi quy
+cho nick đang chạy phiên đó — bất kể hộp cảnh báo ấy đã nằm sẵn ở đó từ trước.
+
+Đếm trên toàn bộ log, **512 lần** hộp cảnh báo bật lên trong các phiên:
+
+| Bật lên lúc | Số lần | |
+|---|---|---|
+| đăng nhập | 67 | *chưa đăng gì* |
+| xem story | 147 | *chưa đăng gì* |
+| lướt newsfeed | 41 | *chưa đăng gì* |
+| chuyển sang Page | 18 | *chưa đăng gì* |
+| vào nhóm | 3 | *chưa đăng gì* |
+| **thu link (sau khi đăng)** | **171** | ← cửa sổ đúng |
+| cooldown | 65 | sau |
+
+**276 lần trên 512 — 54% — rơi vào lúc phiên chưa đăng gì cả.** Quy cho phiên đó
+là đổ oan, và đổ oan cho đúng nick đang chạy phiên chứ không phải nick đã gây ra
+vụ gỡ bài. Một Page có thể được nhiều nick dùng chung, nên vụ gỡ bài của Page
+hoàn toàn có thể do nick khác.
+
+Từ bản này, phần mềm đánh một **mốc thời điểm nội dung thật sự lên Facebook**
+(ngay sau "ĐĂNG THÀNH CÔNG", hoặc sau khi comment xong). Chỉ cảnh báo xuất hiện
+**sau mốc đó** mới được tính là của phiên này. Cảnh báo thấy trước đó vẫn được
+ghi log, nhưng không dùng để gắn cờ.
+
+Đúng như nguyên tắc: phát hiện spam phải diễn ra **trong cửa sổ chờ thu link sau
+khi Page đăng bài**, mới truy ra được đúng nick đã gây ra.
+
+> Nick `Ngân Nấm` bị đánh Spam oan 9 lần ngày 22/09 vì lỗi này — đã gỡ trạng
+> thái khi cập nhật.
+
 ## v2.26.0 — 22/09/2026
 
 **Sửa: báo lại đúng một sự việc spam suốt cả ngày**

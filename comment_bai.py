@@ -49,7 +49,7 @@ from utils import logger, CookieDeadError
 from cookie_exporter import load_cookie
 from fb_common import (kiem_vi_pham, chua_dang_nhap, browser_launch_kwargs, find_profile_dir, human_delay,
                        dong_dialog_canh_bao, bat_dau_canh_dialog, dong_hop_cookie,
-                       view_stories, browse_and_like, ghi_clipboard)
+                       view_stories, browse_and_like, ghi_clipboard, danh_dau_da_dang)
 from nuoi_nick import pick_messages, is_messaging_restricted
 import db
 
@@ -349,6 +349,9 @@ async def _ket_phien(page, acc_name: str = "") -> None:
         await browse_and_like(page, duration_sec=giay, max_likes=KET_LIKE)
         # Comment bị gỡ cũng là dính spam, y như bài đăng bị gỡ. Dò SAU khi
         # lướt feed vì Facebook cần vài chục giây mới đổ thông báo về.
+        # Comment đã lên rồi mới đánh mốc — cảnh báo thấy trước đó là chuyện cũ.
+        if kq.get("da_comment"):
+            danh_dau_da_dang(page)
         await kiem_vi_pham(page, acc_name, "phiên comment")
     except Exception as e:
         logger.warning(f"    ⚠️  Kết phiên không trọn vẹn: {e}")

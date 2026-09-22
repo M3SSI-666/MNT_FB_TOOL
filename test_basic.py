@@ -1769,13 +1769,35 @@ class _TrangGia:
 _tg = _TrangGia()
 _fbc_vp._nho_canh_bao(_tg, "Spam Đã gỡ bài viết")
 check("vòng canh ghi lại được chữ cảnh báo",
-      _fbc_vp._CANH_BAO_DA_THAY.get(id(_tg)) == "Spam Đã gỡ bài viết")
+      _fbc_vp._CANH_BAO_DA_THAY.get(id(_tg), ("",))[0] == "Spam Đã gỡ bài viết")
 _fbc_vp._nho_canh_bao(_tg, "ngắn")
 check("giữ bản DÀI nhất, không để bản sau đè mất",
-      _fbc_vp._CANH_BAO_DA_THAY.get(id(_tg)) == "Spam Đã gỡ bài viết")
+      _fbc_vp._CANH_BAO_DA_THAY.get(id(_tg), ("",))[0] == "Spam Đã gỡ bài viết")
+
+# ── Cảnh báo thấy TRƯỚC khi đăng KHÔNG phải của phiên này ─────────────────
+# Đếm trên toàn bộ log: 512 lần hộp cảnh báo bật lên, thì 276 lần (54%) rơi vào
+# lúc đăng nhập / xem story / lướt newsfeed / chuyển sang Page — tức phiên CHƯA
+# đăng gì cả. Quy cho phiên đó là đổ oan cho nick đang chạy phiên, trong khi vụ
+# gỡ bài có thể do nick khác gây ra (nhiều nick dùng chung một Page).
+check("chưa đánh mốc đăng -> KHÔNG dùng cảnh báo cũ",
+      _fbc_vp._canh_bao_sau_khi_dang(_tg) == "")
+_fbc_vp.danh_dau_da_dang(_tg)          # phiên vừa đăng xong
+check("cảnh báo thấy TRƯỚC khi đăng -> vẫn bỏ qua",
+      _fbc_vp._canh_bao_sau_khi_dang(_tg) == "")
+_fbc_vp._nho_canh_bao(_tg, "Spam Đã gỡ bài viết — vụ MỚI sau khi đăng")
+check("cảnh báo thấy SAU khi đăng -> mới dùng",
+      "vụ MỚI sau khi đăng" in _fbc_vp._canh_bao_sau_khi_dang(_tg))
+
 _fbc_vp._quen_canh_bao(_tg)
 check("đóng trang thì xoá, không rò sang phiên sau",
-      id(_tg) not in _fbc_vp._CANH_BAO_DA_THAY)
+      id(_tg) not in _fbc_vp._CANH_BAO_DA_THAY
+      and id(_tg) not in _fbc_vp._MOC_DA_DANG)
+
+# Mọi luồng đưa nội dung lên đều phải đánh mốc, không thì cảnh báo của vòng
+# canh vĩnh viễn không được dùng tới.
+for _f_md in ("page_via_poster.py", "via_poster.py", "comment_bai.py"):
+    check(f"{_f_md}: có đánh mốc sau khi đăng/comment",
+          "danh_dau_da_dang(page)" in Path(_f_md).read_text(encoding="utf-8"))
 
 _src_fb = Path("fb_common.py").read_text(encoding="utf-8")
 check("CẢ HAI đường đóng dialog đều ghi lại trước khi đóng",

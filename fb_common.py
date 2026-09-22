@@ -504,17 +504,49 @@ async def composer_bi_chan(page, giay_cho: int = 10) -> bool:
 _CANH_BAO_DA_THAY: dict = {}
 
 
+# Thời điểm phiên này ĐƯA NỘI DUNG LÊN xong (đăng bài / comment xong).
+#
+# Cảnh báo thấy TRƯỚC mốc này KHÔNG phải của phiên này — nó đã nằm sẵn ở đó từ
+# trước. Đếm trên toàn bộ log: trong 512 lần hộp cảnh báo bật lên, có 276 lần
+# (54%) rơi vào lúc đăng nhập / xem story / lướt newsfeed / chuyển sang Page —
+# tức là khi phiên CHƯA đăng gì cả. Quy cho phiên đó là đổ oan, và còn đổ oan
+# cho đúng nick đang chạy phiên chứ không phải nick gây ra vụ gỡ bài.
+_MOC_DA_DANG: dict = {}
+
+
+def danh_dau_da_dang(page):
+    """Đánh mốc: từ đây trở đi, cảnh báo mới có thể là của phiên này."""
+    import time as _t
+    _MOC_DA_DANG[id(page)] = _t.time()
+
+
 def _nho_canh_bao(page, txt: str):
-    """Giữ lại chữ cảnh báo dài nhất đã thấy trên trang này."""
+    """Giữ lại chữ cảnh báo dài nhất đã thấy, KÈM thời điểm thấy."""
     if not txt:
         return
-    cu = _CANH_BAO_DA_THAY.get(id(page), "")
-    if len(txt) > len(cu):
-        _CANH_BAO_DA_THAY[id(page)] = txt
+    import time as _t
+    cu = _CANH_BAO_DA_THAY.get(id(page))
+    if cu is None or len(txt) > len(cu[0]):
+        _CANH_BAO_DA_THAY[id(page)] = (txt, _t.time())
+
+
+def _canh_bao_sau_khi_dang(page) -> str:
+    """
+    Chữ cảnh báo đã thấy SAU khi phiên đưa nội dung lên. Rỗng nếu không có.
+
+    Chưa đánh mốc (phiên không đăng gì, hoặc đăng hỏng) thì trả rỗng: lúc đó
+    mọi cảnh báo nhìn thấy đều là của chuyện cũ.
+    """
+    moc = _MOC_DA_DANG.get(id(page))
+    ghi = _CANH_BAO_DA_THAY.get(id(page))
+    if moc is None or ghi is None:
+        return ""
+    return ghi[0] if ghi[1] >= moc else ""
 
 
 def _quen_canh_bao(page):
     _CANH_BAO_DA_THAY.pop(id(page), None)
+    _MOC_DA_DANG.pop(id(page), None)
 
 
 async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
@@ -546,10 +578,9 @@ async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
             # Dò tại chỗ không thấy → dùng chữ vòng canh đã ghi lại trong
             # phiên. Không có bước này thì hầu hết vi phạm bị bỏ lọt, vì vòng
             # canh gần như luôn đóng dialog trước (xem `_CANH_BAO_DA_THAY`).
-            cu = _CANH_BAO_DA_THAY.get(id(page), "")
-            vp = _sk.doc_vi_pham(cu)
+            vp = _sk.doc_vi_pham(_canh_bao_sau_khi_dang(page))
             if vp:
-                logger.warning("  🔁 Dùng lại cảnh báo vòng canh đã thấy giữa phiên")
+                logger.warning("  🔁 Dùng lại cảnh báo vòng canh thấy SAU khi đăng")
         if not vp:
             logger.info("  ✅ Không thấy cảnh báo gỡ bài")
             return False

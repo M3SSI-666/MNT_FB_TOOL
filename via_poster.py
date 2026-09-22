@@ -33,7 +33,7 @@ from cookie_exporter import load_cookie
 from config import HEADLESS
 from utils import logger, jitter_ms, CookieDeadError, LoiBuoc
 from fb_common import (kiem_vi_pham, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
-                       bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, browser_launch_kwargs,
+                       bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, danh_dau_da_dang, browser_launch_kwargs,
                        human_delay, jwait, clipboard_paste,
                        view_stories, browse_and_like)
 
@@ -463,6 +463,10 @@ async def _run_crosspost(
         # Chờ ô soạn bài đóng = Facebook đã nhận bài
         if await cho_composer_dong(page):
             logger.info(f"  ✅ [{acc_name}] ĐĂNG THÀNH CÔNG!")
+            # Từ ĐÂY nội dung mới thật sự nằm trên Facebook. Cảnh báo gỡ bài
+            # thấy sau mốc này mới có thể là của phiên này — xem ghi chú ở
+            # `fb_common.danh_dau_da_dang`.
+            danh_dau_da_dang(page)
         else:
             logger.warning(f"  ⚠️  Không chắc kết quả — kiểm tra thủ công trên Facebook")
 
