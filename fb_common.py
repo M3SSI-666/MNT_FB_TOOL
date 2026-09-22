@@ -554,10 +554,15 @@ async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
             logger.info("  ✅ Không thấy cảnh báo gỡ bài")
             return False
         moi, cu = _db.ghi_nhan_vi_pham(acc_name, vp["so"], vp["spam"],
-                                       vp.get("hom_nay", 0))
+                                       vp.get("hom_nay", 0),
+                                       vp.get("chac_chan", True))
+        # Ghi cả `chắc chắn`: không có nó thì nhìn log không phân biệt được con
+        # số lấy từ nút "Xem tất cả (N)" với con số đếm mò mấy dòng đang hiện —
+        # mà hai thứ đó được xử lý khác hẳn nhau.
         logger.warning(f"  ⚠️  FB đã gỡ {vp['so']} bài của '{acc_name}'"
                        f" (lần đo trước: {'chưa đo' if cu < 0 else cu}"
-                       f" | hôm nay: {vp.get('hom_nay', 0)})")
+                       f" | hôm nay: {vp.get('hom_nay', 0)}"
+                       f" | {'chắc chắn' if vp.get('chac_chan') else 'ĐẾM MÒ'})")
         if moi:
             n, moc = _db.danh_dau_spam(acc_name, f"{vp['so'] - cu} bài mới bị gỡ")
             logger.error(

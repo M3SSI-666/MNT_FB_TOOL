@@ -308,6 +308,11 @@ def init_db():
         # phiên hỏng chứ không đợi tới lúc cho nghỉ: bốn lỗi đầu trong chuỗi
         # cũng cần nhìn thấy, không thì tới lỗi thứ năm mới biết có chuyện.
         _add_col("accounts",  "loi_gan_nhat",  "loi_gan_nhat TEXT DEFAULT ''")
+        # Ngày đã gắn cờ spam theo tín hiệu "có vụ đề ngày hôm nay". Hộp cảnh
+        # báo giữ nguyên vụ của hôm nay suốt cả ngày, nên thiếu cột này thì
+        # mỗi phiên lại báo lại đúng một sự việc — nick 'Nguyen Ngan' bị đánh
+        # spam 12 lần trong ngày 22/09 vì đúng chuyện đó.
+        _add_col("accounts",  "vi_pham_ngay",  "vi_pham_ngay TEXT DEFAULT ''")
         _add_col("schedules", "hoat_dong",     "hoat_dong TEXT DEFAULT 'dang_bai'")
 
         # ── Migration: bỏ 2 cột cờ comment ──────────────────────────────
@@ -741,24 +746,48 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool, ly_do_loi: str = "") -> tuple[st
 
 
 def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool,
-                     hom_nay: int = 0) -> tuple[bool, int]:
+                     hom_nay: int = 0, chac_chan: bool = True) -> tuple[bool, int]:
     """
     Ghi số vụ Facebook gỡ bài đo được sau một phiên đăng.
 
-    Chỉ khi số vụ TĂNG so với lần đo trước mới coi là vừa dính — xem
-    `suc_khoe_acc.co_vu_moi`. Lần đo đầu tiên chỉ ghi mốc.
-
     Trả `(vua_dinh, so_cu)`.
+
+    HAI CHỐT CHỐNG BÁO LẠI, cả hai đều học từ nick 'Nguyen Ngan' ngày 22/09 —
+    hôm đó nó bị đánh spam 12 LẦN cho đúng MỘT sự việc:
+
+    1. Tín hiệu "có vụ đề ngày hôm nay" chỉ được nổ MỘT LẦN MỖI NGÀY. Hộp cảnh
+       báo giữ nguyên vụ của hôm nay tới hết ngày, nên mọi phiên sau đều đọc ra
+       y hệt — log cho thấy `hom_nay=6` ở cả 12 lần đo, không đổi một đơn vị.
+
+    2. Con số chỉ được dùng khi CHẮC CHẮN, tức lấy từ nút "Xem tất cả (N)".
+       Không có nút đó thì nó chỉ là số dòng đang hiện, mà số dòng render ra
+       thay đổi mỗi lần mở: 13, 19, 6, 19, 20, 20, 20, 15, 8, 17, 10, 20 trong
+       cùng một ngày. So "lớn hơn lần trước" trên con số ấy là tung đồng xu, và
+       nó cũng không được phép ghi đè mốc đã lưu.
     """
     import suc_khoe_acc as sk
+    ngay = datetime.now().strftime("%Y-%m-%d")
     with _conn() as con:
-        r = con.execute("SELECT id, so_vi_pham, trang_thai FROM accounts "
+        r = con.execute("SELECT id, so_vi_pham, trang_thai, vi_pham_ngay FROM accounts "
                         "WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
         if not r:
             return False, -1
         so_cu = r["so_vi_pham"] if r["so_vi_pham"] is not None else -1
-        con.execute("UPDATE accounts SET so_vi_pham=? WHERE id=?", (so_moi, r["id"]))
-        vua_dinh = la_spam and sk.co_vu_moi(so_cu, so_moi, hom_nay)
+
+        # Đã gắn cờ hôm nay rồi thì tắt tín hiệu "vụ hôm nay" đi, để khỏi báo
+        # lại đúng sự việc ấy ở mọi phiên còn lại của ngày.
+        if (r["vi_pham_ngay"] or "") == ngay:
+            hom_nay = 0
+
+        if chac_chan:
+            con.execute("UPDATE accounts SET so_vi_pham=? WHERE id=?", (so_moi, r["id"]))
+            vua_dinh = la_spam and sk.co_vu_moi(so_cu, so_moi, hom_nay)
+        else:
+            # Số không đáng tin: không ghi đè mốc, và chỉ còn đường "vụ hôm nay".
+            vua_dinh = la_spam and hom_nay > 0 and so_cu >= 0
+
+        if vua_dinh:
+            con.execute("UPDATE accounts SET vi_pham_ngay=? WHERE id=?", (ngay, r["id"]))
     return vua_dinh, so_cu
 
 

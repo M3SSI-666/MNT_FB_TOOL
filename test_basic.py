@@ -1719,6 +1719,39 @@ check("mốc 10 / đo 4 / toàn vụ cũ -> KHÔNG gắn cờ oan",
 check("lần đo ĐẦU vẫn chỉ ghi mốc, dù có vụ hôm nay",
       _sk.co_vu_moi(-1, 4, 4) is False)
 
+# ── Không được báo LẠI đúng một sự việc suốt cả ngày ───────────────────────
+# Hộp cảnh báo giữ nguyên vụ của hôm nay tới hết ngày, nên mọi phiên sau đều
+# đọc ra y hệt. Nick 'Nguyen Ngan' ngày 22/09 bị đánh spam 12 LẦN cho đúng MỘT
+# sự việc — log cho thấy `hom_nay=6` ở cả 12 lần đo, không đổi một đơn vị.
+_nid = db.upsert_account({"ten_acc": "NGAYSPAM Test", "trang_thai": "Active"})
+with db._conn() as _c:
+    _c.execute("UPDATE accounts SET so_vi_pham=10 WHERE id=?", (_nid,))
+_m1, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 4, True, hom_nay=6, chac_chan=True)
+check("vụ hôm nay lần ĐẦU -> gắn cờ", _m1 is True)
+_m2, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 4, True, hom_nay=6, chac_chan=True)
+_m3, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 4, True, hom_nay=6, chac_chan=True)
+check("cùng sự việc đó -> KHÔNG báo lại", _m2 is False and _m3 is False)
+check("có ghi lại ngày đã báo",
+      (db.get_account_by_name("NGAYSPAM Test").get("vi_pham_ngay") or "")
+      == __import__("datetime").datetime.now().strftime("%Y-%m-%d"))
+
+# Con số ĐẾM MÒ không được ghi đè mốc, cũng không được dùng để so.
+# 12 lần đo cùng ngày cho 13,19,6,19,20,20,20,15,8,17,10,20 trong khi số vụ
+# thật không đổi — so "lớn hơn lần trước" trên đó là tung đồng xu.
+with db._conn() as _c:
+    _c.execute("UPDATE accounts SET so_vi_pham=13, vi_pham_ngay='' WHERE id=?", (_nid,))
+db.ghi_nhan_vi_pham("NGAYSPAM Test", 19, True, hom_nay=0, chac_chan=False)
+check("đếm mò KHÔNG ghi đè mốc",
+      db.get_account_by_name("NGAYSPAM Test")["so_vi_pham"] == 13)
+_m4, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 19, True, hom_nay=0, chac_chan=False)
+check("đếm mò tăng -> KHÔNG gắn cờ", _m4 is False)
+_m5, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 19, True, hom_nay=0, chac_chan=True)
+check("số CHẮC CHẮN tăng -> vẫn gắn cờ như cũ", _m5 is True)
+db.delete_account(_nid)
+
+check("log ghi rõ số là chắc chắn hay đếm mò",
+      "ĐẾM MÒ" in Path("fb_common.py").read_text(encoding="utf-8"))
+
 # ── Vòng canh KHÔNG được nuốt mất bằng chứng ───────────────────────────────
 # Vòng canh nền quét mỗi 5 giây và ĐÓNG dialog ngay khi thấy. `kiem_vi_pham`
 # chạy cuối phiên, mở facebook.com rồi chờ 4–6 giây mới dò — quãng đó vòng canh

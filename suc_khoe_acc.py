@@ -144,10 +144,16 @@ def doc_vi_pham(text: str) -> dict | None:
     thap = " ".join(text.split()).lower()
     if not any(m in thap for m in _MOC_GO_BAI):
         return None
-    m = _RE_XEM_TAT_CA.search(thap)
+    m  = _RE_XEM_TAT_CA.search(thap)
     so = int(m.group(1)) if m else sum(thap.count(k) for k in _MOC_GO_BAI)
+    # `chac_chan`: con số lấy từ nút "Xem tất cả (N)" — đó là TỔNG THẬT.
+    # Không có nút ấy thì chỉ đếm được mấy dòng đang nhìn thấy, mà số dòng
+    # render ra thay đổi mỗi lần mở. Đo trên nick 'Nguyen Ngan' ngày 22/09, 12
+    # lần đo trong cùng một ngày cho: 13, 19, 6, 19, 20, 20, 20, 15, 8, 17, 10,
+    # 20 — trong khi số vụ thật không hề đổi. So "lớn hơn lần trước" trên một
+    # con số như vậy là tung đồng xu, nên nơi gọi phải biết mà bỏ qua.
     return {"so": max(so, 1), "spam": any(k in thap for k in _MOC_SPAM),
-            "hom_nay": co_vu_hom_nay(thap)}
+            "hom_nay": co_vu_hom_nay(thap), "chac_chan": bool(m)}
 
 
 def _ngay_hom_nay() -> tuple:

@@ -10,6 +10,44 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.26.0 — 22/09/2026
+
+**Sửa: báo lại đúng một sự việc spam suốt cả ngày**
+
+Ngày 22/09 nick `Nguyen Ngan` bị đánh spam **12 lần**, `Ngân Nấm` **9 lần** —
+trong khi hôm trước cả hệ thống chỉ có 1 lần. Kiểm tra thì cả 12 lần của nick
+đầu là **cùng một sự việc**, đọc đi đọc lại.
+
+Hai đường phát hiện đều có lỗi, phải sửa cả hai.
+
+**1. Tín hiệu "có vụ đề ngày hôm nay" không có trí nhớ.**
+
+Hộp cảnh báo giữ nguyên vụ của hôm nay tới hết ngày. Log cho thấy `hôm nay: 6` ở
+**cả 12 lần đo**, không đổi một đơn vị — tức là cùng 6 vụ từ sáng sớm, đọc lại
+mỗi phiên. Giờ tín hiệu này chỉ nổ **một lần mỗi ngày cho mỗi nick**.
+
+**2. Con số vụ là nhiễu thuần tuý.**
+
+12 lần đo trong cùng một ngày cho:
+
+```
+13 → 19 → 6 → 19 → 20 → 20 → 20 → 15 → 8 → 17 → 10 → 20
+```
+
+Số vụ thật không hề đổi. Nguyên nhân: khi hộp cảnh báo chưa hiện nút **"Xem tất
+cả (N)"**, phần mềm đếm tạm mấy dòng đang nhìn thấy — mà số dòng render ra thay
+đổi mỗi lần mở. So *"lớn hơn lần trước"* trên con số ấy là tung đồng xu.
+
+Giờ phần mềm phân biệt hai loại số. Chỉ số lấy từ **"Xem tất cả (N)"** mới được
+dùng để so và mới được ghi đè mốc đã lưu; số đếm tạm thì bỏ qua. Log cũng ghi rõ
+`chắc chắn` hay `ĐẾM MÒ` để sau này soi lại được.
+
+Chạy lại đúng 12 lần đo của ngày 22/09: **12 lần báo → còn 2**.
+
+> Lưu ý: việc nick vẫn comment được **không** chứng minh Facebook không gỡ bài.
+> Hai chuyện độc lập — Facebook gỡ bài đăng nhưng vẫn cho bình luận là bình
+> thường. Bằng chứng gỡ bài nằm ở hộp "Sự việc", không ở khả năng comment.
+
 ## v2.25.2 — 22/09/2026
 
 **Ô Trạng thái không còn hứa sai giờ thăm dò**
