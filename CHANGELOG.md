@@ -10,6 +10,41 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.29.0 — 28/09/2026
+
+**Sửa: bấm UPDATE trên máy vệ tinh không lên bản mới**
+
+Cửa sổ đen chạy tới bước `[2/6] Dang tat app dang chay...` rồi dừng, không cập
+nhật gì.
+
+`UPDATE.bat` **tự chép mình sang `%TEMP%` rồi chạy bản sao** — cố ý làm vậy, để
+lệnh `git reset --hard` ở bước 4 không ghi đè chính nó giữa chừng. Nhưng từ lúc
+ấy `%~dp0` trỏ vào `%TEMP%`, **không phải thư mục cài đặt**. Cả file dùng
+`%MNT_UPDATE_DIR%` cho đúng, riêng hai dòng thêm ở bản v2.23.0 lại dùng `%~dp0`:
+
+```bat
+call "%~dp0_TIM_PYTHON.bat"      ← tìm trong %TEMP% → không thấy
+if errorlevel 1 exit /b 1        ← thoát ngay tại đây
+```
+
+Đo lại trên máy thật: `%~dp0` ra thư mục `Temp`, `errorlevel = 1`, và
+`_TIM_PYTHON.bat` không hề có trong `%TEMP%`.
+
+Đã sửa hai dòng đó. Thêm phép kiểm tự động: từ chỗ chép sang `%TEMP%` trở đi,
+`UPDATE.bat` không được dùng `%~dp0` ở bất kỳ dòng lệnh nào, và mọi file nó gọi
+tới phải tồn tại thật.
+
+> **Máy vệ tinh đang mắc kẹt:** bản `UPDATE.bat` trên đó cũng hỏng, nên không tự
+> kéo được bản vá này về. Cách gỡ một lần — mở `cmd` ngay trong thư mục cài đặt
+> rồi chạy:
+>
+> ```
+> git fetch --tags --force origin
+> git checkout -f v2.29.0
+> ```
+>
+> Xong thì bấm `RESTART.bat`. Từ lần sau `UPDATE.bat` chạy bình thường.
+
 ## v2.28.0 — 23/09/2026
 
 **Phát hiện spam: chỉ còn MỘT luật**
