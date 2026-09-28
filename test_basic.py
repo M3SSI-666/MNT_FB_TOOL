@@ -3508,6 +3508,36 @@ for _b in ("RESTART.bat", "UPDATE.bat"):
     check(f"{_b}: không quét Get-CimInstance nữa", "Get-CimInstance" not in _lenh_b)
     check(f"{_b}: gọi dung_het.py", "dung_het.py" in _lenh_b)
 
+# ── UPDATE.bat: sau khi tự chép sang %TEMP% thì %~dp0 ĐỔI NGHĨA ──────────
+# File đó tự chép mình sang %TEMP% rồi chạy bản sao (để `git reset --hard` ở
+# bước 4 không ghi đè chính nó giữa chừng). Từ lúc ấy `%~dp0` trỏ vào %TEMP%
+# chứ không phải thư mục cài đặt — mọi thứ phải dùng `%MNT_UPDATE_DIR%`.
+#
+# Bản v2.23.0 lỡ dùng `%~dp0` ở bước dừng app: `call` tìm _TIM_PYTHON.bat
+# trong %TEMP% -> không thấy -> errorlevel 1 -> `exit /b 1` -> LỆNH CẬP NHẬT
+# DỪNG NGAY Ở BƯỚC 2/6 mà không báo gì rõ ràng. Máy vệ tinh bấm update mãi
+# không lên bản mới. Đo lại: %~dp0 ra thư mục Temp, errorlevel = 1.
+_ub = Path("UPDATE.bat").read_text(encoding="utf-8", errors="replace").splitlines()
+_i_chep = next(i for i, l in enumerate(_ub) if 'cd /d "%MNT_UPDATE_DIR%"' in l)
+_pham = [f"dòng {i+1}"
+         for i, l in enumerate(_ub[_i_chep:], start=_i_chep)
+         if ("%~dp0" in l or "%~f0" in l)
+         and not l.strip().startswith("::")
+         and not l.strip().lower().startswith("rem ")]
+check("UPDATE.bat: sau khi chép sang TEMP thì KHÔNG còn dùng %~dp0"
+      + (f" — còn {_pham}" if _pham else ""), not _pham)
+
+# Và mọi file nó gọi tới phải có thật.
+import re as _re_ub
+_thieu = sorted({m.group(1)
+                 for l in _ub
+                 if not l.strip().startswith("::")
+                 and not l.strip().lower().startswith("rem ")
+                 for m in _re_ub.finditer(r"%MNT_UPDATE_DIR%([A-Za-z0-9_.]+)", l)
+                 if not Path(m.group(1)).exists()})
+check("UPDATE.bat: mọi file nó gọi đều tồn tại"
+      + (f" — thiếu {_thieu}" if _thieu else ""), not _thieu)
+
 check("dung_het: tìm runner qua khoá, không chỉ file pid",
       hasattr(_dh, "pid_giu_khoa") and hasattr(_dh, "pid_tu_file"))
 # dung_het KHÔNG được chép lại phần xử lý tiến trình — dùng chung `tien_trinh`.

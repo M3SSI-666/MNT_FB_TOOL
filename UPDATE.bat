@@ -147,10 +147,19 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8080 ^| findstr LISTENING 2^
 :: dung_het.py chup mot anh danh sach tien trinh roi goi thang TerminateProcess:
 :: cung phep do do, chet trong 0,00 giay. No con tim runner qua FILE KHOA nen
 :: khong phu thuoc file pid con hay mat.
+:: PHAI dung %MNT_UPDATE_DIR%, KHONG duoc dung %~dp0.
+:: File nay tu chep minh sang %TEMP% roi chay ban sao (xem khoi [-1] o dau
+:: file), nen trong luc chay %~dp0 tro vao %TEMP%\ chu khong phai thu muc
+:: cai dat. Ban v2.23.0 lo dung %~dp0 o day: cau `call` tim _TIM_PYTHON.bat
+:: trong %TEMP% -> khong thay -> errorlevel 1 -> `exit /b 1` -> ca lenh cap
+:: nhat DUNG NGAY O BUOC 2/6 ma khong bao gi ro rang.
+::
+:: Do lai tren may that: %~dp0 ra "C:\Users\...\AppData\Local\Temp\",
+:: errorlevel = 1, va _TIM_PYTHON.bat khong he co trong TEMP.
 echo  Dang dung server + runner...
-call "%~dp0_TIM_PYTHON.bat"
+call "%MNT_UPDATE_DIR%_TIM_PYTHON.bat"
 if errorlevel 1 exit /b 1
-%PY% -X utf8 "%~dp0dung_het.py" %SV_PID%
+%PY% -X utf8 "%MNT_UPDATE_DIR%dung_het.py" %SV_PID%
 ping -n 3 127.0.0.1 >nul
 echo.
 
