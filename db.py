@@ -1429,23 +1429,26 @@ def delete_uid_group(gid: int):
         con.execute("DELETE FROM uid_groups WHERE id=?", (gid,))
 
 
-def import_uid_groups(records: list[dict]) -> tuple[int, int]:
-    """Nhập hàng loạt UID nhóm (sheet 'UID Nhóm', ma_nhom='') từ file Excel.
+def import_uid_groups(records: list[dict], ma_nhom: str = "") -> tuple[int, int]:
+    """Nhập hàng loạt UID nhóm từ file Excel vào một sheet.
 
-    Chế độ "thêm & bỏ trùng": chỉ thêm UID chưa tồn tại trong sheet UID Nhóm.
-    Trùng so theo cột uid. Trả (số đã thêm, số bỏ qua vì trùng).
+    `ma_nhom`: '' = sheet UID Nhóm, 'MARKET' = nhóm đã duyệt Marketplace.
+
+    Chế độ "thêm & bỏ trùng": chỉ thêm UID chưa tồn tại TRONG SHEET ĐÓ. Trùng so
+    theo cột uid. Trả (số đã thêm, số bỏ qua vì trùng).
     """
     cols = ("uid", "ten_nhom", "link_url", "thanh_vien", "ghi_chu")
     added = skipped = 0
     with _conn() as con:
         existing = {
             r[0] for r in con.execute(
-                "SELECT uid FROM uid_groups WHERE ma_nhom=''"
+                "SELECT uid FROM uid_groups WHERE COALESCE(ma_nhom,'')=?", (ma_nhom,)
             ).fetchall()
         }
         # Dòng mới xuống cuối sheet — nối tiếp order_idx đang có.
         nxt = con.execute(
-            "SELECT COALESCE(MAX(order_idx), -1) + 1 FROM uid_groups WHERE ma_nhom=''"
+            "SELECT COALESCE(MAX(order_idx), -1) + 1 FROM uid_groups "
+            "WHERE COALESCE(ma_nhom,'')=?", (ma_nhom,)
         ).fetchone()[0]
         for rec in records:
             uid = (rec.get("uid") or "").strip()
@@ -1456,8 +1459,8 @@ def import_uid_groups(records: list[dict]) -> tuple[int, int]:
             values = [rec.get(c, "") or "" for c in cols]
             con.execute(
                 f"INSERT INTO uid_groups (ma_nhom, {', '.join(cols)}, order_idx) "
-                f"VALUES ('', {', '.join(['?'] * len(cols))}, ?)",
-                values + [nxt],
+                f"VALUES (?, {', '.join(['?'] * len(cols))}, ?)",
+                [ma_nhom] + values + [nxt],
             )
             nxt += 1
             added += 1
@@ -1867,22 +1870,32 @@ def tach_link_nhom(text: str) -> list[dict]:
     return ra
 
 
-def get_uid_groups_market() -> list[dict]:
+def get_uid_groups(ma_nhom: str = "") -> list[dict]:
+    """Nhóm của một sheet: '' = UID Nhóm, 'MARKET' = nhóm đã duyệt Marketplace."""
     with _conn() as con:
         return [dict(r) for r in con.execute(
-            "SELECT * FROM uid_groups WHERE ma_nhom=? ORDER BY order_idx, id",
-            (MA_NHOM_MARKET,)).fetchall()]
+            "SELECT * FROM uid_groups WHERE COALESCE(ma_nhom,'')=? "
+            "ORDER BY order_idx, id", (ma_nhom,)).fetchall()]
 
 
-def them_nhom_market(records: list[dict]) -> tuple[int, int]:
-    """Thêm nhóm Marketplace, bỏ qua uid đã có. Trả về (thêm, bỏ qua)."""
+def get_uid_groups_market() -> list[dict]:
+    return get_uid_groups(MA_NHOM_MARKET)
+
+
+def them_nhom_tu_link(records: list[dict], ma_nhom: str = "") -> tuple[int, int]:
+    """Thêm nhóm vào một sheet, bỏ qua uid đã có. Trả về (thêm, bỏ qua).
+
+    Dùng chung cho cả hai tab UID — chúng chỉ khác nhau đúng giá trị `ma_nhom`,
+    nên tách làm hai hàm là tạo chỗ cho chúng lệch nhau về sau.
+    """
     them = bo = 0
     with _conn() as con:
         da_co = {(r["uid"] or "").strip() for r in con.execute(
-            "SELECT uid FROM uid_groups WHERE ma_nhom=?", (MA_NHOM_MARKET,)).fetchall()}
+            "SELECT uid FROM uid_groups WHERE COALESCE(ma_nhom,'')=?",
+            (ma_nhom,)).fetchall()}
         nxt = con.execute(
-            "SELECT COALESCE(MAX(order_idx), -1) + 1 FROM uid_groups WHERE ma_nhom=?",
-            (MA_NHOM_MARKET,)).fetchone()[0]
+            "SELECT COALESCE(MAX(order_idx), -1) + 1 FROM uid_groups "
+            "WHERE COALESCE(ma_nhom,'')=?", (ma_nhom,)).fetchone()[0]
         for r in records:
             uid = (r.get("uid") or "").strip()
             if not uid or uid in da_co:
@@ -1892,7 +1905,7 @@ def them_nhom_market(records: list[dict]) -> tuple[int, int]:
             con.execute(
                 "INSERT INTO uid_groups(ma_nhom, uid, ten_nhom, link_url, order_idx) "
                 "VALUES(?,?,?,?,?)",
-                (MA_NHOM_MARKET, uid, (r.get("ten_nhom") or "").strip(),
+                (ma_nhom, uid, (r.get("ten_nhom") or "").strip(),
                  (r.get("link_url") or "").strip(), nxt))
             nxt += 1
             them += 1

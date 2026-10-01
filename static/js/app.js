@@ -2028,15 +2028,22 @@ async function deleteContentItem(id){
 // ── UID Groups ────────────────────────────────────────────────
 async function loadUidGroups(){
     const tbody=document.getElementById("uid-table"); if(!tbody) return;
+    _uidNapAcc("");
+    _uidQuetTT("");
     try{
         const res=await API.uidGroups();
         // Chỉ hiện nhóm từ sheet "UID Nhóm" (ma_nhom trống) — TIME1-7 dùng nội bộ
         res.data = res.data.filter(g => !g.ma_nhom || g.ma_nhom === "");
-        document.getElementById("uid-count").textContent=`${res.data.length} nhóm`;
-        if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="5" class="empty">Chưa có UID nhóm</td></tr>`; return; }
+        const _tong=res.data.reduce((s,g)=>s+_uidSo(g),0);
+        document.getElementById("uid-count").textContent=
+            `${res.data.length} nhóm · ${_tong.toLocaleString("vi")} thành viên`;
+        if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="5" class="empty">Chưa có UID nhóm — dán link vào ô trên</td></tr>`; return; }
         tbody.innerHTML=res.data.map(g=>{
-            const tv = g.thanh_vien > 0
-                ? `<span style="font-size:12px;color:var(--text-secondary)">${Number(g.thanh_vien).toLocaleString("vi")}</span>`
+            // Dùng chung phép đọc số với tab Marketplace: cột thanh_vien có dòng
+            // là SỐ, có dòng là CHUỖI, so thẳng `> 0` là ra kết quả lung tung.
+            const _n=_uidSo(g);
+            const tv = _n > 0
+                ? `<span style="font-size:12px;color:var(--text-secondary)">${_n.toLocaleString("vi")}</span>`
                 : `<span style="color:var(--text-muted)">-</span>`;
             const linkCell = g.link_url && g.link_url.startsWith("http")
                 ? `<a href="${g.link_url}" target="_blank" style="font-family:var(--font-mono);font-size:11px;color:var(--accent)">${g.uid} 🔗</a>`
@@ -2119,6 +2126,78 @@ async function jcTrangThai(nguon){
 // Cùng bộ máy với "Tham gia nhóm", khác hai chỗ: lấy nhóm từ UID Marketplace,
 // và KHÔNG switch sang Page — bài niêm yết chỉ đăng được dưới nick cá nhân nên
 // chính nick đó phải là thành viên nhóm.
+// ── Hai tab UID: thêm bằng link, quét tên, Excel ──────────────
+// Chỉ khác nhau đúng `ma_nhom` và bộ id trên màn hình, nên dùng chung một bộ
+// hàm. Tách làm hai bản là tạo chỗ cho chúng lệch nhau.
+const _UIDG = {
+    "":       {dan:"uid-dan",  acc:"uid-acc",  nutQuet:"uid-nut-quet",  tt:"uid-quet-tt",
+               quetHet:"uid-quet-het",  hienChrome:"uid-hien-chrome",
+               nap:()=>loadUidGroups(), ten:"UID Nhóm"},
+    "MARKET": {dan:"uidm-dan", acc:"uidm-acc", nutQuet:"uidm-nut-quet", tt:"uidm-quet-tt",
+               quetHet:"uidm-quet-het", hienChrome:"uidm-hien-chrome",
+               nap:()=>loadUidMarket(), ten:"UID Marketplace"},
+};
+const _uidHen = {};
+
+async function _uidNapAcc(ma){
+    const o=document.getElementById(_UIDG[ma].acc); if(!o || o.options.length) return;
+    try{
+        const r=await API.accounts();
+        const ds=(r.data||[]).filter(a=>(a.trang_thai||"")==="Active"&&(a.c_user||"").trim());
+        o.innerHTML=ds.map(a=>`<option value="${_escapeHtml(a.ten_acc)}">${_escapeHtml(a.ten_acc)}</option>`).join("")
+                    || `<option value="">(không có nick Active)</option>`;
+    }catch(e){}
+}
+
+async function uidThem(ma){
+    const c=_UIDG[ma], o=document.getElementById(c.dan);
+    const text=(o?.value||"").trim();
+    if(!text){ Toast.error("Chưa dán link nào"); return; }
+    try{
+        const r=await API.uidThem(text, ma);
+        if(!r.ok){ Toast.error(r.error); return; }
+        o.value="";
+        Toast.success(`Đọc được ${r.doc_duoc} link — thêm ${r.them}, bỏ qua ${r.bo_qua} trùng`);
+        c.nap();
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function uidQuet(ma){
+    const c=_UIDG[ma];
+    const acc=document.getElementById(c.acc)?.value||"";
+    if(!acc){ Toast.error("Chưa có nick Active nào để quét"); return; }
+    try{
+        const r=await API.uidQuet({
+            acc, ma_nhom: ma,
+            quet_het:    document.getElementById(c.quetHet)?.checked||false,
+            hien_chrome: document.getElementById(c.hienChrome)?.checked||false});
+        if(!r.ok){ Toast.error(r.error); return; }
+        Toast.success(`Đang quét ${c.ten} bằng nick ${acc}`);
+        if(!_uidHen[ma]) _uidHen[ma]=setInterval(()=>_uidQuetTT(ma), 2000);
+        _uidQuetTT(ma);
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function _uidQuetTT(ma){
+    const c=_UIDG[ma];
+    const el=document.getElementById(c.tt), nut=document.getElementById(c.nutQuet);
+    if(!el){ clearInterval(_uidHen[ma]); delete _uidHen[ma]; return; }
+    try{
+        const d=(await API.uidQuetTT(ma)).data||{};
+        if(d.dang_chay){
+            if(nut) nut.disabled=true;
+            el.textContent=`⏳ ${d.da||0}/${d.tong||0}${d.dang?" · "+d.dang:""}`;
+            el.style.color="var(--warning)";
+            return;
+        }
+        if(nut) nut.disabled=false;
+        if(d.loi){ el.textContent="❌ "+d.loi; el.style.color="var(--danger)"; }
+        else if(d.xong && d.tong){ el.textContent=`✓ đọc được ${d.ok}/${d.tong} nhóm`; el.style.color="var(--success)"; }
+        else el.textContent="";
+        if(_uidHen[ma]){ clearInterval(_uidHen[ma]); delete _uidHen[ma]; c.nap(); }
+    }catch(e){}
+}
+
 function jmHeadless(){ return !document.getElementById("jm-headless")?.checked; }
 
 function jmNhanHeadless(){
@@ -2216,7 +2295,7 @@ async function jmXoa(id){
 let _uidmDs = [];
 let _uidmSap = "";        // "" | "giam" | "tang"
 
-function _uidmSo(g){
+function _uidSo(g){
     const n = parseInt(String(g.thanh_vien || "0").replace(/\D/g, ""), 10);
     return isNaN(n) ? 0 : n;
 }
@@ -2232,9 +2311,9 @@ function _uidmVe(){
     if(th) th.textContent = "Thành viên" + (_uidmSap==="giam" ? " ▾" : _uidmSap==="tang" ? " ▴" : "");
 
     let ds=_uidmDs.slice();
-    if(_uidmSap) ds.sort((a,b)=> _uidmSap==="giam" ? _uidmSo(b)-_uidmSo(a) : _uidmSo(a)-_uidmSo(b));
+    if(_uidmSap) ds.sort((a,b)=> _uidmSap==="giam" ? _uidSo(b)-_uidSo(a) : _uidSo(a)-_uidSo(b));
 
-    const tong=ds.reduce((s,g)=>s+_uidmSo(g),0);
+    const tong=ds.reduce((s,g)=>s+_uidSo(g),0);
     const dem=document.getElementById("uidm-count");
     if(dem) dem.textContent=`${ds.length} nhóm đã duyệt · ${tong.toLocaleString("vi")} thành viên`;
 
@@ -2243,7 +2322,7 @@ function _uidmVe(){
         return;
     }
     tbody.innerHTML=ds.map((g,i)=>{
-        const n=_uidmSo(g);
+        const n=_uidSo(g);
         const tv = n>0
             ? `<span style="font-size:12px;color:var(--text-secondary)">${n.toLocaleString("vi")}</span>`
             : `<span style="color:var(--text-muted)">-</span>`;
@@ -2264,8 +2343,8 @@ function _uidmVe(){
 
 async function loadUidMarket(){
     const tbody=document.getElementById("uidm-table"); if(!tbody) return;
-    _uidmNapAcc();
-    _uidmTT();
+    _uidNapAcc('MARKET');
+    _uidQuetTT('MARKET');
     try{
         const res=await API.uidMarket();
         _uidmDs = res.data||[];
@@ -2273,93 +2352,9 @@ async function loadUidMarket(){
     }catch(e){ tbody.innerHTML=`<tr><td colspan="5" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
 }
 
-async function uidmThem(){
-    const o=document.getElementById("uidm-dan");
-    const text=(o?.value||"").trim();
-    if(!text){ Toast.error("Chưa dán link nào"); return; }
-    try{
-        const r=await API.uidMarketThem(text);
-        if(!r.ok){ Toast.error(r.error); return; }
-        o.value="";
-        Toast.success(`Đọc được ${r.doc_duoc} link — thêm ${r.them}, bỏ qua ${r.bo_qua} trùng`);
-        loadUidMarket();
-    }catch(e){ Toast.error(e.message); }
-}
-
-// Quét tên + số thành viên: mở từng trang nhóm bằng một nick đã đăng nhập.
-// Chạy ở tiến trình riêng nên ở đây chỉ bấm rồi hỏi lại tiến độ.
-let _uidmHen = null;
-
-async function _uidmNapAcc(){
-    const o=document.getElementById("uidm-acc"); if(!o || o.options.length) return;
-    try{
-        const r=await API.accounts();
-        const ds=(r.data||[]).filter(a=>(a.trang_thai||"")==="Active"&&(a.c_user||"").trim());
-        o.innerHTML=ds.map(a=>`<option value="${_escapeHtml(a.ten_acc)}">${_escapeHtml(a.ten_acc)}</option>`).join("")
-                    || `<option value="">(không có nick Active)</option>`;
-    }catch(e){}
-}
-
-async function _uidmTT(){
-    const el=document.getElementById("uidm-quet-tt");
-    const nut=document.getElementById("uidm-nut-quet");
-    if(!el) { clearInterval(_uidmHen); _uidmHen=null; return; }
-    try{
-        const d=(await API.uidMarketQuetTT()).data||{};
-        if(d.dang_chay){
-            nut.disabled=true;
-            el.textContent=`⏳ ${d.da||0}/${d.tong||0}${d.dang?" · "+d.dang:""}`;
-            el.style.color="var(--warning)";
-            return;
-        }
-        nut.disabled=false;
-        if(d.loi){ el.textContent="❌ "+d.loi; el.style.color="var(--danger)"; }
-        else if(d.xong && d.tong){ el.textContent=`✓ đọc được ${d.ok}/${d.tong} nhóm`; el.style.color="var(--success)"; }
-        else el.textContent="";
-        if(_uidmHen){ clearInterval(_uidmHen); _uidmHen=null; loadUidMarket(); }
-    }catch(e){}
-}
-
-async function uidmQuet(){
-    const acc=document.getElementById("uidm-acc")?.value||"";
-    if(!acc){ Toast.error("Chưa có nick Active nào để quét"); return; }
-    try{
-        const r=await API.uidMarketQuet({
-            acc,
-            quet_het:    document.getElementById("uidm-quet-het")?.checked||false,
-            hien_chrome: document.getElementById("uidm-hien-chrome")?.checked||false});
-        if(!r.ok){ Toast.error(r.error); return; }
-        Toast.success(`Đang quét bằng nick ${acc}`);
-        if(!_uidmHen) _uidmHen=setInterval(_uidmTT, 2000);
-        _uidmTT();
-    }catch(e){ Toast.error(e.message); }
-}
-
 async function uidmXoa(id){
     if(!confirm("Bỏ nhóm này khỏi danh sách đã duyệt?")) return;
     try{ await API.deleteUidGroup(id); Toast.success("Đã xóa"); loadUidMarket(); }
-    catch(e){ Toast.error(e.message); }
-}
-
-function openUidGroupForm(data={}){
-    const f=(k,l)=>`<div class="field-group"><label>${l}</label><input id="uf_${k}" value="${(data[k]||"").toString().replace(/"/g,"&quot;")}"></div>`;
-    openModal(data.id?"Sửa UID nhóm":"Thêm UID nhóm",`
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            ${f("ma_nhom","Mã nhóm (TIME1...)")} ${f("uid","UID nhóm")}
-            ${f("ten_nhom","Tên nhóm")} ${f("ghi_chu","Ghi chú")}
-        </div>
-        ${data.id?`<input type="hidden" id="uf_id" value="${data.id}">`:""}
-        <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px">
-            <button onclick="closeModal()" class="btn btn-ghost">Huỷ</button>
-            <button onclick="saveUidGroupForm()" class="btn btn-primary">💾 Lưu</button>
-        </div>`);
-}
-
-async function saveUidGroupForm(){
-    const g=id=>document.getElementById(id)?.value||"";
-    const data={ id:parseInt(g("uf_id"))||undefined, ma_nhom:g("uf_ma_nhom"), uid:g("uf_uid"), ten_nhom:g("uf_ten_nhom"), ghi_chu:g("uf_ghi_chu") };
-    if(!data.id) delete data.id;
-    try{ const r=await API.saveUidGroup(data); if(r.ok){Toast.success("Đã lưu");closeModal();loadUidGroups();}else Toast.error(r.error); }
     catch(e){ Toast.error(e.message); }
 }
 
@@ -2369,24 +2364,28 @@ async function deleteUidGroup(id){
     catch(e){ Toast.error(e.message); }
 }
 
-async function exportUidGroupsExcel(){
+async function exportUidGroupsExcel(ma){
     try{
-        const res=await API.exportUidGroups();
+        const res=await API.exportUidGroups(ma||"");
         if(!res.ok) throw new Error(res.error||"không rõ lỗi");
         Toast.show(`Đã lưu ${res.count} UID: ${res.path}`, "success", 10000);
     }catch(e){ Toast.error("Lỗi xuất Excel: "+e.message); }
 }
 
-async function importUidGroupsExcel(e){
+async function importUidGroupsExcel(e, ma){
     const file=e.target.files[0]; if(!file) return;
     e.target.value="";  // reset để chọn lại cùng file vẫn kích hoạt onchange
     try{
-        const fd=new FormData(); fd.append("file",file);
+        const fd=new FormData();
+        fd.append("file",file);
+        // Phải gửi kèm ma_nhom, nếu không file Marketplace sẽ đổ vào sheet
+        // UID Nhóm — hai danh sách lẫn nhau thì gỡ ra rất mệt.
+        fd.append("ma_nhom", ma||"");
         const r=await fetch("/api/uid-groups/import-excel",{method:"POST",body:fd});
         const res=await r.json();
         if(!res.ok) throw new Error(res.error||"không rõ lỗi");
         Toast.success(`Đã thêm ${res.added} UID mới, bỏ qua ${res.skipped} trùng`);
-        loadUidGroups();
+        (_UIDG[ma||""]||_UIDG[""]).nap();
     }catch(err){ Toast.error("Lỗi nhập Excel: "+err.message); }
 }
 

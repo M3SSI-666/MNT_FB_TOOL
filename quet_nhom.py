@@ -1,5 +1,8 @@
 """
-Quét tên nhóm và số thành viên cho danh sách UID Marketplace.
+Quét tên nhóm và số thành viên cho một sheet UID.
+
+Dùng chung cho cả tab "UID Nhóm" (`QUET_MA_NHOM=""`) và "UID Marketplace"
+(`QUET_MA_NHOM="MARKET"`) — hai tab chỉ khác nhau đúng giá trị đó.
 
 Dán link vào là xong — không phải gõ tay tên từng nhóm. Worker mở từng trang
 nhóm bằng một nick đã đăng nhập, đọc tên và số thành viên rồi ghi về DB.
@@ -24,12 +27,12 @@ import sys
 
 from config import PROFILES_DIR
 from cookie_exporter import load_cookie
-from db import (MA_NHOM_MARKET, _conn, doc_so_thanh_vien, get_account_by_name,
-                set_setting)
+from db import (_conn, doc_so_thanh_vien, get_account_by_name, set_setting)
 from fb_common import browser_launch_kwargs, dong_hop_cookie
 from utils import logger
 
-KHOA_TRANG_THAI = "mkt_quet_trang_thai"
+MA_NHOM = os.environ.get("QUET_MA_NHOM", "")
+KHOA_TRANG_THAI = f"quet_tt_{MA_NHOM or 'UID'}"
 
 ACC      = os.environ.get("QUET_ACC_NAME", "").strip()
 HEADLESS = os.environ.get("HEADLESS", "true").lower() != "false"
@@ -46,7 +49,7 @@ def can_quet() -> list[dict]:
     with _conn() as con:
         rows = con.execute(
             "SELECT id, uid, ten_nhom, link_url, thanh_vien FROM uid_groups "
-            "WHERE ma_nhom=? ORDER BY order_idx, id", (MA_NHOM_MARKET,)
+            "WHERE COALESCE(ma_nhom,'')=? ORDER BY order_idx, id", (MA_NHOM,)
         ).fetchall()
     ds = [dict(r) for r in rows]
     if QUET_HET:
@@ -222,11 +225,12 @@ async def main():
         logger.info("Không có nhóm nào cần quét")
         return
 
-    logger.info(f"🔎 Quét {len(ds)} nhóm Marketplace bằng nick {ACC}")
+    ten_sheet = "Marketplace" if MA_NHOM else "UID Nhóm"
+    logger.info(f"🔎 Quét {len(ds)} nhóm {ten_sheet} bằng nick {ACC}")
     bao(xong=False, tong=len(ds), da=0, ok=0, dang="")
 
     from playwright.async_api import async_playwright
-    profile = str(PROFILES_DIR / f"_quet_market_{ACC.replace(' ', '_')}")
+    profile = str(PROFILES_DIR / f"_quet_{MA_NHOM or 'uid'}_{ACC.replace(' ', '_')}")
 
     ok = 0
     async with async_playwright() as p:
@@ -277,6 +281,6 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except Exception as e:
-        logger.exception("❌ Quét nhóm Marketplace hỏng")
+        logger.exception("❌ Quét tên nhóm hỏng")
         bao(xong=True, loi=f"{type(e).__name__}: {e}"[:160])
         raise

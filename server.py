@@ -48,7 +48,7 @@ from db import (
     get_setting, set_setting, get_all_settings,
     # marketplace
     MKT_MAC_DINH, doc_cai_dat_mkt, tach_gia,
-    tach_link_nhom, get_uid_groups_market, them_nhom_market,
+    tach_link_nhom, get_uid_groups, get_uid_groups_market, them_nhom_tu_link,
 )
 from utils import logger
 
@@ -1514,17 +1514,20 @@ EXPORT_UID_COLUMNS = [
 def api_uid_groups_export_excel():
     """Xuất danh sách UID nhóm ra .xlsx, lưu vào Downloads.
 
-    Chỉ xuất nhóm từ sheet "UID Nhóm" (ma_nhom trống) — đúng những gì hiển thị
-    trên tab UID Nhóm. Các mã TIME1-7 dùng nội bộ nên không đưa vào file chia sẻ.
+    Xuất đúng MỘT sheet: `ma_nhom=''` là tab UID Nhóm, `ma_nhom=MARKET` là tab
+    UID Marketplace. Các mã TIME1-7 dùng nội bộ nên không bao giờ vào file chia
+    sẻ — chúng không thuộc sheet nào trong hai sheet trên.
     """
     from openpyxl import Workbook
     from openpyxl.styles import Font
 
-    rows = [g for g in get_all_uid_groups() if not g.get("ma_nhom")]
+    ma_nhom = _ma_nhom_yc()
+    ten_sheet = "UID Marketplace" if ma_nhom else "UID Nhóm"
+    rows = get_uid_groups(ma_nhom)
 
     wb = Workbook()
     ws = wb.active
-    ws.title = "UID Nhóm"
+    ws.title = ten_sheet
     ws.append([label for _, label in EXPORT_UID_COLUMNS])
     for cell in ws[1]:
         cell.font = Font(bold=True)
@@ -1549,7 +1552,8 @@ def api_uid_groups_export_excel():
 
     ws.freeze_panes = "A2"
 
-    name = f"uid_nhom_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    dau = "uid_marketplace" if ma_nhom else "uid_nhom"
+    name = f"{dau}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     path = _export_dir() / name
     wb.save(str(path))
 
@@ -1561,8 +1565,8 @@ def api_uid_groups_export_excel():
 def api_uid_groups_import_excel():
     """Nhập UID nhóm từ file .xlsx do đồng nghiệp gửi.
 
-    Chế độ "thêm & bỏ trùng": UID nào đã có (so theo cột uid, sheet UID Nhóm)
-    thì bỏ qua, chỉ thêm UID mới. Không đụng tới dữ liệu cũ.
+    Vào đúng sheet mà `ma_nhom` chỉ định. Chế độ "thêm & bỏ trùng": UID nào đã
+    có TRONG SHEET ĐÓ thì bỏ qua, chỉ thêm UID mới. Không đụng tới dữ liệu cũ.
     Cột nhận diện theo header ở dòng 1, không phụ thuộc thứ tự cột.
     """
     from openpyxl import load_workbook
@@ -1606,7 +1610,7 @@ def api_uid_groups_import_excel():
             records.append(rec)
 
     try:
-        added, skipped = import_uid_groups(records)
+        added, skipped = import_uid_groups(records, _ma_nhom_yc())
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -2121,72 +2125,102 @@ def api_settings_save():
 
 
 # ── Marketplace ───────────────────────────────────────────────────
+# Hai tab UID chỉ khác nhau đúng giá trị `ma_nhom`, nên dùng CHUNG một bộ route.
+# Tách làm hai bộ là tạo chỗ cho chúng lệch nhau — đã có tiền lệ với hai file
+# poster từng giữ hai bản chép của cùng một hàm rồi trôi mất một dòng.
+def _ma_nhom_yc() -> str:
+    """'' = sheet UID Nhóm, 'MARKET' = nhóm đã duyệt Marketplace.
+
+    Đọc từ cả query string, JSON body lẫn form — nhập Excel gửi multipart nên
+    không có JSON body.
+
+    Giá trị lạ quy về '' chứ KHÔNG báo lỗi: ghi nhầm mã sheet mà vẫn ghi được
+    thì dữ liệu lọt sang sheet không tồn tại, chẳng tab nào hiện ra.
+    """
+    v = request.args.get("ma_nhom") or ""
+    if not v and request.is_json:
+        v = (request.json or {}).get("ma_nhom") or ""
+    if not v:
+        v = request.form.get("ma_nhom") or ""
+    return "MARKET" if str(v).strip().upper() == "MARKET" else ""
+
+
 @app.route("/api/uid-groups/market")
 def api_uid_market():
     return jsonify({"ok": True, "data": get_uid_groups_market()})
 
 
-@app.route("/api/uid-groups/market/them", methods=["POST"])
-def api_uid_market_them():
+@app.route("/api/uid-groups/them", methods=["POST"])
+def api_uid_them():
     """Dán một đống link nhóm vào, tách ra và thêm những cái chưa có.
 
-    Dán hàng loạt chứ không nhập từng dòng: Marketplace cho tối đa 20 nhóm mỗi
-    bài, mà nhóm được duyệt thì gom dần hàng tuần — nhập tay từng cái quá chậm.
+    Dán hàng loạt chứ không nhập từng dòng: nhóm gom dần hàng tuần, mà form cũ
+    bắt gõ tay từng ô UID / Tên nhóm / Ghi chú — chậm mà vẫn thiếu tên nhóm.
     """
     body = request.json or {}
     ds = tach_link_nhom(body.get("text", ""))
     if not ds:
         return jsonify({"ok": False, "error": "Không đọc được link nhóm nào"})
-    them, bo = them_nhom_market(ds)
+    them, bo = them_nhom_tu_link(ds, _ma_nhom_yc())
     return jsonify({"ok": True, "doc_duoc": len(ds), "them": them, "bo_qua": bo})
 
 
-@app.route("/api/uid-groups/market/quet", methods=["POST"])
-def api_uid_market_quet():
+def _quet_pid_file(ma_nhom: str) -> Path:
+    return BASE_DIR / f".quet_{ma_nhom or 'uid'}.pid"
+
+
+def _quet_dang_chay(ma_nhom: str) -> bool:
+    pf = _quet_pid_file(ma_nhom)
+    if not pf.exists():
+        return False
+    try:
+        if tien_trinh.con_song(int(pf.read_text().strip())):
+            return True
+    except (ValueError, OSError):
+        pass
+    pf.unlink(missing_ok=True)
+    return False
+
+
+@app.route("/api/uid-groups/quet", methods=["POST"])
+def api_uid_quet():
     """Mở từng trang nhóm bằng một nick, đọc tên và số thành viên, ghi về DB.
 
     Chạy ở tiến trình riêng như lịch tham gia nhóm: một lượt quét vài chục nhóm
     mất mấy phút, giữ trong request là treo cả giao diện.
     """
-    body = request.json or {}
-    acc  = (body.get("acc") or "").strip()
+    body    = request.json or {}
+    acc     = (body.get("acc") or "").strip()
+    ma_nhom = _ma_nhom_yc()
     if not acc:
         return jsonify({"ok": False, "error": "Chưa chọn tài khoản"})
-    if _quet_market_dang_chay():
+    if _quet_dang_chay(ma_nhom):
         return jsonify({"ok": False, "error": "Đang quét rồi"})
     flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
     env   = {**os.environ,
              "QUET_ACC_NAME":      acc,
+             "QUET_MA_NHOM":       ma_nhom,
              "QUET_HET":           "1" if body.get("quet_het") else "0",
              "HEADLESS":           "false" if body.get("hien_chrome") else "true",
              # Đường dẫn ĐẦY ĐỦ. Truyền tên trần thì log rơi ra thư mục mã
              # nguồn thay vì logs/, và thoát khỏi mọi quy tắc dọn log sẵn có.
-             "SCHEDULER_LOG_FILE": str(LOG_DIR / "quet_market.log")}
-    set_setting("mkt_quet_trang_thai",
+             "SCHEDULER_LOG_FILE": str(LOG_DIR / "quet_nhom.log")}
+    set_setting(f"quet_tt_{ma_nhom or 'UID'}",
                 json.dumps({"xong": False, "tong": 0, "da": 0, "ok": 0, "dang": ""}))
-    proc = subprocess.Popen(_lenh_con("quet_nhom_market.py"),
+    proc = subprocess.Popen(_lenh_con("quet_nhom.py"),
                             cwd=str(BASE_DIR), creationflags=flags, env=env)
-    (BASE_DIR / ".quet_market.pid").write_text(str(proc.pid))
+    _quet_pid_file(ma_nhom).write_text(str(proc.pid))
     return jsonify({"ok": True, "pid": proc.pid})
 
 
-def _quet_market_dang_chay() -> bool:
-    pf = BASE_DIR / ".quet_market.pid"
-    if not pf.exists():
-        return False
+@app.route("/api/uid-groups/quet-trang-thai")
+def api_uid_quet_trang_thai():
+    ma_nhom = _ma_nhom_yc()
     try:
-        return tien_trinh.con_song(int(pf.read_text().strip()))
-    except (ValueError, OSError):
-        return False
-
-
-@app.route("/api/uid-groups/market/quet-trang-thai")
-def api_uid_market_quet_trang_thai():
-    try:
-        tt = json.loads(get_setting("mkt_quet_trang_thai", "") or "{}")
+        tt = json.loads(get_setting(f"quet_tt_{ma_nhom or 'UID'}", "") or "{}")
     except ValueError:
         tt = {}
-    tt["dang_chay"] = _quet_market_dang_chay()
+    tt["dang_chay"] = _quet_dang_chay(ma_nhom)
     return jsonify({"ok": True, "data": tt})
 
 

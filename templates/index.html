@@ -159,12 +159,33 @@
 
             <!-- ══ UID Nhóm ════════════════════════════════ -->
             <div class="page" id="page-uid-groups" style="display:none">
-                <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-                    <button class="btn btn-primary" onclick="openUidGroupForm()">+ Thêm UID nhóm</button>
-                    <button class="btn btn-ghost" onclick="exportUidGroupsExcel()">📤 Xuất Excel</button>
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;max-width:680px">
+                    Dán link nhóm vào đây, mỗi dòng một nhóm — thêm <code>| Tên nhóm</code> phía
+                    sau nếu muốn ghi sẵn tên. Tên và số thành viên để trống thì bấm
+                    <b>Lấy tên &amp; số thành viên</b> cho nó tự đọc về.
+                </p>
+                <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-start">
+                    <textarea class="input" id="uid-dan" rows="3" style="flex:1;min-width:320px;
+                              font-family:var(--font-mono);font-size:11px"
+                              placeholder="https://www.facebook.com/groups/311375961636397/&#10;https://www.facebook.com/groups/homestaytimescity/ | Homestay Times City"></textarea>
+                    <button class="btn btn-primary" onclick="uidThem('')">+ Thêm</button>
+                    <button class="btn btn-ghost" onclick="loadUidGroups()" title="Refresh">🔄</button>
+                </div>
+                <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+                    <button class="btn btn-ghost" onclick="uidQuet('')" id="uid-nut-quet"
+                            title="Mở từng trang nhóm để đọc tên và số thành viên">🔎 Lấy tên &amp; số thành viên</button>
+                    <select class="input" id="uid-acc" style="width:170px;font-size:12px"></select>
+                    <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:5px">
+                        <input type="checkbox" id="uid-quet-het"> quét lại cả dòng đã có tên
+                    </label>
+                    <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:5px">
+                        <input type="checkbox" id="uid-hien-chrome"> hiện Chrome
+                    </label>
+                    <span id="uid-quet-tt" style="font-size:12px;color:var(--text-muted)"></span>
+                    <button class="btn btn-ghost" onclick="exportUidGroupsExcel('')">📤 Xuất Excel</button>
                     <button class="btn btn-ghost" onclick="document.getElementById('uid-import-file').click()">📥 Nhập Excel</button>
-                    <input type="file" id="uid-import-file" accept=".xlsx" style="display:none" onchange="importUidGroupsExcel(event)">
-                    <span style="font-size:12px;color:var(--text-muted);align-self:center" id="uid-count"></span>
+                    <input type="file" id="uid-import-file" accept=".xlsx" style="display:none" onchange="importUidGroupsExcel(event,'')">
+                    <span style="font-size:12px;color:var(--text-muted);margin-left:auto" id="uid-count"></span>
                 </div>
                 <div class="card">
                     <div class="table-wrap">
@@ -195,11 +216,11 @@
                     <textarea class="input" id="uidm-dan" rows="3" style="flex:1;min-width:320px;
                               font-family:var(--font-mono);font-size:11px"
                               placeholder="https://www.facebook.com/groups/311375961636397/&#10;https://www.facebook.com/groups/homestaytimescity/ | Homestay Times City"></textarea>
-                    <button class="btn btn-primary" onclick="uidmThem()">+ Thêm</button>
+                    <button class="btn btn-primary" onclick="uidThem('MARKET')">+ Thêm</button>
                     <button class="btn btn-ghost" onclick="loadUidMarket()" title="Refresh">🔄</button>
                 </div>
                 <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-                    <button class="btn btn-ghost" onclick="uidmQuet()" id="uidm-nut-quet"
+                    <button class="btn btn-ghost" onclick="uidQuet('MARKET')" id="uidm-nut-quet"
                             title="Mở từng trang nhóm để đọc tên và số thành viên">🔎 Lấy tên &amp; số thành viên</button>
                     <select class="input" id="uidm-acc" style="width:180px;font-size:12px"></select>
                     <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:5px">
@@ -210,6 +231,9 @@
                         <input type="checkbox" id="uidm-hien-chrome"> hiện Chrome
                     </label>
                     <span id="uidm-quet-tt" style="font-size:12px;color:var(--text-muted)"></span>
+                    <button class="btn btn-ghost" onclick="exportUidGroupsExcel('MARKET')">📤 Xuất Excel</button>
+                    <button class="btn btn-ghost" onclick="document.getElementById('uidm-import-file').click()">📥 Nhập Excel</button>
+                    <input type="file" id="uidm-import-file" accept=".xlsx" style="display:none" onchange="importUidGroupsExcel(event,'MARKET')">
                     <span style="font-size:12px;color:var(--text-muted);margin-left:auto" id="uidm-count"></span>
                 </div>
                 <div class="card">

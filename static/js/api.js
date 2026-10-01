@@ -43,10 +43,8 @@ const API = {
 
     // UID Groups
     uidGroups:       ()           => API.get("/api/uid-groups"),
-    saveUidGroup:    (data)       => API.post("/api/uid-groups/save", data),
     deleteUidGroup:  (id)         => API.del(`/api/uid-groups/${id}`),
     reorderUidGroups:(ids)        => API.post("/api/uid-groups/reorder", ids),
-    exportUidGroups: ()           => API.get("/api/uid-groups/export-excel"),
 
     // Schedule
     schedule:        (loai)       => API.get(`/api/schedule/${loai}`),
@@ -99,10 +97,15 @@ const API = {
     // Marketplace — lưu vẫn dùng saveSettings, chỉ ĐỌC là riêng vì server
     // phải trộn mặc định vào trước khi trả về.
     mktCaiDat:       ()           => API.get("/api/marketplace/cai-dat"),
+    // Hai tab UID dùng chung một bộ route, chỉ khác tham số `ma_nhom`:
+    // "" = UID Nhóm, "MARKET" = UID Marketplace.
     uidMarket:       ()           => API.get("/api/uid-groups/market"),
-    uidMarketThem:   (text)       => API.post("/api/uid-groups/market/them", {text}),
-    uidMarketQuet:   (data)       => API.post("/api/uid-groups/market/quet", data),
-    uidMarketQuetTT: ()           => API.get("/api/uid-groups/market/quet-trang-thai"),
+    uidThem:         (text, ma)   => API.post("/api/uid-groups/them", {text, ma_nhom: ma||""}),
+    uidQuet:         (data)       => API.post("/api/uid-groups/quet", data),
+    uidQuetTT:       (ma)         => API.get("/api/uid-groups/quet-trang-thai"
+                                        + (ma ? `?ma_nhom=${encodeURIComponent(ma)}` : "")),
+    exportUidGroups: (ma)         => API.get("/api/uid-groups/export-excel"
+                                        + (ma ? `?ma_nhom=${encodeURIComponent(ma)}` : "")),
 
     // Telegram
     tgThu:           (data)       => API.post("/api/telegram/thu", data),

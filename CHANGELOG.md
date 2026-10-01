@@ -10,6 +10,30 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.31.0 — 01/10/2026
+
+**Hai tab UID giờ dùng giống hệt nhau**
+
+**`UID Nhóm` bỏ form nhập tay.** Trước đây thêm một nhóm phải gõ bốn ô: Mã nhóm,
+UID, Tên nhóm, Ghi chú — chậm, mà gõ xong vẫn không có số thành viên. Nay dán
+link vào ô là xong, mỗi dòng một nhóm, thêm `| Tên nhóm` phía sau nếu muốn ghi
+sẵn tên. Nó tự bỏ đuôi `?ref=`, bỏ dòng rác và gộp link trùng.
+
+Kèm theo là nút **Lấy tên & số thành viên** như bên Marketplace: mở từng trang
+nhóm đọc về, khoảng 8 giây một nhóm, bật được **hiện Chrome** để nhìn tận mắt.
+Thanh đếm hiện thêm tổng số thành viên của cả sheet.
+
+**`UID Marketplace` có Nhập/Xuất Excel** như UID Nhóm. File xuất ra đặt tên theo
+sheet (`uid_marketplace_...` / `uid_nhom_...`) để khỏi lẫn, và nhập vào đúng
+sheet đang mở — nhập nhầm thì 25 nhóm Marketplace trộn vào 58 nhóm UID Nhóm, gỡ
+ra rất mệt.
+
+Hai tab chạy trên **cùng một bộ máy**, chỉ khác đúng mã sheet. Trong phần mềm này
+đã có bài học: hai file poster từng giữ hai bản chép của cùng một hàm rồi trôi
+mất một dòng, đủ để hai nick hành xử khác nhau mà không ai biết.
+
+---
+
 ## v2.30.0 — 01/10/2026
 
 **Bỏ bước lướt story ở phiên đăng bài và comment**

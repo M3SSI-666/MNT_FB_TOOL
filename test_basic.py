@@ -3959,10 +3959,11 @@ check("tự dựng link đầy đủ từ UID trần",
       db.tach_link_nhom("555666777")[0]["link_url"]
       == "https://www.facebook.com/groups/555666777/")
 
-_them, _bo = db.them_nhom_market(db.tach_link_nhom(
-    "facebook.com/groups/mkt1 | Nhóm A\nfacebook.com/groups/mkt2"))
+_them, _bo = db.them_nhom_tu_link(db.tach_link_nhom(
+    "facebook.com/groups/mkt1 | Nhóm A\nfacebook.com/groups/mkt2"), db.MA_NHOM_MARKET)
 check("thêm nhóm Marketplace", (_them, _bo) == (2, 0))
-_them2, _bo2 = db.them_nhom_market(db.tach_link_nhom("facebook.com/groups/mkt1"))
+_them2, _bo2 = db.them_nhom_tu_link(db.tach_link_nhom("facebook.com/groups/mkt1"),
+                                    db.MA_NHOM_MARKET)
 check("thêm lại thì bỏ qua trùng", (_them2, _bo2) == (0, 1))
 _mkt_ds = db.get_uid_groups_market()
 check("đọc lại đúng 2 nhóm", [g["uid"] for g in _mkt_ds] == ["mkt1", "mkt2"])
@@ -3975,19 +3976,20 @@ check("nhóm MARKET không lọt vào sheet UID Nhóm",
 _r_um = _client.get("/api/uid-groups/market").get_json()
 check("API trả danh sách nhóm Marketplace",
       _r_um.get("ok") and len(_r_um["data"]) == 2)
-_r_um2 = _client.post("/api/uid-groups/market/them",
-                      json={"text": "facebook.com/groups/mkt3"}).get_json()
+_r_um2 = _client.post("/api/uid-groups/them",
+                      json={"text": "facebook.com/groups/mkt3",
+                            "ma_nhom": "MARKET"}).get_json()
 check("API thêm được nhóm mới", _r_um2.get("them") == 1)
-_r_um3 = _client.post("/api/uid-groups/market/them", json={"text": "abc"}).get_json()
+_r_um3 = _client.post("/api/uid-groups/them", json={"text": "abc"}).get_json()
 check("dán rác thì báo lỗi rõ, không thêm gì",
       _r_um3.get("ok") is False and "link" in (_r_um3.get("error") or "").lower())
 
 # Quét tên nhóm: worker chạy tiến trình riêng, KHÔNG được dùng profile Chrome
 # của nick — nick nào cũng có thể đang chạy phiên đăng bài, hai bên giành khoá
 # thư mục profile là hỏng cả hai.
-_src_quet = Path("quet_nhom_market.py").read_text(encoding="utf-8")
+_src_quet = Path("quet_nhom.py").read_text(encoding="utf-8")
 check("quét dùng profile riêng, không giành khoá với runner",
-      "_quet_market_" in _src_quet and "find_profile_dir" not in _src_quet)
+      '_quet_{MA_NHOM' in _src_quet and "find_profile_dir" not in _src_quet)
 # Chỉ đọc nghĩa là KHÔNG có cú bấm nào trong worker: vào trang nhóm, đọc, đi
 # tiếp. Một cú click lạc vào đây có thể là bấm Tham gia nhóm bằng nick thật.
 check("quét chỉ ĐỌC — không có cú bấm nào", ".click(" not in _src_quet)
@@ -3996,7 +3998,7 @@ check("quét dùng lại doc_so_thanh_vien đã có",
 # Nguồn lấy tên nhóm. Đo ngày 30/09 trên nick thật: og:title KHÔNG tồn tại,
 # document.title đọc lại của trang trước (mở riêng hai nhóm, chờ 9 giây, vẫn
 # cùng một title dù số thành viên khác nhau), h1 đầu trang là "Thông báo".
-import quet_nhom_market as _qnm
+import quet_nhom as _qnm
 check("lấy tên từ [role=main] h1", '[role="main"] h1' in _qnm.JS_TEN)
 check("KHÔNG tin document.title", "document.title" not in _qnm.JS_TEN
       and "document.title" not in _qnm.JS_DOC)
@@ -4037,7 +4039,7 @@ check("mặc định chỉ quét dòng còn thiếu",
       "QUET_HET" in _src_quet and 'QUET_HET", "0"' in _src_quet)
 _src_srv_q = Path("server.py").read_text(encoding="utf-8")
 check("server chặn chạy chồng hai lượt quét",
-      "_quet_market_dang_chay()" in _src_srv_q)
+      "_quet_dang_chay(" in _src_srv_q)
 check("có nút quét và ô chọn nick",
       'id="uidm-nut-quet"' in _html_mkt and 'id="uidm-acc"' in _html_mkt)
 # Mặc định chạy ẩn cho khỏi vướng, nhưng phải có đường xem tận mắt — lần đầu
@@ -4054,6 +4056,48 @@ check("sắp xếp đủ ba trạng thái",
 # thì sắp xếp ra thứ tự lung tung mà nhìn bảng không biết sai ở đâu.
 check("đọc số thành viên chịu được cả số lẫn chuỗi",
       'String(g.thanh_vien || "0").replace(/\\D/g, "")' in _ajs_mkt)
+
+# ── Hai tab UID dùng chung một bộ máy ──────────────────────────────────────
+# Chỉ khác đúng `ma_nhom`. Tách làm hai bộ là tạo chỗ cho chúng lệch nhau — đã
+# có tiền lệ với hai file poster từng giữ hai bản chép của cùng một hàm.
+check("import Excel nhận ma_nhom",
+      "def import_uid_groups(records: list[dict], ma_nhom: str = \"\")" in
+      Path("db.py").read_text(encoding="utf-8"))
+# Nhập Excel gửi multipart nên KHÔNG có JSON body — phải đọc được cả form.
+check("đọc ma_nhom từ cả query, JSON lẫn form",
+      "request.form.get(\"ma_nhom\")" in _src_srv_q
+      and "request.args.get(\"ma_nhom\")" in _src_srv_q)
+# Mã sheet lạ phải quy về '' chứ không được ghi thẳng: ghi nhầm mã thì dữ liệu
+# lọt sang sheet không tồn tại, chẳng tab nào hiện ra mà cũng không báo lỗi.
+check("mã sheet lạ quy về rỗng",
+      'return "MARKET" if str(v).strip().upper() == "MARKET" else ""' in _src_srv_q)
+
+# Nhập Excel vào sheet Marketplace KHÔNG được lẫn sang sheet UID Nhóm.
+_truoc_uid = len(db.get_uid_groups(""))
+db.import_uid_groups([{"uid": "xl_mkt_1", "ten_nhom": "X"}], db.MA_NHOM_MARKET)
+db.import_uid_groups([{"uid": "xl_uid_1", "ten_nhom": "Y"}], "")
+check("Excel vào đúng sheet Marketplace",
+      "xl_mkt_1" in [g["uid"] for g in db.get_uid_groups(db.MA_NHOM_MARKET)])
+check("Excel vào đúng sheet UID Nhóm",
+      "xl_uid_1" in [g["uid"] for g in db.get_uid_groups("")])
+check("hai sheet không lẫn nhau",
+      "xl_mkt_1" not in [g["uid"] for g in db.get_uid_groups("")]
+      and "xl_uid_1" not in [g["uid"] for g in db.get_uid_groups(db.MA_NHOM_MARKET)])
+check("thêm trùng trong CÙNG sheet mới bị bỏ qua",
+      db.import_uid_groups([{"uid": "xl_mkt_1"}], db.MA_NHOM_MARKET) == (0, 1)
+      and db.import_uid_groups([{"uid": "xl_mkt_1"}], "") == (1, 0))
+
+# Tab UID Nhóm: bỏ form nhập tay, thay bằng dán link + quét như tab Marketplace.
+check("UID Nhóm có ô dán link", 'id="uid-dan"' in _html_mkt)
+check("UID Nhóm có nút quét tên", 'id="uid-nut-quet"' in _html_mkt)
+check("UID Nhóm BỎ form nhập tay từng ô",
+      "openUidGroupForm" not in _html_mkt and "openUidGroupForm" not in _ajs_mkt)
+check("cả hai tab đều có Nhập/Xuất Excel",
+      "exportUidGroupsExcel('')" in _html_mkt
+      and "exportUidGroupsExcel('MARKET')" in _html_mkt
+      and "importUidGroupsExcel(event,'')" in _html_mkt
+      and "importUidGroupsExcel(event,'MARKET')" in _html_mkt)
+check("nhập Excel gửi kèm ma_nhom", 'fd.append("ma_nhom"' in _ajs_mkt)
 
 check("có mục UID Marketplace ở sidebar", 'data-page="uid-market"' in _html_mkt)
 check("có trang UID Marketplace", 'id="page-uid-market"' in _html_mkt)
