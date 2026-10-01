@@ -34,8 +34,7 @@ from config import HEADLESS
 from utils import logger, jitter_ms, CookieDeadError, LoiBuoc
 from fb_common import (kiem_vi_pham, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, danh_dau_da_dang, browser_launch_kwargs,
-                       human_delay, jwait, clipboard_paste,
-                       view_stories, browse_and_like)
+                       human_delay, jwait, clipboard_paste, browse_and_like)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -58,13 +57,12 @@ _find_profile_dir = find_profile_dir
 
 # Vỏ mỏng gọi sang fb_common — TRƯỚC ĐÂY LÀ NĂM BẢN SAO NGUYÊN VĂN.
 # Hai file poster mỗi file giữ một bộ giống hệt nhau, nên mỗi lần vá phải nhớ vá
-# cả hai. Thực tế đã trôi: bản `_view_stories` ở đây chờ bằng
+# cả hai. Thực tế đã trôi: bản xem story ở đây chờ bằng
 # `page.wait_for_timeout(1500)` còn bản kia dùng `_jwait(page, 1500)` — lệch đúng
 # một dòng, đủ để hai nick hành xử khác nhau mà không ai biết.
 _human_delay     = human_delay
 _jwait           = jwait
 _clipboard_paste = clipboard_paste
-_view_stories    = view_stories
 _browse_and_like = browse_and_like
 
 
@@ -124,7 +122,7 @@ async def _run_crosspost(
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 1 — Login vào acc cá nhân
         # ════════════════════════════════════════════════════════════════
-        logger.info(f"  [1/6] 🔐 Login acc cá nhân...")
+        logger.info(f"  [1/5] 🔐 Login acc cá nhân...")
         await page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=30000)
         await _human_delay(2000, 3000)
 
@@ -141,23 +139,18 @@ async def _run_crosspost(
             logger.info("  🍪 Đã đóng hộp xin phép cookie")
 
         # ════════════════════════════════════════════════════════════════
-        # BƯỚC 2 — Xem story 15-20s
+        # BƯỚC 2 — Scroll newsfeed 20-30s (không like — trang cá nhân)
         # ════════════════════════════════════════════════════════════════
-        logger.info(f"  [2/6] 📖 Xem story...")
-        await _view_stories(page, duration_sec=random.randint(15, 20))
-
-        # ════════════════════════════════════════════════════════════════
-        # BƯỚC 3 — Scroll newsfeed 20-30s (không like — trang cá nhân)
-        # ════════════════════════════════════════════════════════════════
+        # KHÔNG còn bước xem story: Duong chỉ giữ story ở phiên NUÔI NICK.
         scroll_sec = random.randint(20, 30)
-        logger.info(f"  [3/6] 📜 Scroll newsfeed {scroll_sec}s...")
+        logger.info(f"  [2/5] 📜 Scroll newsfeed {scroll_sec}s...")
         await _browse_and_like(page, duration_sec=scroll_sec, max_likes=0)
 
         # ════════════════════════════════════════════════════════════════
-        # BƯỚC 4 — Chui vào nhóm đầu, paste nội dung + upload ảnh
+        # BƯỚC 3 — Chui vào nhóm đầu, paste nội dung + upload ảnh
         # ════════════════════════════════════════════════════════════════
         group_url = f"https://www.facebook.com/groups/{first_group_uid}/"
-        logger.info(f"  [4/6] 📌 Vào nhóm: {group_url}")
+        logger.info(f"  [3/5] 📌 Vào nhóm: {group_url}")
         await page.goto(group_url, wait_until="domcontentloaded", timeout=30000)
         await _human_delay(3000, 5000)
 
@@ -272,7 +265,7 @@ async def _run_crosspost(
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 5 — Thêm nhóm → gõ từ khóa → tick → Đăng
         # ════════════════════════════════════════════════════════════════
-        logger.info(f"  [5/6] ➕ Thêm nhóm → tìm \"{search_kw}\" → tick → Đăng...")
+        logger.info(f"  [4/5] ➕ Thêm nhóm → tìm \"{search_kw}\" → tick → Đăng...")
 
         # Click "+ Thêm nhóm"
         await _human_delay(1000, 1500)
@@ -474,7 +467,7 @@ async def _run_crosspost(
         # BƯỚC 6 — Scroll 15-30s rồi đóng Chrome (không like — trang cá nhân)
         # ════════════════════════════════════════════════════════════════
         cooldown_sec = random.randint(15, 30)
-        logger.info(f"  [6/6] 📜 Cooldown {cooldown_sec}s...")
+        logger.info(f"  [5/5] 📜 Cooldown {cooldown_sec}s...")
         await _browse_and_like(page, duration_sec=cooldown_sec, max_likes=0)
 
         # Facebook gỡ bài rồi mới đổ thông báo về — cooldown ở trên vừa hay là

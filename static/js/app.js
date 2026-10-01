@@ -117,11 +117,14 @@ async function lbDownloadAll(){
 // ── Navigation ────────────────────────────────────────────────
 const PAGE_TITLES = {
     accounts:"Tài khoản", pages:"Page", content:"Content",
-    "uid-groups":"UID Nhóm",
+    "uid-groups":"UID Nhóm", "uid-market":"UID Marketplace",
     "lich-homestay":"Lịch Homestay", "lich-thue":"Lịch Thuê",
     "lich-ban":"Lịch Bán", "lich-page":"Lịch Đăng Page", "lich-nuoi":"Lịch Nuôi nick",
     "comment-posts":"Bài đi Comment",
-    "tham-gia-nhom":"Tham gia nhóm", "hanh-dong":"Hành động", logs:"Logs",
+    "tham-gia-nhom":"Tham gia nhóm Page",
+    "tham-gia-nhom-market":"Tham gia nhóm Market",
+    marketplace:"Marketplace",
+    "hanh-dong":"Hành động", logs:"Logs",
 };
 
 let _logInterval = null;
@@ -139,8 +142,11 @@ function loadPageData(page) {
     else if(page==="pages")      loadPages();
     else if(page==="content")    openContentTab(_currentContentLoai);
     else if(page==="uid-groups") loadUidGroups();
+    else if(page==="uid-market") loadUidMarket();
     else if(page==="comment-posts") renderCommentPostsPage();
     else if(page==="tham-gia-nhom") loadJoinSchedules();
+    else if(page==="tham-gia-nhom-market") loadJoinMarket();
+    else if(page==="marketplace")   mktNap();
     else if(page==="hanh-dong")     loadRunnerStatus();
     else if(page==="logs")       { loadLogs(); _logInterval=setInterval(loadLogs,2000); }
     else if(page.startsWith("lich-")) {
@@ -176,9 +182,7 @@ async function _autoRefreshSchedule(loai){
     await loadSchedule(loai);
 }
 
-// ── Tham gia nhóm ─────────────────────────────────────────────
-
-let _joinRefreshTimer = null;
+// ── Tham gia nhóm Page ────────────────────────────────────────
 
 async function loadJoinSchedules() {
     const tbody = document.getElementById("join-table"); if(!tbody) return;
@@ -186,15 +190,13 @@ async function loadJoinSchedules() {
         const res = await API.joinSchedules();
         const badge = document.getElementById("join-running-badge");
         const count = document.getElementById("join-count");
-        const anyRunning = res.running || res.data.some(r => r.is_running);
+        const anyRunning = res.data.some(r => r.is_running);
         if(badge) badge.style.display = anyRunning ? "inline" : "none";
-        if(count) count.textContent = `${res.data.length} lịch`;
+        if(count && !anyRunning) count.textContent = `${res.data.length} lịch`;
 
-        // Auto-refresh mỗi 8s khi có bất kỳ phiên nào đang chạy
-        clearTimeout(_joinRefreshTimer);
-        if(anyRunning) {
-            _joinRefreshTimer = setTimeout(loadJoinSchedules, 8000);
-        }
+        // Nhịp làm mới do vòng theo dõi chuỗi lo, khỏi hai đồng hồ chạy song song.
+        if(anyRunning && !_jcHen[""]) jcTheoDoi("");
+        else if(!anyRunning) jcTrangThai("");
 
         if(!res.data.length) {
             tbody.innerHTML = `<tr><td colspan="9" class="empty">Chưa có lịch tham gia nhóm nào</td></tr>`;
@@ -209,17 +211,9 @@ async function loadJoinSchedules() {
             else if(st.startsWith("Lỗi"))   stBadge = `<span class="badge badge-danger">${st}</span>`;
             else                             stBadge = `<span class="badge badge-muted">${st}</span>`;
 
-            const actionBtn = isRunning
-                ? `<button onclick="stopJoin(${r.id})"
-                       style="background:var(--danger-light);color:var(--danger);border:none;border-radius:5px;padding:4px 10px;cursor:pointer;font-size:12px;margin-right:4px">
-                       ■ Stop
-                   </button>`
-                : `<button onclick="runJoin(${r.id})"
-                       style="background:var(--success-light);color:var(--success);border:none;border-radius:5px;padding:4px 10px;cursor:pointer;font-size:12px;margin-right:4px">
-                       ▶ Run
-                   </button>`;
-
-            return `<tr>
+            // Không còn nút Run/Stop từng hàng: cả bảng chạy bằng MỘT nút
+            // "Chạy lần lượt" ở trên. Hàng đang chạy tô nền nhạt cho dễ theo dõi.
+            return `<tr${isRunning?' style="background:rgba(251,191,36,.07)"':""}>
                 <td style="text-align:center;font-weight:600">${r.ten_acc}</td>
                 <td style="text-align:center;color:var(--text-secondary)">${r.ten_page}</td>
                 <td style="text-align:center;font-weight:600">${r.gio_chay||"-"}</td>
@@ -228,8 +222,7 @@ async function loadJoinSchedules() {
                 <td style="text-align:center;color:var(--text-muted)">${r.da_join||0}</td>
                 <td style="text-align:center;color:var(--danger)">${r.loi||0}</td>
                 <td style="text-align:center">${stBadge}</td>
-                <td style="text-align:center;white-space:nowrap">
-                    ${actionBtn}
+                <td style="text-align:center">
                     <button onclick="deleteJoin(${r.id})"
                         style="background:var(--danger-light);color:var(--danger);border:none;border-radius:5px;width:26px;height:26px;cursor:pointer;font-size:13px">
                         🗑
@@ -353,28 +346,6 @@ function updateJoinHeadlessLabel() {
     }
 }
 
-async function runJoin(id) {
-    const headless  = isJoinHeadless();
-    const settings  = await API.settings().catch(()=>({data:{}}));
-    const dNew      = parseInt(settings.data?.join_delay_new  || String(JOIN_NGHI_MOI_MAC_DINH));
-    const modeLabel = headless ? "ẩn Chrome" : "hiển thị Chrome";
-    try {
-        const r = await API.joinRun(id, headless, dNew);
-        if(r.ok) {
-            Toast.success(`▶ Khởi động (${modeLabel} | mới join: ${dNew}s)`);
-            loadJoinSchedules();
-        } else Toast.error(r.error);
-    } catch(e) { Toast.error(e.message); }
-}
-
-async function stopJoin(id) {
-    try {
-        const r = await API.joinStop(id);
-        if(r.ok) { Toast.success("■ Đã dừng"); loadJoinSchedules(); }
-        else Toast.error(r.error);
-    } catch(e) { Toast.error(e.message); }
-}
-
 async function deleteJoin(id) {
     if(!confirm("Xóa lịch này?")) return;
     try { await API.joinDelete(id); loadJoinSchedules(); }
@@ -458,6 +429,55 @@ async function napHienChrome(){
             _hienChromeMap[loai] = String(s[`hien_chrome_${loai}`] || "0") === "1";
         }
     }catch(e){}
+}
+
+// ── Marketplace ──────────────────────────────────────────────────
+// Mặc định KHÔNG để ở đây mà hỏi server (`/api/marketplace/cai-dat`), vì bộ
+// đăng bài bên Python cũng đọc đúng bộ mặc định đó. Chép làm hai bản thì sớm
+// muộn cũng lệch, và người dùng sẽ thấy một đằng còn Facebook nhận một nẻo.
+let _mktMacDinh = {};
+
+async function mktNap(){
+    const el = id => document.getElementById(id);
+    if(!el("mkt-tieu-de")) return;
+    try{
+        const r = await API.mktCaiDat();
+        const d = r.data || {};
+        _mktMacDinh = r.mac_dinh || {};
+        el("mkt-loai-tin").value   = d.mkt_loai_tin   || "";
+        el("mkt-tieu-de").value    = d.mkt_tieu_de    || "";
+        el("mkt-gia-list").value   = d.mkt_gia_list   || "";
+        el("mkt-hang-muc").value   = d.mkt_hang_muc   || "";
+        el("mkt-tinh-trang").value = d.mkt_tinh_trang || "";
+        el("mkt-vi-tri").value     = d.mkt_vi_tri     || "";
+        el("mkt-so-nhom").value    = d.mkt_so_nhom    || "";
+        el("mkt-tu-khoa").value    = d.mkt_tu_khoa    || "";
+    }catch(e){ Toast.error("Không đọc được cài đặt Marketplace: "+e.message); }
+}
+
+async function mktLuu(hienToast){
+    const el = id => document.getElementById(id);
+    const kq = el("mkt-ket-qua");
+    try{
+        await API.saveSettings({
+            mkt_loai_tin:   el("mkt-loai-tin").value,
+            mkt_tieu_de:    el("mkt-tieu-de").value.trim(),
+            mkt_gia_list:   el("mkt-gia-list").value.trim(),
+            mkt_hang_muc:   el("mkt-hang-muc").value.trim(),
+            mkt_tinh_trang: el("mkt-tinh-trang").value,
+            mkt_vi_tri:     el("mkt-vi-tri").value.trim(),
+            mkt_so_nhom:    el("mkt-so-nhom").value.trim(),
+            mkt_tu_khoa:    el("mkt-tu-khoa").value.trim(),
+        });
+        // Đọc lại thay vì tự suy: ô để trống thì server thay bằng mặc định, và
+        // danh sách giá cũng do server tách. Không đọc lại là màn hình nói sai.
+        await mktNap();
+        if(hienToast) Toast.success("Đã lưu cài đặt Marketplace");
+        if(kq){ kq.textContent = ""; }
+    }catch(e){
+        if(kq){ kq.textContent = "❌ " + e.message; kq.style.color = "var(--danger)"; }
+        else Toast.error(e.message);
+    }
 }
 
 // ── Báo về Telegram ──────────────────────────────────────────────
@@ -2037,6 +2057,288 @@ async function loadUidGroups(){
             </tr>`;
         }).join("");
     }catch(e){ tbody.innerHTML=`<tr><td colspan="5" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
+}
+
+// ── Chạy lần lượt (dùng chung cho cả hai tab tham gia nhóm) ───
+// Một nút thay cho một nút mỗi hàng. Chạy từ trên xuống đúng thứ tự bảng đang
+// hiện: xong nick này mới mở nick kế tiếp. KHÔNG song song — mỗi phiên là một
+// Chromium ~1,1 GB, máy đã 11,6/15,9 GB với 5 runner.
+const _JC = {
+    "":       {nutChay:"join-nut-chay", nutDung:"join-nut-dung",
+               dem:"join-count", nap:()=>loadJoinSchedules(), an:()=>isJoinHeadless()},
+    "MARKET": {nutChay:"jm-nut-chay",   nutDung:"jm-nut-dung",
+               dem:"jm-count",   nap:()=>loadJoinMarket(),    an:()=>jmHeadless()},
+};
+const _jcHen = {};
+
+async function jcChay(nguon){
+    const c=_JC[nguon]; if(!c) return;
+    try{
+        const r=await API.joinRunChain(nguon, c.an());
+        if(!r.ok){ Toast.error(r.error); return; }
+        Toast.success(`▶ Chạy lần lượt ${r.tong} nick (${c.an()?"ẩn Chrome":"hiện Chrome"})`);
+        jcTheoDoi(nguon);
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function jcDung(nguon){
+    if(!confirm("Dừng cả chuỗi? Nick đang chạy dở sẽ bị cắt ngang.")) return;
+    try{
+        await API.joinStopChain(nguon);
+        Toast.success("Đã dừng");
+        jcTheoDoi(nguon);
+    }catch(e){ Toast.error(e.message); }
+}
+
+function jcTheoDoi(nguon){
+    clearInterval(_jcHen[nguon]);
+    _jcHen[nguon]=setInterval(()=>jcTrangThai(nguon), 5000);
+    jcTrangThai(nguon);
+}
+
+async function jcTrangThai(nguon){
+    const c=_JC[nguon]; if(!c) return;
+    const bChay=document.getElementById(c.nutChay);
+    const bDung=document.getElementById(c.nutDung);
+    if(!bChay){ clearInterval(_jcHen[nguon]); delete _jcHen[nguon]; return; }
+    try{
+        const d=(await API.joinChainTT(nguon)).data||{};
+        bChay.style.display = d.dang_chay ? "none" : "";
+        if(bDung) bDung.style.display = d.dang_chay ? "" : "none";
+        const dem=document.getElementById(c.dem);
+        if(dem && d.dang_chay)
+            dem.textContent=`⏳ ${d.da||0}/${d.tong||0}${d.dang?" · đang: "+d.dang:""}`;
+        if(d.dang_chay){ c.nap(); return; }
+        clearInterval(_jcHen[nguon]); delete _jcHen[nguon];
+        if(d.loi) Toast.error(d.loi);
+        c.nap();
+    }catch(e){}
+}
+
+// ── Tham gia nhóm Market ──────────────────────────────────────
+// Cùng bộ máy với "Tham gia nhóm", khác hai chỗ: lấy nhóm từ UID Marketplace,
+// và KHÔNG switch sang Page — bài niêm yết chỉ đăng được dưới nick cá nhân nên
+// chính nick đó phải là thành viên nhóm.
+function jmHeadless(){ return !document.getElementById("jm-headless")?.checked; }
+
+function jmNhanHeadless(){
+    const c = document.getElementById("jm-headless")?.checked;
+    const l = document.getElementById("jm-headless-label");
+    if(l){ l.textContent = c ? "Hiển thị Chrome" : "Ẩn Chrome";
+           l.style.color = c ? "var(--warning)" : ""; }
+}
+
+async function loadJoinMarket(){
+    const tbody=document.getElementById("jm-table"); if(!tbody) return;
+    try{
+        const res=await API.joinSchedules("MARKET");
+        const ds=res.data||[];
+        const dangChay=ds.some(r=>r.is_running);
+        const dem=document.getElementById("jm-count");
+        if(dem && !dangChay) dem.textContent=`${ds.length} lịch`;
+        if(dangChay && !_jcHen["MARKET"]) jcTheoDoi("MARKET");
+        else if(!dangChay) jcTrangThai("MARKET");
+
+        if(!ds.length){
+            tbody.innerHTML=`<tr><td colspan="8" class="empty">Chưa có lịch nào — bấm "Tạo lịch cho mọi nick Active"</td></tr>`;
+            return;
+        }
+        tbody.innerHTML=ds.map(r=>{
+            const st=r.trang_thai||"Chờ", chay=!!r.is_running;
+            let badge;
+            if(st.startsWith("Hoàn thành"))            badge=`<span class="badge badge-success">${st}</span>`;
+            else if(chay||st.startsWith("Đang chạy"))  badge=`<span class="badge badge-warning">⏳ Đang chạy</span>`;
+            else if(st.startsWith("Lỗi"))              badge=`<span class="badge badge-danger">${st}</span>`;
+            else                                       badge=`<span class="badge badge-muted">${st}</span>`;
+            return `<tr${chay?' style="background:rgba(251,191,36,.07)"':""}>
+                <td style="font-weight:600">${_escapeHtml(r.ten_acc)}</td>
+                <td style="text-align:center;font-weight:600">${r.gio_chay||"-"}</td>
+                <td style="text-align:center">${r.tong_nhom||0}</td>
+                <td style="text-align:center;color:var(--success);font-weight:600">${r.moi_join||0}</td>
+                <td style="text-align:center;color:var(--text-muted)">${r.da_join||0}</td>
+                <td style="text-align:center;color:var(--danger)">${r.loi||0}</td>
+                <td>${badge}</td>
+                <td style="text-align:center">
+                    <button onclick="jmXoa(${r.id})" style="background:var(--danger-light);color:var(--danger);border:none;border-radius:5px;width:26px;height:26px;cursor:pointer;font-size:13px">🗑</button>
+                </td></tr>`;
+        }).join("");
+    }catch(e){ tbody.innerHTML=`<tr><td colspan="8" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
+}
+
+async function jmTaoNhanh(){
+    try{
+        const r=await API.joinGenMarket();
+        if(!r.ok){ Toast.error(r.error); return; }
+        Toast.success(`Tạo ${r.created} lịch, bỏ qua ${r.skipped} đã có · ${r.so_nhom} nhóm mỗi nick`);
+        loadJoinMarket();
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function jmThem(){
+    const accs=(await API.accounts().catch(()=>({data:[]}))).data||[];
+    const ds=accs.filter(a=>(a.trang_thai||"")==="Active");
+    openModal("Thêm lịch tham gia nhóm Market",`
+        <div class="field-group"><label>Tài khoản</label>
+            <select class="input" id="jm-acc">${
+                ds.map(a=>`<option>${_escapeHtml(a.ten_acc)}</option>`).join("")
+                || `<option value="">(không có nick Active)</option>`}</select></div>
+        <div class="field-group"><label>Giờ chạy (để trống = chỉ chạy tay)</label>
+            <input class="input" id="jm-gio" placeholder="09:00"></div>
+        <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px">
+            <button onclick="closeModal()" class="btn btn-ghost">Huỷ</button>
+            <button onclick="jmLuu()" class="btn btn-primary">💾 Lưu</button>
+        </div>`);
+}
+
+async function jmLuu(){
+    const acc=document.getElementById("jm-acc")?.value||"";
+    if(!acc){ Toast.error("Chưa chọn tài khoản"); return; }
+    try{
+        const r=await API.joinAdd({ten_acc:acc, ten_page:"", nguon:"MARKET",
+                                   gio_chay:document.getElementById("jm-gio")?.value||""});
+        if(r.ok){ Toast.success("Đã thêm"); closeModal(); loadJoinMarket(); }
+        else Toast.error(r.error);
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function jmXoa(id){
+    if(!confirm("Xoá lịch này?")) return;
+    try{ await API.joinDelete(id); Toast.success("Đã xoá"); loadJoinMarket(); }
+    catch(e){ Toast.error(e.message); }
+}
+
+// ── UID Marketplace ───────────────────────────────────────────
+// Nhóm đã xin được duyệt cho Marketplace. Dán hàng loạt chứ không nhập từng
+// dòng: nhóm được duyệt gom dần hàng tuần, nhập tay từng cái quá chậm.
+// Sắp xếp bảng theo số thành viên. Ba trạng thái: thứ tự nhập → nhiều trước →
+// ít trước. Giữ cả "thứ tự nhập" vì đó là thứ tự Duong tự duyệt từng nhóm, có
+// ý nghĩa riêng chứ không phải danh sách ngẫu nhiên.
+let _uidmDs = [];
+let _uidmSap = "";        // "" | "giam" | "tang"
+
+function _uidmSo(g){
+    const n = parseInt(String(g.thanh_vien || "0").replace(/\D/g, ""), 10);
+    return isNaN(n) ? 0 : n;
+}
+
+function uidmSapXep(){
+    _uidmSap = _uidmSap === "" ? "giam" : (_uidmSap === "giam" ? "tang" : "");
+    _uidmVe();
+}
+
+function _uidmVe(){
+    const tbody=document.getElementById("uidm-table"); if(!tbody) return;
+    const th=document.getElementById("uidm-th-tv");
+    if(th) th.textContent = "Thành viên" + (_uidmSap==="giam" ? " ▾" : _uidmSap==="tang" ? " ▴" : "");
+
+    let ds=_uidmDs.slice();
+    if(_uidmSap) ds.sort((a,b)=> _uidmSap==="giam" ? _uidmSo(b)-_uidmSo(a) : _uidmSo(a)-_uidmSo(b));
+
+    const tong=ds.reduce((s,g)=>s+_uidmSo(g),0);
+    const dem=document.getElementById("uidm-count");
+    if(dem) dem.textContent=`${ds.length} nhóm đã duyệt · ${tong.toLocaleString("vi")} thành viên`;
+
+    if(!ds.length){
+        tbody.innerHTML=`<tr><td colspan="5" class="empty">Chưa có nhóm nào — dán link vào ô trên</td></tr>`;
+        return;
+    }
+    tbody.innerHTML=ds.map((g,i)=>{
+        const n=_uidmSo(g);
+        const tv = n>0
+            ? `<span style="font-size:12px;color:var(--text-secondary)">${n.toLocaleString("vi")}</span>`
+            : `<span style="color:var(--text-muted)">-</span>`;
+        const link = g.link_url||`https://www.facebook.com/groups/${g.uid}/`;
+        return `<tr data-id="${g.id}">
+            <td style="text-align:center;color:var(--text-muted);font-size:11px">${i+1}</td>
+            <td style="text-align:center">
+                <a href="${link}" target="_blank"
+                   style="font-family:var(--font-mono);font-size:11px;color:var(--accent)">${g.uid} 🔗</a></td>
+            <td style="font-size:12px">${_escapeHtml(g.ten_nhom||"")||"<span style='color:var(--text-muted)'>chưa đặt tên</span>"}</td>
+            <td style="text-align:center">${tv}</td>
+            <td style="text-align:center">
+                <button onclick="uidmXoa(${g.id})" style="background:var(--danger-light);color:var(--danger);border:none;border-radius:5px;width:26px;height:26px;cursor:pointer;font-size:12px">🗑️</button>
+            </td>
+        </tr>`;
+    }).join("");
+}
+
+async function loadUidMarket(){
+    const tbody=document.getElementById("uidm-table"); if(!tbody) return;
+    _uidmNapAcc();
+    _uidmTT();
+    try{
+        const res=await API.uidMarket();
+        _uidmDs = res.data||[];
+        _uidmVe();
+    }catch(e){ tbody.innerHTML=`<tr><td colspan="5" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
+}
+
+async function uidmThem(){
+    const o=document.getElementById("uidm-dan");
+    const text=(o?.value||"").trim();
+    if(!text){ Toast.error("Chưa dán link nào"); return; }
+    try{
+        const r=await API.uidMarketThem(text);
+        if(!r.ok){ Toast.error(r.error); return; }
+        o.value="";
+        Toast.success(`Đọc được ${r.doc_duoc} link — thêm ${r.them}, bỏ qua ${r.bo_qua} trùng`);
+        loadUidMarket();
+    }catch(e){ Toast.error(e.message); }
+}
+
+// Quét tên + số thành viên: mở từng trang nhóm bằng một nick đã đăng nhập.
+// Chạy ở tiến trình riêng nên ở đây chỉ bấm rồi hỏi lại tiến độ.
+let _uidmHen = null;
+
+async function _uidmNapAcc(){
+    const o=document.getElementById("uidm-acc"); if(!o || o.options.length) return;
+    try{
+        const r=await API.accounts();
+        const ds=(r.data||[]).filter(a=>(a.trang_thai||"")==="Active"&&(a.c_user||"").trim());
+        o.innerHTML=ds.map(a=>`<option value="${_escapeHtml(a.ten_acc)}">${_escapeHtml(a.ten_acc)}</option>`).join("")
+                    || `<option value="">(không có nick Active)</option>`;
+    }catch(e){}
+}
+
+async function _uidmTT(){
+    const el=document.getElementById("uidm-quet-tt");
+    const nut=document.getElementById("uidm-nut-quet");
+    if(!el) { clearInterval(_uidmHen); _uidmHen=null; return; }
+    try{
+        const d=(await API.uidMarketQuetTT()).data||{};
+        if(d.dang_chay){
+            nut.disabled=true;
+            el.textContent=`⏳ ${d.da||0}/${d.tong||0}${d.dang?" · "+d.dang:""}`;
+            el.style.color="var(--warning)";
+            return;
+        }
+        nut.disabled=false;
+        if(d.loi){ el.textContent="❌ "+d.loi; el.style.color="var(--danger)"; }
+        else if(d.xong && d.tong){ el.textContent=`✓ đọc được ${d.ok}/${d.tong} nhóm`; el.style.color="var(--success)"; }
+        else el.textContent="";
+        if(_uidmHen){ clearInterval(_uidmHen); _uidmHen=null; loadUidMarket(); }
+    }catch(e){}
+}
+
+async function uidmQuet(){
+    const acc=document.getElementById("uidm-acc")?.value||"";
+    if(!acc){ Toast.error("Chưa có nick Active nào để quét"); return; }
+    try{
+        const r=await API.uidMarketQuet({
+            acc,
+            quet_het:    document.getElementById("uidm-quet-het")?.checked||false,
+            hien_chrome: document.getElementById("uidm-hien-chrome")?.checked||false});
+        if(!r.ok){ Toast.error(r.error); return; }
+        Toast.success(`Đang quét bằng nick ${acc}`);
+        if(!_uidmHen) _uidmHen=setInterval(_uidmTT, 2000);
+        _uidmTT();
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function uidmXoa(id){
+    if(!confirm("Bỏ nhóm này khỏi danh sách đã duyệt?")) return;
+    try{ await API.deleteUidGroup(id); Toast.success("Đã xóa"); loadUidMarket(); }
+    catch(e){ Toast.error(e.message); }
 }
 
 function openUidGroupForm(data={}){

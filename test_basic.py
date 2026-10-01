@@ -950,7 +950,7 @@ check("có trần thời gian cho phiên comment", _cb.GIOI_HAN_PHIEN_GIAY > 0)
 # `comment_cau_chinh_chu` câu, và giữa mỗi cặp câu còn nghỉ thêm NGHI_GIUA_2_CAU.
 _so_bai  = _cb.DEFAULTS["comment_so_bai"]
 _so_cau  = _cb.DEFAULTS["comment_cau_chinh_chu"]
-_uoc = (max(_cb.STORY_GIAY) + max(_cb.FEED_GIAY) + max(_cb.KET_GIAY)
+_uoc = (max(_cb.FEED_GIAY) + max(_cb.KET_GIAY)
         + _so_bai * _so_cau * 15
         + _so_bai * (_so_cau - 1) * max(_cb.NGHI_GIUA_2_CAU)
         + (_so_bai - 1) * _cb.DEFAULTS["comment_nghi_max"])
@@ -963,10 +963,32 @@ check("trần không quá rộng (≤ 30 phút)",      _cb.GIOI_HAN_PHIEN_GIAY <
 check("không thêm ô chỉnh thời lượng phiên",
       set(_cb.DEFAULTS) == {"comment_so_bai", "comment_nghi_min", "comment_nghi_max",
                             "comment_cau_chinh_chu"})
-check("thời lượng story khớp luồng đăng bài",  _cb.STORY_GIAY == (15, 20))
 check("thời lượng newsfeed khớp luồng đăng bài", _cb.FEED_GIAY == (20, 30))
 check("kết phiên khớp luồng đăng bài",        _cb.KET_GIAY == (15, 30))
 check("kết phiên like đúng 1 bài",            _cb.KET_LIKE == 1)
+
+# ── Xem story CHỈ còn ở phiên nuôi nick ────────────────────────────────────
+# Duong bỏ bước lướt story khỏi mọi phiên đăng bài và comment, chỉ giữ ở nuôi
+# nick. Giữ được bao lâu là nhờ test này: thêm lại một dòng `view_stories` vào
+# poster thì phiên dài thêm ~20 giây mỗi lượt mà không ai để ý.
+_F_KHONG_STORY = ("via_poster.py", "page_via_poster.py", "comment_bai.py")
+for _f in _F_KHONG_STORY:
+    _s = Path(_f).read_text(encoding="utf-8")
+    check(f"{_f} KHÔNG xem story", "view_stories(" not in _s)
+check("nuôi nick VẪN xem story",
+      "view_stories(page" in Path("nuoi_nick.py").read_text(encoding="utf-8"))
+check("fb_common vẫn giữ hàm view_stories cho nuôi nick",
+      "async def view_stories" in Path("fb_common.py").read_text(encoding="utf-8"))
+
+# Bỏ một bước thì phải đánh số lại, nếu không log ghi "[2/7]" mà phiên chỉ có 6
+# bước — đọc log để lần lỗi sẽ tưởng mất bước.
+import re as _re_buoc
+for _f, _tong in (("via_poster.py", 5), ("page_via_poster.py", 6)):
+    _s = Path(_f).read_text(encoding="utf-8")
+    _b = _re_buoc.findall(r"\[(\d)/(\d)\]", _s)
+    _b = [(int(a), int(t)) for a, t in _b if int(t) == _tong]
+    check(f"{_f}: số bước liền mạch 1..{_tong}",
+          sorted(a for a, _ in _b) == list(range(1, _tong + 1)))
 
 # Lý do bỏ qua
 check("danh sách trống -> báo trống", _cb.ly_do_bo_qua([]) == "danh sách trống")
@@ -3698,6 +3720,438 @@ try:
           db.get_account_by_id(_id_ck)["trang_thai"] == "Cookie hết hạn")
 finally:
     _ce_mod.thu_cookie = _that_thu
+
+
+# ── Marketplace: cài đặt của form "Tạo bài niêm yết" ───────────────────────
+# Form có 8 ô. Hai ô lấy thẳng từ thư viện Content ([2] Ảnh, [7] Mô tả), sáu ô
+# còn lại dùng chung cho mọi bài nên nằm ở bảng `settings`. Nhờ vậy bảng
+# `content` KHÔNG phải thêm cột nào — chốt này phải giữ, nếu không là quay lại
+# chuyện thêm cột rồi phải migrate dữ liệu đã nhập.
+with db._conn() as _con_mkt:
+    _cot_content = {r[1] for r in
+                    _con_mkt.execute("PRAGMA table_info(content)").fetchall()}
+check("content KHÔNG có cột riêng cho Marketplace",
+      not {"tieu_de", "gia", "vi_tri"} & _cot_content)
+
+# Marketplace KHÔNG có bảng phân công riêng: cột `loai_dang` bên Tài khoản đã
+# nói acc phụ trách loại nào. Acc "X_" vừa đăng vừa comment nhưng vẫn chỉ thuộc
+# đúng một loại content.
+check("Homestay -> content homestay", db.loai_content_cua_acc("Homestay") == "homestay")
+check("X_Home   -> content homestay", db.loai_content_cua_acc("X_Home")   == "homestay")
+check("Thuê     -> content thue",     db.loai_content_cua_acc("Thuê")     == "thue")
+check("X_Thuê   -> content thue",     db.loai_content_cua_acc("X_Thuê")   == "thue")
+check("Bán      -> content ban",      db.loai_content_cua_acc("Bán")      == "ban")
+check("X_Bán    -> content ban",      db.loai_content_cua_acc("X_Bán")    == "ban")
+check("acc chưa phân công -> rỗng",   db.loai_content_cua_acc("")         == "")
+check("giá trị lạ -> rỗng, không đoán bừa",
+      db.loai_content_cua_acc("C_Home") == "")
+# Hai chiều phải khớp nhau tuyệt đối, nếu không sẽ có acc Gen được lịch mà
+# Marketplace lại không biết lấy content ở đâu (hoặc ngược lại).
+check("khớp hai chiều với khop_loai_lich",
+      all(db.khop_loai_lich(v, db.loai_content_cua_acc(v))
+          for v in db.LOAI_DANG_OPTIONS if v))
+
+# Ô Giá nhận chuỗi tự do người dùng gõ tay, nên phải chịu được mọi kiểu gõ.
+check("tách giá: phân cách bằng dấu phẩy",
+      db.tach_gia("86, 68, 8686, 8386") == ["86", "68", "8686", "8386"])
+check("tách giá: phân cách bằng dấu cách / xuống dòng",
+      db.tach_gia("86 68\n8686") == ["86", "68", "8686"])
+check("tách giá: bỏ ký tự không phải số",
+      db.tach_gia("86đ, 68 VNĐ") == ["86", "68"])
+# Gõ nhầm hai lần cùng một giá thì giá đó được bốc gấp đôi mà người gõ không
+# hề biết mình vừa làm lệch tỉ lệ.
+check("tách giá: bỏ trùng", db.tach_gia("86, 68, 86") == ["86", "68"])
+check("tách giá: ô rỗng -> danh sách rỗng", db.tach_gia("") == [])
+check("tách giá: gõ toàn chữ -> danh sách rỗng", db.tach_gia("chưa điền") == [])
+
+# Chưa đặt lần nào thì phải ra đúng mặc định — người dùng mở phần mềm lần đầu
+# là dùng được ngay, không phải tự đi điền sáu ô.
+_cd_mkt = db.doc_cai_dat_mkt()
+check("mặc định: loại niêm yết là Mặt hàng cần bán",
+      _cd_mkt["mkt_loai_tin"] == "Mặt hàng cần bán")
+check("mặc định: hạng mục Hộ gia đình", _cd_mkt["mkt_hang_muc"] == "Hộ gia đình")
+check("mặc định: tình trạng Mới",       _cd_mkt["mkt_tinh_trang"] == "Mới")
+check("mặc định: vị trí Hai Bà Trưng",  _cd_mkt["mkt_vi_tri"] == "Hai Bà Trưng")
+check("mặc định: tối đa 20 nhóm",       _cd_mkt["mkt_so_nhom"] == "20")
+check("mặc định: từ khoá nhóm gồm cả biến thể thiếu chữ 's'",
+      db.tach_tu_khoa(_cd_mkt["mkt_tu_khoa"])
+      == ["Times City", "Time City", "làng Times"])
+# Từ khoá rỗng nghĩa là tick nhóm nào cũng được — đúng cái phải tránh. Để trống
+# thì lấy lại mặc định chứ không được coi là "không lọc".
+db.set_setting("mkt_tu_khoa", "")
+check("từ khoá để trống -> lấy lại mặc định, KHÔNG thành không lọc",
+      db.doc_cai_dat_mkt()["mkt_tu_khoa"] == db.MKT_MAC_DINH["mkt_tu_khoa"])
+check("mặc định: giá đọc ra được 4 giá",
+      db.tach_gia(_cd_mkt["mkt_gia_list"]) == ["86", "68", "8686", "8386"])
+
+# Xoá trắng một ô rồi lưu thì phải quay về mặc định, KHÔNG được để rỗng — ô
+# Hạng mục rỗng nghĩa là lúc đăng không biết chọn gì và phiên hỏng giữa chừng.
+db.set_setting("mkt_hang_muc", "   ")
+check("ô để trống -> lấy lại mặc định",
+      db.doc_cai_dat_mkt()["mkt_hang_muc"] == "Hộ gia đình")
+db.set_setting("mkt_hang_muc", "Đồ điện tử")
+check("ô có giá trị -> giữ nguyên giá trị đó",
+      db.doc_cai_dat_mkt()["mkt_hang_muc"] == "Đồ điện tử")
+db.set_setting("mkt_hang_muc", "")
+
+_r_mkt = _client.get("/api/marketplace/cai-dat").get_json()
+check("API trả cài đặt đã trộn mặc định",
+      _r_mkt.get("ok") and _r_mkt["data"]["mkt_vi_tri"] == "Hai Bà Trưng")
+check("API trả sẵn danh sách giá đã tách",
+      _r_mkt.get("gia") == ["86", "68", "8686", "8386"])
+
+# Mặc định chỉ được có MỘT nguồn (db.MKT_MAC_DINH). Nếu app.js tự giữ một bản
+# nữa thì hai bên sẽ lệch, và người dùng thấy một đằng còn Facebook nhận một nẻo.
+_ajs_mkt = Path("static/js/app.js").read_text(encoding="utf-8")
+check("app.js KHÔNG chép lại bộ mặc định, phải hỏi server",
+      "API.mktCaiDat()" in _ajs_mkt and "Hộ gia đình" not in _ajs_mkt)
+
+# Trang nằm ở nhóm "Vận hành" chứ không phải một tab thứ tư của Content:
+# CONTENT_CATEGORIES cố định 3 loại vì chúng khớp 1-1 với 3 scheduler.
+_html_mkt = Path("templates/index.html").read_text(encoding="utf-8")
+check("Content vẫn đúng 3 danh mục", len(server.CONTENT_CATEGORIES) == 3)
+check("có mục Marketplace ở sidebar", 'data-page="marketplace"' in _html_mkt)
+check("có trang Marketplace",         'id="page-marketplace"' in _html_mkt)
+check("Marketplace nằm SAU mục Tham gia nhóm (nhóm Vận hành)",
+      _html_mkt.index('data-page="marketplace"')
+      > _html_mkt.index('data-page="tham-gia-nhom"'))
+check("mở trang Marketplace thì nạp cài đặt",
+      'page==="marketplace"' in _ajs_mkt and "mktNap()" in _ajs_mkt)
+check("Marketplace có tên ở thanh tiêu đề", 'marketplace:"Marketplace"' in _ajs_mkt)
+# Ảnh và Mô tả lấy từ Content nên tuyệt đối không được có ô nhập ở đây — có ô
+# nhập là sinh ra nguồn thứ hai, rồi không ai biết lúc đăng lấy bản nào.
+check("KHÔNG có ô nhập Ảnh / Mô tả ở trang Marketplace",
+      'id="mkt-anh"' not in _html_mkt and 'id="mkt-mo-ta"' not in _html_mkt)
+# Trang chỉ liệt kê những ô CẦN NHẬP: Ảnh và Mô tả lấy từ Content nên không có
+# dòng nào, và số thứ tự vì thế đánh liền 1..7 chứ không chừa chỗ trống.
+import re as _re_mkt
+_khoi_mkt = _html_mkt[_html_mkt.index('id="page-marketplace"'):]
+_khoi_mkt = _khoi_mkt[:_khoi_mkt.index('id="page-hanh-dong"')]
+check("số thứ tự đánh liền 1..7",
+      _re_mkt.findall(r'class="mkt-so">(\d+)<', _khoi_mkt)
+      == [str(i) for i in range(1, 8)])
+# Từ khoá dùng chung, đặt ngay cạnh ô Số nhóm — hai thứ này cùng nói về một
+# việc (tick nhóm nào), tách ra hai chỗ là người dùng chỉnh cái này quên cái kia.
+check("ô Từ khoá nằm cạnh ô Số nhóm",
+      'id="mkt-tu-khoa"' in _html_mkt
+      and 0 < _html_mkt.index('id="mkt-tu-khoa"') - _html_mkt.index('id="mkt-so-nhom"') < 400)
+check("từ khoá được nạp và lưu",
+      'el("mkt-tu-khoa").value' in _ajs_mkt and "mkt_tu_khoa:" in _ajs_mkt)
+
+# ── Tham gia nhóm Market ───────────────────────────────────────────────────
+# Dùng chung bộ máy với "Tham gia nhóm", khác hai chỗ: nguồn nhóm và KHÔNG
+# switch sang Page. Marketplace chỉ đăng được dưới nick cá nhân, nên cho Page
+# vào nhóm là tốn một lượt xin duyệt mà nick vẫn không đăng được vào đó.
+_src_jr = Path("join_groups_runner.py").read_text(encoding="utf-8")
+check("runner nhận tham số nguồn nhóm",
+      'def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str = "")' in _src_jr)
+check("nguồn MARKET đọc nhóm ma_nhom='MARKET'",
+      'WHERE ma_nhom=\'MARKET\'' in _src_jr)
+_i_mkt  = _src_jr.index('if nguon == "MARKET":\n            _log("info", "👤')
+_i_swi  = _src_jr.index("await _switch_to_page(page, ctx, page_uid)", _i_mkt)
+check("nhóm MARKET KHÔNG switch sang Page",
+      "else:" in _src_jr[_i_mkt:_i_swi])
+_src_jw = Path("join_groups_worker.py").read_text(encoding="utf-8")
+check("worker đọc JOIN_NGUON", 'JOIN_NGUON' in _src_jw)
+# Nhóm đã tham gia được lọc TRƯỚC khi duyệt, không mở trang — đo thật lúc làm
+# tối ưu này: phiên cũ mở 30 trang nhóm trong 10 phút chỉ để biết cả 30 đều đã
+# là thành viên. Chỉ nhóm lọt qua bộ lọc mới rơi vào đường dự phòng 5 giây.
+check("lọc nhóm đã tham gia trước khi duyệt",
+      "_lay_nhom_da_vao" in _src_jr and "con_lai" in _src_jr)
+# groups/joins trả nhóm của CHỦ THỂ ĐANG HOẠT ĐỘNG. Lịch Market không switch
+# Page nên nó ra nhóm của nick cá nhân — đúng thứ cần, nhưng log phải nói đúng.
+check("log gọi đúng chủ thể, không nói 'Page' khi chạy Market",
+      'chu_the = "Nick" if nguon == "MARKET" else "Page"' in _src_jr
+      and "f\"📋 {chu_the} đã tham gia" in _src_jr)
+check("MARKET không bắt buộc Page UID",
+      'if NGUON != "MARKET" and not PAGE_UID' in _src_jw)
+
+# Hai tab phải TÁCH danh sách: lịch Market không được lẫn vào tab cũ và ngược
+# lại, nếu không thì bấm Run ở tab này lại chạy nhóm của tab kia.
+_src_srv_j = Path("server.py").read_text(encoding="utf-8")
+check("API lọc lịch theo nguồn",
+      "WHERE COALESCE(nguon,'')=?" in _src_srv_j)
+check("tạo nhanh Market không đòi Page",
+      "gen-quick-market" in _src_srv_j and "get_uid_groups_market" in _src_srv_j)
+check("tạo nhanh UID Nhóm bỏ qua lịch Market",
+      "AND COALESCE(nguon,'')=''" in _src_srv_j)
+check("truyền JOIN_NGUON khi Run", '"JOIN_NGUON":' in _src_srv_j)
+
+_html_jm = Path("templates/index.html").read_text(encoding="utf-8")
+_ajs_jm  = Path("static/js/app.js").read_text(encoding="utf-8")
+check("có mục Tham gia nhóm Market", 'data-page="tham-gia-nhom-market"' in _html_jm)
+check("nằm ngay dưới Tham gia nhóm",
+      0 < _html_jm.index('data-page="tham-gia-nhom-market"')
+          - _html_jm.index('data-page="tham-gia-nhom"') < 200)
+check("mở trang thì nạp lịch Market",
+      'page==="tham-gia-nhom-market"' in _ajs_jm and "loadJoinMarket()" in _ajs_jm)
+# Chạy LẦN LƯỢT: một nút thay cho một nút mỗi hàng. Không song song — mỗi phiên
+# là một Chromium ~1,1 GB, máy đã 11,6/15,9 GB với 5 runner.
+_src_jc = Path("join_chain_worker.py").read_text(encoding="utf-8")
+check("chuỗi chạy theo đúng thứ tự bảng (id giảm dần)",
+      "ORDER BY id DESC" in _src_jc)
+check("chuỗi chạy tuần tự, không song song",
+      "for r in rows:" in _src_jc and "Popen" not in _src_jc)
+check("chuỗi ghi file pid của lịch đang chạy để đèn từng hàng vẫn đúng",
+      "pid_file(sid).write_text" in _src_jc and "pid_file(sid).unlink" in _src_jc)
+check("một nick hỏng KHÔNG làm đứt cả chuỗi",
+      "except Exception as e:" in _src_jc and "finally:" in _src_jc)
+check("chuỗi sập thì báo ra", 'bao(xong=True' in _src_jc and "loi=" in _src_jc)
+check("dừng chuỗi diệt CẢ CÂY tiến trình",
+      "tien_trinh.diet_cay" in _src_srv_j)
+check("cả hai tab đều có nút Chạy lần lượt",
+      'id="join-nut-chay"' in _html_jm and 'id="jm-nut-chay"' in _html_jm)
+# Bỏ nút Run từng hàng — nếu còn thì người dùng có hai đường chạy song song
+# nhau, và chuỗi sẽ giành trình duyệt với phiên bấm tay.
+check("KHÔNG còn nút Run từng hàng",
+      "runJoin(" not in _ajs_jm and "jmChay(" not in _ajs_jm)
+
+check("đổi tên tab cũ thành Tham gia nhóm Page",
+      "Tham gia nhóm Page" in _html_jm
+      and '"tham-gia-nhom":"Tham gia nhóm Page"' in _ajs_jm)
+
+check("trang Market KHÔNG có cột Page",
+      "jm-table" in _html_jm
+      and _html_jm[_html_jm.index('id="page-tham-gia-nhom-market"'):
+                   _html_jm.index('id="jm-table"')].count("<th>Page</th>") == 0)
+
+# Lịch Market thật sự tách khỏi lịch cũ.
+with db._conn() as _c_jm:
+    _c_jm.execute("INSERT INTO join_schedules(ten_acc,ten_page,nguon) VALUES('A','P','')")
+    _c_jm.execute("INSERT INTO join_schedules(ten_acc,ten_page,nguon) VALUES('A','','MARKET')")
+_r_j1 = _client.get("/api/join/schedules").get_json()
+_r_j2 = _client.get("/api/join/schedules?nguon=MARKET").get_json()
+check("tab cũ không thấy lịch Market",
+      all((r.get("nguon") or "") == "" for r in _r_j1["data"]))
+check("tab Market chỉ thấy lịch Market",
+      _r_j2["data"] and all(r["nguon"] == "MARKET" for r in _r_j2["data"]))
+with db._conn() as _c_jm:
+    _c_jm.execute("DELETE FROM join_schedules WHERE ten_acc='A'")
+
+
+# ── UID Marketplace: danh sách nhóm đã được duyệt ──────────────────────────
+# Lưu CHUNG bảng uid_groups với ma_nhom='MARKET'. Tab "UID Nhóm" vốn đã lọc
+# ma_nhom==='' nên hai danh sách không lẫn nhau — phải giữ đúng như vậy.
+check("mã nhóm Marketplace là MARKET", db.MA_NHOM_MARKET == "MARKET")
+check("tab UID Nhóm vẫn chỉ hiện ma_nhom rỗng",
+      'g.ma_nhom === ""' in _ajs_mkt)
+
+check("tách link nhóm dạng số",
+      [x["uid"] for x in db.tach_link_nhom(
+          "https://www.facebook.com/groups/311375961636397/")] == ["311375961636397"])
+check("tách link nhóm dạng chữ",
+      [x["uid"] for x in db.tach_link_nhom(
+          "facebook.com/groups/homestaytimescity")] == ["homestaytimescity"])
+check("bỏ được đuôi ?ref=",
+      [x["uid"] for x in db.tach_link_nhom(
+          "https://www.facebook.com/groups/123456789/?ref=share")] == ["123456789"])
+check("nhận UID trần",
+      [x["uid"] for x in db.tach_link_nhom("987654321")] == ["987654321"])
+check("đọc được tên nhóm sau dấu |",
+      db.tach_link_nhom("facebook.com/groups/abc | Homestay Times City")[0]["ten_nhom"]
+      == "Homestay Times City")
+check("nhiều dòng, bỏ trùng, giữ thứ tự",
+      [x["uid"] for x in db.tach_link_nhom(
+          "facebook.com/groups/111\nfacebook.com/groups/222\nfacebook.com/groups/111")]
+      == ["111", "222"])
+check("dòng rác bị bỏ qua", db.tach_link_nhom("chưa có gì\n\nlinh tinh") == [])
+check("tự dựng link đầy đủ từ UID trần",
+      db.tach_link_nhom("555666777")[0]["link_url"]
+      == "https://www.facebook.com/groups/555666777/")
+
+_them, _bo = db.them_nhom_market(db.tach_link_nhom(
+    "facebook.com/groups/mkt1 | Nhóm A\nfacebook.com/groups/mkt2"))
+check("thêm nhóm Marketplace", (_them, _bo) == (2, 0))
+_them2, _bo2 = db.them_nhom_market(db.tach_link_nhom("facebook.com/groups/mkt1"))
+check("thêm lại thì bỏ qua trùng", (_them2, _bo2) == (0, 1))
+_mkt_ds = db.get_uid_groups_market()
+check("đọc lại đúng 2 nhóm", [g["uid"] for g in _mkt_ds] == ["mkt1", "mkt2"])
+check("giữ tên nhóm đã nhập", _mkt_ds[0]["ten_nhom"] == "Nhóm A")
+# Quan trọng: KHÔNG được lẫn vào sheet UID Nhóm của người dùng.
+check("nhóm MARKET không lọt vào sheet UID Nhóm",
+      not [g for g in db.get_all_uid_groups()
+           if g["ma_nhom"] == "" and (g["uid"] or "").startswith("mkt")])
+
+_r_um = _client.get("/api/uid-groups/market").get_json()
+check("API trả danh sách nhóm Marketplace",
+      _r_um.get("ok") and len(_r_um["data"]) == 2)
+_r_um2 = _client.post("/api/uid-groups/market/them",
+                      json={"text": "facebook.com/groups/mkt3"}).get_json()
+check("API thêm được nhóm mới", _r_um2.get("them") == 1)
+_r_um3 = _client.post("/api/uid-groups/market/them", json={"text": "abc"}).get_json()
+check("dán rác thì báo lỗi rõ, không thêm gì",
+      _r_um3.get("ok") is False and "link" in (_r_um3.get("error") or "").lower())
+
+# Quét tên nhóm: worker chạy tiến trình riêng, KHÔNG được dùng profile Chrome
+# của nick — nick nào cũng có thể đang chạy phiên đăng bài, hai bên giành khoá
+# thư mục profile là hỏng cả hai.
+_src_quet = Path("quet_nhom_market.py").read_text(encoding="utf-8")
+check("quét dùng profile riêng, không giành khoá với runner",
+      "_quet_market_" in _src_quet and "find_profile_dir" not in _src_quet)
+# Chỉ đọc nghĩa là KHÔNG có cú bấm nào trong worker: vào trang nhóm, đọc, đi
+# tiếp. Một cú click lạc vào đây có thể là bấm Tham gia nhóm bằng nick thật.
+check("quét chỉ ĐỌC — không có cú bấm nào", ".click(" not in _src_quet)
+check("quét dùng lại doc_so_thanh_vien đã có",
+      "doc_so_thanh_vien" in _src_quet)
+# Nguồn lấy tên nhóm. Đo ngày 30/09 trên nick thật: og:title KHÔNG tồn tại,
+# document.title đọc lại của trang trước (mở riêng hai nhóm, chờ 9 giây, vẫn
+# cùng một title dù số thành viên khác nhau), h1 đầu trang là "Thông báo".
+import quet_nhom_market as _qnm
+check("lấy tên từ [role=main] h1", '[role="main"] h1' in _qnm.JS_TEN)
+check("KHÔNG tin document.title", "document.title" not in _qnm.JS_TEN
+      and "document.title" not in _qnm.JS_DOC)
+check("KHÔNG tin og:title", "og:title" not in _qnm.JS_TEN
+      and "og:title" not in _qnm.JS_DOC)
+check("bỏ số thông báo '(8)' ở đầu tên",
+      _qnm._don_ten("(8) ✅Chợ Cư Dân Times City | Facebook")
+      == "✅Chợ Cư Dân Times City")
+check("bỏ đuôi '| Facebook'", _qnm._don_ten("Times City Mart | Facebook")
+      == "Times City Mart")
+# Hai nhóm KHÁC NHAU có thể TRÙNG TÊN — 382936754082358 (16,6K) và
+# 1362597001398822 (13,5K) cùng tên "✅Chợ Cư Dân Times City & Park Hill".
+# Nên tuyệt đối không được thêm phép "trùng tên thì đọc lại": nó ghi đè tên
+# đúng. Cũng vì vậy, muốn đối chiếu chắc chắn thì phải khớp bằng UID.
+check("KHÔNG có phép đọc lại khi trùng tên", "ten_truoc" not in _src_quet)
+# Nhóm lưu bằng TÊN CHỮ (7/25 nhóm của Duong) phải lấy thêm dạng SỐ, nếu không
+# bộ lọc "nhóm đã tham gia" trượt và nhóm đó bị mở lại mỗi lần chạy.
+check("lấy mã số từ URL dạng số",
+      _qnm._ma_so_nhom("https://www.facebook.com/groups/123456789/", []) == "123456789")
+check("lấy mã số từ link phụ khi URL là tên chữ",
+      _qnm._ma_so_nhom("https://www.facebook.com/groups/timecity/",
+                       ["/groups/987654321/members/", "/groups/987654321/media/",
+                        "/groups/111222333/"]) == "987654321")
+# Link /groups/<số> TRẦN không tính: trang nhóm đầy link sang nhóm khác trong
+# các bài đăng, lấy bừa là ghi nhầm mã của nhóm người ta.
+check("không đoán bừa khi chỉ có link nhóm khác",
+      _qnm._ma_so_nhom("https://www.facebook.com/groups/timecity/",
+                       ["/groups/111222333/", "/groups/444555666/"]) == "")
+check("thiếu mã số thì vẫn phải quét lại", "_thieu_ma_so" in _src_quet)
+# Cột thanh_vien khai là TEXT nhưng dữ liệu cũ có dòng giữ SỐ (nhập từ Excel),
+# SQLite không ép kiểu. Gọi .strip() thẳng lên int làm worker sập ngay ở bước
+# đọc danh sách — người bấm nút chỉ thấy nó đứng im.
+check("chịu được thanh_vien là số", "_rong" in _src_quet and "str(v" in _src_quet)
+# Sập thì phải BÁO RA, không được đứng im.
+check("worker báo lỗi khi sập", "except Exception as e" in _src_quet
+      and "bao(xong=True, loi=" in _src_quet)
+check("mặc định chỉ quét dòng còn thiếu",
+      "QUET_HET" in _src_quet and 'QUET_HET", "0"' in _src_quet)
+_src_srv_q = Path("server.py").read_text(encoding="utf-8")
+check("server chặn chạy chồng hai lượt quét",
+      "_quet_market_dang_chay()" in _src_srv_q)
+check("có nút quét và ô chọn nick",
+      'id="uidm-nut-quet"' in _html_mkt and 'id="uidm-acc"' in _html_mkt)
+# Mặc định chạy ẩn cho khỏi vướng, nhưng phải có đường xem tận mắt — lần đầu
+# dùng mà không nhìn được nó làm gì thì không ai dám tin.
+check("có ô tích hiện Chrome", 'id="uidm-hien-chrome"' in _html_mkt
+      and "hien_chrome:" in _ajs_mkt)
+# Sắp xếp theo số thành viên, ba trạng thái. Giữ cả "thứ tự nhập" vì đó là thứ
+# tự Duong tự duyệt từng nhóm, không phải danh sách ngẫu nhiên.
+check("cột Thành viên bấm được để sắp xếp",
+      'onclick="uidmSapXep()"' in _html_mkt and 'id="uidm-th-tv"' in _html_mkt)
+check("sắp xếp đủ ba trạng thái",
+      '_uidmSap === "" ? "giam"' in _ajs_mkt and '"giam" ? "tang" : ""' in _ajs_mkt)
+# thanh_vien có dòng là SỐ, có dòng là CHUỖI — phải đọc được cả hai, nếu không
+# thì sắp xếp ra thứ tự lung tung mà nhìn bảng không biết sai ở đâu.
+check("đọc số thành viên chịu được cả số lẫn chuỗi",
+      'String(g.thanh_vien || "0").replace(/\\D/g, "")' in _ajs_mkt)
+
+check("có mục UID Marketplace ở sidebar", 'data-page="uid-market"' in _html_mkt)
+check("có trang UID Marketplace", 'id="page-uid-market"' in _html_mkt)
+check("mở trang thì nạp danh sách",
+      'page==="uid-market"' in _ajs_mkt and "loadUidMarket()" in _ajs_mkt)
+
+
+# ── Marketplace: lọc nhóm theo từ khoá ─────────────────────────────────────
+# Bước chọn nhóm KHÔNG có ô tìm kiếm (đo trên nick Sa Tran Anh ngày 29/09: 28
+# nhóm hiện thẳng thành danh sách tick), nên phần mềm phải tự đọc tên và tự lọc.
+check("bỏ dấu + bỏ hoa thường + bỏ ký tự lạ",
+      db.chuan_hoa("MUA BÁN NHÀ TIMES CITY-PARK HILL ✅") == "muabannhatimescityparkhill")
+check("chuẩn hoá đổi đ -> d", db.chuan_hoa("Đống Đa") == "dongda")
+check("chuỗi rỗng -> rỗng", db.chuan_hoa("") == "")
+
+check("tách nhiều từ khoá theo dấu phẩy",
+      db.tach_tu_khoa("Times City, Time City, làng Times")
+      == ["Times City", "Time City", "làng Times"])
+check("tách từ khoá: bỏ trùng sau khi chuẩn hoá",
+      db.tach_tu_khoa("Times City, TIMES CITY, times  city") == ["Times City"])
+check("tách từ khoá: ô rỗng -> rỗng", db.tach_tu_khoa("  ,  ") == [])
+
+# Từ khoá rỗng KHÔNG được coi là "khớp tất cả" — như vậy là tick sạch mọi nhóm.
+check("từ khoá rỗng -> không khớp gì", db.khop_tu_khoa("Times City", "") is False)
+check("khớp một trong nhiều từ khoá",
+      db.khop_tu_khoa("Chợ Làng Time City - Park Hill", "Times City, Time City"))
+check("không khớp thì trả False",
+      db.khop_tu_khoa("Phòng trọ Kim Giang - Linh Đàm", "Times City, Time City") is False)
+
+# Facebook viết "43,5K" kiểu Việt Nam: PHẨY là dấu thập phân khi có hậu tố K,
+# còn CHẤM là phân cách hàng nghìn khi không có. Lẫn hai thứ là sai nghìn lần.
+check("đọc 43,5K thành viên", db.doc_so_thanh_vien("43,5K thành viên · Công khai") == 43500)
+check("đọc 3,6K thành viên",  db.doc_so_thanh_vien("3,6K thành viên") == 3600)
+check("đọc 1.234 thành viên", db.doc_so_thanh_vien("1.234 thành viên") == 1234)
+check("đọc 950 thành viên",   db.doc_so_thanh_vien("950 thành viên") == 950)
+check("không có số -> 0",     db.doc_so_thanh_vien("Công khai") == 0)
+
+# 28 nhóm THẬT của nick Sa Tran Anh, chép nguyên từ DOM lúc 29/09.
+_NHOM_THAT = [
+    "Cư dân Times City & Park Hill tìm Mua Nhà & Thuê Nhà 43,5K thành viên · Công khai",
+    "Hội Mua Bán Nhà & Thuê Nhà Times City 30,6K thành viên · Công khai",
+    "Chợ Làng Time City - Park Hill - Premium 29,5K thành viên · Công khai",
+    "TRAO ĐỔI - MUA BÁN - CHO THUÊ CĂN HỘ TIMES CITY 🔑 19,8K thành viên · Riêng tư",
+    "Chợ cư dân làng Times 16,1K thành viên · Công khai",
+    "CHỢ - TIME CITY - HÒA BÌNH GREEN -MINH KHAI - ONLINE 11,0K thành viên · Công khai",
+    "CHỢ DỊCH VỤ CHO CƯ DÂN TIMES CITY - PARK HILL 30,7K thành viên · Công khai",
+    "Homestay Times City 3,6K thành viên · Công khai",
+    "Mua bán cho thuê căn hộ Times city 27,6K thành viên · Công khai",
+    "MUA BÁN NHÀ TIMES CITY-PARK HILL-PARK PREMIUM✅ 14,1K thành viên · Công khai",
+    "Cư dân Park Hill Times City 18,2K thành viên · Công khai",
+    "Times City Mua bán cho thuê căn hộ 52,3K thành viên · Công khai",
+    "Hội mua bán chung cư Times city 4,6K thành viên · Công khai",
+    "Homestay Times City - Cho thuê Homestay Times City theo ngày / giờ 14,8K thành viên · Công khai",
+    "TÌM PHÒNG TRỌ✅KIM GIANG✅THANH LIỆT✅ĐẠI KIM✅LINH ĐÀM✅HÀ ĐÔNG 97,0K thành viên · Công khai",
+    "Chợ chung cư Times City 15,6K thành viên · Công khai",
+    "Phòng trọ khu vực Bằng Liệt - Thanh Liệt - Kim Giang - Linh Đàm 36,4K thành viên · Công khai",
+    "Làng Times City 37,2K thành viên · Công khai",
+    "Chợ cư dân Times City-Park Hill- Park Premium 18,1K thành viên · Công khai",
+    "Times City Mart 23,3K thành viên · Công khai",
+    "Chung cư Times City Park Hill Premium 12,5K thành viên · Công khai",
+    "Cư Dân Chợ Làng Times City ParkHill Premium 22,1K thành viên · Công khai",
+    "Homestay Times City - Park Hill cho thuê theo giờ/ngày/tháng/năm 4,8K thành viên · Công khai",
+    "Chợ Cư Dân Times City Minh Khai 9,6K thành viên · Công khai",
+    "Times City 44,5K thành viên · Công khai",
+    "BẤT ĐỘNG SẢN Times City 35,4K thành viên · Công khai",
+    "Bất động sản Times City Park Hill Mua bán cho thuê 66,3K thành viên · Công khai",
+    "Bất động sản KĐT Times City - Những thông tin mới nhất 6,4K thành viên · Công khai",
+]
+_ds = [{"ten": t} for t in _NHOM_THAT]
+
+# Một từ khoá "Times City" bỏ oan 3 nhóm chỉ vì chính tả — đây là lý do phải
+# cho nhiều từ khoá. Giữ phép đo này để sau có ai rút về một từ khoá thì biết.
+_mot, _ = db.chon_nhom_marketplace(_ds, "Times City", 99)
+check("một từ khoá 'Times City' chỉ vớt được 23/28", len(_mot) == 23)
+
+_chon, _bo = db.chon_nhom_marketplace(_ds, db.MKT_MAC_DINH["mkt_tu_khoa"], 99)
+check("mặc định nhiều từ khoá vớt được 26/28", len(_chon) == 26)
+_ten_bo = " | ".join(n["ten"] for n in _bo)
+check("chỉ còn loại 2 nhóm phòng trọ khác khu",
+      len(_bo) == 2 and "KIM GIANG" in _ten_bo and "Bằng Liệt" in _ten_bo)
+
+# Khớp nhiều hơn hạn mức thì ưu tiên nhóm ĐÔNG thành viên.
+_chon20, _bo20 = db.chon_nhom_marketplace(_ds, db.MKT_MAC_DINH["mkt_tu_khoa"], 20)
+check("đúng 20 nhóm khi hạn mức 20", len(_chon20) == 20)
+check("nhóm đông nhất đứng đầu",
+      db.doc_so_thanh_vien(_chon20[0]["ten"]) == 66300)
+check("xếp giảm dần theo số thành viên",
+      all(db.doc_so_thanh_vien(_chon20[i]["ten"])
+          >= db.doc_so_thanh_vien(_chon20[i + 1]["ten"])
+          for i in range(len(_chon20) - 1)))
+check("nhóm bị bỏ đều ít thành viên hơn nhóm được chọn cuối",
+      min(db.doc_so_thanh_vien(n["ten"]) for n in _chon20)
+      >= max(db.doc_so_thanh_vien(n["ten"]) for n in _bo20
+             if db.khop_tu_khoa(n["ten"], db.MKT_MAC_DINH["mkt_tu_khoa"])))
+check("chọn + bỏ luôn bằng tổng số nhóm", len(_chon20) + len(_bo20) == 28)
+# Hạn mức 0 thì không tick gì — không được hiểu thành "không giới hạn".
+check("hạn mức 0 -> không chọn nhóm nào",
+      db.chon_nhom_marketplace(_ds, "Times City", 0)[0] == [])
 
 
 # ── dọn dẹp ────────────────────────────────────────────────────────────────

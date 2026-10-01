@@ -172,12 +172,16 @@ def _dinh_danh_nhom(uid: str, link_url: str) -> set:
     return {x for x in ra if x}
 
 
-async def _lay_nhom_da_vao(page) -> set:
+async def _lay_nhom_da_vao(page, chu_the: str = "Page") -> set:
     """
-    Đọc danh sách nhóm Page đang đứng tên ĐÃ tham gia, từ trang `groups/joins`.
+    Đọc danh sách nhóm ĐÃ tham gia của chủ thể đang hoạt động, từ `groups/joins`.
 
-    Gọi SAU khi đã chuyển sang Page — trang này trả về nhóm của chủ thể đang
-    hoạt động, nên đọc trước lúc switch sẽ ra nhóm của acc cá nhân.
+    Trang này trả về nhóm của CHỦ THỂ ĐANG HOẠT ĐỘNG. Với lịch Page thì phải gọi
+    SAU khi đã switch; với lịch Marketplace thì không switch bao giờ, nên nó trả
+    về nhóm của chính nick cá nhân — đúng thứ cần.
+
+    `chu_the` chỉ để ghi log cho đúng: nói "Page đã tham gia" trong lúc chạy
+    Marketplace là nói sai, mà log sai thì lần sau đọc lại càng rối.
 
     Dò thật ba trang: `groups/joins` cho 40 định danh (38 khớp tag), còn
     `groups/` và `groups/feed` chỉ ra 22 — chúng là thanh bên newsfeed, không
@@ -207,7 +211,7 @@ async def _lay_nhom_da_vao(page) -> set:
         if yen >= 3:                      # ba lượt liền không thêm được gì
             break
 
-    _log("info", f"📋 Page đã tham gia {len(da_thay)} nhóm (đọc từ groups/joins)")
+    _log("info", f"📋 {chu_the} đã tham gia {len(da_thay)} nhóm (đọc từ groups/joins)")
     return da_thay
 
 
@@ -289,14 +293,20 @@ async def _join_one_group(page, uid: str, ten_nhom: str, link_url: str) -> str:
 
 # ─── Main flow ────────────────────────────────────────────────────────────────
 
-async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
+async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str = ""):
     from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 
-    # Lấy danh sách nhóm (ma_nhom = '' → từ sheet UID Nhóm)
+    # Nguồn nhóm: '' = sheet UID Nhóm, 'MARKET' = nhóm đã duyệt Marketplace.
     with _conn() as con:
-        rows = con.execute(
-            "SELECT uid, ten_nhom, link_url FROM uid_groups WHERE ma_nhom='' OR ma_nhom IS NULL ORDER BY id"
-        ).fetchall()
+        if nguon == "MARKET":
+            rows = con.execute(
+                "SELECT uid, ten_nhom, link_url FROM uid_groups "
+                "WHERE ma_nhom='MARKET' ORDER BY order_idx, id"
+            ).fetchall()
+        else:
+            rows = con.execute(
+                "SELECT uid, ten_nhom, link_url FROM uid_groups WHERE ma_nhom='' OR ma_nhom IS NULL ORDER BY id"
+            ).fetchall()
 
     groups = [{"uid": r[0], "ten_nhom": r[1], "link_url": r[2]} for r in rows]
     total  = len(groups)
@@ -381,9 +391,15 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
             await ctx.close()
             return
 
-        # Switch sang Page
-        _log("info", f"🔄 Switch sang Page {page_uid}...")
-        await _switch_to_page(page, ctx, page_uid)
+        # Nhóm Marketplace thì KHÔNG switch sang Page: bài niêm yết chỉ đăng
+        # được dưới nick cá nhân, nên phải chính nick đó là thành viên nhóm.
+        # Cho Page vào nhóm là vào nhầm danh nghĩa — tốn một lượt xin duyệt mà
+        # nick cá nhân vẫn không đăng được vào nhóm đó.
+        if nguon == "MARKET":
+            _log("info", "👤 Nhóm Marketplace — vào bằng nick cá nhân, không switch Page")
+        else:
+            _log("info", f"🔄 Switch sang Page {page_uid}...")
+            await _switch_to_page(page, ctx, page_uid)
 
         # ── Bỏ qua nhóm Page ĐÃ tham gia, không mở từng trang để hỏi lại ──
         # Đo thật trên Page 'Bồ Công Anh': phiên cũ mở 30 trang nhóm trong 10
@@ -394,8 +410,9 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
         # Danh sách THIẾU thì vô hại: nhóm không có trong đó vẫn được vào thăm
         # như cũ. Chiều nguy hiểm là nhóm CHƯA vào mà lại nằm trong danh sách —
         # không xảy ra được, vì nguồn của nó chính là "nhóm bạn đã tham gia".
+        chu_the = "Nick" if nguon == "MARKET" else "Page"
         try:
-            da_vao = await _lay_nhom_da_vao(page)
+            da_vao = await _lay_nhom_da_vao(page, chu_the)
         except Exception as e:
             _log("warning", f"⚠️  Không đọc được danh sách nhóm đã tham gia: {e}")
             da_vao = set()
@@ -410,7 +427,7 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
             stats["da_join"] += bo_qua
             results += [{"uid": g["uid"], "ten": g["ten_nhom"], "result": "da_join"}
                         for g in groups if g not in con_lai]
-            _log("info", f"⏭️  Bỏ qua {bo_qua} nhóm Page đã tham gia — "
+            _log("info", f"⏭️  Bỏ qua {bo_qua} nhóm {chu_the.lower()} đã tham gia — "
                         f"còn {len(con_lai)}/{total} nhóm cần vào")
             groups = con_lai
 
@@ -454,8 +471,8 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str):
     _log("info", f"   Lỗi:          {stats['loi']}")
 
 
-def run_join_schedule(schedule_id: int, acc_name: str, page_uid: str):
+def run_join_schedule(schedule_id: int, acc_name: str, page_uid: str, nguon: str = ""):
     """Sync wrapper — gọi từ scheduler."""
     global _ACC
     _ACC = acc_name          # mọi dòng log của phiên này gắn kèm tên acc
-    asyncio.run(_run_join(schedule_id, acc_name, page_uid))
+    asyncio.run(_run_join(schedule_id, acc_name, page_uid, nguon))

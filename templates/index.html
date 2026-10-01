@@ -7,6 +7,11 @@
     <style>
         .nav-section { font-size:10px; color:var(--text-muted); text-transform:uppercase;
                        letter-spacing:.06em; padding:12px 16px 4px; }
+
+        /* Marketplace — số thứ tự của các ô cần nhập, đánh liền 1..7. */
+        .mkt-so { font-size:11px; font-weight:700; color:var(--text-muted);
+                  text-align:center; line-height:22px; height:22px;
+                  background:var(--bg); border-radius:50%; }
     </style>
 </head>
 <body>
@@ -33,6 +38,7 @@
             <div class="nav-item" data-page="pages"><span class="nav-icon">📄</span> Page</div>
             <div class="nav-item" data-page="content"><span class="nav-icon">✍️</span> Content</div>
             <div class="nav-item" data-page="uid-groups"><span class="nav-icon">🔗</span> UID Nhóm</div>
+            <div class="nav-item" data-page="uid-market"><span class="nav-icon">🛒</span> UID Marketplace</div>
 
             <div class="nav-section">Lịch đăng</div>
             <div class="nav-item" data-page="lich-homestay"><span class="nav-icon">🏠</span> Lịch Homestay</div>
@@ -44,8 +50,12 @@
 
             <div class="nav-section">Vận hành</div>
             <div class="nav-item" data-page="tham-gia-nhom">
-                <span class="nav-icon">🔗</span> Tham gia nhóm
+                <span class="nav-icon">🔗</span> Tham gia nhóm Page
             </div>
+            <div class="nav-item" data-page="tham-gia-nhom-market">
+                <span class="nav-icon">🛒</span> Tham gia nhóm Market
+            </div>
+            <div class="nav-item" data-page="marketplace"><span class="nav-icon">🛒</span> Marketplace</div>
             <div class="nav-item" data-page="hanh-dong"><span class="nav-icon">⚡</span> Hành động</div>
             <div class="nav-item" data-page="logs"><span class="nav-icon">📋</span> Logs</div>
         </nav>
@@ -172,6 +182,54 @@
                 </div>
             </div>
 
+            <!-- ══ UID Marketplace ══════════════════════════ -->
+            <!-- Nhóm đã xin được duyệt cho Marketplace. Lưu chung bảng
+                 uid_groups với ma_nhom='MARKET'; tab UID Nhóm lọc ma_nhom=''
+                 nên hai danh sách không lẫn nhau. -->
+            <div class="page" id="page-uid-market" style="display:none">
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;max-width:680px">
+                    Nhóm đã được duyệt cho Marketplace. Dán link vào đây, mỗi dòng một nhóm —
+                    thêm <code>| Tên nhóm</code> phía sau nếu muốn ghi sẵn tên.
+                </p>
+                <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-start">
+                    <textarea class="input" id="uidm-dan" rows="3" style="flex:1;min-width:320px;
+                              font-family:var(--font-mono);font-size:11px"
+                              placeholder="https://www.facebook.com/groups/311375961636397/&#10;https://www.facebook.com/groups/homestaytimescity/ | Homestay Times City"></textarea>
+                    <button class="btn btn-primary" onclick="uidmThem()">+ Thêm</button>
+                    <button class="btn btn-ghost" onclick="loadUidMarket()" title="Refresh">🔄</button>
+                </div>
+                <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+                    <button class="btn btn-ghost" onclick="uidmQuet()" id="uidm-nut-quet"
+                            title="Mở từng trang nhóm để đọc tên và số thành viên">🔎 Lấy tên &amp; số thành viên</button>
+                    <select class="input" id="uidm-acc" style="width:180px;font-size:12px"></select>
+                    <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:5px">
+                        <input type="checkbox" id="uidm-quet-het"> quét lại cả dòng đã có tên
+                    </label>
+                    <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:5px"
+                           title="Mặc định Chrome chạy ẩn. Bật để nhìn tận mắt nó mở từng nhóm.">
+                        <input type="checkbox" id="uidm-hien-chrome"> hiện Chrome
+                    </label>
+                    <span id="uidm-quet-tt" style="font-size:12px;color:var(--text-muted)"></span>
+                    <span style="font-size:12px;color:var(--text-muted);margin-left:auto" id="uidm-count"></span>
+                </div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr>
+                                <th style="width:36px;text-align:center">#</th>
+                                <th style="text-align:center">UID / Link</th>
+                                <th>Tên nhóm</th>
+                                <th style="text-align:center;cursor:pointer;user-select:none"
+                                    onclick="uidmSapXep()" id="uidm-th-tv"
+                                    title="Bấm để sắp xếp: nhiều → ít, ít → nhiều, rồi về thứ tự nhập">Thành viên</th>
+                                <th style="width:60px"></th>
+                            </tr></thead>
+                            <tbody id="uidm-table"><tr><td colspan="5" class="loading"><span class="spin">↻</span></td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- ══ Lịch (template dùng chung) ═══════════════ -->
             <div class="page" id="page-lich-homestay" style="display:none" data-loai="homestay"></div>
             <div class="page" id="page-lich-thue"     style="display:none" data-loai="thue"></div>
@@ -185,7 +243,11 @@
             <!-- ══ PAGE: THAM GIA NHÓM ══════════════════════ -->
             <div class="page" id="page-tham-gia-nhom" style="display:none">
                 <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
-                    <button class="btn btn-primary" onclick="openQuickJoinSchedule()">⚡ Tạo lịch nhanh</button>
+                    <button class="btn btn-primary" onclick="jcChay('')" id="join-nut-chay"
+                            title="Chạy lần lượt từ trên xuống: xong nick này mới mở nick kế tiếp">▶ Chạy lần lượt</button>
+                    <button class="btn btn-ghost" onclick="jcDung('')" id="join-nut-dung"
+                            style="display:none;color:var(--danger)">■ Dừng</button>
+                    <button class="btn btn-ghost" onclick="openQuickJoinSchedule()">⚡ Tạo lịch nhanh</button>
                     <button class="btn btn-ghost" onclick="openAddJoinSchedule()">+ Thêm thủ công</button>
                     <button class="btn btn-ghost" onclick="loadJoinSchedules()" title="Refresh">🔄</button>
 
@@ -214,12 +276,123 @@
                                 <th style="text-align:center">Đã join</th>
                                 <th style="text-align:center">Lỗi</th>
                                 <th>Trạng thái</th>
-                                <th style="width:100px;text-align:center">Run</th>
+                                <th style="width:50px"></th>
                             </tr></thead>
                             <tbody id="join-table">
                                 <tr><td colspan="9" class="loading"><span class="spin">↻</span></td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══ Tham gia nhóm Market ═════════════════════ -->
+            <!-- Khác lịch "Tham gia nhóm" ở hai chỗ: lấy nhóm từ UID
+                 Marketplace, và KHÔNG switch sang Page — bài niêm yết chỉ đăng
+                 được dưới nick cá nhân nên chính nick đó phải là thành viên. -->
+            <div class="page" id="page-tham-gia-nhom-market" style="display:none">
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;max-width:700px">
+                    Cho nick cá nhân xin vào các nhóm ở <b>UID Marketplace</b>. Vào bằng
+                    chính nick, <b>không</b> chuyển sang Page — Marketplace chỉ đăng được
+                    dưới nick cá nhân.
+                </p>
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+                    <button class="btn btn-primary" onclick="jcChay('MARKET')" id="jm-nut-chay"
+                            title="Chạy lần lượt từ trên xuống: xong nick này mới mở nick kế tiếp">▶ Chạy lần lượt</button>
+                    <button class="btn btn-ghost" onclick="jcDung('MARKET')" id="jm-nut-dung"
+                            style="display:none;color:var(--danger)">■ Dừng</button>
+                    <button class="btn btn-ghost" onclick="jmTaoNhanh()">⚡ Tạo lịch cho mọi nick Active</button>
+                    <button class="btn btn-ghost" onclick="jmThem()">+ Thêm một nick</button>
+                    <button class="btn btn-ghost" onclick="loadJoinMarket()" title="Refresh">🔄</button>
+                    <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius)">
+                        <label class="toggle-switch" style="margin:0">
+                            <input type="checkbox" id="jm-headless" onchange="jmNhanHeadless()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <div style="font-size:12px;font-weight:600" id="jm-headless-label">Ẩn Chrome</div>
+                    </div>
+                    <span style="font-size:12px;color:var(--text-muted);margin-left:auto" id="jm-count"></span>
+                </div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr>
+                                <th>Tài khoản</th>
+                                <th style="text-align:center">Giờ chạy</th>
+                                <th style="text-align:center">Tổng</th>
+                                <th style="text-align:center">Mới join</th>
+                                <th style="text-align:center">Đã join</th>
+                                <th style="text-align:center">Lỗi</th>
+                                <th>Trạng thái</th>
+                                <th style="width:50px"></th>
+                            </tr></thead>
+                            <tbody id="jm-table">
+                                <tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══ Marketplace ══════════════════════════════ -->
+            <!-- Chỉ những ô CẦN NHẬP. Ảnh và Mô tả lấy thẳng từ thư viện Content
+                 nên không có mặt ở đây, và số thứ tự vì thế đánh liền 1..7 chứ
+                 không theo số ô của form Facebook. -->
+            <div class="page" id="page-marketplace" style="display:none">
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px;max-width:680px">
+                    Giá trị dùng chung cho mọi bài niêm yết. Ảnh và Mô tả lấy từ
+                    <b>Content</b> theo cột <b>Loại đăng</b> bên Tài khoản.
+                </p>
+
+                <div class="card" style="max-width:680px;padding:18px">
+                    <div style="display:grid;grid-template-columns:28px 130px 1fr;gap:12px 10px;align-items:center;font-size:12px">
+
+                        <span class="mkt-so">1</span>
+                        <label for="mkt-loai-tin">Loại niêm yết</label>
+                        <select class="input" id="mkt-loai-tin" onchange="mktLuu()">
+                            <option>Mặt hàng cần bán</option>
+                            <option>Xe cần bán</option>
+                            <option>Nhà cần bán hoặc cho thuê</option>
+                        </select>
+
+                        <span class="mkt-so">2</span>
+                        <label for="mkt-tieu-de">Tiêu đề</label>
+                        <input class="input" id="mkt-tieu-de" onchange="mktLuu()">
+
+                        <span class="mkt-so">3</span>
+                        <label for="mkt-gia-list">Giá</label>
+                        <input class="input" id="mkt-gia-list" onchange="mktLuu()">
+
+                        <span class="mkt-so">4</span>
+                        <label for="mkt-hang-muc">Hạng mục</label>
+                        <input class="input" id="mkt-hang-muc" onchange="mktLuu()">
+
+                        <span class="mkt-so">5</span>
+                        <label for="mkt-tinh-trang">Tình trạng</label>
+                        <select class="input" id="mkt-tinh-trang" onchange="mktLuu()">
+                            <option>Mới</option>
+                            <option>Đã qua sử dụng - Như mới</option>
+                            <option>Đã qua sử dụng - Tốt</option>
+                            <option>Đã qua sử dụng - Khá</option>
+                        </select>
+
+                        <span class="mkt-so">6</span>
+                        <label for="mkt-vi-tri">Vị trí</label>
+                        <input class="input" id="mkt-vi-tri" onchange="mktLuu()">
+
+                        <span class="mkt-so">7</span>
+                        <label for="mkt-so-nhom">Chọn nhóm</label>
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                            <input class="input" id="mkt-so-nhom" style="width:64px" onchange="mktLuu()">
+                            <span style="color:var(--text-muted);white-space:nowrap">nhóm khớp từ khoá</span>
+                            <input class="input" id="mkt-tu-khoa"
+                                   style="flex:1;min-width:150px" onchange="mktLuu()">
+                        </div>
+                    </div>
+
+                    <div style="display:flex;gap:8px;margin-top:16px;align-items:center">
+                        <button class="btn btn-primary" onclick="mktLuu(true)">Lưu</button>
+                        <span id="mkt-ket-qua" style="font-size:12px"></span>
                     </div>
                 </div>
             </div>

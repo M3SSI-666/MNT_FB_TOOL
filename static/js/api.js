@@ -65,7 +65,13 @@ const API = {
     logs: (loai, n=150) => API.get(`/api/logs/${loai}?n=${n}`),
 
     // Join groups
-    joinSchedules:  ()                              => API.get("/api/join/schedules"),
+    joinSchedules:  (nguon)                         => API.get("/api/join/schedules"
+                                                        + (nguon ? `?nguon=${encodeURIComponent(nguon)}` : "")),
+    joinGenMarket:  ()                              => API.post("/api/join/gen-quick-market", {}),
+    joinRunChain:   (nguon, headless)               => API.post("/api/join/run-chain", {nguon, headless}),
+    joinStopChain:  (nguon)                         => API.post("/api/join/stop-chain", {nguon}),
+    joinChainTT:    (nguon)                         => API.get("/api/join/chain-status"
+                                                        + (nguon ? `?nguon=${encodeURIComponent(nguon)}` : "")),
     joinAdd:        (data)                          => API.post("/api/join/add", data),
     joinGenQuick:   (data)                          => API.post("/api/join/gen-quick", data),
     joinRun:        (id, headless, dNew)            => API.post(`/api/join/${id}/run`, {headless, delay_new: dNew}),
@@ -89,6 +95,14 @@ const API = {
     // Settings
     settings:        ()           => API.get("/api/settings"),
     saveSettings:    (data)       => API.post("/api/settings/save", data),
+
+    // Marketplace — lưu vẫn dùng saveSettings, chỉ ĐỌC là riêng vì server
+    // phải trộn mặc định vào trước khi trả về.
+    mktCaiDat:       ()           => API.get("/api/marketplace/cai-dat"),
+    uidMarket:       ()           => API.get("/api/uid-groups/market"),
+    uidMarketThem:   (text)       => API.post("/api/uid-groups/market/them", {text}),
+    uidMarketQuet:   (data)       => API.post("/api/uid-groups/market/quet", data),
+    uidMarketQuetTT: ()           => API.get("/api/uid-groups/market/quet-trang-thai"),
 
     // Telegram
     tgThu:           (data)       => API.post("/api/telegram/thu", data),

@@ -46,6 +46,9 @@ from db import (
     TI_LE_COMMENT_MAC_DINH, accounts_theo_lich,
     # settings
     get_setting, set_setting, get_all_settings,
+    # marketplace
+    MKT_MAC_DINH, doc_cai_dat_mkt, tach_gia,
+    tach_link_nhom, get_uid_groups_market, them_nhom_market,
 )
 from utils import logger
 
@@ -2117,6 +2120,90 @@ def api_settings_save():
     return jsonify({"ok": True})
 
 
+# ── Marketplace ───────────────────────────────────────────────────
+@app.route("/api/uid-groups/market")
+def api_uid_market():
+    return jsonify({"ok": True, "data": get_uid_groups_market()})
+
+
+@app.route("/api/uid-groups/market/them", methods=["POST"])
+def api_uid_market_them():
+    """Dán một đống link nhóm vào, tách ra và thêm những cái chưa có.
+
+    Dán hàng loạt chứ không nhập từng dòng: Marketplace cho tối đa 20 nhóm mỗi
+    bài, mà nhóm được duyệt thì gom dần hàng tuần — nhập tay từng cái quá chậm.
+    """
+    body = request.json or {}
+    ds = tach_link_nhom(body.get("text", ""))
+    if not ds:
+        return jsonify({"ok": False, "error": "Không đọc được link nhóm nào"})
+    them, bo = them_nhom_market(ds)
+    return jsonify({"ok": True, "doc_duoc": len(ds), "them": them, "bo_qua": bo})
+
+
+@app.route("/api/uid-groups/market/quet", methods=["POST"])
+def api_uid_market_quet():
+    """Mở từng trang nhóm bằng một nick, đọc tên và số thành viên, ghi về DB.
+
+    Chạy ở tiến trình riêng như lịch tham gia nhóm: một lượt quét vài chục nhóm
+    mất mấy phút, giữ trong request là treo cả giao diện.
+    """
+    body = request.json or {}
+    acc  = (body.get("acc") or "").strip()
+    if not acc:
+        return jsonify({"ok": False, "error": "Chưa chọn tài khoản"})
+    if _quet_market_dang_chay():
+        return jsonify({"ok": False, "error": "Đang quét rồi"})
+    flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    env   = {**os.environ,
+             "QUET_ACC_NAME":      acc,
+             "QUET_HET":           "1" if body.get("quet_het") else "0",
+             "HEADLESS":           "false" if body.get("hien_chrome") else "true",
+             # Đường dẫn ĐẦY ĐỦ. Truyền tên trần thì log rơi ra thư mục mã
+             # nguồn thay vì logs/, và thoát khỏi mọi quy tắc dọn log sẵn có.
+             "SCHEDULER_LOG_FILE": str(LOG_DIR / "quet_market.log")}
+    set_setting("mkt_quet_trang_thai",
+                json.dumps({"xong": False, "tong": 0, "da": 0, "ok": 0, "dang": ""}))
+    proc = subprocess.Popen(_lenh_con("quet_nhom_market.py"),
+                            cwd=str(BASE_DIR), creationflags=flags, env=env)
+    (BASE_DIR / ".quet_market.pid").write_text(str(proc.pid))
+    return jsonify({"ok": True, "pid": proc.pid})
+
+
+def _quet_market_dang_chay() -> bool:
+    pf = BASE_DIR / ".quet_market.pid"
+    if not pf.exists():
+        return False
+    try:
+        return tien_trinh.con_song(int(pf.read_text().strip()))
+    except (ValueError, OSError):
+        return False
+
+
+@app.route("/api/uid-groups/market/quet-trang-thai")
+def api_uid_market_quet_trang_thai():
+    try:
+        tt = json.loads(get_setting("mkt_quet_trang_thai", "") or "{}")
+    except ValueError:
+        tt = {}
+    tt["dang_chay"] = _quet_market_dang_chay()
+    return jsonify({"ok": True, "data": tt})
+
+
+@app.route("/api/marketplace/cai-dat")
+def api_mkt_cai_dat():
+    """Cài đặt Marketplace đã trộn mặc định, kèm danh sách giá đã tách sẵn.
+
+    Giao diện KHÔNG tự giữ bản mặc định riêng — hỏi ở đây để chỉ có một nguồn
+    duy nhất (`db.MKT_MAC_DINH`). `gia` trả về để ô nhập hiện ngay "sẽ bốc
+    ngẫu nhiên trong N giá", người dùng gõ sai định dạng là thấy liền.
+    """
+    cd = doc_cai_dat_mkt()
+    return jsonify({"ok": True, "data": cd,
+                    "gia": tach_gia(cd["mkt_gia_list"]),
+                    "mac_dinh": MKT_MAC_DINH})
+
+
 # ── Telegram ──────────────────────────────────────────────────────
 @app.route("/api/telegram/thu", methods=["POST"])
 def api_telegram_thu():
@@ -2264,11 +2351,15 @@ def _reset_stale_join():
 
 @app.route("/api/join/schedules")
 def api_join_schedules():
+    """Lịch tham gia nhóm. `nguon=MARKET` lấy nhóm đã duyệt Marketplace, bỏ
+    trống lấy sheet UID Nhóm — hai danh sách nằm ở hai tab riêng."""
     try:
         _reset_stale_join()
         from db import _conn
+        nguon = (request.args.get("nguon") or "").strip()
         rows = [dict(r) for r in _conn().execute(
-            "SELECT * FROM join_schedules ORDER BY id DESC"
+            "SELECT * FROM join_schedules WHERE COALESCE(nguon,'')=? ORDER BY id DESC",
+            (nguon,)
         ).fetchall()]
         # Gắn trạng thái running per-row
         for r in rows:
@@ -2284,16 +2375,21 @@ def api_join_add():
     ten_acc  = body.get("ten_acc","").strip()
     ten_page = body.get("ten_page","").strip()
     gio_chay = body.get("gio_chay","").strip()
-    if not ten_acc or not ten_page:
-        return jsonify({"ok": False, "error": "Thiếu Acc hoặc Page"})
+    nguon    = (body.get("nguon") or "").strip()
+    if not ten_acc:
+        return jsonify({"ok": False, "error": "Thiếu Acc"})
+    # Nhóm Marketplace vào bằng nick cá nhân nên KHÔNG cần Page.
+    if nguon != "MARKET" and not ten_page:
+        return jsonify({"ok": False, "error": "Thiếu Page"})
     try:
         from db import _conn, get_page_by_name
-        page_info = get_page_by_name(ten_page)
+        page_info = get_page_by_name(ten_page) if ten_page else None
         page_uid  = page_info.get("page_uid","") if page_info else ""
         with _conn() as con:
             cur = con.execute(
-                "INSERT INTO join_schedules (ten_acc,ten_page,page_uid,gio_chay,created_at) VALUES (?,?,?,?,datetime('now','localtime'))",
-                (ten_acc, ten_page, page_uid, gio_chay)
+                "INSERT INTO join_schedules (ten_acc,ten_page,page_uid,gio_chay,nguon,created_at) "
+                "VALUES (?,?,?,?,?,datetime('now','localtime'))",
+                (ten_acc, ten_page, page_uid, gio_chay, nguon)
             )
         return jsonify({"ok": True, "id": cur.lastrowid})
     except Exception as e:
@@ -2321,9 +2417,12 @@ def api_join_gen_quick():
                 ten_page = (acc.get("ten_page") or "").strip()
                 if not ten_page:
                     continue
-                # Bỏ qua nếu đã có lịch cho cặp này
+                # Bỏ qua nếu đã có lịch cho cặp này. Phải lọc cả `nguon`, nếu
+                # không thì một lịch Marketplace của cùng acc sẽ bị tính là
+                # "đã có" và acc đó không bao giờ được tạo lịch UID Nhóm.
                 existing = con.execute(
-                    "SELECT id FROM join_schedules WHERE ten_acc=? AND ten_page=?",
+                    "SELECT id FROM join_schedules "
+                    "WHERE ten_acc=? AND ten_page=? AND COALESCE(nguon,'')=''",
                     (ten_acc, ten_page)
                 ).fetchone()
                 if existing:
@@ -2340,6 +2439,132 @@ def api_join_gen_quick():
         return jsonify({"ok": True, "created": created, "skipped": skipped})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/join/gen-quick-market", methods=["POST"])
+def api_join_gen_quick_market():
+    """Mỗi nick Active → 1 lịch tham gia các nhóm đã duyệt Marketplace.
+
+    KHÔNG đòi acc phải có Page như lịch UID Nhóm: nhóm Marketplace vào bằng
+    chính nick cá nhân, Page không liên quan. Đòi Page ở đây là loại oan những
+    nick chưa gán Page, mà đó lại chính là nick chỉ dùng cho Marketplace.
+    """
+    try:
+        from db import _conn, get_uid_groups_market
+        so_nhom = len(get_uid_groups_market())
+        if not so_nhom:
+            return jsonify({"ok": False,
+                            "error": "Chưa có nhóm nào trong UID Marketplace"})
+        created = skipped = 0
+        with _conn() as con:
+            for acc in get_accounts(trang_thai="Active"):
+                ten_acc = acc["ten_acc"]
+                if con.execute("SELECT id FROM join_schedules "
+                               "WHERE ten_acc=? AND COALESCE(nguon,'')='MARKET'",
+                               (ten_acc,)).fetchone():
+                    skipped += 1
+                    continue
+                con.execute(
+                    "INSERT INTO join_schedules "
+                    "(ten_acc,ten_page,page_uid,gio_chay,trang_thai,nguon,created_at) "
+                    "VALUES (?,'','','','Chờ','MARKET',datetime('now','localtime'))",
+                    (ten_acc,))
+                created += 1
+        return jsonify({"ok": True, "created": created, "skipped": skipped,
+                        "so_nhom": so_nhom})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+def _chain_pid_file(nguon: str) -> Path:
+    return BASE_DIR / f".join_chain_{nguon or 'UID'}.pid"
+
+
+def _chain_dang_chay(nguon: str) -> bool:
+    pf = _chain_pid_file(nguon)
+    if not pf.exists():
+        return False
+    try:
+        if _pid_alive(int(pf.read_text().strip())):
+            return True
+    except (ValueError, OSError):
+        pass
+    pf.unlink(missing_ok=True)
+    return False
+
+
+@app.route("/api/join/run-chain", methods=["POST"])
+def api_join_run_chain():
+    """Chạy LẦN LƯỢT mọi lịch của một nguồn, từ trên xuống dưới.
+
+    Một nick xong mới mở nick kế tiếp — không chạy song song: mỗi phiên là một
+    Chromium ~1,1 GB, mà máy đã 11,6/15,9 GB với 5 runner.
+    """
+    body  = request.json or {}
+    nguon = (body.get("nguon") or "").strip()
+    if _chain_dang_chay(nguon):
+        return jsonify({"ok": False, "error": "Đang chạy rồi"})
+    try:
+        from db import _conn
+        n = _conn().execute(
+            "SELECT COUNT(*) FROM join_schedules WHERE COALESCE(nguon,'')=?",
+            (nguon,)).fetchone()[0]
+        if not n:
+            return jsonify({"ok": False, "error": "Chưa có lịch nào"})
+        delay_new = int(body.get("delay_new",
+                                 get_setting("join_delay_new", None) or JOIN_NGHI_MOI_MAC_DINH))
+        set_setting("join_delay_new", str(delay_new))
+        flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        env   = {**os.environ,
+                 "JOIN_NGUON":         nguon,
+                 "JOIN_DELAY_NEW":     str(delay_new),
+                 "HEADLESS":           "true" if body.get("headless", True) else "false",
+                 "SCHEDULER_LOG_FILE": JOIN_LOG_FILE}
+        proc = subprocess.Popen(_lenh_con("join_chain_worker.py"),
+                                cwd=str(BASE_DIR), creationflags=flags, env=env)
+        _chain_pid_file(nguon).write_text(str(proc.pid))
+        return jsonify({"ok": True, "pid": proc.pid, "tong": n})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/join/stop-chain", methods=["POST"])
+def api_join_stop_chain():
+    """Dừng cả chuỗi. Diệt CẢ CÂY tiến trình — Chromium là con của worker, diệt
+    mỗi worker thì trình duyệt ở lại ăn RAM và giữ khoá profile."""
+    nguon = ((request.json or {}).get("nguon") or "").strip()
+    pf    = _chain_pid_file(nguon)
+    da    = 0
+    if pf.exists():
+        try:
+            da = tien_trinh.diet_cay(int(pf.read_text().strip()))
+        except (ValueError, OSError):
+            pass
+        pf.unlink(missing_ok=True)
+    # Dọn file pid của lịch đang dở và trả nó về Chờ.
+    try:
+        from db import _conn
+        with _conn() as con:
+            for r in con.execute(
+                    "SELECT id FROM join_schedules "
+                    "WHERE COALESCE(nguon,'')=? AND trang_thai='Đang chạy'",
+                    (nguon,)).fetchall():
+                _join_pid_file(r[0]).unlink(missing_ok=True)
+                con.execute("UPDATE join_schedules SET trang_thai='Chờ' WHERE id=?", (r[0],))
+    except Exception:
+        pass
+    return jsonify({"ok": True, "da_diet": da})
+
+
+@app.route("/api/join/chain-status")
+def api_join_chain_status():
+    nguon = (request.args.get("nguon") or "").strip()
+    try:
+        tt = json.loads(get_setting(f"join_chain_tt_{nguon or 'UID'}", "") or "{}")
+    except ValueError:
+        tt = {}
+    tt["dang_chay"] = _chain_dang_chay(nguon)
+    return jsonify({"ok": True, "data": tt})
 
 
 @app.route("/api/join/<int:sched_id>/run", methods=["POST"])
@@ -2360,7 +2585,8 @@ def api_join_run(sched_id):
         env        = {**os.environ,
                       "JOIN_SCHEDULE_ID":   str(sched_id),
                       "JOIN_ACC_NAME":      row["ten_acc"],
-                      "JOIN_PAGE_UID":      row["page_uid"],
+                      "JOIN_PAGE_UID":      row["page_uid"] or "",
+                      "JOIN_NGUON":         row.get("nguon") or "",
                       "HEADLESS":           "true" if headless else "false",
                       "JOIN_DELAY_NEW":     str(delay_new),
                       "JOIN_DELAY_SKIP":    str(delay_skip),

@@ -48,8 +48,7 @@ from config import HEADLESS
 from utils import logger, ComposerBiChan, jitter_ms, CookieDeadError, LoiBuoc
 from fb_common import (kiem_vi_pham, composer_bi_chan, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, danh_dau_da_dang, browser_launch_kwargs,
-                       human_delay, jwait, clipboard_paste,
-                       view_stories, browse_and_like)
+                       human_delay, jwait, clipboard_paste, browse_and_like)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -77,13 +76,12 @@ GIOI_HAN_NHOM_CHEO = 10
 
 # Vỏ mỏng gọi sang fb_common — TRƯỚC ĐÂY LÀ NĂM BẢN SAO NGUYÊN VĂN.
 # Hai file poster mỗi file giữ một bộ giống hệt nhau, nên mỗi lần vá phải nhớ vá
-# cả hai. Thực tế đã trôi: bản `_view_stories` ở đây chờ bằng
+# cả hai. Thực tế đã trôi: bản xem story ở đây chờ bằng
 # `page.wait_for_timeout(1500)` còn bản kia dùng `_jwait(page, 1500)` — lệch đúng
 # một dòng, đủ để hai nick hành xử khác nhau mà không ai biết.
 _human_delay     = human_delay
 _jwait           = jwait
 _clipboard_paste = clipboard_paste
-_view_stories    = view_stories
 _browse_and_like = browse_and_like
 
 
@@ -241,7 +239,7 @@ async def _run_page_via(
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 1 — Login vào acc cá nhân
         # ════════════════════════════════════════════════════════════════
-        logger.info(f"  [1/7] 🔐 Login acc cá nhân...")
+        logger.info(f"  [1/6] 🔐 Login acc cá nhân...")
         await page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=30000)
         await _human_delay(2000, 3000)
 
@@ -258,29 +256,24 @@ async def _run_page_via(
             logger.info("  🍪 Đã đóng hộp xin phép cookie")
 
         # ════════════════════════════════════════════════════════════════
-        # BƯỚC 2 — Xem story 15-20s
+        # BƯỚC 2 — Scroll newsfeed 20-30s (không like — đang ở trang cá nhân)
         # ════════════════════════════════════════════════════════════════
-        logger.info(f"  [2/7] 📖 Xem story...")
-        await _view_stories(page, duration_sec=random.randint(15, 20))
-
-        # ════════════════════════════════════════════════════════════════
-        # BƯỚC 3 — Scroll newsfeed 20-30s (không like — đang ở trang cá nhân)
-        # ════════════════════════════════════════════════════════════════
+        # KHÔNG còn bước xem story: Duong chỉ giữ story ở phiên NUÔI NICK.
         scroll_sec = random.randint(20, 30)
-        logger.info(f"  [3/7] 📜 Scroll newsfeed {scroll_sec}s...")
+        logger.info(f"  [2/6] 📜 Scroll newsfeed {scroll_sec}s...")
         await _browse_and_like(page, duration_sec=scroll_sec, max_likes=0)
 
         # ════════════════════════════════════════════════════════════════
-        # BƯỚC 4 — Chui vào Page, chiếm quyền Page
+        # BƯỚC 3 — Chui vào Page, chiếm quyền Page
         # ════════════════════════════════════════════════════════════════
-        logger.info(f"  [4/7] 🔄 Switch → Page {page_uid}...")
+        logger.info(f"  [3/6] 🔄 Switch → Page {page_uid}...")
         await _switch_to_page(page, ctx, page_uid)
 
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 5 — Chui vào nhóm đầu, paste nội dung + upload ảnh
         # ════════════════════════════════════════════════════════════════
         group_url = f"https://www.facebook.com/groups/{first_group_uid}/"
-        logger.info(f"  [5/7] 📌 Vào nhóm: {group_url}")
+        logger.info(f"  [4/6] 📌 Vào nhóm: {group_url}")
         await page.goto(group_url, wait_until="domcontentloaded", timeout=30000)
         await _human_delay(3000, 5000)
 
@@ -405,7 +398,7 @@ async def _run_page_via(
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 6 — Thêm nhóm → gõ từ khóa → tick → Đăng
         # ════════════════════════════════════════════════════════════════
-        logger.info(f"  [6/7] ➕ Thêm nhóm → tìm \"{search_kw}\" → tick → Đăng...")
+        logger.info(f"  [5/6] ➕ Thêm nhóm → tìm \"{search_kw}\" → tick → Đăng...")
 
         # Click "+ Thêm nhóm"
         await _human_delay(1000, 1500)
@@ -706,7 +699,7 @@ async def _run_page_via(
         # BƯỚC 7 — Scroll 15-30s + like tối đa 1 bài (đang là Page) rồi đóng Chrome
         # ════════════════════════════════════════════════════════════════
         cooldown_sec = random.randint(15, 30)
-        logger.info(f"  [7/7] 📜 Cooldown {cooldown_sec}s + like...")
+        logger.info(f"  [6/6] 📜 Cooldown {cooldown_sec}s + like...")
         await _browse_and_like(page, duration_sec=cooldown_sec, max_likes=1)
 
         logger.info(f"  ✅ Đóng Chrome")
@@ -780,9 +773,9 @@ async def _run_page_wall(
         if await dong_hop_cookie(page):
             logger.info("  🍪 Đã đóng hộp xin phép cookie")
 
-        # ── BƯỚC 2 — Warm-up nhẹ (story + scroll, không like — trang cá nhân) ─
-        logger.info(f"  [2/5] 📖 Xem story + scroll newsfeed...")
-        await _view_stories(page, duration_sec=random.randint(10, 15))
+        # ── BƯỚC 2 — Warm-up nhẹ (scroll, không like — đang ở trang cá nhân) ──
+        # KHÔNG còn bước xem story: Duong chỉ giữ story ở phiên NUÔI NICK.
+        logger.info(f"  [2/5] 📜 Scroll newsfeed...")
         await _browse_and_like(page, duration_sec=random.randint(15, 25), max_likes=0)
 
         # ── BƯỚC 3 — Switch sang Page actor ───────────────────────────────────

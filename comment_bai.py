@@ -49,7 +49,7 @@ from utils import logger, CookieDeadError
 from cookie_exporter import load_cookie
 from fb_common import (kiem_vi_pham, chua_dang_nhap, browser_launch_kwargs, find_profile_dir, human_delay,
                        dong_dialog_canh_bao, bat_dau_canh_dialog, dong_hop_cookie,
-                       view_stories, browse_and_like, ghi_clipboard, danh_dau_da_dang)
+                       browse_and_like, ghi_clipboard, danh_dau_da_dang)
 from nuoi_nick import pick_messages, is_messaging_restricted
 import db
 
@@ -88,11 +88,11 @@ NGHI_GIUA_2_CAU = (5, 8)
 
 # Khởi động và kết phiên BÁM ĐÚNG luồng đăng bài Page — cùng một hành vi thì
 # cùng một khoảng thời gian, không có lý do gì để chỉnh riêng. Xem các bước
-# [2/7], [3/7], [7/7] trong page_via_poster.py; sửa ở đó thì sửa cả ở đây.
-STORY_GIAY = (15, 20)     # [2/7] xem story
-FEED_GIAY  = (20, 30)     # [3/7] lướt newsfeed, KHÔNG like
-KET_GIAY   = (15, 30)     # [7/7] lướt cuối phiên
-KET_LIKE   = 1            # [7/7] like tối đa 1 bài — chỗ DUY NHẤT có like
+# [2/6], [6/6] trong page_via_poster.py; sửa ở đó thì sửa cả ở đây.
+# KHÔNG còn xem story: Duong chỉ giữ story ở phiên NUÔI NICK.
+FEED_GIAY  = (20, 30)     # [2/6] lướt newsfeed, KHÔNG like
+KET_GIAY   = (15, 30)     # [6/6] lướt cuối phiên
+KET_LIKE   = 1            # [6/6] like tối đa 1 bài — chỗ DUY NHẤT có like
 
 
 # Trần cứng cho một phiên comment.
@@ -286,7 +286,7 @@ async def _tim_o_comment(page):
 async def _khoi_dong(page, ctx, page_uid: str = "") -> bool:
     """
     Khởi động phiên, y hệt luồng đăng bài Page:
-        story cá nhân → newsfeed cá nhân → CHUYỂN sang Page được phân công
+        newsfeed cá nhân → CHUYỂN sang Page được phân công
 
     Bước cuối là **chiếm quyền hoạt động của Page** (bấm nút Chuyển + inject
     `i_user`), không phải chỉ ghé xem — sau bước này mọi comment đi ra dưới danh
@@ -307,11 +307,10 @@ async def _khoi_dong(page, ctx, page_uid: str = "") -> bool:
                         wait_until="domcontentloaded", timeout=30000)
         await human_delay(1500, 2500)
         await dong_dialog_canh_bao(page)
-        await view_stories(page, duration_sec=random.randint(*STORY_GIAY))
         await browse_and_like(page, duration_sec=random.randint(*FEED_GIAY),
                               max_likes=0)
     except Exception as e:
-        logger.warning(f"    ⚠️  Story/newsfeed không trọn vẹn: {e}")
+        logger.warning(f"    ⚠️  Lướt newsfeed không trọn vẹn: {e}")
 
     if not page_uid:
         logger.info("    ⏭️  Slot không có Page được phân công — comment bằng acc cá nhân")

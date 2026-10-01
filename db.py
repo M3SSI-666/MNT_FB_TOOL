@@ -6,6 +6,7 @@ Thay thế hoàn toàn Google Sheets, không cần internet để đọc/ghi dat
 import sqlite3
 import os
 import re
+import unicodedata
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -353,6 +354,15 @@ def init_db():
         _add_col("uid_groups", "order_idx", "order_idx INTEGER DEFAULT 0")
         # Cột ghi chú "Acc quản lý" cho pages — chỉ để note, không dùng khi đăng bài.
         _add_col("pages",      "acc_quan_ly", "acc_quan_ly TEXT DEFAULT ''")
+
+        # Nguồn nhóm của một lịch tham gia nhóm:
+        #   ''        sheet UID Nhóm — vào nhóm với VAI PAGE (switch sang Page
+        #             trước khi bấm Tham gia), như từ trước tới nay.
+        #   'MARKET'  nhóm đã duyệt Marketplace — vào bằng CHÍNH NICK CÁ NHÂN,
+        #             KHÔNG switch sang Page. Marketplace chỉ đăng được dưới
+        #             nick cá nhân, Page vào nhóm thì bài niêm yết vẫn không
+        #             đăng được vào đó.
+        _add_col("join_schedules", "nguon", "nguon TEXT DEFAULT ''")
 
         # ── Sức khoẻ acc (xem suc_khoe_acc.py) ──────────────────────────
         # `lich_su_phien` là chuỗi "o"/"x" của tối đa 20 phiên đăng gần nhất —
@@ -1775,6 +1785,245 @@ def set_setting(key: str, value: str):
 def get_all_settings() -> dict:
     with _conn() as con:
         return {r["key"]: r["value"] for r in con.execute("SELECT * FROM settings").fetchall()}
+
+
+# ═══════════════════════════════════════════════════════════════
+# Marketplace
+# ═══════════════════════════════════════════════════════════════
+# Form "Tạo bài niêm yết" của Facebook có 8 ô. Hai ô lấy thẳng từ thư viện
+# Content nên KHÔNG có mặt ở đây:
+#
+#   [2] Ảnh   -> content.link_anh
+#   [7] Mô tả -> content.noi_dung
+#
+# Sáu ô còn lại là giá trị dùng chung cho mọi bài, nên nằm ở bảng `settings`.
+# Nhờ vậy bảng `content` không phải thêm cột nào.
+#
+# Mặc định để ở ĐÂY chứ không để trong JavaScript: bộ đăng bài (Python) và
+# giao diện (JS) phải nhìn thấy CÙNG một mặc định. Chép làm hai bản thì sớm
+# muộn cũng lệch, và lúc đó người dùng thấy một đằng còn Facebook nhận một nẻo.
+MKT_MAC_DINH = {
+    "mkt_loai_tin":   "Mặt hàng cần bán",   # [1] không phải Xe / Nhà cần bán
+    "mkt_tieu_de":    "",                   # [3] một tiêu đề dùng chung
+    "mkt_gia_list":   "86, 68, 8686, 8386",  # [4] bốc ngẫu nhiên một giá
+    "mkt_hang_muc":   "Hộ gia đình",        # [5]
+    "mkt_tinh_trang": "Mới",                # [6]
+    "mkt_vi_tri":     "Hai Bà Trưng",       # [8] gõ rồi chọn gợi ý dòng đầu
+    "mkt_so_nhom":    "20",                 # Facebook cho tick tối đa 20 nhóm
+    # Chỉ tick nhóm có MỘT TRONG các từ khoá này trong tên, cách nhau bằng dấu
+    # phẩy. Bước chọn nhóm của Marketplace KHÔNG có ô tìm kiếm (đo trên nick
+    # Sa Tran Anh: 28 nhóm hiện thẳng ra thành danh sách tick), nên không mượn
+    # được cách của luồng đăng nhóm cũ — phải tự đọc tên và tự lọc.
+    #
+    # Vì sao nhiều từ khoá chứ không phải một: đo thật thấy 3 nhóm bị loại oan
+    # chỉ vì chính tả — "Chợ Làng Time City" và "CHỢ - TIME CITY - HOÀ BÌNH
+    # GREEN" thiếu chữ "s", "Chợ cư dân làng Times" thiếu chữ "City". Ba nhóm
+    # đó cộng lại 56,6K thành viên.
+    #
+    # KHÔNG để sẵn "Park Hill": trong danh sách thật nó không thêm nhóm nào mới
+    # (các nhóm Park Hill đều đã khớp "Times City" hoặc "Time City") mà lại kéo
+    # về nguy cơ nhóm Park Hill ở khu khác. Cần thì tự thêm.
+    "mkt_tu_khoa":    "Times City, Time City, làng Times",
+}
+
+
+# Nhóm đã được duyệt cho Marketplace, do Duong tự vào từng nhóm xin duyệt rồi
+# lưu lại. Nằm CHUNG bảng `uid_groups` với mã riêng, để dùng lại nguyên bộ
+# thêm/sửa/xoá/kéo sắp xếp. Tab "UID Nhóm" vốn đã lọc `ma_nhom === ""` nên hai
+# danh sách không lẫn vào nhau.
+MA_NHOM_MARKET = "MARKET"
+
+# facebook.com/groups/<số hoặc slug>. Nhận cả link có ?ref=..., có hay không có
+# https, có hay không có www, và cả dòng chỉ ghi mỗi UID.
+_RE_LINK_NHOM = re.compile(
+    r"(?:facebook\.com/groups/)([A-Za-z0-9._-]+)", re.I)
+_RE_UID_TRAN = re.compile(r"^\s*(\d{6,})\s*$")
+
+
+def tach_link_nhom(text: str) -> list[dict]:
+    """Tách danh sách nhóm từ một đống chữ dán vào.
+
+    Mỗi dòng: một link nhóm, hoặc một UID trần, tuỳ chọn thêm ` | Tên nhóm`.
+    Bỏ trùng theo uid, giữ nguyên thứ tự dán.
+    """
+    ra, da_co = [], set()
+    for dong in (text or "").splitlines():
+        dong = dong.strip()
+        if not dong:
+            continue
+        ten = ""
+        if "|" in dong:
+            dong, _, ten = dong.partition("|")
+            dong, ten = dong.strip(), ten.strip()
+        m = _RE_LINK_NHOM.search(dong) or _RE_UID_TRAN.match(dong)
+        if not m:
+            continue
+        uid = m.group(1)
+        if uid in da_co:
+            continue
+        da_co.add(uid)
+        ra.append({"uid": uid, "ten_nhom": ten,
+                   "link_url": f"https://www.facebook.com/groups/{uid}/"})
+    return ra
+
+
+def get_uid_groups_market() -> list[dict]:
+    with _conn() as con:
+        return [dict(r) for r in con.execute(
+            "SELECT * FROM uid_groups WHERE ma_nhom=? ORDER BY order_idx, id",
+            (MA_NHOM_MARKET,)).fetchall()]
+
+
+def them_nhom_market(records: list[dict]) -> tuple[int, int]:
+    """Thêm nhóm Marketplace, bỏ qua uid đã có. Trả về (thêm, bỏ qua)."""
+    them = bo = 0
+    with _conn() as con:
+        da_co = {(r["uid"] or "").strip() for r in con.execute(
+            "SELECT uid FROM uid_groups WHERE ma_nhom=?", (MA_NHOM_MARKET,)).fetchall()}
+        nxt = con.execute(
+            "SELECT COALESCE(MAX(order_idx), -1) + 1 FROM uid_groups WHERE ma_nhom=?",
+            (MA_NHOM_MARKET,)).fetchone()[0]
+        for r in records:
+            uid = (r.get("uid") or "").strip()
+            if not uid or uid in da_co:
+                bo += 1
+                continue
+            da_co.add(uid)
+            con.execute(
+                "INSERT INTO uid_groups(ma_nhom, uid, ten_nhom, link_url, order_idx) "
+                "VALUES(?,?,?,?,?)",
+                (MA_NHOM_MARKET, uid, (r.get("ten_nhom") or "").strip(),
+                 (r.get("link_url") or "").strip(), nxt))
+            nxt += 1
+            them += 1
+    return them, bo
+
+
+def chuan_hoa(s: str) -> str:
+    """Đưa tên nhóm về dạng so khớp được: bỏ dấu, bỏ hoa thường, bỏ mọi ký tự
+    không phải chữ-số.
+
+    Bỏ khoảng trắng và ký tự đặc biệt vì tên nhóm đầy gạch ngang, emoji và dấu
+    tích: "MUA BÁN NHÀ TIMES CITY-PARK HILL-PARK PREMIUM✅". Bỏ dấu tiếng Việt
+    để "làng Times" khớp cả "Lang Times".
+    """
+    s = (s or "").lower().replace("đ", "d")
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^a-z0-9]", "", s)
+
+
+def tach_tu_khoa(chuoi: str) -> list[str]:
+    """Tách ô Từ khoá thành danh sách — khớp MỘT cái là đủ."""
+    ra, da_co = [], set()
+    for phan in (chuoi or "").split(","):
+        p = phan.strip()
+        k = chuan_hoa(p)
+        if k and k not in da_co:
+            da_co.add(k)
+            ra.append(p)
+    return ra
+
+
+def khop_tu_khoa(ten_nhom: str, chuoi_tu_khoa: str) -> bool:
+    """Tên nhóm có chứa ít nhất một từ khoá không.
+
+    Từ khoá rỗng trả về False chứ KHÔNG phải True: rỗng nghĩa là chưa cấu hình,
+    mà coi đó là "khớp tất cả" thì tick sạch mọi nhóm — đúng cái phải tránh.
+    """
+    ten = chuan_hoa(ten_nhom)
+    if not ten:
+        return False
+    return any(chuan_hoa(tk) in ten for tk in tach_tu_khoa(chuoi_tu_khoa))
+
+
+# "43,5K thành viên" · "3,6K thành viên" · "950 thành viên" · "1.234 thành viên"
+_RE_TV = re.compile(r"([\d.,]+)\s*([KMkm])?\s*(?:thành viên|members)", re.I)
+
+
+def doc_so_thanh_vien(mo_ta: str) -> int:
+    """Số thành viên đọc từ dòng mô tả nhóm. Không đọc được thì 0.
+
+    Facebook viết theo kiểu Việt Nam: dấu PHẨY là dấu thập phân khi có hậu tố
+    K/M ("43,5K" = 43.500), còn dấu CHẤM là phân cách hàng nghìn khi không có
+    hậu tố ("1.234"). Lẫn hai quy ước này là sai số nghìn lần.
+    """
+    m = _RE_TV.search(mo_ta or "")
+    if not m:
+        return 0
+    so, hau_to = m.group(1), (m.group(2) or "").upper()
+    try:
+        if hau_to:
+            n = float(so.replace(".", "").replace(",", "."))
+            return int(n * (1_000_000 if hau_to == "M" else 1_000))
+        return int(re.sub(r"[.,]", "", so) or 0)
+    except ValueError:
+        return 0
+
+
+def chon_nhom_marketplace(nhom: list[dict], chuoi_tu_khoa: str,
+                          so_toi_da: int) -> tuple[list[dict], list[dict]]:
+    """Chọn nhóm để tick. Trả về (chọn, bị loại).
+
+    `nhom`: [{"ten": <cả dòng chữ của nhóm>, ...}] theo đúng thứ tự trên màn hình.
+
+    Khớp nhiều hơn hạn mức thì ƯU TIÊN NHÓM ĐÔNG THÀNH VIÊN — số đó đọc được
+    ngay từ DOM nên không phải đoán. Đo thật trên nick Sa Tran Anh: 23 nhóm khớp
+    mà Facebook chỉ cho 20, nên chuyện phải bỏ bớt là bình thường chứ không hiếm.
+    """
+    khop = [n for n in nhom if khop_tu_khoa(n.get("ten", ""), chuoi_tu_khoa)]
+    loai = [n for n in nhom if n not in khop]
+    # sort ổn định: cùng số thành viên thì giữ nguyên thứ tự Facebook đưa ra.
+    khop.sort(key=lambda n: -doc_so_thanh_vien(n.get("ten", "")))
+    n = max(0, int(so_toi_da or 0))
+    return khop[:n], loai + khop[n:]
+
+
+def doc_cai_dat_mkt() -> dict:
+    """Cài đặt Marketplace, đã trộn sẵn mặc định cho khoá chưa từng lưu.
+
+    Ô để trống (hoặc chỉ có dấu cách) cũng coi như chưa đặt và lấy mặc định —
+    trừ Tiêu đề, vì mặc định của nó vốn đã là rỗng.
+    """
+    s = get_all_settings()
+    return {k: ((s.get(k) or "").strip() or v) for k, v in MKT_MAC_DINH.items()}
+
+
+def loai_content_cua_acc(loai_dang: str) -> str:
+    """Acc này lấy content của loại nào: 'homestay' / 'thue' / 'ban' / ''.
+
+    Marketplace KHÔNG có bảng phân công riêng — cột `loai_dang` bên Tài khoản
+    đã nói acc phụ trách loại nào rồi. Acc "X_" vừa đăng vừa comment nhưng vẫn
+    chỉ thuộc đúng một loại content, nên vẫn ra một kết quả.
+
+    Đây là chiều ngược của `khop_loai_lich`, và cùng đọc `LOAI_LICH_MAP` để hai
+    chiều không bao giờ lệch nhau.
+    """
+    v = (loai_dang or "").strip()
+    for loai_lich, nhan in LOAI_LICH_MAP.items():
+        if v in nhan:
+            return loai_lich
+    return ""
+
+
+def tach_gia(chuoi: str) -> list[str]:
+    """Tách ô Giá thành danh sách để bốc ngẫu nhiên.
+
+    Nhận cả "86, 68, 8686" lẫn xuống dòng lẫn "86đ" — chỉ giữ chữ số, vì ô Giá
+    của Facebook không nhận ký tự khác.
+
+    BỎ TRÙNG: gõ nhầm hai lần cùng một giá thì giá đó được bốc gấp đôi, mà
+    người gõ không hề biết mình vừa làm lệch tỉ lệ.
+
+    Trả về chuỗi chứ không phải số: giá trị này đem gõ thẳng vào ô nhập.
+    """
+    ra, da_co = [], set()
+    for phan in re.split(r"[^0-9]+", chuoi or ""):
+        so = phan.lstrip("0") or phan          # "086" -> "86", nhưng "0" vẫn là "0"
+        if so and so not in da_co:
+            da_co.add(so)
+            ra.append(so)
+    return ra
 
 
 # ═══════════════════════════════════════════════════════════════

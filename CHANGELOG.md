@@ -10,6 +10,74 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.30.0 — 01/10/2026
+
+**Bỏ bước lướt story ở phiên đăng bài và comment**
+
+Mỗi phiên trước đây mở đầu bằng xem story 15–20 giây rồi mới vào việc. Nay bỏ
+hẳn, chỉ còn lướt newsfeed. Mỗi phiên **ngắn đi 15–20 giây** — với nhịp hiện tại
+là hơn 800 phiên mỗi ngày.
+
+Phiên **nuôi nick vẫn xem story như cũ**: ở đó xem story chính là việc cần làm,
+không phải bước khởi động.
+
+---
+
+**Mới: đăng Marketplace — phần chuẩn bị**
+
+Thêm ba mục trong phần mềm. Phần đăng bài tự động chưa có, sẽ làm tiếp.
+
+**`Vận hành → Marketplace`** — bảy ô cài đặt dùng chung cho mọi bài niêm yết:
+loại niêm yết, tiêu đề, giá, hạng mục, tình trạng, vị trí, và số nhóm kèm từ
+khoá lọc. Ảnh và mô tả lấy thẳng từ thư viện Content theo cột **Loại đăng** của
+tài khoản, nên không phải khai báo lại.
+
+Ô **Giá** nhận nhiều giá cách nhau bằng dấu phẩy, mỗi bài bốc ngẫu nhiên một
+giá. Ô **Từ khoá** cũng nhận nhiều từ: đo thật trên nick Sa Tran Anh, chỉ dùng
+một từ khoá `Times City` thì ba nhóm bị loại oan vì chính tả — `Chợ Làng Time
+City` và `CHỢ - TIME CITY` thiếu chữ "s", `Chợ cư dân làng Times` thiếu chữ
+"City". Ba nhóm đó cộng lại 56.600 thành viên.
+
+**`Quản lý → UID Marketplace`** — nơi lưu các nhóm đã xin được duyệt cho
+Marketplace. Dán cả đống link vào, mỗi dòng một nhóm; nó tự bỏ đuôi `?ref=`, bỏ
+dòng rác và gộp link trùng. Nút **Lấy tên & số thành viên** mở từng trang nhóm
+để đọc về, khoảng 8 giây một nhóm, có thể bật hiện Chrome để nhìn.
+
+Bấm vào tiêu đề cột **Thành viên** để sắp xếp: thứ tự nhập → nhiều trước → ít
+trước.
+
+---
+
+**Mới: `Vận hành → Tham gia nhóm Market`**
+
+Cho nick cá nhân xin vào các nhóm trong UID Marketplace. Khác lịch tham gia nhóm
+cũ ở chỗ **không chuyển sang Page**: bài niêm yết Marketplace chỉ đăng được dưới
+nick cá nhân, nên chính nick đó phải là thành viên. Cho Page vào nhóm là tốn một
+lượt xin duyệt mà nick vẫn không đăng được vào đó.
+
+Vì vậy mục này **không đòi tài khoản phải có Page** — nick chưa gán Page, vốn bị
+loại khỏi mọi lịch khác, vẫn dùng được cho Marketplace.
+
+Mục cũ đổi tên thành **Tham gia nhóm Page** cho khỏi lẫn.
+
+---
+
+**Mới: nút "Chạy lần lượt" cho cả hai mục tham gia nhóm**
+
+Trước đây mỗi dòng một nút Run, mười hai tài khoản là mười hai lần bấm và phải
+ngồi canh. Nay một nút: mở trình duyệt nick trên cùng, tham gia đủ nhóm, đóng
+lại, rồi mới sang nick kế tiếp — cho tới nick cuối. Dòng đang chạy được tô nền,
+thanh đếm hiện `⏳ 4/12 · đang: Mai Tien Duong`.
+
+**Chạy tuần tự chứ không song song:** mỗi nick là một phiên Chrome khoảng 1,1 GB.
+Mở cả chục phiên cùng lúc là hết RAM, mà chạy dồn dập cũng đúng kiểu hành vi
+Facebook chặn nhanh nhất.
+
+Một nick hỏng không làm đứt cả chuỗi — ghi lỗi vào cột Trạng thái rồi đi tiếp.
+Bấm **Dừng** thì diệt cả cây tiến trình, không để Chrome ở lại ăn RAM.
+
+---
+
 ## v2.29.0 — 28/09/2026
 
 **Sửa: bấm UPDATE trên máy vệ tinh không lên bản mới**
