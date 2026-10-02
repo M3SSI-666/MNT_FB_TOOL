@@ -363,6 +363,39 @@ def init_db():
         #             nick cá nhân, Page vào nhóm thì bài niêm yết vẫn không
         #             đăng được vào đó.
         _add_col("join_schedules", "nguon", "nguon TEXT DEFAULT ''")
+        # Sau khi tham gia đủ nhóm mục tiêu thì RỜI mọi nhóm khác, để nick chỉ
+        # còn đúng các nhóm đã duyệt Marketplace — lúc tick nhóm ở bước đăng bài
+        # khỏi phải lọc giữa một rừng nhóm không liên quan.
+        # Mặc định TẮT: rời nhóm là việc khó quay lại, nhóm nào cần duyệt thì
+        # phải xin duyệt lại từ đầu.
+        _add_col("join_schedules", "lam_sach", "lam_sach INTEGER DEFAULT 0")
+        # Số nhóm đã rời ở lượt chạy gần nhất — để nhìn bảng là biết nó đã làm gì.
+        _add_col("join_schedules", "da_roi", "da_roi INTEGER DEFAULT 0")
+
+        # ── Migration: cắt dấu cách thừa ở tên tài khoản ────────────────
+        # Hai nick nhập vào có dấu cách cuối ('Thị Sữa ', 'Tung Mai Van ').
+        # Trong phần mềm thì chạy được vì mọi nơi đọc tên từ DB, nhưng hễ có
+        # chỗ nào tra theo tên gõ tay là trượt — đã vấp thật ngày 01/10,
+        # `get_account_by_name('Thị Sữa')` trả về None.
+        #
+        # Phải sửa ĐỒNG LOẠT cả 5 bảng tham chiếu theo tên, nếu không lịch mồ
+        # côi: 137 dòng schedules và 124 dòng comment_posts trỏ vào tên cũ.
+        _ten_lech = [r[0] for r in con.execute(
+            "SELECT ten_acc FROM accounts WHERE ten_acc<>TRIM(ten_acc)").fetchall()]
+        for _cu in _ten_lech:
+            _moi = _cu.strip()
+            if not _moi:
+                continue
+            # Trùng với một acc KHÁC đã có thì bỏ qua: cắt vào là hai dòng chung
+            # tên, không phân biệt được nữa.
+            _da_co = con.execute(
+                "SELECT COUNT(*) FROM accounts WHERE ten_acc=?", (_moi,)).fetchone()[0]
+            if _da_co:
+                continue
+            for _bang, _cot in (("accounts", "ten_acc"), ("schedules", "ten_acc"),
+                                ("join_schedules", "ten_acc"), ("comment_posts", "acc"),
+                                ("pages", "acc_quan_ly")):
+                con.execute(f"UPDATE {_bang} SET {_cot}=? WHERE {_cot}=?", (_moi, _cu))
 
         # ── Sức khoẻ acc (xem suc_khoe_acc.py) ──────────────────────────
         # `lich_su_phien` là chuỗi "o"/"x" của tối đa 20 phiên đăng gần nhất —
@@ -513,6 +546,11 @@ def get_account_by_cuser(c_user: str) -> dict | None:
 
 
 def upsert_account(data: dict) -> int:
+    # Cắt dấu cách thừa NGAY LÚC LƯU, không để lọt vào DB. Dán tên từ Excel hay
+    # từ chỗ khác rất dễ kèm dấu cách cuối, mà tên acc lại là khoá tham chiếu
+    # của 4 bảng khác — lệch một dấu cách là tra cứu theo tên trượt sạch.
+    if isinstance(data.get("ten_acc"), str):
+        data = {**data, "ten_acc": data["ten_acc"].strip()}
     cols   = [k for k in data if k != "id"]
     placeholders = ", ".join(["?"] * len(cols))
     values = [data[c] for c in cols]

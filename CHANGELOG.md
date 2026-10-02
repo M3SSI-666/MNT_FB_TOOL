@@ -10,6 +10,86 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.32.0 — 02/10/2026
+
+**Sửa lỗi nặng: phần mềm báo "đã là thành viên" cho nhóm chưa hề vào**
+
+Lỗi này có từ trước, ảnh hưởng cả mục **Tham gia nhóm Page** đang dùng hằng ngày.
+
+Bộ dò trạng thái quét mọi nút trên trang nhóm rồi hỏi chữ trong nút có **chứa**
+cụm "đã tham gia" không. Mà trang nhóm đầy chỗ mang chữ đó chẳng liên quan trạng
+thái: *"N người bạn đã tham gia"*, bài trong bảng tin *"… đã tham gia nhóm"*.
+Trúng một cái là nó kết luận đã vào rồi **bỏ qua, không bấm Tham gia** — trong
+khi bảng vẫn hiện con số đẹp.
+
+Đo thật ngày 01/10 trên nick Thị Sữa: phiên báo *"đã là thành viên: 16"*, kiểm
+lại từng nhóm thì **17/25 nhóm nút vẫn là "Tham gia nhóm"** — chưa vào, chưa cả
+gửi yêu cầu.
+
+Ba chỗ đã sửa:
+
+- Bộ dò giờ khớp **chính xác cả chuỗi**, và chỉ nhận nút **đang nhìn thấy**.
+- "Không đọc được trạng thái" **không còn bị coi là đã là thành viên**. Thà báo
+  lỗi để còn nhìn thấy mà chạy lại, hơn là im lặng bỏ qua.
+- Bấm Tham gia xong **vào lại trang kiểm chứng**: vào được mới tính *mới tham
+  gia*, mới gửi yêu cầu thì tính *chờ duyệt*.
+
+Danh sách nhóm đã tham gia cũng đọc kiên nhẫn hơn — bản cũ dừng quá sớm nên đọc
+ra 11 nhóm trong khi nick ở ít nhất 27.
+
+---
+
+**Mới: làm sạch nhóm cho nick cá nhân**
+
+Trong mục **Tham gia nhóm Market**, cột *Giờ chạy* (không dùng tới) thay bằng ô
+tích **Làm sạch**, kèm cột **Đã rời**.
+
+Bật lên thì trước khi tham gia, nick sẽ **rời mọi nhóm không có trong UID
+Marketplace** — để nick chỉ còn đúng nhóm mục tiêu, lúc tích nhóm ở bước đăng
+bài khỏi phải lọc giữa một rừng nhóm không liên quan.
+
+Mặc định **tắt**, bật thì hỏi lại một lần: rời nhóm khó quay lại, nhóm nào cần
+duyệt thì phải xin duyệt lại từ đầu.
+
+Rời xong **vào lại trang kiểm chứng** mới tính là đã rời, không đếm số lần bấm.
+Lưới này bắt được ngay một ca thật trong lần chạy đầu: một nhóm bấm rồi mà vẫn
+còn trong đó.
+
+---
+
+**Cột số thứ tự cho cả 5 bảng**
+
+Tài khoản, Page, Content, UID Nhóm, UID Marketplace đều có cột `#`. Ô số thứ tự
+kiêm luôn tay cầm để kéo đổi vị trí, thay cho cột `☰` riêng — bảng Tài khoản đã
+19 cột, thêm cột nữa chỉ để kéo là phí chỗ.
+
+**UID Marketplace giờ kéo sắp xếp được** như bốn bảng kia. Đang sắp xếp theo số
+thành viên thì không kéo được, vì kéo lúc đó sẽ ghi đè thứ tự nhìn thấy lên thứ
+tự tay — mất thứ tự bạn tự duyệt từng nhóm mà không có đường lấy lại.
+
+---
+
+**Tạo lịch nhanh giờ dựng lại bảng, không chỉ thêm**
+
+Mỗi lần bấm, nó so bảng với phân công ở tab Tài khoản ngay lúc đó rồi **tạo cái
+thiếu, xoá cái thừa, giữ cái khớp**. Lịch đang chạy thì để yên.
+
+Trước đây nút này chỉ thêm nên bảng phình ra theo thời gian: đo ngày 01/10, 16
+dòng trong khi phân công thật chỉ có 12 — và hai nick mỗi nick có hai dòng, bấm
+*Chạy lần lượt* là chúng chạy hai lượt, lượt đầu cho **Page cũ** đi xin vào 58
+nhóm.
+
+---
+
+**Sửa: tên tài khoản có dấu cách thừa**
+
+Hai nick nhập vào kèm dấu cách ở cuối. Phần mềm vẫn chạy vì mọi nơi đọc tên từ
+cơ sở dữ liệu, nhưng hễ có chỗ nào tra theo tên gõ tay là trượt. Nay cắt sạch —
+sửa đồng loạt cả 5 bảng tham chiếu theo tên, và cắt ngay lúc lưu để không tái
+diễn.
+
+---
+
 ## v2.31.0 — 01/10/2026
 
 **Hai tab UID giờ dùng giống hệt nhau**

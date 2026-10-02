@@ -66,6 +66,7 @@ const API = {
     joinSchedules:  (nguon)                         => API.get("/api/join/schedules"
                                                         + (nguon ? `?nguon=${encodeURIComponent(nguon)}` : "")),
     joinGenMarket:  ()                              => API.post("/api/join/gen-quick-market", {}),
+    joinLamSach:    (id, bat)                       => API.post(`/api/join/${id}/lam-sach`, {bat: !!bat}),
     joinRunChain:   (nguon, headless)               => API.post("/api/join/run-chain", {nguon, headless}),
     joinStopChain:  (nguon)                         => API.post("/api/join/stop-chain", {nguon}),
     joinChainTT:    (nguon)                         => API.get("/api/join/chain-status"

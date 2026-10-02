@@ -3853,6 +3853,7 @@ check("nhóm MARKET KHÔNG switch sang Page",
       "else:" in _src_jr[_i_mkt:_i_swi])
 _src_jw = Path("join_groups_worker.py").read_text(encoding="utf-8")
 check("worker đọc JOIN_NGUON", 'JOIN_NGUON' in _src_jw)
+
 # Nhóm đã tham gia được lọc TRƯỚC khi duyệt, không mở trang — đo thật lúc làm
 # tối ưu này: phiên cũ mở 30 trang nhóm trong 10 phút chỉ để biết cả 30 đều đã
 # là thành viên. Chỉ nhóm lọt qua bộ lọc mới rơi vào đường dự phòng 5 giây.
@@ -3874,11 +3875,139 @@ check("API lọc lịch theo nguồn",
 check("tạo nhanh Market không đòi Page",
       "gen-quick-market" in _src_srv_j and "get_uid_groups_market" in _src_srv_j)
 check("tạo nhanh UID Nhóm bỏ qua lịch Market",
-      "AND COALESCE(nguon,'')=''" in _src_srv_j)
+      "WHERE COALESCE(nguon,'')=''" in _src_srv_j)
+
+# ── Tạo lịch nhanh = DỰNG LẠI theo phân công hiện tại ──────────────────────
+# Trước đây nút này chỉ THÊM nên bảng phình ra: đo 01/10, 16 dòng trong khi
+# phân công thật chỉ có 12, và hai nick có hai dòng — bấm "Chạy lần lượt" là
+# chúng chạy hai lượt, lượt đầu cho Page CŨ đi xin vào 58 nhóm.
+with db._conn() as _c_gq:
+    _c_gq.execute("DELETE FROM join_schedules")
+    _c_gq.execute("DELETE FROM accounts")
+    _c_gq.execute("DELETE FROM pages")
+for _n, _p in (("A1", "P1"), ("A2", "P2"), ("A3", "")):
+    db.upsert_account({"ten_acc": _n, "ten_page": _p, "trang_thai": "Active",
+                       "c_user": f"c{_n}", "xs": "x"})
+db.upsert_account({"ten_acc": "A4", "ten_page": "P1", "trang_thai": "Dừng",
+                   "c_user": "cA4", "xs": "x"})
+for _p, _u in (("P1", "111"), ("P2", "222"), ("P_cu", "999")):
+    db.upsert_page({"ten_page": _p, "page_uid": _u})
+# Ba dòng rác: acc không tồn tại, acc đổi Page, acc không còn Active.
+with db._conn() as _c_gq:
+    for _a, _p in (("A_da_xoa", "P1"), ("A1", "P_cu"), ("A4", "P1")):
+        _c_gq.execute("INSERT INTO join_schedules(ten_acc,ten_page,nguon) VALUES(?,?,'')",
+                      (_a, _p))
+    _c_gq.execute("INSERT INTO join_schedules(ten_acc,ten_page,nguon) "
+                  "VALUES('A1','P1','MARKET')")
+
+_r_gq = _client.post("/api/join/gen-quick", json={}).get_json()
+_sau = [(r["ten_acc"], r["ten_page"]) for r in
+        _client.get("/api/join/schedules").get_json()["data"]]
+check("chỉ còn acc Active CÓ gán Page", sorted(_sau) == [("A1", "P1"), ("A2", "P2")])
+check("xoá đúng 3 dòng không còn khớp", _r_gq.get("xoa") == 3)
+check("acc chưa gán Page không được tạo lịch", ("A3", "") not in _sau)
+check("acc Dừng không được tạo lịch", not [x for x in _sau if x[0] == "A4"])
+# Lịch Marketplace là bảng khác, tuyệt đối không được dọn lây.
+check("KHÔNG đụng vào lịch Marketplace",
+      len(_client.get("/api/join/schedules?nguon=MARKET").get_json()["data"]) == 1)
+# Bấm lại lần nữa thì không được tạo thêm — nếu không, mỗi lần bấm là một
+# dòng trùng và nick đó chạy thêm một lượt.
+_r_gq2 = _client.post("/api/join/gen-quick", json={}).get_json()
+check("bấm lại không tạo thêm dòng trùng",
+      _r_gq2.get("created") == 0 and _r_gq2.get("xoa") == 0
+      and len(_client.get("/api/join/schedules").get_json()["data"]) == 2)
+with db._conn() as _c_gq:
+    _c_gq.execute("DELETE FROM join_schedules")
 check("truyền JOIN_NGUON khi Run", '"JOIN_NGUON":' in _src_srv_j)
 
 _html_jm = Path("templates/index.html").read_text(encoding="utf-8")
 _ajs_jm  = Path("static/js/app.js").read_text(encoding="utf-8")
+
+# ── Làm sạch nhóm ──────────────────────────────────────────────────────────
+# Rời mọi nhóm KHÔNG có trong UID Marketplace, để nick chỉ còn nhóm mục tiêu.
+# Rời nhóm khó quay lại nên mặc định TẮT và phải tự tay tích từng nick.
+check("cột lam_sach mặc định TẮT",
+      '_add_col("join_schedules", "lam_sach", "lam_sach INTEGER DEFAULT 0")'
+      in Path("db.py").read_text(encoding="utf-8"))
+check("chỉ bật được cho lịch MARKET",
+      'if bat and r["ng"] != "MARKET"' in _src_srv_j)
+# Làm sạch chạy TRƯỚC phần tham gia: dọn xong thì bước lọc "đã tham gia" ở dưới
+# đọc đúng tình trạng sau khi dọn, và danh sách nhóm của nick gọn ngay.
+_i_join = _src_jr.index("for i, g in enumerate(groups, 1):")
+_i_sach = _src_jr.index("_lam_sach_nhom(page, groups_goc)")
+_i_loc  = _src_jr.index("da_vao = await _lay_nhom_da_vao(page, chu_the)")
+check("làm sạch chạy TRƯỚC phần tham gia", _i_sach < _i_join)
+check("làm sạch chạy TRƯỚC bước lọc nhóm đã vào", _i_sach < _i_loc)
+# `groups` bị thay bằng danh sách đã lọc, nên phải giữ bản gốc để biết nhóm nào
+# là mục tiêu — dùng nhầm `groups` là rời luôn nhóm đã tham gia từ trước.
+check("làm sạch dùng danh sách mục tiêu GỐC", "groups_goc = list(groups)" in _src_jr)
+check("chỉ làm sạch khi nguồn MARKET và có bật cờ",
+      'if nguon == "MARKET" and lam_sach:' in _src_jr)
+# Đếm KẾT QUẢ, không đếm số lần bấm — đúng lỗi đã mắc ở bước tick nhóm
+# Marketplace: log báo tick 20 mà thực tế chỉ 16.
+check("xác minh đã rời bằng cách đọc lại nút",
+      "con_o = await page.evaluate(_JS_NUT_HIEN" in _src_jr
+      and 'return "da_roi"' in _src_jr)
+# Rời xong Facebook tự điều hướng đi, page.reload() lúc đó ném
+# `ERR_ABORTED; maybe frame was detached` — gặp thật 01/10 ở nhóm
+# 719961823676435: đã rời được nhưng bị ghi thành lỗi.
+check("vào lại bằng goto chứ không reload",
+      "await page.reload(" not in _src_jr)
+# "Không đọc được trạng thái" KHÔNG được coi là "đã là thành viên": suy đoán đó
+# làm phiên 01/10 báo "đã là thành viên: 16" trong khi 17/25 nhóm chưa hề vào.
+check("không đoán 'đã là thành viên' khi không đọc được",
+      "Không đọc được trạng thái thành viên" in _src_jr
+      and "coi như đã là thành viên" not in _src_jr)
+# Bộ dò phải khớp CHÍNH XÁC cả chuỗi trên nút ĐANG NHÌN THẤY. Bản cũ hỏi
+# textContent có CHỨA "đã tham gia" nên trúng cả "N người bạn đã tham gia".
+check("dò trạng thái khớp chính xác, chỉ nút nhìn thấy",
+      "elementFromPoint" in _src_jr
+      and "/^(đã tham gia|joined)$/" in _src_jr
+      and "includes('đã tham gia')" not in _src_jr)
+check("bấm Tham gia xong phải xác minh",
+      'sau = await page.evaluate(_DETECT_STATE_JS)' in _src_jr
+      and 'Bấm Tham gia rồi mà vẫn chưa vào' in _src_jr)
+check("gửi yêu cầu thì tính chờ duyệt, không tính đã vào",
+      'return "cho_duyet"' in _src_jr and "Đã gửi yêu cầu, chờ duyệt" in _src_jr)
+# Danh sách groups/joins nạp rất chậm; bản cũ dừng sau 3 lượt im nên đọc thiếu.
+check("đọc danh sách nhóm kiên nhẫn hơn",
+      "for _ in range(45)" in _src_jr and "yen >= 6" in _src_jr
+      and "window.scrollBy(0, 2200)" in _src_jr)
+
+# ── Tên tài khoản không được có dấu cách thừa ──────────────────────────────
+# Tên acc là khoá tham chiếu của 4 bảng khác; lệch một dấu cách là mọi tra cứu
+# theo tên trượt sạch — đã vấp thật: get_account_by_name('Thị Sữa') trả None.
+_id_sp = db.upsert_account({"ten_acc": "  Acc Thua Dau Cach  ", "trang_thai": "Active"})
+check("cắt dấu cách ngay lúc lưu",
+      db.get_account_by_id(_id_sp)["ten_acc"] == "Acc Thua Dau Cach")
+check("tra theo tên đã cắt là thấy",
+      db.get_account_by_name("Acc Thua Dau Cach") is not None)
+# Migration phải sửa ĐỒNG LOẠT, nếu không lịch trỏ vào tên cũ thành mồ côi.
+_src_db_sp = Path("db.py").read_text(encoding="utf-8")
+check("migration sửa cả 5 bảng tham chiếu",
+      all(x in _src_db_sp for x in
+          ('("accounts", "ten_acc")', '("schedules", "ten_acc")',
+           '("join_schedules", "ten_acc")', '("comment_posts", "acc")',
+           '("pages", "acc_quan_ly")')))
+check("migration bỏ qua khi cắt xong bị trùng tên khác",
+      'SELECT COUNT(*) FROM accounts WHERE ten_acc=?' in _src_db_sp
+      and "if _da_co:" in _src_db_sp)
+# Hộp xác nhận: chỉ bấm nút NẰM TRONG dialog. Bấm bừa chữ "Rời nhóm" ở ngoài
+# là bấm lại chính cái menu vừa đóng.
+check("chỉ bấm nút trong hộp thoại",
+      'div[role="dialog"] div[role="button"]:has-text("Rời nhóm")' in _src_jr)
+# Nút "Đã tham gia" có HAI cái trên trang; bấm nhầm cái bị che thì menu không
+# mở — đo thật 01/10, bấm cái đầu theo thứ tự DOM ra menu rỗng.
+check("chỉ bấm nút đang NHÌN THẤY",
+      "elementFromPoint" in _src_jr and "_JS_NUT_HIEN" in _src_jr)
+check("da_roi về 0 khi bắt đầu lượt mới", "tong_nhom=total, da_roi=0" in _src_jr)
+check("bảng có cột Làm sạch và Đã rời",
+      ">Làm sạch</th>" in _html_jm and ">Đã rời</th>" in _html_jm)
+check("bỏ cột Giờ chạy ở tab Market",
+      _html_jm[_html_jm.index('id="page-tham-gia-nhom-market"'):
+               _html_jm.index('id="jm-table"')].count("Giờ chạy") == 0)
+check("hỏi lại trước khi BẬT làm sạch",
+      "if(bat && !confirm(" in _ajs_jm)
 check("có mục Tham gia nhóm Market", 'data-page="tham-gia-nhom-market"' in _html_jm)
 check("nằm ngay dưới Tham gia nhóm",
       0 < _html_jm.index('data-page="tham-gia-nhom-market"')
@@ -4056,6 +4185,32 @@ check("sắp xếp đủ ba trạng thái",
 # thì sắp xếp ra thứ tự lung tung mà nhìn bảng không biết sai ở đâu.
 check("đọc số thành viên chịu được cả số lẫn chuỗi",
       'String(g.thanh_vien || "0").replace(/\\D/g, "")' in _ajs_mkt)
+
+# ── Cột STT + kéo đổi thứ tự ───────────────────────────────────────────────
+# Cột STT kiêm luôn tay cầm để kéo, thay cho một cột ☰ riêng: bảng Tài khoản
+# đã 19 cột, thêm cột nữa chỉ để kéo là phí chỗ.
+check("có kiểu cho cột STT", "td.stt {" in _html_mkt)
+check("cả 5 bảng đều có đầu cột #",
+      _html_mkt.count('width:40px;text-align:center">#</th>') == 4
+      and 'id="uidm-table"' in _html_mkt)
+check("KHÔNG còn cột ☰ rỗng", 'style="width:32px"></th>' not in _html_mkt)
+for _b in ("rows.map((r,i)=>{", "res.data.map((p,i)=>", "res.data.map((r,i)=>{",
+           "res.data.map((g,i)=>{"):
+    check(f"bảng có chỉ số hàng: {_b[:22]}", _b in _ajs_mkt)
+check("đủ 5 bảng có ô STT", _ajs_mkt.count('class="stt"') == 5)
+
+# UID Marketplace sắp xếp được theo số thành viên. Kéo trong lúc đang sắp xếp
+# thì thứ tự NHÌN THẤY bị ghi đè lên thứ tự tay — mất thứ tự Duong tự duyệt
+# từng nhóm mà không có đường lấy lại.
+check("Marketplace kéo được", "function uidmDrop" in _ajs_mkt
+      and 'uidmDrop(event,${g.id})' in _ajs_mkt)
+check("đang sắp xếp thì CHẶN kéo",
+      "if(_uidmSap){" in _ajs_mkt and "_rowDrop(e, t, \"uidm-table\"" in _ajs_mkt)
+_i_chan = _ajs_mkt.index("async function uidmDrop")
+_i_goi  = _ajs_mkt.index('_rowDrop(e, t, "uidm-table"', _i_chan)
+check("chặn ĐỨNG TRƯỚC khi gọi lưu",
+      _ajs_mkt.index("if(_uidmSap){", _i_chan) < _i_goi)
+
 
 # ── Hai tab UID dùng chung một bộ máy ──────────────────────────────────────
 # Chỉ khác đúng `ma_nhom`. Tách làm hai bộ là tạo chỗ cho chúng lệch nhau — đã

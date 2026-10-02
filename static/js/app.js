@@ -259,8 +259,11 @@ function openQuickJoinSchedule() {
         openModal("⚡ Tạo lịch nhanh — Tham gia nhóm", `
             <div style="display:flex;flex-direction:column;gap:12px">
                 <div style="font-size:13px;color:var(--text-secondary);background:var(--bg-hover);padding:10px 12px;border-radius:var(--radius-sm);line-height:1.6">
-                    Tự động tạo <strong>1 lịch / tài khoản Active có Page</strong>.<br>
-                    Bỏ qua acc đã có lịch rồi.
+                    Dựng lại bảng cho khớp <strong>phân công ở tab Tài khoản ngay lúc này</strong>:
+                    mỗi acc Active có gán Page được một lịch, vào đúng Page đó.<br>
+                    <span style="color:var(--danger)">Lịch không còn khớp sẽ bị xoá</span> —
+                    acc đã xoá, acc bỏ gán Page, hoặc acc đã đổi sang Page khác.
+                    Lịch đang chạy thì để yên.
                 </div>
                 ${_delayPanel(dNew)}
                 <div style="font-size:11px;color:var(--text-muted)">
@@ -279,7 +282,10 @@ async function saveQuickJoinSchedule() {
     try {
         const r = await API.joinGenQuick({delay_new: dNew});
         if(r.ok) {
-            Toast.success(`✅ Đã tạo ${r.created} lịch mới (bỏ qua ${r.skipped} đã có)`);
+            const phan = [`tạo ${r.created}`, `giữ ${r.skipped}`];
+            if(r.xoa)       phan.push(`xoá ${r.xoa} lịch không còn đúng phân công`);
+            if(r.dang_chay) phan.push(`${r.dang_chay} đang chạy nên để yên`);
+            Toast.show("✅ " + phan.join(" · "), "success", 8000);
             closeModal(); loadJoinSchedules();
         } else Toast.error(r.error);
     } catch(e) { Toast.error(e.message); }
@@ -1070,7 +1076,7 @@ async function loadAccounts(){
         const res=await API.accounts();
         _accData=res.data;
         // Thead
-        if(thead) thead.innerHTML=`<tr><th style="width:32px"></th>${ACC_FIELDS.map(f=>`<th style="text-align:center">${f.label}</th>`).join("")}<th style="width:60px;text-align:center">Xóa</th></tr>`;
+        if(thead) thead.innerHTML=`<tr><th style="width:40px;text-align:center">#</th>${ACC_FIELDS.map(f=>`<th style="text-align:center">${f.label}</th>`).join("")}<th style="width:60px;text-align:center">Xóa</th></tr>`;
         // Summary
         const box=document.getElementById("acc-summary");
         if(box){
@@ -1100,7 +1106,7 @@ function renderAccTable(data){
     const rows=data.filter(r=>!filter||((r.loai_dang||"").trim()===filter));
     if(count) count.textContent=`${rows.length}/${data.length} tài khoản`;
     if(!rows.length){ tbody.innerHTML=`<tr><td colspan="19" class="empty">Không có tài khoản nào</td></tr>`; return; }
-    tbody.innerHTML=rows.map(r=>{
+    tbody.innerHTML=rows.map((r,i)=>{
         const CENTER_KEYS=["loai_dang","thoi_gian_nghi","link_profile","refresh","trang_thai","nuoi_interval"];
         const tds=ACC_FIELDS.map(f=>{
             const val=(r[f.key]||"").toString();
@@ -1169,8 +1175,7 @@ function renderAccTable(data){
                     ondragleave="accDragLeave(event)"
                     ondragend="accDragEnd(event)"
                     style="cursor:default">
-            <td style="text-align:center;color:var(--text-muted);cursor:grab;font-size:16px;padding:4px 6px"
-                title="Kéo để di chuyển hàng">☰</td>
+            <td class="stt" title="Kéo để đổi thứ tự">${i+1}</td>
             ${tds}
             <td style="text-align:center;white-space:nowrap">
                 <button title="Thử cookie còn dùng được không (~20 giây)"
@@ -1459,6 +1464,18 @@ async function pageDrop(e, t)    { return _rowDrop(e, t, "pages-table",   API.re
 async function contentDrop(e, t) { return _rowDrop(e, t, "content-table", API.reorderContent); }
 async function uidDrop(e, t)     { return _rowDrop(e, t, "uid-table",     API.reorderUidGroups); }
 
+// UID Marketplace khác bốn bảng kia ở chỗ nó SẮP XẾP ĐƯỢC theo số thành viên.
+// Kéo trong lúc đang sắp xếp thì thứ tự nhìn thấy bị ghi đè lên thứ tự tay —
+// mất luôn thứ tự Duong tự duyệt từng nhóm, mà không có đường lấy lại.
+async function uidmDrop(e, t){
+    if(_uidmSap){
+        e.preventDefault(); e.currentTarget.style.background = ""; _dragId = null;
+        Toast.error("Đang sắp xếp theo số thành viên — bấm tiêu đề cột để về thứ tự nhập rồi mới kéo");
+        return;
+    }
+    return _rowDrop(e, t, "uidm-table", API.reorderUidGroups);
+}
+
 // ── Accounts — Insert row ─────────────────────────────────────
 async function insertAccRow(refId, position) {
     try {
@@ -1502,15 +1519,14 @@ async function loadPages(){
                 onclick="startPageEdit(this)">${val||"-"}</td>`;
         };
 
-        tbody.innerHTML=res.data.map(p=>`<tr draggable="true" data-id="${p.id}"
+        tbody.innerHTML=res.data.map((p,i)=>`<tr draggable="true" data-id="${p.id}"
                 ondragstart="accDragStart(event,${p.id})"
                 ondragover="accDragOver(event)"
                 ondrop="pageDrop(event,${p.id})"
                 ondragleave="accDragLeave(event)"
                 ondragend="accDragEnd(event)"
                 style="cursor:default">
-            <td style="text-align:center;color:var(--text-muted);cursor:grab;font-size:16px;padding:4px 6px"
-                title="Kéo để di chuyển hàng">☰</td>
+            <td class="stt" title="Kéo để đổi thứ tự">${i+1}</td>
             ${ep(p,"ten_page","font-weight:600;min-width:140px")}
             ${ep(p,"acc_quan_ly","min-width:110px;text-align:center")}
             ${ep(p,"page_uid","min-width:120px;text-align:center",true)}
@@ -1825,7 +1841,7 @@ async function loadContent(loai){
                 onclick="startContentFieldEdit(this)">${val||"-"}</td>`;
         };
 
-        tbody.innerHTML=res.data.map(r=>{
+        tbody.innerHTML=res.data.map((r,i)=>{
             const imgs=(r.link_anh||"").split(",").map(s=>s.trim()).filter(Boolean);
             const encImgs=encodeURIComponent(JSON.stringify(imgs));
             const suDung=r.su_dung==="Có";
@@ -1836,9 +1852,9 @@ async function loadContent(loai){
                 ondragover="accDragOver(event)"
                 ondrop="contentDrop(event,${r.id})"
                 ondragleave="accDragLeave(event)">
-                <td draggable="true" ondragstart="accDragStart(event,${r.id})" ondragend="accDragEnd(event)"
-                    style="text-align:center;color:var(--text-muted);cursor:grab;font-size:16px;padding:8px 6px;user-select:none"
-                    title="Kéo để đổi thứ tự — thứ tự này quyết định content nào vào giờ nào khi Gen lịch">☰</td>
+                <td class="stt" draggable="true" ondragstart="accDragStart(event,${r.id})" ondragend="accDragEnd(event)"
+                    style="padding:8px 6px"
+                    title="Kéo để đổi thứ tự — thứ tự này quyết định content nào vào giờ nào khi Gen lịch">${i+1}</td>
                 ${ec(r,"ma_content","font-weight:600;text-align:center;white-space:nowrap;font-size:13px")}
 
                 <!-- Nội dung: inline edit bằng textarea -->
@@ -2038,7 +2054,7 @@ async function loadUidGroups(){
         document.getElementById("uid-count").textContent=
             `${res.data.length} nhóm · ${_tong.toLocaleString("vi")} thành viên`;
         if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="5" class="empty">Chưa có UID nhóm — dán link vào ô trên</td></tr>`; return; }
-        tbody.innerHTML=res.data.map(g=>{
+        tbody.innerHTML=res.data.map((g,i)=>{
             // Dùng chung phép đọc số với tab Marketplace: cột thanh_vien có dòng
             // là SỐ, có dòng là CHUỖI, so thẳng `> 0` là ra kết quả lung tung.
             const _n=_uidSo(g);
@@ -2052,9 +2068,8 @@ async function loadUidGroups(){
                 ondragover="accDragOver(event)"
                 ondrop="uidDrop(event,${g.id})"
                 ondragleave="accDragLeave(event)">
-                <td draggable="true" ondragstart="accDragStart(event,${g.id})" ondragend="accDragEnd(event)"
-                    style="text-align:center;color:var(--text-muted);cursor:grab;font-size:16px;padding:4px 6px;user-select:none"
-                    title="Kéo để di chuyển hàng">☰</td>
+                <td class="stt" draggable="true" ondragstart="accDragStart(event,${g.id})" ondragend="accDragEnd(event)"
+                    title="Kéo để đổi thứ tự">${i+1}</td>
                 <td style="text-align:center">${linkCell}</td>
                 <td style="font-size:12px">${g.ten_nhom||"-"}</td>
                 <td style="text-align:center">${tv}</td>
@@ -2231,11 +2246,15 @@ async function loadJoinMarket(){
             else                                       badge=`<span class="badge badge-muted">${st}</span>`;
             return `<tr${chay?' style="background:rgba(251,191,36,.07)"':""}>
                 <td style="font-weight:600">${_escapeHtml(r.ten_acc)}</td>
-                <td style="text-align:center;font-weight:600">${r.gio_chay||"-"}</td>
+                <td style="text-align:center">
+                    <input type="checkbox" ${r.lam_sach?"checked":""} ${chay?"disabled":""}
+                           onchange="jmLamSach(${r.id}, this.checked)"
+                           title="Rời mọi nhóm KHÔNG có trong UID Marketplace"></td>
                 <td style="text-align:center">${r.tong_nhom||0}</td>
                 <td style="text-align:center;color:var(--success);font-weight:600">${r.moi_join||0}</td>
                 <td style="text-align:center;color:var(--text-muted)">${r.da_join||0}</td>
                 <td style="text-align:center;color:var(--danger)">${r.loi||0}</td>
+                <td style="text-align:center;color:${r.da_roi?"var(--warning)":"var(--text-muted)"}">${r.da_roi||0}</td>
                 <td>${badge}</td>
                 <td style="text-align:center">
                     <button onclick="jmXoa(${r.id})" style="background:var(--danger-light);color:var(--danger);border:none;border-radius:5px;width:26px;height:26px;cursor:pointer;font-size:13px">🗑</button>
@@ -2278,6 +2297,24 @@ async function jmLuu(){
         if(r.ok){ Toast.success("Đã thêm"); closeModal(); loadJoinMarket(); }
         else Toast.error(r.error);
     }catch(e){ Toast.error(e.message); }
+}
+
+// Bật/tắt làm sạch cho một nick. Hỏi lại khi BẬT vì rời nhóm khó quay lại —
+// nhóm nào cần duyệt thì phải xin duyệt lại từ đầu.
+async function jmLamSach(id, bat){
+    if(bat && !confirm(
+        "Bật làm sạch cho nick này?\n\n"
+        + "Khi chạy, nick sẽ RỜI mọi nhóm không có trong UID Marketplace — "
+        + "kể cả nhóm cá nhân không liên quan công việc.\n\n"
+        + "Nhóm cần duyệt mà rời rồi thì phải xin duyệt lại từ đầu.")){
+        loadJoinMarket();   // vẽ lại để ô tích về đúng trạng thái cũ
+        return;
+    }
+    try{
+        const r = await API.joinLamSach(id, bat);
+        if(!r.ok){ Toast.error(r.error); loadJoinMarket(); return; }
+        Toast.success(bat ? "Đã bật làm sạch" : "Đã tắt làm sạch");
+    }catch(e){ Toast.error(e.message); loadJoinMarket(); }
 }
 
 async function jmXoa(id){
@@ -2327,8 +2364,14 @@ function _uidmVe(){
             ? `<span style="font-size:12px;color:var(--text-secondary)">${n.toLocaleString("vi")}</span>`
             : `<span style="color:var(--text-muted)">-</span>`;
         const link = g.link_url||`https://www.facebook.com/groups/${g.uid}/`;
-        return `<tr data-id="${g.id}">
-            <td style="text-align:center;color:var(--text-muted);font-size:11px">${i+1}</td>
+        return `<tr data-id="${g.id}"
+            ondragover="accDragOver(event)"
+            ondrop="uidmDrop(event,${g.id})"
+            ondragleave="accDragLeave(event)">
+            <td class="stt" draggable="${_uidmSap?"false":"true"}"
+                ondragstart="accDragStart(event,${g.id})" ondragend="accDragEnd(event)"
+                style="${_uidmSap?"cursor:default":""}"
+                title="${_uidmSap?"Về thứ tự nhập mới kéo được":"Kéo để đổi thứ tự"}">${i+1}</td>
             <td style="text-align:center">
                 <a href="${link}" target="_blank"
                    style="font-family:var(--font-mono);font-size:11px;color:var(--accent)">${g.uid} 🔗</a></td>

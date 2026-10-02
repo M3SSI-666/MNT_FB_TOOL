@@ -115,22 +115,36 @@ async def _switch_to_page(page, ctx, page_uid: str):
 
 # Quét toàn bộ nút 1 lần, phân loại trạng thái nhóm. Thứ tự ưu tiên:
 # đã tham gia > đang chờ duyệt > có nút tham gia (chưa join).
-_DETECT_STATE_JS = """() => {
-    const btns = [...document.querySelectorAll('[role="button"], a[role="button"]')];
-    const texts = btns.map(b => (b.textContent||'').trim().toLowerCase()).filter(Boolean);
-    // 1) Đã là thành viên — nút "Đã tham gia" / "Joined"
-    if (texts.some(t => t.includes('đã tham gia') || t === 'joined'))
-        return 'da_join';
-    // 2) Đang chờ duyệt
-    if (texts.some(t => t.includes('huỷ yêu cầu') || t.includes('hủy yêu cầu')
-                     || t.includes('cancel request') || t.includes('pending')
-                     || t.includes('đang chờ') || t.includes('requested')))
+# Trạng thái thành viên, đọc từ NÚT ĐANG NHÌN THẤY và khớp CHÍNH XÁC cả chuỗi.
+#
+# Bản cũ quét mọi [role="button"] rồi hỏi textContent có CHỨA "đã tham gia"
+# không. Trang nhóm đầy chỗ mang chữ đó mà chẳng liên quan trạng thái: "N người
+# bạn đã tham gia", bài trong feed "... đã tham gia nhóm". Trúng một cái là nó
+# kết luận đã là thành viên rồi BỎ QUA, không bấm Tham gia.
+#
+# Đo thật ngày 01/10 trên nick Thị Sữa: phiên báo "đã là thành viên: 16", kiểm
+# lại từng nhóm thì 17/25 nhóm nút vẫn là "Tham gia nhóm" — chưa vào, chưa cả
+# gửi yêu cầu. Bộ dò khớp chính xác đọc đúng 25/25.
+_DETECT_STATE_JS = r"""() => {
+    const t = e => (e.innerText || e.textContent || '').trim().replace(/\s+/g,' ');
+    const nhin = e => {
+        const r = e.getBoundingClientRect();
+        if (r.width < 20 || r.height < 14) return false;
+        const x = Math.round(r.left + r.width/2), y = Math.round(r.top + r.height/2);
+        const tr = document.elementFromPoint(x, y);
+        return !!tr && (e.contains(tr) || tr.contains(e));
+    };
+    const chu = [];
+    for (const e of document.querySelectorAll('[role="button"],button,a[role="button"]')) {
+        if (!nhin(e)) continue;
+        const s = t(e).toLowerCase();
+        if (s && s.length < 30) chu.push(s);
+    }
+    const co = re => chu.some(s => re.test(s));
+    if (co(/^(đã tham gia|joined)$/))                              return 'da_join';
+    if (co(/^(huỷ yêu cầu|hủy yêu cầu|cancel request|đã gửi yêu cầu|request sent)$/))
         return 'cho_duyet';
-    // 3) Có nút tham gia (chưa join) — loại trừ "Mời"
-    if (texts.some(t => (t.includes('tham gia nhóm') || t === 'tham gia'
-                          || t.includes('join group'))
-                     && !t.includes('mời') && !t.includes('invite')))
-        return 'need_join';
+    if (co(/^(tham gia nhóm|tham gia|join group|join)$/))          return 'need_join';
     return '';
 }"""
 
@@ -194,25 +208,174 @@ async def _lay_nhom_da_vao(page, chu_the: str = "Page") -> set:
                     wait_until="domcontentloaded", timeout=60000)
     await page.wait_for_timeout(4000)
 
+    # Cuộn bằng CẢ HAI cách. `mouse.wheel` chỉ cuộn khung đang nằm dưới con trỏ
+    # — con trỏ ở đâu thì Playwright không bảo đảm, nên có lúc nó cuộn nhầm khung
+    # hoặc không cuộn gì. `window.scrollBy` cuộn chính tài liệu, luôn ăn.
+    #
+    # VÀ KIÊN NHẪN HƠN HẲN BẢN CŨ: 20 lượt, nghỉ 1,2 giây, dừng sau 3 lượt im.
+    # Facebook nạp danh sách này rất chậm nên nó dừng quá sớm — đo ngày 01/10
+    # trên nick Thị Sữa: đọc ra 11 nhóm trong khi nick ở ít nhất 27 nhóm, và 16
+    # nhóm bị bỏ sót đều là nhóm mục tiêu.
     da_thay, yen = set(), 0
-    for _ in range(20):
+    for _ in range(45):
+        truoc = len(da_thay)
         try:
             da_thay |= set(await page.evaluate(_JS_BOC_NHOM))
         except Exception:
             pass
-        truoc = len(da_thay)
-        await page.mouse.wheel(0, 2500)
-        await page.wait_for_timeout(1200)
+        await page.evaluate("window.scrollBy(0, 2200)")
+        try:
+            await page.mouse.wheel(0, 2200)
+        except Exception:
+            pass
+        await page.wait_for_timeout(1800)
         try:
             da_thay |= set(await page.evaluate(_JS_BOC_NHOM))
         except Exception:
             pass
         yen = yen + 1 if len(da_thay) == truoc else 0
-        if yen >= 3:                      # ba lượt liền không thêm được gì
+        if yen >= 6:                      # sáu lượt liền không thêm được gì
             break
 
     _log("info", f"📋 {chu_the} đã tham gia {len(da_thay)} nhóm (đọc từ groups/joins)")
     return da_thay
+
+
+# Nút "Đã tham gia" xuất hiện HAI LẦN trên trang nhóm: một ở thanh dính, một ở
+# phần chính. Bấm nhầm cái đang bị che thì menu không mở — đo thật ngày 01/10:
+# bấm cái đầu theo thứ tự DOM ra `menu hiện ra: []`. Lọc bằng elementFromPoint:
+# điểm giữa nút phải trả về chính nó thì mới là nút đang nhìn thấy.
+_JS_NUT_HIEN = r"""(chu) => {
+    const t = e => (e.innerText || e.textContent || '').trim().replace(/\s+/g,' ');
+    for (const e of document.querySelectorAll('[role="button"],button')) {
+        const s = t(e), lab = e.getAttribute('aria-label') || '';
+        if (!(s + lab).toLowerCase().includes(chu.toLowerCase())) continue;
+        const r = e.getBoundingClientRect();
+        if (r.width < 20 || r.height < 14) continue;
+        const x = Math.round(r.left + r.width/2), y = Math.round(r.top + r.height/2);
+        const tren = document.elementFromPoint(x, y);
+        if (tren && (e.contains(tren) || tren.contains(e))) return {x, y};
+    }
+    return null;
+}"""
+
+
+async def _roi_mot_nhom(page, uid: str, ten_nhom: str, link_url: str) -> str:
+    """Rời MỘT nhóm. Trả về "da_roi" | "khong_o_trong" | "loi".
+
+    Đường đi đo thật ngày 01/10 trên nick Nguyen Ngan:
+        bấm "Đã tham gia"  →  menu [Quản lý thông báo · Bỏ theo dõi nhóm · Rời nhóm]
+        →  bấm "Rời nhóm"  →  (có thể) hộp xác nhận
+
+    XÁC MINH sau khi bấm chứ không tin là xong: chỉ tính đã rời khi nút đổi
+    thành "Tham gia". Đếm số lần bấm thay vì đếm kết quả chính là lỗi đã mắc ở
+    bước tick nhóm Marketplace — log báo 20 mà thực tế chỉ 16.
+    """
+    url = link_url if link_url and link_url.startswith("http") \
+          else f"https://www.facebook.com/groups/{uid}/"
+    try:
+        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        await _human_delay(2000, 3000)
+    except Exception as e:
+        _log("error", f"❌ Không mở được nhóm '{ten_nhom or uid}': {e}")
+        return "loi"
+
+    vi_tri = await page.evaluate(_JS_NUT_HIEN, "Đã tham gia")
+    if not vi_tri:
+        _log("info", f"⏭️  Không còn ở trong nhóm: {ten_nhom or uid}")
+        return "khong_o_trong"
+
+    await page.mouse.click(vi_tri["x"], vi_tri["y"])
+    await _human_delay(1500, 2500)
+
+    # "Rời nhóm" là một role=menuitem trong menu vừa mở.
+    try:
+        muc = await page.wait_for_selector(
+            '[role="menuitem"]:has-text("Rời nhóm")', timeout=5000, state="visible")
+    except Exception:
+        muc = None
+    if not muc:
+        _log("warning", f"⚠️  Không thấy mục 'Rời nhóm': {ten_nhom or uid}")
+        await page.keyboard.press("Escape")
+        return "loi"
+    await muc.click()
+    await _human_delay(2000, 3000)
+
+    # Facebook có thể hỏi lại trong hộp thoại. Chỉ bấm nút nằm TRONG dialog —
+    # bấm bừa chữ "Rời nhóm" ở ngoài là bấm lại chính cái menu vừa đóng.
+    for sel in ('div[role="dialog"] div[role="button"]:has-text("Rời nhóm")',
+                'div[role="dialog"] div[role="button"]:has-text("Rời khỏi nhóm")',
+                'div[role="dialog"] div[role="button"]:has-text("Xác nhận")'):
+        try:
+            nut = await page.wait_for_selector(sel, timeout=3000, state="visible")
+            if nut:
+                await nut.click()
+                await _human_delay(2000, 3000)
+                break
+        except Exception:
+            continue
+
+    # Xác minh: nút phải đổi thành "Tham gia".
+    # Vào LẠI bằng goto chứ không page.reload(): rời nhóm xong Facebook tự điều
+    # hướng đi, reload lúc đó ném `ERR_ABORTED; maybe frame was detached` —
+    # gặp thật ngày 01/10 ở nhóm 719961823676435, nhóm đã rời được nhưng bị ghi
+    # thành lỗi. goto vào thẳng URL nhóm thì không phụ thuộc trang đang đứng ở đâu.
+    try:
+        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        await _human_delay(2500, 3500)
+    except Exception as e:
+        _log("warning", f"⚠️  Không vào lại được để kiểm: {ten_nhom or uid} ({e})")
+        return "loi"
+    con_o = await page.evaluate(_JS_NUT_HIEN, "Đã tham gia")
+    if con_o:
+        _log("warning", f"⚠️  Bấm rồi mà VẪN còn trong nhóm: {ten_nhom or uid}")
+        return "loi"
+    _log("info", f"🚪 Đã rời: {ten_nhom or uid}")
+    return "da_roi"
+
+
+async def _lam_sach_nhom(page, muc_tieu: list) -> int:
+    """Rời mọi nhóm nick đang ở mà KHÔNG nằm trong danh sách mục tiêu.
+
+    Mục đích: để nick chỉ còn đúng các nhóm đã duyệt Marketplace, lúc tick nhóm
+    ở bước đăng bài khỏi phải lọc giữa một rừng nhóm không liên quan.
+
+    Đọc danh sách nhóm của CHÍNH NICK CÁ NHÂN (luồng Marketplace không switch
+    sang Page), nên không đụng tới nhóm của Page.
+
+    Trả về số nhóm ĐÃ RỜI THẬT — đếm kết quả xác minh, không đếm số lần bấm.
+    """
+    giu = set()
+    for g in muc_tieu:
+        giu |= _dinh_danh_nhom(g["uid"], g["link_url"])
+
+    try:
+        dang_o = await _lay_nhom_da_vao(page, "Nick")
+    except Exception as e:
+        _log("warning", f"⚠️  Không đọc được danh sách nhóm để làm sạch: {e}")
+        return 0
+
+    thua = sorted(dang_o - giu)
+    _log("info", f"\n🧹 LÀM SẠCH: đang ở {len(dang_o)} nhóm, "
+                 f"giữ {len(dang_o & giu)}, rời {len(thua)}")
+    if not thua:
+        return 0
+    for x in thua:
+        _log("info", f"     sẽ rời: {x}")
+
+    da_roi = 0
+    for i, uid in enumerate(thua, 1):
+        _log("info", f"\n[rời {i}/{len(thua)}] {uid}")
+        try:
+            if await _roi_mot_nhom(page, uid, "", "") == "da_roi":
+                da_roi += 1
+        except Exception as e:
+            _log("error", f"❌ Lỗi khi rời {uid}: {e}")
+        # Rời nhóm dồn dập cũng là hành vi bất thường như tham gia dồn dập.
+        await asyncio.sleep(_DELAY_SKIP_SEC + random.randint(0, 4))
+
+    _log("info", f"\n🧹 Đã rời {da_roi}/{len(thua)} nhóm")
+    return da_roi
 
 
 async def _join_one_group(page, uid: str, ten_nhom: str, link_url: str) -> str:
@@ -250,9 +413,12 @@ async def _join_one_group(page, uid: str, ten_nhom: str, link_url: str) -> str:
         _log("info", f"⏳ Đang chờ duyệt: {ten_nhom}")
         return "cho_duyet"
     if state != "need_join":
-        # Không thấy nút tham gia sau ~6s → coi như đã là thành viên (tránh click sai)
-        _log("info", f"⏭️  Không thấy nút tham gia — coi như đã là thành viên: {ten_nhom}")
-        return "da_join"
+        # KHÔNG được coi "không đọc được" là "đã là thành viên". Suy đoán đó
+        # chính là thứ làm phiên ngày 01/10 báo "đã là thành viên: 16" trong khi
+        # 17/25 nhóm nút vẫn là "Tham gia nhóm" — nó bỏ qua, không bấm gì cả, mà
+        # bảng vẫn hiện số đẹp. Thà báo lỗi để còn nhìn thấy mà chạy lại.
+        _log("warning", f"⚠️  Không đọc được trạng thái thành viên: {ten_nhom}")
+        return "loi"
 
     # ── need_join: click nút "Tham gia nhóm" (nút đã có sẵn, query nhanh) ──
     clicked = False
@@ -288,7 +454,21 @@ async def _join_one_group(page, uid: str, ten_nhom: str, link_url: str) -> str:
         except PWTimeout:
             pass
 
-    return "moi_join"
+    # XÁC MINH sau khi bấm, không tin là xong. Nhóm cần duyệt thì bấm Tham gia
+    # mới chỉ là GỬI YÊU CẦU — đếm nó vào "đã tham gia" là báo cáo sai.
+    try:
+        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        await _human_delay(2500, 3500)
+        sau = await page.evaluate(_DETECT_STATE_JS)
+    except Exception:
+        sau = ""
+    if sau == "da_join":
+        return "moi_join"
+    if sau == "cho_duyet":
+        _log("info", f"⏳ Đã gửi yêu cầu, chờ duyệt: {ten_nhom}")
+        return "cho_duyet"
+    _log("warning", f"⚠️  Bấm Tham gia rồi mà vẫn chưa vào: {ten_nhom}")
+    return "loi"
 
 
 # ─── Main flow ────────────────────────────────────────────────────────────────
@@ -309,7 +489,18 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
             ).fetchall()
 
     groups = [{"uid": r[0], "ten_nhom": r[1], "link_url": r[2]} for r in rows]
+    # Giữ bản GỐC: `groups` lát nữa bị thay bằng danh sách đã lọc bớt nhóm đã
+    # tham gia, mà bước làm sạch cần biết TOÀN BỘ nhóm mục tiêu để chừa lại.
+    groups_goc = list(groups)
     total  = len(groups)
+
+    with _conn() as con:
+        _r = con.execute("SELECT lam_sach FROM join_schedules WHERE id=?",
+                         (schedule_id,)).fetchone()
+    lam_sach = bool(_r and _r[0])
+    if lam_sach:
+        _log("info", "🧹 Lịch này BẬT làm sạch — xong phần tham gia sẽ rời "
+                     "mọi nhóm ngoài danh sách")
     _log("info", f"📋 Tổng {total} nhóm cần kiểm tra")
 
     def _update_status(status, **kwargs):
@@ -319,7 +510,9 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
             con.execute(f"UPDATE join_schedules SET trang_thai=?, {sets} WHERE id=?",
                         [status] + vals)
 
-    _update_status("Đang chạy", tong_nhom=total)
+    # da_roi về 0 ngay từ đầu: để nguyên là số của lượt TRƯỚC còn hiện trên
+    # bảng suốt lượt này, nhìn tưởng vừa rời ngần ấy nhóm.
+    _update_status("Đang chạy", tong_nhom=total, da_roi=0)
 
     profile_dir = _find_profile_dir(acc_name)
     UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -401,6 +594,15 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
             _log("info", f"🔄 Switch sang Page {page_uid}...")
             await _switch_to_page(page, ctx, page_uid)
 
+        # ── LÀM SẠCH TRƯỚC, rồi mới tham gia ──────────────────────────────
+        # Rời mọi nhóm KHÔNG có trong danh sách mục tiêu. Làm TRƯỚC chứ không
+        # phải sau: dọn xong thì danh sách nhóm của nick gọn ngay, và bước lọc
+        # "đã tham gia" ở dưới đọc được đúng tình trạng sau khi dọn.
+        # Chỉ áp dụng cho nguồn MARKET và khi lịch bật cờ `lam_sach`.
+        if nguon == "MARKET" and lam_sach:
+            stats["da_roi"] = await _lam_sach_nhom(page, groups_goc)
+            _update_status("Đang chạy", da_roi=stats["da_roi"])
+
         # ── Bỏ qua nhóm Page ĐÃ tham gia, không mở từng trang để hỏi lại ──
         # Đo thật trên Page 'Bồ Công Anh': phiên cũ mở 30 trang nhóm trong 10
         # phút chỉ để phát hiện cả 30 đều "đã là thành viên" — ~20 giây mỗi nhóm
@@ -462,6 +664,7 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
                    moi_join=stats["moi_join"],
                    da_join=stats["da_join"],
                    loi=stats["loi"],
+                   da_roi=stats.get("da_roi", 0),
                    ket_qua=ket_qua)
 
     _log("info", f"\n✅ HOÀN THÀNH:")

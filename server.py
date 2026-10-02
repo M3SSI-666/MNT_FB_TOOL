@@ -2432,7 +2432,19 @@ def api_join_add():
 
 @app.route("/api/join/gen-quick", methods=["POST"])
 def api_join_gen_quick():
-    """Tạo lịch nhanh: mỗi acc Active có page → 1 lịch tham gia nhóm."""
+    """Dựng lại bảng cho KHỚP ĐÚNG phân công ở tab Tài khoản ngay lúc này.
+
+    Mỗi acc Active có gán Page → một lịch, vào đúng Page được gán.
+
+    DỌN luôn dòng không còn khớp — acc đã xoá, acc bỏ gán Page, hoặc acc đã đổi
+    sang Page khác. Trước đây nút này chỉ THÊM nên bảng phình ra theo thời gian:
+    đo ngày 01/10, 16 dòng trong khi phân công thật chỉ có 12, và hai nick
+    (Vân Anh, Nguyen Ngan) mỗi nick có hai dòng — bấm "Chạy lần lượt" là chúng
+    chạy hai lượt, lượt đầu cho Page CŨ đi xin vào 58 nhóm.
+
+    KHÔNG đụng vào lịch đang chạy, và không đụng vào lịch Marketplace
+    (`nguon='MARKET'`) — đó là bảng khác.
+    """
     body       = request.json or {}
     delay_new  = int(body.get("delay_new",  JOIN_NGHI_MOI_MAC_DINH))
     delay_skip = int(body.get("delay_skip", JOIN_NGHI_BO_QUA_MAC_DINH))
@@ -2441,36 +2453,51 @@ def api_join_gen_quick():
     set_setting("join_delay_skip", str(delay_skip))
 
     try:
-        accs    = get_accounts(trang_thai="Active")
-        created = 0
-        skipped = 0
         from db import _conn, get_page_by_name
+
+        # Phân công hiện tại: {(acc, page): page_uid}
+        mong_muon = {}
+        for acc in get_accounts(trang_thai="Active"):
+            ten_page = (acc.get("ten_page") or "").strip()
+            if not ten_page:
+                continue
+            p = get_page_by_name(ten_page)
+            mong_muon[(acc["ten_acc"], ten_page)] = (p or {}).get("page_uid", "") if p else ""
+
+        created = giu = xoa = dang_chay = 0
         with _conn() as con:
-            for acc in accs:
-                ten_acc  = acc["ten_acc"]
-                ten_page = (acc.get("ten_page") or "").strip()
-                if not ten_page:
-                    continue
-                # Bỏ qua nếu đã có lịch cho cặp này. Phải lọc cả `nguon`, nếu
-                # không thì một lịch Marketplace của cùng acc sẽ bị tính là
-                # "đã có" và acc đó không bao giờ được tạo lịch UID Nhóm.
-                existing = con.execute(
-                    "SELECT id FROM join_schedules "
-                    "WHERE ten_acc=? AND ten_page=? AND COALESCE(nguon,'')=''",
-                    (ten_acc, ten_page)
-                ).fetchone()
-                if existing:
-                    skipped += 1
-                    continue
-                page_info = get_page_by_name(ten_page)
-                page_uid  = page_info.get("page_uid", "") if page_info else ""
+            dang_co = {}
+            for r in con.execute(
+                    "SELECT id, ten_acc, ten_page FROM join_schedules "
+                    "WHERE COALESCE(nguon,'')=''").fetchall():
+                dang_co.setdefault((r["ten_acc"], r["ten_page"]), []).append(r["id"])
+
+            for cap, ids in dang_co.items():
+                for sid in ids:
+                    # Lịch đang chạy thì để yên: xoá giữa chừng là tiến trình
+                    # còn sống mà hàng của nó biến mất, không ai dừng được nữa.
+                    if _join_running_for(sid):
+                        dang_chay += 1
+                        # Vẫn phải gạch khỏi danh sách mong muốn, nếu không
+                        # vòng dưới lại chèn thêm một dòng y hệt cho cặp này.
+                        mong_muon.pop(cap, None)
+                        continue
+                    if cap in mong_muon:
+                        giu += 1
+                        mong_muon.pop(cap)          # đã có rồi, khỏi tạo lại
+                    else:
+                        con.execute("DELETE FROM join_schedules WHERE id=?", (sid,))
+                        xoa += 1
+
+            for (ten_acc, ten_page), page_uid in mong_muon.items():
                 con.execute(
                     "INSERT INTO join_schedules (ten_acc,ten_page,page_uid,gio_chay,trang_thai,created_at) "
                     "VALUES (?,?,?,?,?,datetime('now','localtime'))",
                     (ten_acc, ten_page, page_uid, "", "Chờ")
                 )
                 created += 1
-        return jsonify({"ok": True, "created": created, "skipped": skipped})
+        return jsonify({"ok": True, "created": created, "skipped": giu,
+                        "xoa": xoa, "dang_chay": dang_chay})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -2525,6 +2552,32 @@ def _chain_dang_chay(nguon: str) -> bool:
         pass
     pf.unlink(missing_ok=True)
     return False
+
+
+@app.route("/api/join/<int:sched_id>/lam-sach", methods=["POST"])
+def api_join_lam_sach(sched_id):
+    """Bật/tắt "làm sạch nhóm" cho một lịch Marketplace.
+
+    Chỉ cho bật trên lịch nguồn MARKET: làm sạch nghĩa là rời mọi nhóm không có
+    trong UID Marketplace, mà lịch nguồn '' chạy dưới danh nghĩa PAGE — bật ở đó
+    là rời nhầm nhóm của Page, không phải thứ ai muốn.
+    """
+    bat = bool((request.json or {}).get("bat"))
+    try:
+        from db import _conn
+        with _conn() as con:
+            r = con.execute("SELECT COALESCE(nguon,'') ng FROM join_schedules WHERE id=?",
+                            (sched_id,)).fetchone()
+            if not r:
+                return jsonify({"ok": False, "error": "Không tìm thấy lịch"})
+            if bat and r["ng"] != "MARKET":
+                return jsonify({"ok": False,
+                                "error": "Chỉ bật được cho lịch Tham gia nhóm Market"})
+            con.execute("UPDATE join_schedules SET lam_sach=? WHERE id=?",
+                        (1 if bat else 0, sched_id))
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 
 
 @app.route("/api/join/run-chain", methods=["POST"])

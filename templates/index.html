@@ -12,6 +12,13 @@
         .mkt-so { font-size:11px; font-weight:700; color:var(--text-muted);
                   text-align:center; line-height:22px; height:22px;
                   background:var(--bg); border-radius:50%; }
+
+        /* Cột STT — vừa là số thứ tự vừa là tay cầm để kéo đổi vị trí.
+           Gộp làm một ô thay vì để riêng một cột ☰: bảng Tài khoản đã 19 cột,
+           thêm cột nữa chỉ để kéo là phí chỗ. */
+        td.stt { text-align:center; color:var(--text-muted); font-size:11px;
+                 padding:4px 6px; cursor:grab; user-select:none; }
+        td.stt:active { cursor:grabbing; }
     </style>
 </head>
 <body>
@@ -112,7 +119,7 @@
                     <div class="table-wrap">
                         <table>
                             <thead><tr>
-                                <th style="width:32px"></th>
+                                <th style="width:40px;text-align:center">#</th>
                                 <th>Tên Page</th><th style="text-align:center">Acc quản lý</th><th style="text-align:center">Page UID</th>
                                 <th style="text-align:center">Loại đăng</th>
                                 <th style="text-align:center">Bài tối đa</th><th style="text-align:center">Link</th><th>Ghi chú</th>
@@ -145,7 +152,7 @@
                     <div class="table-wrap">
                         <table>
                             <thead><tr>
-                                <th style="width:32px"></th>
+                                <th style="width:40px;text-align:center">#</th>
                                 <th>Mã content</th><th>Nội dung</th>
                                 <th style="text-align:center">Ảnh</th>
                                 <th style="text-align:center">Sử dụng</th>
@@ -191,7 +198,7 @@
                     <div class="table-wrap">
                         <table>
                             <thead><tr>
-                                <th style="width:32px"></th>
+                                <th style="width:40px;text-align:center">#</th>
                                 <th style="text-align:center">UID / Link</th>
                                 <th>Tên nhóm</th>
                                 <th style="text-align:center">Thành viên</th>
@@ -240,7 +247,7 @@
                     <div class="table-wrap">
                         <table>
                             <thead><tr>
-                                <th style="width:36px;text-align:center">#</th>
+                                <th style="width:40px;text-align:center">#</th>
                                 <th style="text-align:center">UID / Link</th>
                                 <th>Tên nhóm</th>
                                 <th style="text-align:center;cursor:pointer;user-select:none"
@@ -342,11 +349,13 @@
                         <table>
                             <thead><tr>
                                 <th>Tài khoản</th>
-                                <th style="text-align:center">Giờ chạy</th>
+                                <th style="text-align:center"
+                                    title="Sau khi tham gia đủ nhóm mục tiêu thì rời mọi nhóm khác">Làm sạch</th>
                                 <th style="text-align:center">Tổng</th>
                                 <th style="text-align:center">Mới join</th>
                                 <th style="text-align:center">Đã join</th>
                                 <th style="text-align:center">Lỗi</th>
+                                <th style="text-align:center">Đã rời</th>
                                 <th>Trạng thái</th>
                                 <th style="width:50px"></th>
                             </tr></thead>
