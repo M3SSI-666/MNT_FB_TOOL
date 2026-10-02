@@ -10,6 +10,55 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.32.1 — 02/10/2026
+
+**Sửa: mở tab Tham gia nhóm là cả phần mềm lag**
+
+Lỗi có từ v2.30.0. Bảng tự nạp lại không có nhịp chờ: hàm vẽ bảng gọi hàm hỏi
+trạng thái, hàm hỏi trạng thái lại gọi hàm vẽ bảng. Đo ngày 02/10: **~250 yêu
+cầu mỗi giây**, chạy mãi kể cả khi đã sang tab khác, cạn **16.384 cổng mạng**
+của Windows (16.293 kết nối treo ở cổng 8080) — bấm xoá một lịch phải chờ rất
+lâu mới xong.
+
+Nay chỉ hỏi 5 giây một lần, và chỉ nút Chạy/Dừng mới nạp lại bảng.
+
+---
+
+**Sửa: nhóm vào được THẬT nhưng bị ghi thành lỗi**
+
+Sau khi bấm Tham gia, phần mềm vào lại đúng địa chỉ đang mở để kiểm chứng — mà
+Chromium trả **bản trang cũ trong bộ nhớ đệm**, nút vẫn là "Tham gia nhóm". Đo
+ngày 02/10 trên nick Tuan Ngoc Mai: 2 giây sau khi bấm, nút trên trang đã là
+"Đã tham gia", nhưng phiên ghi **15/15 nhóm thành lỗi**. Vì bị coi là lỗi nên nó
+chỉ nghỉ 5 giây thay vì 15 giây giữa hai lần tham gia — nhanh hơn mức an toàn.
+
+Nay đọc trạng thái ngay trên trang trước; cần vào lại thì dùng địa chỉ chống
+đệm. Bước rời nhóm cũng vậy. Cuối phiên đọc lại danh sách nhóm: nhóm nào ghi lỗi
+mà thực ra đã vào thì tính lại thành đã tham gia. Lỗi thật thì ghi kèm ảnh màn
+hình vào `logs/join_loi/`.
+
+Chạy lại cùng nick: **25/25 nhóm, lỗi 0**.
+
+---
+
+**Làm sạch nhóm chuyển xuống SAU phần tham gia**
+
+Bản trước làm sạch trước. Nếu bước tham gia hỏng thì nick đã rời sạch nhóm cũ mà
+không vào được nhóm mới — mất cả hai đầu. Nay làm sạch chạy sau, và **bỏ qua nếu
+chưa vào được nhóm mục tiêu nào** (nhóm mới gửi yêu cầu không tính).
+
+Cột **Đã rời** nay tăng dần mỗi 5 nhóm thay vì chỉ hiện lúc xong: một nick phải
+rời 425 nhóm mất gần 3 tiếng, bảng đứng ở 0 suốt thời gian đó nhìn tưởng treo.
+
+---
+
+**Sửa: nút Dừng chuỗi báo lỗi 500 mà chuỗi vẫn chạy tiếp**
+
+Hàm diệt tiến trình nhận vào một **danh sách** pid, nhưng chỗ gọi truyền một số
+đơn lẻ.
+
+---
+
 ## v2.32.0 — 02/10/2026
 
 **Sửa lỗi nặng: phần mềm báo "đã là thành viên" cho nhóm chưa hề vào**
