@@ -196,7 +196,7 @@ async function loadJoinSchedules() {
 
         // Nhịp làm mới do vòng theo dõi chuỗi lo, khỏi hai đồng hồ chạy song song.
         if(anyRunning && !_jcHen[""]) jcTheoDoi("");
-        else if(!anyRunning) jcTrangThai("");
+        else if(!anyRunning) jcTrangThai("", false);
 
         if(!res.data.length) {
             tbody.innerHTML = `<tr><td colspan="9" class="empty">Chưa có lịch tham gia nhóm nào</td></tr>`;
@@ -2100,6 +2100,7 @@ async function jcChay(nguon){
         if(!r.ok){ Toast.error(r.error); return; }
         Toast.success(`▶ Chạy lần lượt ${r.tong} nick (${c.an()?"ẩn Chrome":"hiện Chrome"})`);
         jcTheoDoi(nguon);
+        c.nap();
     }catch(e){ Toast.error(e.message); }
 }
 
@@ -2109,16 +2110,22 @@ async function jcDung(nguon){
         await API.joinStopChain(nguon);
         Toast.success("Đã dừng");
         jcTheoDoi(nguon);
+        _JC[nguon].nap();
     }catch(e){ Toast.error(e.message); }
 }
 
 function jcTheoDoi(nguon){
     clearInterval(_jcHen[nguon]);
     _jcHen[nguon]=setInterval(()=>jcTrangThai(nguon), 5000);
-    jcTrangThai(nguon);
+    jcTrangThai(nguon, false);
 }
 
-async function jcTrangThai(nguon){
+// `napLai`: có nạp lại bảng không. CHỈ nhịp 5 giây được nạp lại bảng — hàm nạp
+// bảng gọi vào đây thì truyền false, và jcTheoDoi cũng vậy.
+// Trước đây hàm nạp bảng gọi vào đây, đây lại gọi hàm nạp bảng, không có nhịp
+// chờ nào ở giữa: đo 02/10 được ~250 yêu cầu/giây, chạy mãi kể cả khi đã sang
+// tab khác, làm cạn 16.384 cổng mạng của Windows nên bấm gì cũng phải chờ.
+async function jcTrangThai(nguon, napLai=true){
     const c=_JC[nguon]; if(!c) return;
     const bChay=document.getElementById(c.nutChay);
     const bDung=document.getElementById(c.nutDung);
@@ -2130,6 +2137,11 @@ async function jcTrangThai(nguon){
         const dem=document.getElementById(c.dem);
         if(dem && d.dang_chay)
             dem.textContent=`⏳ ${d.da||0}/${d.tong||0}${d.dang?" · đang: "+d.dang:""}`;
+        if(!napLai){
+            // Chuỗi đang chạy mà chưa có nhịp theo dõi (vd mở app giữa chừng).
+            if(d.dang_chay && !_jcHen[nguon]) jcTheoDoi(nguon);
+            return;
+        }
         if(d.dang_chay){ c.nap(); return; }
         clearInterval(_jcHen[nguon]); delete _jcHen[nguon];
         if(d.loi) Toast.error(d.loi);
@@ -2231,7 +2243,7 @@ async function loadJoinMarket(){
         const dem=document.getElementById("jm-count");
         if(dem && !dangChay) dem.textContent=`${ds.length} lịch`;
         if(dangChay && !_jcHen["MARKET"]) jcTheoDoi("MARKET");
-        else if(!dangChay) jcTrangThai("MARKET");
+        else if(!dangChay) jcTrangThai("MARKET", false);
 
         if(!ds.length){
             tbody.innerHTML=`<tr><td colspan="8" class="empty">Chưa có lịch nào — bấm "Tạo lịch cho mọi nick Active"</td></tr>`;

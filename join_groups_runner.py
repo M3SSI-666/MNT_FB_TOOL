@@ -157,6 +157,84 @@ _JOIN_SELS = [
 ]
 
 
+def _url_chong_cache(url: str) -> str:
+    """URL nhóm kèm tham số thời gian, để vào lại trang mà KHÔNG nhận bản cũ.
+
+    Bấm Tham gia xong mà `goto` lại ĐÚNG URL đang mở thì Chromium trả bản trang
+    cũ, nút vẫn là "Tham gia nhóm". Đo 02/10 trên nick Tuan Ngoc Mai: 15/15 nhóm
+    vào thật bị ghi thành lỗi vì vậy. Cùng lúc đó URL có tham số và tab mới đều
+    đọc ra "Đã tham gia".
+    """
+    return f"{url}{'&' if '?' in url else '?'}_t={int(time.time())}"
+
+
+async def _cho_trang_thai(page, giay: int) -> str:
+    """Đọc trạng thái thành viên, chờ tối đa `giay` giây tới khi rõ ràng."""
+    st = ""
+    for _ in range(giay):
+        try:
+            st = await page.evaluate(_DETECT_STATE_JS)
+        except Exception:
+            st = ""
+        if st in ("da_join", "cho_duyet"):
+            break
+        await page.wait_for_timeout(1000)
+    return st
+
+
+_JS_HOP_THOAI = r"""() => [...document.querySelectorAll('[role="dialog"],[role="alertdialog"]')]
+  .filter(d => { const r = d.getBoundingClientRect(); return r.width > 50 && r.height > 50; })
+  .map(d => ({
+     chu: (d.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 300),
+     nut: [...d.querySelectorAll('[role="button"],button')]
+            .map(b => (b.innerText || b.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' '))
+            .filter(s => s && s.length < 40),
+  }))"""
+
+_SO_ANH_LOI = 0          # mỗi phiên chụp tối đa 5 ảnh, đủ để biết lỗi gì
+_GIU_ANH_LOI = 50        # thư mục ảnh lỗi giữ 50 ảnh mới nhất
+
+
+async def _ghi_chan_doan(page, ten_nhom: str, hop=None, anh: bytes = None):
+    """Lỗi không rõ nguyên nhân thì ghi lại Facebook đang hiện gì.
+
+    Trước đây log chỉ có "vẫn chưa vào" — không biết là Facebook chặn, hỏi câu
+    hỏi thành viên, hay phần mềm đọc sai. Phải chạy thử lại bằng tay mới biết.
+
+    `hop` / `anh` là thứ đã chụp sẵn từ trước (khi trang đã bị tải lại); không
+    có thì đọc từ trang hiện tại.
+    """
+    global _SO_ANH_LOI
+    if hop is None:
+        try:
+            hop = await page.evaluate(_JS_HOP_THOAI)
+        except Exception:
+            hop = []
+    if not hop:
+        _log("warning", "   (không có hộp thoại nào đang mở)")
+    for h in hop:
+        _log("warning", f"   hộp thoại: {h['chu']} | nút: {', '.join(h['nut'])}")
+
+    if _SO_ANH_LOI >= 5:
+        return
+    _SO_ANH_LOI += 1
+    try:
+        from config import LOG_DIR
+        thu_muc = Path(LOG_DIR) / "join_loi"
+        thu_muc.mkdir(parents=True, exist_ok=True)
+        ten = re.sub(r"\W+", "_", f"{_ACC}_{ten_nhom}")[:60]
+        tep = thu_muc / f"{time.strftime('%Y%m%d_%H%M%S')}_{ten}.png"
+        if anh:
+            tep.write_bytes(anh)
+        else:
+            await page.screenshot(path=str(tep))
+        _log("warning", f"   ảnh màn hình: logs/join_loi/{tep.name}")
+        for cu in sorted(thu_muc.glob("*.png"))[:-_GIU_ANH_LOI]:
+            cu.unlink(missing_ok=True)
+    except Exception as e:
+        _log("warning", f"   không chụp được màn hình: {e}")
+
+
 # Bóc mọi id/slug nhóm từ link trên trang. Nhận cả UID số lẫn slug chữ vì tag
 # đang có cả hai dạng (54/58 là số, còn lại như "lucnhare24h").
 _JS_BOC_NHOM = r"""() => {
@@ -320,8 +398,10 @@ async def _roi_mot_nhom(page, uid: str, ten_nhom: str, link_url: str) -> str:
     # hướng đi, reload lúc đó ném `ERR_ABORTED; maybe frame was detached` —
     # gặp thật ngày 01/10 ở nhóm 719961823676435, nhóm đã rời được nhưng bị ghi
     # thành lỗi. goto vào thẳng URL nhóm thì không phụ thuộc trang đang đứng ở đâu.
+    # URL chống cache: nếu Facebook không điều hướng đi thì goto lại đúng URL đang
+    # mở sẽ nhận bản trang cũ, nút vẫn "Đã tham gia" dù đã rời — xem `_url_chong_cache`.
     try:
-        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        await page.goto(_url_chong_cache(url), wait_until="domcontentloaded", timeout=30000)
         await _human_delay(2500, 3500)
     except Exception as e:
         _log("warning", f"⚠️  Không vào lại được để kiểm: {ten_nhom or uid} ({e})")
@@ -334,14 +414,19 @@ async def _roi_mot_nhom(page, uid: str, ten_nhom: str, link_url: str) -> str:
     return "da_roi"
 
 
-async def _lam_sach_nhom(page, muc_tieu: list) -> int:
+async def _lam_sach_nhom(page, muc_tieu: list, dang_o: set = None, bao=None) -> int:
     """Rời mọi nhóm nick đang ở mà KHÔNG nằm trong danh sách mục tiêu.
 
     Mục đích: để nick chỉ còn đúng các nhóm đã duyệt Marketplace, lúc tick nhóm
     ở bước đăng bài khỏi phải lọc giữa một rừng nhóm không liên quan.
 
     Đọc danh sách nhóm của CHÍNH NICK CÁ NHÂN (luồng Marketplace không switch
-    sang Page), nên không đụng tới nhóm của Page.
+    sang Page), nên không đụng tới nhóm của Page. `dang_o` là danh sách đã đọc
+    sẵn — có thì khỏi đọc lại (mỗi lần đọc mất cả phút cuộn trang).
+
+    `bao(da_roi)` được gọi sau mỗi 5 nhóm để bảng hiện tiến độ. Không có nó thì
+    cột "Đã rời" đứng ở 0 suốt cả buổi: ngày 02/10 nick Mai Tùng phải rời 425
+    nhóm, mất gần 3 tiếng, nhìn bảng tưởng tool đã treo.
 
     Trả về số nhóm ĐÃ RỜI THẬT — đếm kết quả xác minh, không đếm số lần bấm.
     """
@@ -349,11 +434,12 @@ async def _lam_sach_nhom(page, muc_tieu: list) -> int:
     for g in muc_tieu:
         giu |= _dinh_danh_nhom(g["uid"], g["link_url"])
 
-    try:
-        dang_o = await _lay_nhom_da_vao(page, "Nick")
-    except Exception as e:
-        _log("warning", f"⚠️  Không đọc được danh sách nhóm để làm sạch: {e}")
-        return 0
+    if dang_o is None:
+        try:
+            dang_o = await _lay_nhom_da_vao(page, "Nick")
+        except Exception as e:
+            _log("warning", f"⚠️  Không đọc được danh sách nhóm để làm sạch: {e}")
+            return 0
 
     thua = sorted(dang_o - giu)
     _log("info", f"\n🧹 LÀM SẠCH: đang ở {len(dang_o)} nhóm, "
@@ -371,6 +457,11 @@ async def _lam_sach_nhom(page, muc_tieu: list) -> int:
                 da_roi += 1
         except Exception as e:
             _log("error", f"❌ Lỗi khi rời {uid}: {e}")
+        if bao and i % 5 == 0:
+            try:
+                bao(da_roi)
+            except Exception:
+                pass
         # Rời nhóm dồn dập cũng là hành vi bất thường như tham gia dồn dập.
         await asyncio.sleep(_DELAY_SKIP_SEC + random.randint(0, 4))
 
@@ -418,6 +509,7 @@ async def _join_one_group(page, uid: str, ten_nhom: str, link_url: str) -> str:
         # 17/25 nhóm nút vẫn là "Tham gia nhóm" — nó bỏ qua, không bấm gì cả, mà
         # bảng vẫn hiện số đẹp. Thà báo lỗi để còn nhìn thấy mà chạy lại.
         _log("warning", f"⚠️  Không đọc được trạng thái thành viên: {ten_nhom}")
+        await _ghi_chan_doan(page, ten_nhom)
         return "loi"
 
     # ── need_join: click nút "Tham gia nhóm" (nút đã có sẵn, query nhanh) ──
@@ -443,31 +535,52 @@ async def _join_one_group(page, uid: str, ten_nhom: str, link_url: str) -> str:
         _log("info", f"⏭️  Đã là thành viên: {ten_nhom}")
         return "da_join"
 
-    # Xử lý dialog xác nhận nếu có
-    for sel in ['div[role="dialog"] div[role="button"]:has-text("Tham gia")',
-                'div[role="dialog"] div[role="button"]:has-text("Join")',
-                'div[role="dialog"] div[role="button"]:has-text("Xác nhận")',
-                'div[role="dialog"] div[role="button"]:has-text("Confirm")']:
-        try:
-            btn = await page.wait_for_selector(sel, timeout=3000, state="visible")
-            if btn: await btn.click(); await _human_delay(1500, 2500)
-        except PWTimeout:
-            pass
-
     # XÁC MINH sau khi bấm, không tin là xong. Nhóm cần duyệt thì bấm Tham gia
     # mới chỉ là GỬI YÊU CẦU — đếm nó vào "đã tham gia" là báo cáo sai.
-    try:
-        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-        await _human_delay(2500, 3500)
-        sau = await page.evaluate(_DETECT_STATE_JS)
-    except Exception:
-        sau = ""
+    #
+    # Đọc NGAY TRÊN TRANG trước: đo 02/10, bấm xong 2 giây nút đã thành "Đã tham
+    # gia". Bản cũ `goto` lại đúng URL đang mở và nhận bản trang cũ (xem
+    # `_url_chong_cache`), nên 15/15 nhóm vào thật bị ghi thành lỗi — và vì bị
+    # coi là lỗi nên chỉ nghỉ 5 giây thay vì 15 giây giữa hai lần tham gia.
+    sau = await _cho_trang_thai(page, 6)
+
+    if sau not in ("da_join", "cho_duyet"):
+        # Xử lý dialog xác nhận nếu có
+        for sel in ['div[role="dialog"] div[role="button"]:has-text("Tham gia")',
+                    'div[role="dialog"] div[role="button"]:has-text("Join")',
+                    'div[role="dialog"] div[role="button"]:has-text("Xác nhận")',
+                    'div[role="dialog"] div[role="button"]:has-text("Confirm")']:
+            try:
+                btn = await page.wait_for_selector(sel, timeout=3000, state="visible")
+                if btn: await btn.click(); await _human_delay(1500, 2500)
+            except PWTimeout:
+                pass
+        sau = await _cho_trang_thai(page, 4)
+
+    hop, anh = None, None
+    if sau not in ("da_join", "cho_duyet"):
+        # Chụp lại TRƯỚC khi vào lại trang: vào lại là hộp thoại (nếu có) mất.
+        # Chỉ ghi ra đĩa nếu rốt cuộc vẫn là lỗi.
+        try:
+            hop = await page.evaluate(_JS_HOP_THOAI)
+            anh = await page.screenshot()
+        except Exception:
+            pass
+        # Vẫn chưa rõ thì vào lại trang — bằng URL chống cache.
+        try:
+            await page.goto(_url_chong_cache(url), wait_until="domcontentloaded", timeout=30000)
+            await _human_delay(2500, 3500)
+            sau = await _cho_trang_thai(page, 5)
+        except Exception:
+            sau = ""
+
     if sau == "da_join":
         return "moi_join"
     if sau == "cho_duyet":
         _log("info", f"⏳ Đã gửi yêu cầu, chờ duyệt: {ten_nhom}")
         return "cho_duyet"
     _log("warning", f"⚠️  Bấm Tham gia rồi mà vẫn chưa vào: {ten_nhom}")
+    await _ghi_chan_doan(page, ten_nhom, hop, anh)
     return "loi"
 
 
@@ -500,7 +613,8 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
     lam_sach = bool(_r and _r[0])
     if lam_sach:
         _log("info", "🧹 Lịch này BẬT làm sạch — xong phần tham gia sẽ rời "
-                     "mọi nhóm ngoài danh sách")
+                     "mọi nhóm ngoài danh sách (bỏ qua nếu chưa vào được nhóm "
+                     "mục tiêu nào)")
     _log("info", f"📋 Tổng {total} nhóm cần kiểm tra")
 
     def _update_status(status, **kwargs):
@@ -594,15 +708,6 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
             _log("info", f"🔄 Switch sang Page {page_uid}...")
             await _switch_to_page(page, ctx, page_uid)
 
-        # ── LÀM SẠCH TRƯỚC, rồi mới tham gia ──────────────────────────────
-        # Rời mọi nhóm KHÔNG có trong danh sách mục tiêu. Làm TRƯỚC chứ không
-        # phải sau: dọn xong thì danh sách nhóm của nick gọn ngay, và bước lọc
-        # "đã tham gia" ở dưới đọc được đúng tình trạng sau khi dọn.
-        # Chỉ áp dụng cho nguồn MARKET và khi lịch bật cờ `lam_sach`.
-        if nguon == "MARKET" and lam_sach:
-            stats["da_roi"] = await _lam_sach_nhom(page, groups_goc)
-            _update_status("Đang chạy", da_roi=stats["da_roi"])
-
         # ── Bỏ qua nhóm Page ĐÃ tham gia, không mở từng trang để hỏi lại ──
         # Đo thật trên Page 'Bồ Công Anh': phiên cũ mở 30 trang nhóm trong 10
         # phút chỉ để phát hiện cả 30 đều "đã là thành viên" — ~20 giây mỗi nhóm
@@ -634,11 +739,14 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
             groups = con_lai
 
         # Duyệt từng nhóm
+        nhom_loi = []
         for i, g in enumerate(groups, 1):
             _log("info", f"\n[{i}/{total}] {g['ten_nhom'] or g['uid']}")
             result = await _join_one_group(page, g["uid"], g["ten_nhom"], g["link_url"])
             stats[result] += 1
             results.append({"uid": g["uid"], "ten": g["ten_nhom"], "result": result})
+            if result == "loi":
+                nhom_loi.append(g)
 
             # Update progress mỗi 5 nhóm
             if i % 5 == 0:
@@ -655,6 +763,52 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
                 wait = _DELAY_SKIP_SEC
                 _log("info", f"⏩ Bỏ qua → chờ {wait}s...")
             await asyncio.sleep(wait)
+
+        # ── Đối chiếu lại, rồi mới LÀM SẠCH ───────────────────────────────
+        # Đọc lại danh sách nhóm đã tham gia một lần. Hai việc dùng chung nó:
+        #  1. Nhóm bị ghi lỗi mà thật ra đã vào → sửa thành "mới tham gia".
+        #     Lưới an toàn cho mọi kiểu đọc sai trạng thái trên trang nhóm.
+        #  2. Làm sạch: rời nhóm ngoài danh sách mục tiêu.
+        lam_sach_nay = nguon == "MARKET" and lam_sach
+        if nhom_loi or lam_sach_nay:
+            try:
+                dang_o = await _lay_nhom_da_vao(page, chu_the)
+            except Exception as e:
+                _log("warning", f"⚠️  Không đọc lại được danh sách nhóm: {e}")
+                dang_o = None
+
+            if dang_o and nhom_loi:
+                sua = [g for g in nhom_loi
+                       if _dinh_danh_nhom(g["uid"], g["link_url"]) & dang_o]
+                for g in sua:
+                    for r in results:
+                        if r["uid"] == g["uid"] and r["result"] == "loi":
+                            r["result"] = "moi_join"
+                stats["loi"]      -= len(sua)
+                stats["moi_join"] += len(sua)
+                if sua:
+                    _log("info", f"🔁 Đối chiếu: {len(sua)} nhóm ghi lỗi thật ra "
+                                 f"đã vào — tính lại thành mới tham gia")
+
+            # LÀM SAU khi tham gia, và CHỈ KHI đã vào được ít nhất một nhóm mục
+            # tiêu. Bản cũ làm sạch TRƯỚC: bước tham gia mà hỏng thì nick rời
+            # sạch nhóm cũ, không vào được nhóm mới — mất trắng, nhóm cần duyệt
+            # phải xin lại từ đầu. Nhóm mới GỬI YÊU CẦU (chờ duyệt) không tính:
+            # có thể không bao giờ được duyệt.
+            if lam_sach_nay:
+                if stats["moi_join"] + stats["da_join"] == 0:
+                    _log("warning", "🧹 BỎ QUA làm sạch: chưa vào được nhóm mục "
+                                    "tiêu nào — rời nhóm cũ lúc này là mất trắng")
+                elif dang_o is None:
+                    _log("warning", "🧹 BỎ QUA làm sạch: không đọc được danh sách nhóm")
+                else:
+                    # Ghi luôn số nhóm vừa đối chiếu lại: không thì bảng vẫn
+                    # hiện số lỗi cũ suốt thời gian làm sạch.
+                    _update_status("Đang chạy", moi_join=stats["moi_join"],
+                                   da_join=stats["da_join"], loi=stats["loi"])
+                    stats["da_roi"] = await _lam_sach_nhom(
+                        page, groups_goc, dang_o,
+                        bao=lambda n: _update_status("Đang chạy", da_roi=n))
 
         await ctx.close()
 

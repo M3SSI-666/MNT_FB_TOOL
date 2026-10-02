@@ -3931,18 +3931,37 @@ check("cột lam_sach mặc định TẮT",
       in Path("db.py").read_text(encoding="utf-8"))
 check("chỉ bật được cho lịch MARKET",
       'if bat and r["ng"] != "MARKET"' in _src_srv_j)
-# Làm sạch chạy TRƯỚC phần tham gia: dọn xong thì bước lọc "đã tham gia" ở dưới
-# đọc đúng tình trạng sau khi dọn, và danh sách nhóm của nick gọn ngay.
+# Làm sạch chạy SAU phần tham gia, và chỉ khi đã vào được ít nhất một nhóm mục
+# tiêu. Bản cũ làm sạch TRƯỚC: ngày 02/10 bước tham gia báo lỗi 15/15 nhóm (đọc
+# sai, xem dưới) — nick nào có nhóm cũ mà chạy tiếp là rời sạch nhóm cũ, không
+# vào được nhóm mới.
 _i_join = _src_jr.index("for i, g in enumerate(groups, 1):")
-_i_sach = _src_jr.index("_lam_sach_nhom(page, groups_goc)")
-_i_loc  = _src_jr.index("da_vao = await _lay_nhom_da_vao(page, chu_the)")
-check("làm sạch chạy TRƯỚC phần tham gia", _i_sach < _i_join)
-check("làm sạch chạy TRƯỚC bước lọc nhóm đã vào", _i_sach < _i_loc)
+_i_sach = _src_jr.index("await _lam_sach_nhom(")
+_i_chan = _src_jr.index('if stats["moi_join"] + stats["da_join"] == 0:')
+check("làm sạch chạy SAU phần tham gia", _i_join < _i_sach)
+check("chưa vào được nhóm mục tiêu nào thì BỎ QUA làm sạch", _i_join < _i_chan < _i_sach)
+check("nhóm mới chờ duyệt KHÔNG tính là đã vào khi quyết định làm sạch",
+      "cho_duyet" not in _src_jr[_i_chan:_i_chan + 60])
+check("chỉ còn MỘT chỗ gọi làm sạch", _src_jr.count("await _lam_sach_nhom(") == 1)
+check("làm sạch dùng lại danh sách vừa đọc, không cuộn đọc lại",
+      "page, groups_goc, dang_o," in _src_jr[_i_sach:_i_sach + 120])
+# Rời 425 nhóm mất gần 3 tiếng (Mai Tùng, 02/10) — cột "Đã rời" phải tăng dần,
+# không thì bảng đứng ở 0 cả buổi, nhìn tưởng tool treo.
+check("làm sạch báo tiến độ lên bảng trong lúc chạy",
+      'bao=lambda n: _update_status("Đang chạy", da_roi=n)' in _src_jr
+      and "bao(da_roi)" in _src_jr)
+# Trạng thái phải giữ nguyên "Đang chạy": dọn lịch kẹt và nút Dừng đều tìm
+# đúng chữ đó — ghi chữ khác vào là lịch kẹt mãi khi tiến trình chết.
+check("báo tiến độ không đổi chữ trạng thái",
+      "_update_status(f\"Đang rời" not in _src_jr)
 # `groups` bị thay bằng danh sách đã lọc, nên phải giữ bản gốc để biết nhóm nào
 # là mục tiêu — dùng nhầm `groups` là rời luôn nhóm đã tham gia từ trước.
 check("làm sạch dùng danh sách mục tiêu GỐC", "groups_goc = list(groups)" in _src_jr)
 check("chỉ làm sạch khi nguồn MARKET và có bật cờ",
-      'if nguon == "MARKET" and lam_sach:' in _src_jr)
+      'lam_sach_nay = nguon == "MARKET" and lam_sach' in _src_jr)
+# Đọc lại danh sách nhóm sau phiên: nhóm ghi lỗi mà thật ra đã vào thì sửa lại.
+check("đối chiếu lại nhóm ghi lỗi với danh sách nhóm đã vào",
+      'r["result"] = "moi_join"' in _src_jr and 'stats["loi"]      -= len(sua)' in _src_jr)
 # Đếm KẾT QUẢ, không đếm số lần bấm — đúng lỗi đã mắc ở bước tick nhóm
 # Marketplace: log báo tick 20 mà thực tế chỉ 16.
 check("xác minh đã rời bằng cách đọc lại nút",
@@ -3965,8 +3984,52 @@ check("dò trạng thái khớp chính xác, chỉ nút nhìn thấy",
       and "/^(đã tham gia|joined)$/" in _src_jr
       and "includes('đã tham gia')" not in _src_jr)
 check("bấm Tham gia xong phải xác minh",
-      'sau = await page.evaluate(_DETECT_STATE_JS)' in _src_jr
+      'sau = await _cho_trang_thai(page' in _src_jr
       and 'Bấm Tham gia rồi mà vẫn chưa vào' in _src_jr)
+# goto lại ĐÚNG URL đang mở ngay sau khi bấm thì Chromium trả bản trang cũ, nút
+# vẫn "Tham gia nhóm". Đo 02/10: 15/15 nhóm vào thật bị ghi thành lỗi.
+_than_join = _src_jr[_src_jr.index("async def _join_one_group"):
+                     _src_jr.index("# ─── Main flow")]
+_sau_bam = _than_join[_than_join.index("# XÁC MINH sau khi bấm"):]
+check("xác minh đọc trên trang TRƯỚC khi vào lại",
+      _sau_bam.index("_cho_trang_thai(page, 6)") < _sau_bam.index("page.goto("))
+check("vào lại sau khi bấm Tham gia dùng URL chống cache",
+      "page.goto(url," not in _sau_bam and "page.goto(_url_chong_cache(url)" in _sau_bam)
+_than_roi = _src_jr[_src_jr.index("async def _roi_mot_nhom"):
+                    _src_jr.index("async def _lam_sach_nhom")]
+check("xác minh đã rời cũng dùng URL chống cache",
+      _than_roi.count("page.goto(url,") == 1
+      and "page.goto(_url_chong_cache(url)" in _than_roi)
+import join_groups_runner as _jr_cc
+check("URL chống cache thêm tham số đúng cách",
+      _jr_cc._url_chong_cache("https://x/groups/1/").startswith("https://x/groups/1/?_t=")
+      and _jr_cc._url_chong_cache("https://x/groups/1/?ref=a").startswith("https://x/groups/1/?ref=a&_t="))
+# Lỗi thật thì ghi lại Facebook đang hiện gì — chụp TRƯỚC khi vào lại trang,
+# vì vào lại là hộp thoại (nếu có) mất.
+check("lỗi tham gia có ghi chẩn đoán (hộp thoại + ảnh)",
+      "await _ghi_chan_doan(page, ten_nhom, hop, anh)" in _sau_bam
+      and _sau_bam.index("anh = await page.screenshot()")
+          < _sau_bam.index("page.goto(_url_chong_cache(url)"))
+check("ảnh lỗi có giới hạn, không đầy ổ đĩa",
+      "_SO_ANH_LOI >= 5" in _src_jr and "[:-_GIU_ANH_LOI]" in _src_jr)
+
+# Nút Dừng chuỗi: diet_cay nhận DANH SÁCH pid. Truyền một số đơn lẻ thì nó ném
+# TypeError → lỗi 500, chuỗi chạy tiếp như chưa bấm (gặp thật 02/10).
+check("Dừng chuỗi truyền danh sách pid", "diet_cay(int(" not in _src_srv_j)
+_p_dung = _sp.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+_pf_dung = Path(".join_chain_TEST_DUNG.pid")
+_pf_dung.write_text(str(_p_dung.pid))
+_r_dung = _client.post("/api/join/stop-chain", json={"nguon": "TEST_DUNG"})
+try:
+    _p_dung.wait(timeout=10)
+except _sp.TimeoutExpired:
+    _p_dung.kill()
+check("API Dừng chuỗi trả về bình thường", _r_dung.status_code == 200
+      and (_r_dung.get_json() or {}).get("ok") is True)
+check("API Dừng chuỗi diệt được tiến trình chuỗi",
+      _p_dung.returncode is not None and _r_dung.get_json()["da_diet"] == [_p_dung.pid])
+check("API Dừng chuỗi xoá file pid", not _pf_dung.exists())
+_pf_dung.unlink(missing_ok=True)
 check("gửi yêu cầu thì tính chờ duyệt, không tính đã vào",
       'return "cho_duyet"' in _src_jr and "Đã gửi yêu cầu, chờ duyệt" in _src_jr)
 # Danh sách groups/joins nạp rất chậm; bản cũ dừng sau 3 lượt im nên đọc thiếu.
@@ -4034,6 +4097,29 @@ check("cả hai tab đều có nút Chạy lần lượt",
 # nhau, và chuỗi sẽ giành trình duyệt với phiên bấm tay.
 check("KHÔNG còn nút Run từng hàng",
       "runJoin(" not in _ajs_jm and "jmChay(" not in _ajs_jm)
+
+# Vòng lặp nạp bảng ↔ trạng thái chuỗi (v2.30.0–v2.32.0): loadJoinMarket gọi
+# jcTrangThai, jcTrangThai lại gọi loadJoinMarket, không có nhịp chờ nào ở giữa.
+# Đo 02/10: ~250 yêu cầu/giây, chạy mãi kể cả khi đã sang tab khác, cạn 16.384
+# cổng mạng của Windows — bấm xoá lịch phải chờ rất lâu. Chỉ nhịp 5 giây
+# (setInterval) được nạp lại bảng.
+import re as _re_lap
+
+def _than_ham(src, ten):
+    i = src.index(f"function {ten}(")
+    m = _re_lap.search(r"\n(?:async )?function ", src[i + 1:])
+    return src[i: i + 1 + m.start()] if m else src[i:]
+
+for _ten in ("loadJoinMarket", "loadJoinSchedules", "jcTheoDoi"):
+    _goi = _re_lap.findall(r"(?<!=>)jcTrangThai\(([^)]*)\)", _than_ham(_ajs_jm, _ten))
+    check(f"{_ten} gọi jcTrangThai mà KHÔNG nạp lại bảng",
+          _goi and all(g.replace(" ", "").endswith(",false") for g in _goi))
+_tt_lap = _than_ham(_ajs_jm, "jcTrangThai")
+check("jcTrangThai mặc định nạp lại bảng (cho nhịp 5 giây)", "napLai=true" in _tt_lap)
+check("napLai=false thì thoát TRƯỚC mọi lần nạp lại bảng",
+      _tt_lap.index("if(!napLai)") < _tt_lap.index("c.nap()"))
+check("nhịp 5 giây vẫn nạp lại bảng",
+      "setInterval(()=>jcTrangThai(nguon), 5000)" in _than_ham(_ajs_jm, "jcTheoDoi"))
 
 check("đổi tên tab cũ thành Tham gia nhóm Page",
       "Tham gia nhóm Page" in _html_jm

@@ -2624,7 +2624,10 @@ def api_join_stop_chain():
     da    = 0
     if pf.exists():
         try:
-            da = tien_trinh.diet_cay(int(pf.read_text().strip()))
+            # diet_cay nhận DANH SÁCH pid. Truyền một số đơn lẻ thì nó ném
+            # TypeError, lọt qua except bên dưới thành lỗi 500 và chuỗi chạy
+            # tiếp như chưa bấm Dừng — gặp thật ngày 02/10.
+            da = tien_trinh.diet_cay([int(pf.read_text().strip())])
         except (ValueError, OSError):
             pass
         pf.unlink(missing_ok=True)
