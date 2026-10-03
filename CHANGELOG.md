@@ -10,6 +10,29 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.33.1 — 03/10/2026
+
+**Thư viện link comment nới từ 300 lên 500 mỗi hạng mục**
+
+Đo ngày 03/10: mỗi hạng mục có **~250 slot đăng mỗi ngày**, mỗi phiên thu 10
+link, tức khoảng **2.000–2.500 link một ngày**. Với mức đó thì 300 link chỉ còn
+tương đương **3 giờ** đăng bài gần nhất — và cả ba hạng mục (Bán, Homestay,
+Thuê) đều đang đứng đúng **300/300**, tức hạn mức chặn thật chứ không phải còn
+chỗ trống. Nới lên 500 đưa độ sâu lên khoảng **5 giờ**.
+
+Lưu ý: **link đã bị đẩy ra trước đây là mất hẳn**, nới hạn mức không lấy lại
+được. Danh sách sẽ tự lớn dần lên 500 theo các phiên đăng sau.
+
+---
+
+**Sửa: bảng ghi cứng "300 link" nên nói sai khi nới hạn mức**
+
+Giao diện ghi thẳng số 300 ở hai chỗ — dòng giải thích và ô tóm tắt
+`<số>/300 link`. Nới hạn mức bên trong là bảng nói sai ngay mà không có gì báo.
+Nay máy chủ gửi kèm hạn mức thật, bảng chỉ hiển thị lại.
+
+---
+
 ## v2.33.0 — 03/10/2026
 
 **Phiên đăng bài nhanh hơn: 188 giây còn 125 giây**

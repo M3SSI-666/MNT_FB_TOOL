@@ -917,7 +917,20 @@ _ds = db.get_comment_posts("thue")
 check("thêm tiếp vẫn đúng giới hạn", len(_ds) == 6)
 check("link cũ nhất bị đẩy ra",  _lk("g1", 4) not in {r["url"] for r in _ds})
 check("link mới nhất có mặt",    _lk("g1", 99) in {r["url"] for r in _ds})
-check("giới hạn mặc định là 300", db.GIOI_HAN_LINK == 300)
+# Nới 300 → 500 ngày 03/10: mỗi hạng mục ~250 slot đăng/ngày × 10 link/phiên
+# = ~2.000-2.500 link/ngày, nên 300 chỉ còn ~3 giờ đăng gần nhất. Cả ba hạng
+# mục đều đứng đúng 300/300, tức hạn mức đang chặn thật.
+check("giới hạn mặc định là 500", db.GIOI_HAN_LINK == 500)
+# Giao diện từng ghi cứng "300" ở hai chỗ, nới hạn mức bên Python là bảng nói
+# sai ngay mà không ai biết. Nay server gửi kèm, giao diện chỉ hiển thị lại.
+_src_srv_gh = Path("server.py").read_text(encoding="utf-8")
+_src_ajs_gh = Path("static/js/app.js").read_text(encoding="utf-8")
+check("server gửi kèm hạn mức", '"gioi_han": db.GIOI_HAN_LINK' in _src_srv_gh)
+check("giao diện KHÔNG ghi cứng số link",
+      "/300 link" not in _src_ajs_gh and "300 link mới nhất" not in _src_ajs_gh)
+check("giao diện lấy hạn mức từ server",
+      "_cmtGioiHan = res.gioi_han" in _src_ajs_gh
+      and _src_ajs_gh.count('class="cmt-gioi-han"') == 2)
 
 # Link chết: XOÁ NGAY, không đánh dấu chờ bị đẩy ra — 20-30% bài bị gỡ, để
 # chúng nằm lại là chừng ấy chỗ trong cửa sổ thành rác.

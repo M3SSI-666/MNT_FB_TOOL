@@ -2492,6 +2492,9 @@ function renderSchedulePage(loai){
 // Acc bị dỡ bài vẫn comment được; comment vào bài cũ làm bài nổi lên đầu nhóm.
 const CMT_LOAI = [["homestay","🏠 Homestay"],["thue","🏡 Thuê"],["ban","💰 Bán"]];
 let _cmtLoai = "homestay";
+// Hạn mức link mỗi hạng mục. Chỉ là giá trị tạm cho lần vẽ ĐẦU TIÊN — ngay khi
+// API trả về thì lấy số thật từ `db.GIOI_HAN_LINK`. Nguồn duy nhất là Python.
+let _cmtGioiHan = 500;
 
 function renderCommentPostsPage(){
     const el=document.getElementById("page-comment-posts"); if(!el) return;
@@ -2508,7 +2511,7 @@ function renderCommentPostsPage(){
             Bật cho từng acc bằng cột <b>Loại đăng</b> ở bảng Tài khoản: <b>X_</b> = vừa đăng vừa comment,
             <b>C_</b> = chỉ comment. Đổi xong nhớ <b>Gen lịch</b> lại.<br>
             Mỗi phiên bốc <b>tối đa 1 link mỗi nhóm</b>, ưu tiên bài cũ nhất chưa comment.
-            Danh sách giữ <b>300 link mới nhất</b>, link cũ bị đẩy ra sẽ xoá hẳn. Link chết (bài đã bị xoá) phát hiện lúc comment là <b>tự xoá khỏi danh sách</b>.
+            Danh sách giữ <b><span class="cmt-gioi-han">${_cmtGioiHan}</span> link mới nhất</b>, link cũ bị đẩy ra sẽ xoá hẳn. Link chết (bài đã bị xoá) phát hiện lúc comment là <b>tự xoá khỏi danh sách</b>.
         </div>
         <div id="cmt-tomtat"></div>
         <div class="card"><div class="table-wrap"><table>
@@ -2540,7 +2543,12 @@ function switchCmtLoai(loai){ _cmtLoai=loai; renderCmtTabs(); loadCommentPosts(l
 async function loadCommentPosts(loai){
     const tb=document.getElementById("cmt-table"); if(!tb) return;
     try{
-        let rows=(await API.commentPosts(loai)).data||[];
+        const res=await API.commentPosts(loai);
+        let rows=res.data||[];
+        // Hạn mức lấy từ server (db.GIOI_HAN_LINK) chứ KHÔNG ghi cứng: ghi cứng
+        // thì nới hạn mức bên Python là bảng nói sai ngay mà không ai biết.
+        _cmtGioiHan = res.gioi_han || _cmtGioiHan;
+        document.querySelectorAll(".cmt-gioi-han").forEach(e=>e.textContent=_cmtGioiHan);
         // Mới nhất lên đầu — kho là cửa sổ trượt, link cũ sắp bị đẩy ra nên
         // không đáng nằm chỗ dễ nhìn nhất.
         rows = rows.slice().reverse();
@@ -2583,7 +2591,7 @@ function _renderCmtTomTat(rows){
     box.innerHTML=`
         <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:8px 12px;margin-bottom:10px;
                     background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px">
-            <span><b>${rows.length}</b>/300 link</span>
+            <span><b>${rows.length}</b>/<span class="cmt-gioi-han">${_cmtGioiHan}</span> link</span>
             <span style="color:#f472b6">đã gắn Page: <b>${co}</b></span>
             ${chua?`<span style="color:var(--text-muted)">chưa gắn: <b>${chua}</b> (link cũ, sẽ bị đẩy ra dần)</span>`:""}
             ${Object.entries(theoPage).map(([k,n])=>`<span style="color:var(--text-muted)">${_escapeHtml(k)}: ${n}</span>`).join("")}

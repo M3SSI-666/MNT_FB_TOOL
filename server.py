@@ -2071,7 +2071,9 @@ def api_comment_posts(loai):
     for r in rows:
         uid = str(r.get("page") or "")
         r["ten_page"] = ten_theo_uid.get(uid, uid)
-    return jsonify({"ok": True, "data": rows})
+    # Gửi kèm hạn mức để bảng không ghi cứng con số. Trước đây giao diện ghi
+    # cứng "300" ở hai chỗ, nên nới hạn mức trong db.py là bảng nói sai ngay.
+    return jsonify({"ok": True, "data": rows, "gioi_han": db.GIOI_HAN_LINK})
 
 
 @app.route("/api/comment-posts/<loai>/add", methods=["POST"])

@@ -1634,9 +1634,12 @@ def update_schedule_field(schedule_id: int, field: str, value: str):
 # Mỗi hạng mục giữ bao nhiêu link. Cửa sổ trượt: link mới đẩy link cũ ra và
 # link bị đẩy ra bị XOÁ HẲN, không lưu trữ lại.
 #
-# 300 là con số người dùng chốt sau khi cân nhắc độ sâu: với ~1.000–2.400 link
-# sinh ra mỗi ngày, 300 link tương đương 3–7 giờ đăng bài gần nhất.
-GIOI_HAN_LINK = 300
+# Nới từ 300 lên 500 ngày 03/10. Đo cùng ngày: mỗi hạng mục có ~250 slot đăng
+# mỗi ngày, mỗi phiên thu 10 link (xem THU_LINK_MOI_NHAT) nên vào khoảng
+# 2.000–2.500 link/ngày. Tức 300 link chỉ còn khoảng 3 giờ đăng gần nhất, và
+# cả ba hạng mục đều đứng đúng 300/300 — tức hạn mức đang chặn thật, không phải
+# còn chỗ trống. 500 link đưa độ sâu lên khoảng 5 giờ.
+GIOI_HAN_LINK = 500
 
 _RE_NHOM_URL = re.compile(r"/groups/([0-9A-Za-z._-]+)/")
 
