@@ -90,8 +90,8 @@ NGHI_GIUA_2_CAU = (5, 8)
 # cùng một khoảng thời gian, không có lý do gì để chỉnh riêng. Xem các bước
 # [2/6], [6/6] trong page_via_poster.py; sửa ở đó thì sửa cả ở đây.
 # KHÔNG còn xem story: Duong chỉ giữ story ở phiên NUÔI NICK.
-FEED_GIAY  = (20, 30)     # [2/6] lướt newsfeed, KHÔNG like
-KET_GIAY   = (15, 30)     # [6/6] lướt cuối phiên
+FEED_GIAY  = (8, 12)      # [2/6] lướt newsfeed, KHÔNG like
+KET_GIAY   = (8, 12)      # [6/6] lướt cuối phiên
 KET_LIKE   = 1            # [6/6] like tối đa 1 bài — chỗ DUY NHẤT có like
 
 
@@ -116,6 +116,11 @@ class CommentRestricted(Exception):
 # Bài bị xoá / đổi phạm vi hiển thị. Phân biệt hẳn với lỗi selector: link chết
 # thì phải xoá khỏi danh sách, còn selector hỏng thì phải sửa code — hai việc
 # hoàn toàn khác nhau, gộp chung vào "không tìm thấy ô bình luận" là đi mò nhầm.
+#
+# ĐÂY LÀ NƠI DUY NHẤT dọn link chết. Đã thử lọc thêm một lần nữa ngay lúc thu
+# link và bỏ: tốn 16s mỗi phiên đăng mà 21 link đo được không chết cái nào, vì
+# bài bị gỡ muộn hơn lúc thu (xem ghi chú trong thu_link.py). Ở đây thì phiên
+# comment đã mở sẵn từng bài nên không tốn thêm giây nào.
 BAI_KHONG_XEM_DUOC = (
     "bạn hiện không xem được nội dung này",
     "nội dung này hiện không có sẵn",

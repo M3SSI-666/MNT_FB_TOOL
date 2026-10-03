@@ -43,6 +43,25 @@ from utils import logger
 # Một con số cố định đoán trước được tốt hơn một vòng lặp thông minh nửa vời.
 CHO_THONG_BAO_GIAY = 60
 
+# Số link lấy về mỗi lượt thu, tính từ bài MỚI NHẤT trở xuống.
+#
+# Từ bản 2.33 việc thu link chuyển sang đầu phiên sau, nên cửa sổ thời gian nới
+# rộng tới 24 giờ — đọc một lần là thấy thông báo của nhiều phiên trước. Đo ngày
+# 02/10: một lượt đọc ra 52 thông báo, 31 link mới. Nhiều hơn mức cần.
+#
+# Thư viện comment là CỬA SỔ TRƯỢT có hạn mức: link mới đẩy link cũ ra. Đổ 31
+# link mỗi phiên vào đó thì danh sách bị thay gần hết trước khi kịp đi comment.
+# Mười link gần nhất là đủ để luôn có bài mới mà không xáo tung thư viện.
+#
+# `thu_tu_thong_bao` xếp kết quả theo thứ tự ĐÁNG THU NHẤT trước khi trả về
+# (chưa đọc trước, rồi mới tới cũ — xem `xep_uu_tien`), nên cắt 10 phần tử đầu
+# là 10 bài cần thu nhất, không phải 10 dòng Facebook tình cờ bày lên trên.
+#
+# Đo 03/10 trên Page Jenniee Homestay: một đợt đăng chéo để lại ĐÚNG 8 thông
+# báo chưa đọc — khớp số nhóm đăng được. Mười chỗ là vừa đủ phủ một phiên mà
+# còn hai chỗ bù cho phiên trước.
+THU_LINK_MOI_NHAT = 10
+
 # Định danh nhóm có thể là SỐ hoặc SLUG chữ ("homestaytimescity",
 # "homestay.timescity.hanoi"). Chỉ khớp \d+ là bỏ sót các nhóm dùng slug —
 # đo thật: 2/7 nhóm trong một đợt đăng chéo dùng slug.
@@ -65,6 +84,14 @@ RE_TUOI = re.compile(r"(\d+)\s*(phút|giờ|ngày|tuần|minute|hour|day|week)")
 _HE_SO = {"phút": 1, "minute": 1, "giờ": 60, "hour": 60,
           "ngày": 1440, "day": 1440, "tuần": 10080, "week": 10080}
 
+# Facebook dán hẳn chữ "Chưa đọc" vào đầu mỗi dòng thông báo chưa xem — đo
+# 03/10 trên Page Jenniee Homestay: cả 14/14 mẫu đều mở đầu bằng chữ này.
+#
+# Đã thử hai manh mối khác và BỎ: màu nền (`backgroundColor`) trả
+# `rgba(0,0,0,0)` cho cả đọc lẫn chưa đọc, còn "có chấm tròn" thì `true` cho
+# tất cả vì trang đầy `svg circle` của thứ khác. Chữ là manh mối duy nhất chắc.
+_DAU_CHUA_DOC = "chưa đọc"
+
 
 def tuoi_phut(text: str):
     """Thông báo này bao nhiêu phút trước? Không đọc được thì None."""
@@ -72,6 +99,80 @@ def tuoi_phut(text: str):
     if not m:
         return None
     return int(m.group(1)) * _HE_SO.get(m.group(2).lower(), 1)
+
+
+def la_chua_doc(mo_ta: str) -> bool:
+    """
+    Thông báo này CHƯA ĐỌC chưa?
+
+    Chỉ soi 20 ký tự đầu, không soi cả chuỗi: tên nhóm nằm ở giữa mô tả và
+    hoàn toàn có thể chứa chữ "chưa đọc" — soi cả chuỗi là tự tạo dương tính giả.
+    """
+    return _DAU_CHUA_DOC in (mo_ta or "")[:20].lower()
+
+
+def xep_uu_tien(cap_link: list) -> list:
+    """
+    Xếp [(url, mo_ta), ...] theo thứ tự CẦN THU TRƯỚC: chưa đọc trước đã đọc,
+    trong mỗi nhóm thì mới trước cũ.
+
+    Để bên gọi cắt N phần tử đầu là được đúng N bài đáng thu nhất.
+
+    **Chưa đọc là tiêu chí YẾU, tuổi mới là thứ gánh việc.** Ý ban đầu là
+    "chưa đọc" = "về sau lần thu gần nhất" = bài mình chưa lấy, và dấu này tự
+    bảo trì vì mở trang thông báo thì Facebook đánh dấu đã đọc.
+    ĐO 03/10 BÁC BỎ ĐIỀU ĐÓ: mở trang thông báo của Page hai lần trong 7 phút,
+    cả 45/45 thông báo vẫn còn "Chưa đọc" — kể cả cái 8 tiếng tuổi. Facebook
+    không tự xoá dấu chỉ vì mình vào xem.
+
+    Nên trong thực tế mọi thông báo đăng chéo đều chưa đọc, hai hạng gộp làm
+    một, và thứ tự rút về đúng bằng xếp theo tuổi. Vẫn giữ tiêu chí này vì khi
+    nào nó CÓ khác thì cái khác đó là tín hiệu thật, và nó không tốn gì — nhưng
+    đừng tin nó nhận ra được "bài đã thu rồi". Việc chống thu lại nằm ở chỗ
+    khác: `them_comment_posts` bỏ trùng theo URL.
+
+    **Vì sao XẾP chứ không LỌC lấy riêng chưa đọc.** Nếu có ngày Facebook đánh
+    dấu đã đọc thật, mà một phiên lại hỏng giữa đường sau khi đã mở trang thông
+    báo, thì mớ đó thành "đã đọc" trong khi chưa kịp vào thư viện — lọc là mất
+    hẳn. Xếp thì hết chưa đọc sẽ tự bù bằng bài đã đọc mới nhất, không mất gì.
+
+    **Tuổi.** Không đọc được tuổi ("Vừa xong", "Just now") thì coi là 0 phút —
+    đúng là mới nhất, và mất một mốc tuổi không được phép đẩy nó xuống cuối.
+
+    Trước bản 2.33 hàm thu trả về nguyên thứ tự `querySelectorAll`, tức thứ tự
+    Facebook bày trên trang. Nó tình cờ đúng vì trang xếp mới nhất trước, nhưng
+    đó là giả định về giao diện người khác chứ không phải điều mình bảo đảm.
+
+    `sort` của Python ổn định, nên hai thông báo CÙNG hạng vẫn giữ thứ tự trang.
+    Điều này có ý nghĩa thật: nhãn tuổi của Facebook chỉ đến từng phút, nên 8
+    nhóm của cùng một đợt đăng chéo đều ghi "8 phút" và không tài nào phân biệt
+    được bằng tuổi. Xếp theo tuổi phân đúng GIỮA các phiên; trong cùng một
+    phiên thì vị trí trang vẫn là tiêu chí phụ.
+    """
+    return sorted(cap_link,
+                  key=lambda x: (0 if la_chua_doc(x[1]) else 1,
+                                 tuoi_phut(x[1]) or 0))
+
+
+# ĐÃ THỬ kiểm link sống/chết ngay tại đây và BỎ — đo 03/10:
+#
+#   • Cách rẻ `ctx.request.get(url)` (chỉ tải HTML, không dựng trang): Facebook
+#     trả HTTP 400 "Error" dài đúng 1542 ký tự cho MỌI link, sống chết như
+#     nhau. Không có đường nào nhẹ hơn là mở trang thật.
+#   • Mở trang thật: 4,9s/link, hạ xuống 1,6s/link khi mở 4 tab cùng lúc —
+#     tức +16s mỗi phiên cho 10 link.
+#   • Hai lượt đo, 21 link, CHẾT ĐÚNG 0 CÁI.
+#
+# Lý do không bắt được gì: bài bị admin gỡ MUỘN HƠN lúc thu. Con số 20–30% bài
+# chết (xem `db.ghi_nhan_comment`) là đo ở lúc đi comment, cách đó nhiều giờ.
+# Mà phiên comment thì đã mở sẵn từng bài rồi, nên phát hiện và xoá link chết ở
+# đó không tốn thêm giây nào — cơ chế ấy đã chạy từ trước.
+#
+# Nên: thu 10 link rồi ném thẳng vào thư viện. Để `comment_bai` dọn link chết.
+#
+# Còn bài CHỜ DUYỆT thì không cần lọc: Facebook không gửi thông báo nào cho bài
+# còn trong hàng chờ (đo 03/10: 53 thông báo, 0 cái thuộc loại chờ duyệt), nên
+# nó không bao giờ vào danh sách để mà phải loại.
 
 
 def _chuan_hoa(gid: str, pid: str) -> str:
@@ -161,7 +262,8 @@ async def thu_tu_thong_bao(page, toi_da_phut: int = 180,
     GỌI SAU KHI ĐÃ CHUYỂN SANG PAGE — thông báo của Page khác của acc cá nhân.
 
     `toi_da_phut`: chỉ lấy thông báo mới hơn bấy nhiêu phút (0 = lấy tất).
-    Trả về [(url, mo_ta), ...].
+    Trả về [(url, mo_ta), ...] XẾP THEO TUỔI, mới nhất đứng đầu — nên bên gọi
+    cắt N phần tử đầu là lấy đúng N bài gần nhất.
     """
     from fb_common import human_delay, dong_dialog_canh_bao
 
@@ -215,7 +317,11 @@ async def thu_tu_thong_bao(page, toi_da_phut: int = 180,
             continue
         da_co.add(u)
         ra.append((u, mo_ta))
-    return ra
+
+    # Tuổi và dấu "Chưa đọc" đã đọc được ở vòng lọc trên rồi, xếp lại gần như
+    # không tốn gì — mà đổi "đáng thu nhất" từ chỗ đoán theo thứ tự trang thành
+    # chỗ đo được.
+    return xep_uu_tien(ra)
 
 
 

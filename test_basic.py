@@ -963,8 +963,145 @@ check("trần không quá rộng (≤ 30 phút)",      _cb.GIOI_HAN_PHIEN_GIAY <
 check("không thêm ô chỉnh thời lượng phiên",
       set(_cb.DEFAULTS) == {"comment_so_bai", "comment_nghi_min", "comment_nghi_max",
                             "comment_cau_chinh_chu"})
-check("thời lượng newsfeed khớp luồng đăng bài", _cb.FEED_GIAY == (20, 30))
-check("kết phiên khớp luồng đăng bài",        _cb.KET_GIAY == (15, 30))
+# So THẲNG với luồng đăng bài thay vì khoá cứng con số: sửa một bên mà quên bên
+# kia thì hỏng test ngay, chứ không âm thầm để hai luồng hành xử khác nhau.
+import re as _re_tl
+_src_pvp_t = Path("page_via_poster.py").read_text(encoding="utf-8")
+_m_feed = _re_tl.search(r"scroll_sec = random\.randint\((\d+), (\d+)\)", _src_pvp_t)
+check("thời lượng newsfeed khớp luồng đăng bài",
+      _cb.FEED_GIAY == (int(_m_feed.group(1)), int(_m_feed.group(2))))
+# Luồng ĐĂNG BÀI không còn bước kết phiên riêng — việc lướt + like đã gộp vào
+# khoảng chờ thông báo đăng chéo. Luồng COMMENT thì vẫn giữ, vì nó không có
+# khoảng chờ nào để gộp vào.
+check("luồng đăng bài không còn bước kết phiên riêng",
+      "cooldown_sec = random.randint" not in _src_pvp_t)
+check("luồng comment vẫn kết phiên, thời lượng hợp lý",
+      5 <= min(_cb.KET_GIAY) and max(_cb.KET_GIAY) <= 30)
+# Lướt feed và hạ nhiệt là hai bước "làm người thật". Hạ xuống dưới 5 giây thì
+# gần như không còn tác dụng mà vẫn tốn một lượt tải trang.
+check("thời lượng còn đủ dài để có nghĩa",
+      min(_cb.FEED_GIAY) >= 5 and min(_cb.KET_GIAY) >= 5)
+
+# ── Ba tối ưu phiên đăng bài (đo ngày 02/10, phiên 188 giây) ───────────────
+_src_pvp2 = Path("page_via_poster.py").read_text(encoding="utf-8")
+_src_fbc2 = Path("fb_common.py").read_text(encoding="utf-8")
+
+# 1. Lướt feed + like làm TRONG lúc chờ thông báo, không thành bước riêng.
+#    Trình duyệt đứng im 60 giây ngay sau khi đăng tự nó đã là dấu hiệu lạ.
+check("bỏ bước hạ nhiệt riêng", "cooldown_sec = random.randint" not in _src_pvp2)
+
+# ── Thu link chuyển sang ĐẦU phiên sau ─────────────────────────────────────
+# Đo 02/10: ngồi chờ thông báo ngay sau khi đăng mất 85 giây MỖI PHIÊN mà vẫn
+# thu hụt — Facebook đẩy nhỏ giọt (29s: 2/9 · 58s: 5/9 · 76s: 9/9). Để sang
+# phiên sau thì thông báo đã nằm sẵn, đọc một lần là đủ và thu được nhiều hơn.
+check("KHÔNG còn chờ thông báo sau khi đăng",
+      "CHO_THONG_BAO_GIAY" not in _src_pvp2)
+check("thu link ở đầu phiên, sau khi chuyển Page",
+      "Thu link phiên trước" in _src_pvp2)
+_i_sw  = _src_pvp2.index("await _switch_to_page(page, ctx, page_uid)")
+_i_thu = _src_pvp2.index("Thu link phiên trước")
+_i_dang = _src_pvp2.index("Thêm nhóm → tìm")
+check("thu link SAU khi chuyển Page, TRƯỚC khi đăng",
+      _i_sw < _i_thu < _i_dang)
+# Cửa sổ 5 phút cũ là để tránh vơ nhầm thông báo của loại lịch khác. Nới rộng
+# được vì đã kiểm: không Page nào phục vụ quá một loại lịch, và
+# them_comment_posts bỏ trùng theo URL.
+check("nới cửa sổ thời gian để lấy cả phiên trước",
+      "toi_da_phut=1440" in _src_pvp2)
+# Cửa sổ rộng nhưng chỉ lấy N bài MỚI NHẤT. Đo 02/10: một lượt đọc ra 52 thông
+# báo, 31 link mới — nhiều hơn mức cần. Thư viện comment là cửa sổ trượt có hạn
+# mức, đổ 31 link mỗi phiên vào là thay gần hết danh sách trước khi kịp comment.
+import thu_link as _tl2
+check("chỉ lấy 10 bài mới nhất", _tl2.THU_LINK_MOI_NHAT == 10)
+check("cắt từ ĐẦU danh sách (đáng thu nhất trước)",
+      "_lay = _cu[:THU_LINK_MOI_NHAT]" in _src_pvp2)
+
+# Cắt từ đầu chỉ đúng nếu danh sách THẬT SỰ xếp đáng thu nhất trước. Bản đầu
+# dựa vào thứ tự Facebook bày trên trang — tình cờ đúng, nhưng là giả định về
+# giao diện người khác: hôm nào họ đổi cách xếp là hỏng ngầm, không báo lỗi,
+# chỉ lặng lẽ đi comment mấy bài cũ.
+_src_tl = Path("thu_link.py").read_text(encoding="utf-8")
+check("hàm thu xếp lại trước khi trả về", "return xep_uu_tien(ra)" in _src_tl)
+_xep = _tl2.xep_uu_tien([("u1", "3 giờ"), ("u2", "5 phút"), ("u3", "2 ngày")])
+check("mới nhất lên đầu", [u for u, _ in _xep] == ["u2", "u1", "u3"])
+# "Vừa xong" không có số nào đọc được. Coi là cũ nhất thì bài vừa đăng — thứ
+# đáng lấy nhất — lại bị đẩy khỏi top 10.
+check("đọc không ra tuổi thì coi là mới nhất",
+      _tl2.xep_uu_tien([("u1", "9 phút"), ("u2", "Vừa xong")])[0][0] == "u2")
+# Nhãn tuổi của Facebook chỉ đến từng phút, nên 8 nhóm cùng một đợt đăng chéo
+# đều ghi "8 phút". Trong thế cân bằng đó thì vị trí trang vẫn là tiêu chí phụ
+# duy nhất còn lại — sort phải ỔN ĐỊNH, không được xáo.
+_deu = [(f"u{i}", "3 phút") for i in range(6)]
+check("cùng hạng thì giữ nguyên thứ tự trang", _tl2.xep_uu_tien(_deu) == _deu)
+
+# ── Ưu tiên thông báo CHƯA ĐỌC ─────────────────────────────────────────────
+# Đo 03/10: Facebook dán chữ "Chưa đọc" vào đầu cả 14/14 dòng mẫu nên đọc được.
+# NHƯNG dấu này KHÔNG tự xoá: mở trang hai lần trong 7 phút, 45/45 vẫn "Chưa
+# đọc". Nên nó là tiêu chí yếu, tuổi mới gánh việc — giữ vì không tốn gì, đừng
+# tin nó nhận ra "bài đã thu rồi".
+check("đọc được dấu chưa đọc",
+      _tl2.la_chua_doc("Chưa đọc Đã đăng chéo bài viết của bạn lên Homestay. 8 phút")
+      and not _tl2.la_chua_doc("Đã đăng chéo bài viết của bạn lên Homestay. 1 giờ"))
+# Chỉ soi 20 ký tự đầu: tên nhóm nằm giữa mô tả và có thể chứa đúng chữ đó.
+check("tên nhóm chứa 'chưa đọc' KHÔNG bị nhận nhầm",
+      not _tl2.la_chua_doc("Đã đăng chéo bài viết của bạn lên nhóm Sách chưa đọc. 2 giờ"))
+# Chưa đọc đi trước, kể cả khi cũ hơn — vì bài đã đọc thì có thể đã nằm trong
+# thư viện rồi, còn chưa đọc thì chắc chắn chưa.
+_tron = [("cu_da_doc", "5 phút"), ("moi_chua_doc", "Chưa đọc ... 3 giờ")]
+check("chưa đọc đi trước dù cũ hơn",
+      [u for u, _ in _tl2.xep_uu_tien(_tron)] == ["moi_chua_doc", "cu_da_doc"])
+# XẾP chứ không LỌC: phiên hỏng giữa đường sau khi đã mở trang thông báo thì mớ
+# đó thành "đã đọc" mà chưa vào thư viện — lọc là mất hẳn, xếp thì tự bù.
+check("vẫn giữ bài đã đọc để bù khi thiếu",
+      len(_tl2.xep_uu_tien(_tron)) == 2)
+
+# ── KHÔNG kiểm sống/chết lúc thu ───────────────────────────────────────────
+# Đã viết bộ lọc rồi bỏ, đo 03/10: mở trang thật 1,6s/link kể cả khi mở 4 tab
+# cùng lúc (cách rẻ `ctx.request.get` trả HTTP 400 cho MỌI link, vô dụng) —
+# tức +16s mỗi phiên, mà 21 link đo được chết đúng 0 cái. Bài bị gỡ muộn hơn
+# lúc thu; phiên comment đã mở sẵn từng bài nên dọn ở đó không tốn thêm gì.
+#
+# Test này để chặn việc làm lại: ai thêm kiểm sống/chết vào khúc thu thì phải
+# đọc ghi chú và có số đo mới, chứ không phải vì nghe có lý.
+check("thu link KHÔNG kiểm sống/chết",
+      "loc_link_song" not in _src_pvp2 and "loc_link_song" not in _src_tl)
+check("ghi lại vì sao bỏ, kèm số đo",
+      "ĐÃ THỬ kiểm link sống/chết ngay tại đây và BỎ" in _src_tl
+      and "21 link, CHẾT ĐÚNG 0 CÁI" in _src_tl)
+# Dọn link chết vẫn phải còn — chỉ còn MỘT nơi làm việc đó.
+_src_cb2 = Path("comment_bai.py").read_text(encoding="utf-8")
+check("comment_bai vẫn dọn link chết",
+      "BAI_KHONG_XEM_DUOC" in _src_cb2 and "chet=True" in _src_cb2)
+check("chỉ một nơi giữ dấu hiệu bài chết",
+      "BAI_KHONG_XEM_DUOC" not in _src_tl)
+# Đăng xong thì ra FEED của Page, không ngồi lại nhóm vừa đăng.
+check("đăng xong ra feed Page lướt + thả tim",
+      'await page.goto("https://www.facebook.com/",' in _src_pvp2
+      and "Lướt feed Page" in _src_pvp2
+      and "max_likes=1" in _src_pvp2)
+# Nguồn (a) phải giữ: nhóm mở composer KHÔNG sinh thông báo đăng chéo nào, bỏ
+# đi là mất đúng một link mỗi lần đăng.
+check("vẫn giữ nguồn bắt link từ phản hồi mạng",
+      "[a] Phản hồi mạng" in _src_pvp2)
+check("Hybrid còn 5 bước", "[5/5]" in _src_pvp2 and "[6/6]" not in _src_pvp2)
+
+# 2. Tìm nút bằng MỘT lần hỏi DOM thay cho chuỗi wait_for_selector. Đo 02/10:
+#    riêng bước tìm nút "Chuyển" tiêu 8 giây để rồi không tìm thấy gì.
+check("chuyển Page tìm nút trong một lần hỏi",
+      "_JS_TIM_NUT" in _src_pvp2 and "async def _bam_nut" in _src_pvp2)
+check("bỏ chuỗi wait_for_selector khi chuyển Page",
+      'wait_for_selector(\n            \'div[role="button"]:has-text("Chuyển ngay")\''
+      not in _src_pvp2)
+check("chỉ bấm nút đang nhìn thấy", "elementFromPoint" in _src_pvp2)
+
+# 3. Soạn bài DÁN bằng clipboard, KHÔNG gõ từng ký tự.
+#    Đo ngày 02/10: gõ 702 ký tự mất 29 giây, dán mất ~1 giây. Mỗi phím là một
+#    vòng gọi sang trình duyệt, chi phí thật ~40ms/ký tự — đắt gấp 29 lần dán.
+check("soạn bài bằng clipboard",
+      "await _clipboard_paste(page, ctx, message)" in _src_pvp2)
+check("không còn hàm gõ từng ký tự",
+      "go_noi_dung" not in _src_pvp2 and "go_noi_dung" not in _src_fbc2)
+
 check("kết phiên like đúng 1 bài",            _cb.KET_LIKE == 1)
 
 # ── Xem story CHỈ còn ở phiên nuôi nick ────────────────────────────────────
@@ -983,12 +1120,15 @@ check("fb_common vẫn giữ hàm view_stories cho nuôi nick",
 # Bỏ một bước thì phải đánh số lại, nếu không log ghi "[2/7]" mà phiên chỉ có 6
 # bước — đọc log để lần lỗi sẽ tưởng mất bước.
 import re as _re_buoc
-for _f, _tong in (("via_poster.py", 5), ("page_via_poster.py", 6)):
+for _f, _tong in (("via_poster.py", 5), ("page_via_poster.py", 5)):
     _s = Path(_f).read_text(encoding="utf-8")
     _b = _re_buoc.findall(r"\[(\d)/(\d)\]", _s)
     _b = [(int(a), int(t)) for a, t in _b if int(t) == _tong]
+    # So theo TẬP chứ không theo danh sách: page_via_poster có hai luồng (đăng
+    # chéo nhóm và đăng tường Page), nay cả hai đều 5 bước nên mỗi số xuất hiện
+    # hai lần. Điều cần canh là không hụt số nào, không phải số lần xuất hiện.
     check(f"{_f}: số bước liền mạch 1..{_tong}",
-          sorted(a for a, _ in _b) == list(range(1, _tong + 1)))
+          sorted({a for a, _ in _b}) == list(range(1, _tong + 1)))
 
 # Lý do bỏ qua
 check("danh sách trống -> báo trống", _cb.ly_do_bo_qua([]) == "danh sách trống")
@@ -1156,21 +1296,30 @@ check("gộp giữ được link nhóm composer", _composer in _gop)
 check("gộp đủ cả hai nguồn",             len(_gop) == 3)
 check("gộp không sinh trùng",            len(_gop) == len(set(_gop)))
 
-# 60s là ĐÁNH ĐỔI có ý thức: đo cũ cho thấy 60s thu được 8/9 nhóm, còn 90s thì đủ
-# nhưng chiếm 37% cả chu trình. Dưới 60s thì hụt nhiều, không được hạ tiếp.
-check("chờ thông báo ≥ 60s",       _tl.CHO_THONG_BAO_GIAY >= 60)
-
-# Cửa sổ lọc thông báo phải BÁM SÁT lần đăng vừa rồi. Rộng quá thì vơ luôn
-# thông báo của lần đăng chéo TRƯỚC bằng cùng Page — nếu lần đó thuộc loại lịch
-# khác thì link bị lưu nhầm hạng mục (đã xảy ra: 7 link Homestay lọt vào Thuê).
+# Cửa sổ lọc thông báo. TRƯỚC ĐÂY phải ≤10 phút vì thu link ngay sau khi đăng:
+# rộng quá là vơ luôn thông báo của lần đăng TRƯỚC bằng cùng Page, mà nếu lần đó
+# thuộc loại lịch khác thì link lưu nhầm hạng mục (đã xảy ra: 7 link Homestay
+# lọt vào Thuê).
+#
+# NAY thu link ở ĐẦU phiên sau nên phải nới rộng — chính thông báo của phiên
+# trước mới là thứ cần lấy. Nới được là nhờ hai điều kiện đã kiểm trên dữ liệu
+# thật ngày 02/10:
+#   - Không Page nào phục vụ quá một loại lịch (0/12) → không gán nhầm hạng mục.
+#   - `them_comment_posts` bỏ trùng theo URL → không sinh link lặp.
 import re as _re
 _src = Path("page_via_poster.py").read_text(encoding="utf-8")
 _m = _re.search(r"thu_tu_thong_bao\(page,\s*toi_da_phut=(\d+)\)", _src)
-check("luồng đăng lọc thông báo ≤10 phút",
-      _m is not None and int(_m.group(1)) <= 10)
-# Chờ tối đa CHO_THONG_BAO_GIAY rồi mới chốt, nên cửa sổ phải rộng hơn thế
-check("cửa sổ lọc rộng hơn thời gian chờ",
-      _m is not None and int(_m.group(1)) * 60 > _tl.CHO_THONG_BAO_GIAY)
+check("cửa sổ lọc đủ rộng để lấy phiên trước",
+      _m is not None and int(_m.group(1)) >= 120)
+# Điều kiện khiến việc nới rộng an toàn — hỏng là phải biết ngay.
+check("không Page nào phục vụ quá một loại lịch",
+      max((len({db.loai_content_cua_acc(a["loai_dang"])
+                for a in db.get_accounts()
+                if (a.get("ten_page") or "").strip() == p})
+           for p in {(a.get("ten_page") or "").strip() for a in db.get_accounts()}
+           if p), default=1) <= 1)
+check("lưu link có bỏ trùng theo URL",
+      "BỎ QUA url đã có" in Path("db.py").read_text(encoding="utf-8"))
 
 
 # Nhóm slug cũng phải khớp ở regex permalink dùng cho nhật ký

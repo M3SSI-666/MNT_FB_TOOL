@@ -142,7 +142,7 @@ async def _run_crosspost(
         # BƯỚC 2 — Scroll newsfeed 20-30s (không like — trang cá nhân)
         # ════════════════════════════════════════════════════════════════
         # KHÔNG còn bước xem story: Duong chỉ giữ story ở phiên NUÔI NICK.
-        scroll_sec = random.randint(20, 30)
+        scroll_sec = random.randint(8, 12)
         logger.info(f"  [2/5] 📜 Scroll newsfeed {scroll_sec}s...")
         await _browse_and_like(page, duration_sec=scroll_sec, max_likes=0)
 
@@ -466,7 +466,7 @@ async def _run_crosspost(
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 6 — Scroll 15-30s rồi đóng Chrome (không like — trang cá nhân)
         # ════════════════════════════════════════════════════════════════
-        cooldown_sec = random.randint(15, 30)
+        cooldown_sec = random.randint(8, 12)
         logger.info(f"  [5/5] 📜 Cooldown {cooldown_sec}s...")
         await _browse_and_like(page, duration_sec=cooldown_sec, max_likes=0)
 

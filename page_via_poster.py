@@ -95,6 +95,54 @@ _dismiss_anon_dialog = dismiss_anon_dialog
 # Bước 3: Switch sang Page actor
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Tìm và bấm một nút trong MỘT lần hỏi DOM, thay cho chuỗi `wait_for_selector`.
+#
+# Bản cũ thử lần lượt nhiều selector, mỗi cái chờ 1–2 giây. Nút KHÔNG có mặt —
+# trường hợp thường gặp nhất — là mất trắng toàn bộ số giây đó: đo ngày 02/10,
+# riêng bước tìm nút "Chuyển" đã tiêu 8 giây để rồi không tìm thấy gì, trong khi
+# cả bước chuyển Page chỉ có 20 giây.
+#
+# Hỏi một lần thì nút có hay không cũng chỉ tốn một vòng gọi (~0,1 giây).
+# `elementFromPoint` để bỏ nút đang bị lớp phủ che — bấm vào đó là bấm trượt.
+_JS_TIM_NUT = r"""([nhan, trongDialog]) => {
+    const t = e => (e.innerText || e.textContent || '').trim().replace(/\s+/g,' ');
+    const goc = trongDialog ? document.querySelectorAll('div[role="dialog"]')
+                            : [document];
+    for (const d of goc) {
+        for (const e of d.querySelectorAll('div[role="button"],button,a[role="button"]')) {
+            const s = t(e).toLowerCase();
+            if (!nhan.some(n => s === n.toLowerCase())) continue;
+            const r = e.getBoundingClientRect();
+            if (r.width < 20 || r.height < 14) continue;
+            const x = Math.round(r.left + r.width/2), y = Math.round(r.top + r.height/2);
+            const tr = document.elementFromPoint(x, y);
+            if (tr && (e.contains(tr) || tr.contains(e))) return {x, y};
+        }
+    }
+    return null;
+}"""
+
+
+async def _bam_nut(page, *nhan, trong_dialog: bool = False):
+    """Bấm nút mang đúng một trong các nhãn. Trả về None nếu không có nút nào.
+
+    Trả None chứ không trả giá trị sai: file này có chốt canh cấm nhánh hỏng
+    trả giá trị sai, vì trước đây mọi nhánh hỏng đều làm vậy và nuốt mất lý do
+    — mọi phiên hỏng hiện ra y như nhau là "Hybrid thất bại".
+    """
+    try:
+        vt = await page.evaluate(_JS_TIM_NUT, [list(nhan), trong_dialog])
+    except Exception:
+        return None
+    if not vt:
+        return None
+    try:
+        await page.mouse.click(vt["x"], vt["y"])
+        return vt
+    except Exception:
+        return None
+
+
 async def _switch_to_page(page, ctx, page_uid: str) -> bool:
     """
     Chuyển browser context từ acc cá nhân sang Page actor.
@@ -119,58 +167,23 @@ async def _switch_to_page(page, ctx, page_uid: str) -> bool:
     if await dong_hop_cookie(page):
         logger.info("    [Switch] 🍪 Đã đóng hộp xin phép cookie")
 
-    # b) Dismiss popup "Dùng Trang" nếu có (thử nhanh, không chờ lâu)
-    for sel in [
-        'div[role="dialog"] div[role="button"]:has-text("Dùng Trang")',
-        'div[role="button"]:has-text("Dùng Trang")',
-        'div[role="button"]:has-text("Use Page")',
-    ]:
-        try:
-            btn = await page.wait_for_selector(sel, timeout=1000, state="visible")
-            if btn:
-                await btn.click()
-                await _jwait(page, 1000)
-                logger.info("    [Switch] Dismissed popup 'Dùng Trang'")
-                break
-        except (PWTimeout, Exception):
-            continue
+    # b) Dismiss popup "Dùng Trang" nếu có
+    if await _bam_nut(page, "Dùng Trang", "Use Page"):
+        await _jwait(page, 1000)
+        logger.info("    [Switch] Dismissed popup 'Dùng Trang'")
 
     # c) Click "Chuyển ngay" nếu xuất hiện
-    try:
-        btn = await page.wait_for_selector(
-            'div[role="button"]:has-text("Chuyển ngay")',
-            timeout=2000,
-            state="visible",
-        )
-        if btn:
-            await btn.click()
-            await _jwait(page, 1500)
-            logger.info("    [Switch] Clicked 'Chuyển ngay'")
-    except (PWTimeout, Exception):
-        pass
+    if await _bam_nut(page, "Chuyển ngay"):
+        await _jwait(page, 1500)
+        logger.info("    [Switch] Clicked 'Chuyển ngay'")
 
     # d) Click "Chuyển" trong popup xác nhận
-    switched = False
-    for sel in [
-        'div[role="dialog"] div[role="button"]:has-text("Chuyển")',
-        'div[role="dialog"] div[role="button"]:has-text("Switch")',
-        'div[role="button"]:has-text("Chuyển")',
-        'div[role="button"]:has-text("Switch")',
-    ]:
-        try:
-            btn = await page.wait_for_selector(sel, timeout=2000, state="visible")
-            if btn:
-                label = (await btn.inner_text()).strip()
-                await btn.click()
-                await _jwait(page, 1500)
-                logger.info(f"    [Switch] Clicked '{label}' ✅")
-                switched = True
-                break
-        except (PWTimeout, Exception):
-            continue
-
-    if not switched:
-        logger.info("    [Switch] Không tìm thấy nút Chuyển — giả định đã ở Page context")
+    switched = await _bam_nut(page, "Chuyển", "Switch", trong_dialog=True)
+    if switched:
+        await _jwait(page, 1500)
+        logger.info("    [Switch] Clicked 'Chuyển' ✅")
+    else:
+        logger.info("    [Switch] Không thấy popup xác nhận — tiêm i_user là đủ")
 
     # e) Inject i_user + chờ 3s trước khi vào nhóm
     await ctx.add_cookies([{
@@ -239,7 +252,7 @@ async def _run_page_via(
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 1 — Login vào acc cá nhân
         # ════════════════════════════════════════════════════════════════
-        logger.info(f"  [1/6] 🔐 Login acc cá nhân...")
+        logger.info(f"  [1/5] 🔐 Login acc cá nhân...")
         await page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=30000)
         await _human_delay(2000, 3000)
 
@@ -259,21 +272,61 @@ async def _run_page_via(
         # BƯỚC 2 — Scroll newsfeed 20-30s (không like — đang ở trang cá nhân)
         # ════════════════════════════════════════════════════════════════
         # KHÔNG còn bước xem story: Duong chỉ giữ story ở phiên NUÔI NICK.
-        scroll_sec = random.randint(20, 30)
-        logger.info(f"  [2/6] 📜 Scroll newsfeed {scroll_sec}s...")
+        scroll_sec = random.randint(8, 12)
+        logger.info(f"  [2/5] 📜 Scroll newsfeed {scroll_sec}s...")
         await _browse_and_like(page, duration_sec=scroll_sec, max_likes=0)
 
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 3 — Chui vào Page, chiếm quyền Page
         # ════════════════════════════════════════════════════════════════
-        logger.info(f"  [3/6] 🔄 Switch → Page {page_uid}...")
+        logger.info(f"  [3/5] 🔄 Switch → Page {page_uid}...")
         await _switch_to_page(page, ctx, page_uid)
+
+        # ── THU LINK CỦA PHIÊN TRƯỚC ─────────────────────────────────────
+        # Thu ở ĐẦU phiên này chứ không phải cuối phiên trước. Lý do:
+        #
+        # Facebook đẩy thông báo đăng chéo về nhỏ giọt trong nhiều phút — đo hai
+        # phiên ngày 02/10: sau 29s mới có 2/9 link, sau 58s được 5/9, phải tới
+        # 76s mới đủ 9/9. Ngồi chờ ngay sau khi đăng là mất 85 giây MỖI PHIÊN mà
+        # vẫn thường xuyên thu hụt.
+        #
+        # Chờ tới phiên sau thì thông báo đã nằm sẵn ở đó từ lâu: đọc một lần là
+        # đủ, tốn khoảng 5 giây, và thu được NHIỀU HƠN cách chờ.
+        #
+        # Hai điều kiện khiến cách này an toàn, đã kiểm trên dữ liệu thật:
+        #   - Không Page nào phục vụ quá một loại lịch (0/12), nên link của phiên
+        #     trước luôn cùng hạng mục với phiên này — không gán nhầm.
+        #   - `them_comment_posts` bỏ trùng theo URL, nên cửa sổ thời gian rộng
+        #     không sinh link lặp. Chính vì vậy mới nới được từ 5 phút lên 24 giờ.
+        if loai_comment:
+            try:
+                from thu_link import (thu_tu_thong_bao, THU_LINK_MOI_NHAT,
+                                      la_chua_doc)
+                _cu = await thu_tu_thong_bao(page, toi_da_phut=1440)
+                # Cắt N bài đáng thu nhất: `thu_tu_thong_bao` đã xếp chưa đọc
+                # trước, rồi mới trước cũ, nên cắt từ đầu là đúng.
+                _lay = _cu[:THU_LINK_MOI_NHAT]
+                _moi = sum(1 for _, m in _lay if la_chua_doc(m))
+                if _lay:
+                    # Ném thẳng vào thư viện, KHÔNG kiểm sống/chết ở đây — xem
+                    # ghi chú trong thu_link.py: tốn 16s mỗi phiên mà không bắt
+                    # được gì, vì bài bị gỡ muộn hơn lúc thu. `comment_bai` dọn.
+                    from db import them_comment_posts
+                    _n = them_comment_posts(loai_comment, [u for u, _ in _lay],
+                                            page=page_uid, acc=acc_name)
+                    logger.info(f"  🔗 Thu link phiên trước: {len(_cu)} thông báo "
+                                f"({_moi} chưa đọc) → lấy {len(_lay)} bài đáng thu nhất "
+                                f"→ {_n} link mới vào thư viện '{loai_comment}'")
+                else:
+                    logger.info("  🔗 Thu link phiên trước: chưa có thông báo nào")
+            except Exception as e:
+                logger.warning(f"  ⚠️  Thu link phiên trước lỗi: {e}")
 
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 5 — Chui vào nhóm đầu, paste nội dung + upload ảnh
         # ════════════════════════════════════════════════════════════════
         group_url = f"https://www.facebook.com/groups/{first_group_uid}/"
-        logger.info(f"  [4/6] 📌 Vào nhóm: {group_url}")
+        logger.info(f"  [4/5] 📌 Vào nhóm: {group_url}")
         await page.goto(group_url, wait_until="domcontentloaded", timeout=30000)
         await _human_delay(3000, 5000)
 
@@ -398,7 +451,7 @@ async def _run_page_via(
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 6 — Thêm nhóm → gõ từ khóa → tick → Đăng
         # ════════════════════════════════════════════════════════════════
-        logger.info(f"  [5/6] ➕ Thêm nhóm → tìm \"{search_kw}\" → tick → Đăng...")
+        logger.info(f"  [5/5] ➕ Thêm nhóm → tìm \"{search_kw}\" → tick → Đăng...")
 
         # Click "+ Thêm nhóm"
         await _human_delay(1000, 1500)
@@ -629,37 +682,29 @@ async def _run_page_via(
         except Exception as e:
             logger.warning(f"  ⚠️  Thu link từ phản hồi lỗi: {e}")
 
-        # (b) Trang thông báo — các nhóm được đăng chéo tới.
-        try:
-            from thu_link import thu_tu_thong_bao, CHO_THONG_BAO_GIAY
-            logger.info(f"  ⏳ Chờ {CHO_THONG_BAO_GIAY}s cho thông báo đăng chéo về...")
-            await asyncio.sleep(CHO_THONG_BAO_GIAY)
-            # Cửa sổ lọc phải BÁM SÁT lần đăng này. Đã chờ 60s nên thông báo
-            # của chính nó chỉ 1–2 phút tuổi; 5 phút là dư biên.
-            #
-            # Để 60 phút thì vơ luôn thông báo của các lần đăng chéo TRƯỚC bằng
-            # cùng Page — và nếu lần trước thuộc loại lịch khác thì link bị lưu
-            # nhầm hạng mục. Đã xảy ra thật: 7 link nhóm Homestay lọt vào danh
-            # sách Thuê, khiến acc thuê đi comment vào bài homestay.
-            _ds = await thu_tu_thong_bao(page, toi_da_phut=5)
-            _them = [u for u, _ in _ds if u not in _link_moi]
-            _link_moi += _them
-            logger.info(f"  🔗 [b] Thông báo: {len(_ds)} link ({len(_them)} link mới)")
-        except Exception as e:
-            logger.warning(f"  ⚠️  Thu link từ thông báo lỗi: {e}")
+        # (b) KHÔNG còn chờ thông báo ở đây nữa — việc đó chuyển sang ĐẦU
+        #     phiên sau, ngay sau khi chuyển vai Page (xem bước [3/5]).
+        #
+        #     Đo ngày 02/10: ngồi chờ ngay sau khi đăng mất 85 giây mỗi phiên mà
+        #     vẫn thu hụt, vì Facebook đẩy thông báo nhỏ giọt — sau 29s mới có
+        #     2/9 link, 58s được 5/9, phải tới 76s mới đủ. Để sang phiên sau thì
+        #     thông báo đã nằm sẵn ở đó, đọc một lần là đủ và thu được nhiều hơn.
+        #
+        #     Bước (c) nhật ký Page cũng bỏ: nó vốn chỉ chạy để bù khi (b) hụt.
 
-        # (c) Nhật ký Page — chỉ chạy khi hai nguồn trên hụt so với số nhóm đã
-        #     tick. Nhật ký bị các lượt like của phiên nuôi/comment lấp đầy nên
-        #     yếu, chạy vô điều kiện chỉ tốn thêm thời gian.
-        if _groups_posted and len(_link_moi) < _groups_posted:
-            try:
-                from thu_link import thu_tu_nhat_ky_page
-                _ds = await thu_tu_nhat_ky_page(page, page_uid)
-                _them = [u for u, _ in _ds if u not in _link_moi]
-                _link_moi += _them
-                logger.info(f"  🔗 [c] Nhật ký Page bù thêm: {len(_them)} link")
-            except Exception as e:
-                logger.warning(f"  ⚠️  Thu link từ nhật ký lỗi: {e}")
+        # ── Lướt feed của Page rồi thả tim 1 bài ────────────────────────
+        # Ra FEED chứ không ở lại nhóm vừa đăng: ngồi lại chính chỗ mình vừa
+        # đăng mà cuộn lên cuộn xuống là hành vi lạ. Đang mang vai Page nên
+        # facebook.com chính là feed của Page.
+        try:
+            await page.goto("https://www.facebook.com/",
+                            wait_until="domcontentloaded", timeout=30000)
+            await _jwait(page, 1500)
+            _luot = random.randint(8, 12)
+            logger.info(f"  📜 Lướt feed Page {_luot}s + thả tim 1 bài...")
+            await _browse_and_like(page, duration_sec=_luot, max_likes=1)
+        except Exception as e:
+            logger.warning(f"  ⚠️  Lướt feed Page lỗi: {e}")
 
         logger.info(f"  🔗 TỔNG: {len(_link_moi)} link / {_groups_posted or '?'} nhóm đã tick")
         for _u in _link_moi[:15]:
@@ -695,13 +740,10 @@ async def _run_page_via(
         # ngày sau đó. Phải so SỐ VỤ với lần đo trước mới biết có vụ mới.
         await kiem_vi_pham(page, acc_name, "phiên đăng Hybrid")
 
-        # ════════════════════════════════════════════════════════════════
-        # BƯỚC 7 — Scroll 15-30s + like tối đa 1 bài (đang là Page) rồi đóng Chrome
-        # ════════════════════════════════════════════════════════════════
-        cooldown_sec = random.randint(15, 30)
-        logger.info(f"  [6/6] 📜 Cooldown {cooldown_sec}s + like...")
-        await _browse_and_like(page, duration_sec=cooldown_sec, max_likes=1)
-
+        # KHÔNG còn bước hạ nhiệt riêng: việc lướt feed + like 1 bài đã làm
+        # TRONG lúc chờ thông báo đăng chéo ở trên. Tách ra thành bước riêng là
+        # vừa tốn thêm ~11 giây, vừa để trình duyệt đứng im suốt 60 giây ngay
+        # sau khi đăng — chính khoảng im đó mới là thứ trông lạ.
         logger.info(f"  ✅ Đóng Chrome")
         await ctx.close()
         # Trả về số nhóm đã đăng (0 nếu không có nút Thêm nhóm = đăng 1 nhóm)
@@ -776,7 +818,7 @@ async def _run_page_wall(
         # ── BƯỚC 2 — Warm-up nhẹ (scroll, không like — đang ở trang cá nhân) ──
         # KHÔNG còn bước xem story: Duong chỉ giữ story ở phiên NUÔI NICK.
         logger.info(f"  [2/5] 📜 Scroll newsfeed...")
-        await _browse_and_like(page, duration_sec=random.randint(15, 25), max_likes=0)
+        await _browse_and_like(page, duration_sec=random.randint(8, 12), max_likes=0)
 
         # ── BƯỚC 3 — Switch sang Page actor ───────────────────────────────────
         logger.info(f"  [3/5] 🔄 Switch → Page {page_uid}...")

@@ -10,6 +10,78 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.33.0 — 03/10/2026
+
+**Phiên đăng bài nhanh hơn: 188 giây còn 125 giây**
+
+Đo trên nick Thảo Ngân với Page Homestay Times City, 5 phiên thật. Rút được nhờ
+ba chỗ, không chỗ nào bớt việc đăng:
+
+| | trước | nay |
+|---|---|---|
+| lướt newsfeed đầu phiên | 20–30s | 8–12s |
+| chờ thu link sau khi đăng | 85s | **bỏ hẳn** |
+| hạ nhiệt cuối phiên | 15–30s | gộp vào lướt feed 8–12s |
+| chuyển vai sang Page | ~13s | ~4s |
+
+Phiên đăng nay còn **5 bước** thay vì 6.
+
+---
+
+**Không chờ thu link nữa — thu ở đầu phiên sau**
+
+Trước đây đăng xong thì ngồi chờ Facebook đẩy thông báo "đã đăng chéo" về rồi
+mới đọc link. Facebook đẩy nhỏ giọt: đo hai phiên ngày 02/10, sau 29 giây mới
+có 2/9 link, sau 58 giây được 5/9, phải tới 76 giây mới đủ. Tức **mất 85 giây
+mỗi phiên mà vẫn thường xuyên thu hụt**.
+
+Nay đăng xong là xong. Việc thu link dồn sang **đầu phiên kế tiếp**, ngay sau
+khi chuyển vai Page — lúc đó thông báo đã nằm sẵn ở đó từ lâu, đọc một lần là
+đủ. Số link thu được **nhiều hơn** cách chờ: 7–9 link/phiên lên 31 link.
+
+Hai điều khiến cách này an toàn, đã kiểm trên dữ liệu thật: không Page nào phục
+vụ quá một loại lịch (0/12 Page), nên link của phiên trước luôn cùng hạng mục
+với phiên này; và thư viện bỏ trùng theo địa chỉ bài nên đọc rộng ra 24 giờ
+cũng không sinh link lặp.
+
+---
+
+**Chỉ lấy 10 bài mới nhất, tính theo thời gian**
+
+Một lượt đọc ra tới 31 link mới — nhiều hơn mức cần. Thư viện comment là **cửa
+sổ trượt có hạn mức**: link mới đẩy link cũ ra. Đổ 31 link mỗi phiên vào đó thì
+danh sách bị thay gần hết trước khi kịp đi comment.
+
+Nay lấy 10 bài. Và "mới nhất" là **đo theo nhãn thời gian của từng thông báo**
+("12 phút", "1 giờ"), không phải lấy 10 dòng Facebook tình cờ bày lên trên.
+Bản nháp đầu dựa vào thứ tự trang — tình cờ đúng, nhưng hôm nào Facebook đổi
+cách xếp là sai ngầm, không báo lỗi, chỉ lặng lẽ đi comment mấy bài cũ.
+
+---
+
+**Đăng xong thì ra newsfeed của Page lướt và thả tim 1 bài**
+
+Trước đây hết phiên là ngồi lại trong nhóm vừa đăng rồi đóng Chrome. Nay ra
+newsfeed của Page lướt 8–12 giây và thả tim 1 bài ngẫu nhiên — vừa là bước hạ
+nhiệt, vừa giống người thật hơn là đứng im một chỗ.
+
+---
+
+**Đã thử và bỏ** — ghi lại để sau này không ai làm lại:
+
+- **Tự gõ nội dung thay vì dán.** Nghe thì giống người thật hơn. Đo thật: 702 ký
+  tự mất **29 giây** (mỗi lần gõ một ký tự là một lượt hỏi–đáp với trình duyệt,
+  ~40ms). Dán mất khoảng 1 giây. Giữ dán.
+- **Kiểm link sống/chết ngay lúc thu.** Cách nhẹ (chỉ tải mã trang, không dựng
+  trang) vô dụng — Facebook trả cùng một lỗi cho *mọi* link, sống chết như nhau.
+  Cách thật là mở từng trang: 1,6 giây/link kể cả khi mở 4 tab cùng lúc, tức
+  **+16 giây mỗi phiên**, mà 21 link đo được **chết đúng 0 cái**. Lý do: bài bị
+  quản trị viên gỡ *muộn hơn* lúc thu. Phiên comment vốn đã mở sẵn từng bài nên
+  phát hiện và xoá link chết ở đó không tốn thêm giây nào — và cơ chế ấy đã chạy
+  từ trước.
+
+---
+
 ## v2.32.1 — 02/10/2026
 
 **Sửa: mở tab Tham gia nhóm là cả phần mềm lag**
