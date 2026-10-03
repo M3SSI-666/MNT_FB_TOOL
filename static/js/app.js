@@ -199,7 +199,7 @@ async function loadJoinSchedules() {
         else if(!anyRunning) jcTrangThai("", false);
 
         if(!res.data.length) {
-            tbody.innerHTML = `<tr><td colspan="9" class="empty">Chưa có lịch tham gia nhóm nào</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="11" class="empty">Chưa có lịch tham gia nhóm nào</td></tr>`;
             return;
         }
         tbody.innerHTML = res.data.map(r => {
@@ -217,10 +217,15 @@ async function loadJoinSchedules() {
                 <td style="text-align:center;font-weight:600">${r.ten_acc}</td>
                 <td style="text-align:center;color:var(--text-secondary)">${r.ten_page}</td>
                 <td style="text-align:center;font-weight:600">${r.gio_chay||"-"}</td>
+                <td style="text-align:center">
+                    <input type="checkbox" ${r.lam_sach?"checked":""} ${isRunning?"disabled":""}
+                           onchange="jmLamSach(${r.id}, this.checked, '')"
+                           title="Page rời mọi nhóm KHÔNG có trong UID Nhóm"></td>
                 <td style="text-align:center">${r.tong_nhom||0}</td>
                 <td style="text-align:center;color:var(--success);font-weight:600">${r.moi_join||0}</td>
                 <td style="text-align:center;color:var(--text-muted)">${r.da_join||0}</td>
                 <td style="text-align:center;color:var(--danger)">${r.loi||0}</td>
+                <td style="text-align:center;color:${r.da_roi?"var(--warning)":"var(--text-muted)"}">${r.da_roi||0}</td>
                 <td style="text-align:center">${stBadge}</td>
                 <td style="text-align:center">
                     <button onclick="deleteJoin(${r.id})"
@@ -231,7 +236,7 @@ async function loadJoinSchedules() {
             </tr>`;
         }).join("");
     } catch(e) {
-        tbody.innerHTML = `<tr><td colspan="9" class="empty" style="color:var(--danger)">${e.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" class="empty" style="color:var(--danger)">${e.message}</td></tr>`;
     }
 }
 
@@ -2313,20 +2318,24 @@ async function jmLuu(){
 
 // Bật/tắt làm sạch cho một nick. Hỏi lại khi BẬT vì rời nhóm khó quay lại —
 // nhóm nào cần duyệt thì phải xin duyệt lại từ đầu.
-async function jmLamSach(id, bat){
-    if(bat && !confirm(
-        "Bật làm sạch cho nick này?\n\n"
-        + "Khi chạy, nick sẽ RỜI mọi nhóm không có trong UID Marketplace — "
-        + "kể cả nhóm cá nhân không liên quan công việc.\n\n"
-        + "Nhóm cần duyệt mà rời rồi thì phải xin duyệt lại từ đầu.")){
-        loadJoinMarket();   // vẽ lại để ô tích về đúng trạng thái cũ
-        return;
-    }
+// Dùng chung cho hai tab: `nguon` "MARKET" = tab Market, "" = tab Page.
+async function jmLamSach(id, bat, nguon="MARKET"){
+    const veLai = ()=>_JC[nguon].nap();   // vẽ lại để ô tích về đúng trạng thái cũ
+    const hoi = nguon === "MARKET"
+        ? "Bật làm sạch cho nick này?\n\n"
+          + "Khi chạy, nick sẽ RỜI mọi nhóm không có trong UID Marketplace — "
+          + "kể cả nhóm cá nhân không liên quan công việc.\n\n"
+          + "Nhóm cần duyệt mà rời rồi thì phải xin duyệt lại từ đầu."
+        : "Bật làm sạch cho Page này?\n\n"
+          + "Khi chạy, PAGE sẽ RỜI mọi nhóm không có trong UID Nhóm — "
+          + "kể cả nhóm Page đang đăng bài mà chưa có trong UID Nhóm.\n\n"
+          + "Nhóm cần duyệt mà rời rồi thì phải xin duyệt lại từ đầu.";
+    if(bat && !confirm(hoi)){ veLai(); return; }
     try{
         const r = await API.joinLamSach(id, bat);
-        if(!r.ok){ Toast.error(r.error); loadJoinMarket(); return; }
+        if(!r.ok){ Toast.error(r.error); veLai(); return; }
         Toast.success(bat ? "Đã bật làm sạch" : "Đã tắt làm sạch");
-    }catch(e){ Toast.error(e.message); loadJoinMarket(); }
+    }catch(e){ Toast.error(e.message); veLai(); }
 }
 
 async function jmXoa(id){

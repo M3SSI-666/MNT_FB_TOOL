@@ -2558,23 +2558,21 @@ def _chain_dang_chay(nguon: str) -> bool:
 
 @app.route("/api/join/<int:sched_id>/lam-sach", methods=["POST"])
 def api_join_lam_sach(sched_id):
-    """Bật/tắt "làm sạch nhóm" cho một lịch Marketplace.
+    """Bật/tắt "làm sạch nhóm" cho một lịch tham gia nhóm.
 
-    Chỉ cho bật trên lịch nguồn MARKET: làm sạch nghĩa là rời mọi nhóm không có
-    trong UID Marketplace, mà lịch nguồn '' chạy dưới danh nghĩa PAGE — bật ở đó
-    là rời nhầm nhóm của Page, không phải thứ ai muốn.
+    Lịch Market: nick cá nhân rời mọi nhóm không có trong UID Marketplace.
+    Lịch Page: PAGE rời mọi nhóm không có trong UID Nhóm — runner chỉ làm khi
+    Facebook xác nhận đang dùng Page (`_dang_dung_page`), không thì rời nhầm
+    nhóm của nick.
     """
     bat = bool((request.json or {}).get("bat"))
     try:
         from db import _conn
         with _conn() as con:
-            r = con.execute("SELECT COALESCE(nguon,'') ng FROM join_schedules WHERE id=?",
+            r = con.execute("SELECT id FROM join_schedules WHERE id=?",
                             (sched_id,)).fetchone()
             if not r:
                 return jsonify({"ok": False, "error": "Không tìm thấy lịch"})
-            if bat and r["ng"] != "MARKET":
-                return jsonify({"ok": False,
-                                "error": "Chỉ bật được cho lịch Tham gia nhóm Market"})
             con.execute("UPDATE join_schedules SET lam_sach=? WHERE id=?",
                         (1 if bat else 0, sched_id))
         return jsonify({"ok": True})

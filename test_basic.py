@@ -4091,8 +4091,29 @@ _ajs_jm  = Path("static/js/app.js").read_text(encoding="utf-8")
 check("cột lam_sach mặc định TẮT",
       '_add_col("join_schedules", "lam_sach", "lam_sach INTEGER DEFAULT 0")'
       in Path("db.py").read_text(encoding="utf-8"))
-check("chỉ bật được cho lịch MARKET",
-      'if bat and r["ng"] != "MARKET"' in _src_srv_j)
+# Làm sạch bật được cho CẢ lịch Page (02/10). Lịch Page thì Page rời nhóm ngoài
+# UID Nhóm — runner chỉ làm khi Facebook xác nhận đang dùng Page.
+with db._conn() as _c_ls:
+    _c_ls.execute("INSERT INTO join_schedules(ten_acc,ten_page,page_uid,nguon) "
+                  "VALUES('LS_PAGE','P','123','')")
+    _id_ls = _c_ls.execute("SELECT id FROM join_schedules WHERE ten_acc='LS_PAGE'").fetchone()[0]
+_r_ls = _client.post(f"/api/join/{_id_ls}/lam-sach", json={"bat": True}).get_json()
+with db._conn() as _c_ls:
+    _v_ls = _c_ls.execute("SELECT lam_sach FROM join_schedules WHERE id=?", (_id_ls,)).fetchone()[0]
+    _c_ls.execute("DELETE FROM join_schedules WHERE ten_acc='LS_PAGE'")
+check("bật được làm sạch cho lịch Page", _r_ls.get("ok") is True and _v_ls == 1)
+import re as _re_ls
+_html_ls = Path("templates/index.html").read_text(encoding="utf-8")
+_bang_page = _html_ls[_html_ls.index('id="page-tham-gia-nhom"'):_html_ls.index('id="join-table"')]
+check("bảng Page có cột Làm sạch và Đã rời",
+      ">Làm sạch</th>" in _bang_page and ">Đã rời</th>" in _bang_page)
+check("bảng Page vẫn giữ cột Giờ chạy", ">Giờ chạy</th>" in _bang_page)
+_ajs_ls = Path("static/js/app.js").read_text(encoding="utf-8")
+check("ô Làm sạch ở bảng Page gọi đúng nguồn Page",
+      "jmLamSach(${r.id}, this.checked, '')" in _ajs_ls)
+check("số cột hàng trống khớp bảng Page (11 cột)",
+      len(_re_ls.findall(r"<th[\s>]", _bang_page)) == 11
+      and 'colspan="11" class="empty">Chưa có lịch tham gia nhóm nào' in _ajs_ls)
 # Làm sạch chạy SAU phần tham gia, và chỉ khi đã vào được ít nhất một nhóm mục
 # tiêu. Bản cũ làm sạch TRƯỚC: ngày 02/10 bước tham gia báo lỗi 15/15 nhóm (đọc
 # sai, xem dưới) — nick nào có nhóm cũ mà chạy tiếp là rời sạch nhóm cũ, không
@@ -4119,8 +4140,47 @@ check("báo tiến độ không đổi chữ trạng thái",
 # `groups` bị thay bằng danh sách đã lọc, nên phải giữ bản gốc để biết nhóm nào
 # là mục tiêu — dùng nhầm `groups` là rời luôn nhóm đã tham gia từ trước.
 check("làm sạch dùng danh sách mục tiêu GỐC", "groups_goc = list(groups)" in _src_jr)
-check("chỉ làm sạch khi nguồn MARKET và có bật cờ",
-      'lam_sach_nay = nguon == "MARKET" and lam_sach' in _src_jr)
+check("làm sạch theo cờ của lịch, cả Page lẫn Market",
+      "lam_sach_nay = lam_sach" in _src_jr)
+# Lịch Page: switch hỏng mà vẫn làm sạch là NICK rời sạch nhóm của nó, kể cả
+# nhóm Marketplace. Phải hỏi Facebook trước, hỏng thì bỏ qua làm sạch.
+_i_hoi_page = _src_jr.index("not await _dang_dung_page(page, page_uid)")
+check("lịch Page hỏi Facebook đang dùng Page TRƯỚC khi làm sạch",
+      _i_join < _i_hoi_page < _i_sach
+      and "lam_sach_nay = False" in _src_jr[_i_hoi_page:_i_hoi_page + 300])
+check("lịch Market không phải hỏi Page",
+      'nguon != "MARKET" and not await _dang_dung_page' in _src_jr)
+check("switch hỏng KHÔNG dừng phần tham gia (logic Page giữ như cũ)",
+      "_dang_dung_page" not in _src_jr[_src_jr.index("await _switch_to_page(page, ctx, page_uid)"):_i_join])
+
+import asyncio as _aio_ls
+import join_groups_runner as _jr_ls
+
+class _TrangGia:
+    """Trang giả: goto không làm gì, `url` là chỗ /me trỏ tới."""
+    def __init__(self, url): self.url = url
+    async def goto(self, *a, **k): pass
+    async def wait_for_timeout(self, *a): pass
+
+def _hoi(url, uid):
+    return _aio_ls.run(_jr_ls._dang_dung_page(_TrangGia(url), uid))
+
+check("/me ra id Page -> đang dùng Page",
+      _hoi("https://www.facebook.com/profile.php?id=615", "615"))
+check("/me ra id nick -> KHÔNG phải Page",
+      not _hoi("https://www.facebook.com/profile.php?id=100019346433861", "615"))
+check("id dài hơn mà trùng đầu KHÔNG được nhận nhầm",
+      not _hoi("https://www.facebook.com/profile.php?id=6150", "615"))
+check("thiếu Page UID -> KHÔNG phải Page", not _hoi("https://www.facebook.com/profile.php?id=", ""))
+with db._conn() as _c_ls:
+    _c_ls.execute("INSERT INTO pages(ten_page,page_uid,link_page) "
+                  "VALUES('LS','61599999999001','https://www.facebook.com/TenRutGon/')")
+check("Page có tên rút gọn: khớp link Page đã lưu",
+      _hoi("https://www.facebook.com/tenrutgon", "61599999999001"))
+check("tên rút gọn khác -> KHÔNG phải Page",
+      not _hoi("https://www.facebook.com/nickcanhan", "61599999999001"))
+with db._conn() as _c_ls:
+    _c_ls.execute("DELETE FROM pages WHERE page_uid='61599999999001'")
 # Đọc lại danh sách nhóm sau phiên: nhóm ghi lỗi mà thật ra đã vào thì sửa lại.
 check("đối chiếu lại nhóm ghi lỗi với danh sách nhóm đã vào",
       'r["result"] = "moi_join"' in _src_jr and 'stats["loi"]      -= len(sua)' in _src_jr)

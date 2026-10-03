@@ -168,6 +168,42 @@ def _url_chong_cache(url: str) -> str:
     return f"{url}{'&' if '?' in url else '?'}_t={int(time.time())}"
 
 
+async def _dang_dung_page(page, page_uid: str) -> bool:
+    """Facebook có xác nhận đang dùng danh nghĩa PAGE không.
+
+    `_switch_to_page` bấm nút rồi đi tiếp, không kiểm. Tham gia nhầm danh nghĩa
+    thì chỉ phí một lượt, nhưng LÀM SẠCH nhầm thì nick cá nhân rời sạch nhóm của
+    chính nó — kể cả nhóm Marketplace. Nên làm sạch ở lịch Page phải hỏi trước.
+
+    Hỏi qua `facebook.com/me`: Facebook chuyển tới trang của danh nghĩa đang
+    dùng. Đo 02/10 (Tien Duongg → Page 61587664442386): trước khi chuyển ra id
+    nick, sau khi chuyển ra id Page. Đây là câu trả lời của Facebook, không phải
+    cookie i_user do chính phần mềm tự đặt.
+    """
+    if not page_uid:
+        return False
+    try:
+        await page.goto("https://www.facebook.com/me", wait_until="domcontentloaded", timeout=30000)
+        await page.wait_for_timeout(3000)
+    except Exception as e:
+        _log("warning", f"   không mở được facebook.com/me: {e}")
+        return False
+    url = page.url
+    if re.search(rf"[?&]id={re.escape(page_uid)}(?:&|$)", url):
+        return True
+    # Page có tên rút gọn (facebook.com/ten-page): đối chiếu với link Page đã lưu.
+    with _conn() as con:
+        r = con.execute("SELECT link_page FROM pages WHERE page_uid=? LIMIT 1",
+                        (page_uid,)).fetchone()
+    ten_luu = re.search(r"facebook\.com/([^/?#]+)", (r[0] if r else "") or "")
+    ten_me  = re.search(r"facebook\.com/([^/?#]+)", url)
+    if (ten_luu and ten_me and ten_luu.group(1) != "profile.php"
+            and ten_luu.group(1).lower() == ten_me.group(1).lower()):
+        return True
+    _log("warning", f"   facebook.com/me đang trỏ tới {url}, không phải Page {page_uid}")
+    return False
+
+
 async def _cho_trang_thai(page, giay: int) -> str:
     """Đọc trạng thái thành viên, chờ tối đa `giay` giây tới khi rõ ràng."""
     st = ""
@@ -417,12 +453,14 @@ async def _roi_mot_nhom(page, uid: str, ten_nhom: str, link_url: str) -> str:
 async def _lam_sach_nhom(page, muc_tieu: list, dang_o: set = None, bao=None) -> int:
     """Rời mọi nhóm nick đang ở mà KHÔNG nằm trong danh sách mục tiêu.
 
-    Mục đích: để nick chỉ còn đúng các nhóm đã duyệt Marketplace, lúc tick nhóm
-    ở bước đăng bài khỏi phải lọc giữa một rừng nhóm không liên quan.
+    Mục đích: để chủ thể chỉ còn đúng các nhóm mục tiêu, lúc tick nhóm ở bước
+    đăng bài khỏi phải lọc giữa một rừng nhóm không liên quan.
 
-    Đọc danh sách nhóm của CHÍNH NICK CÁ NHÂN (luồng Marketplace không switch
-    sang Page), nên không đụng tới nhóm của Page. `dang_o` là danh sách đã đọc
-    sẵn — có thì khỏi đọc lại (mỗi lần đọc mất cả phút cuộn trang).
+    Rời dưới danh nghĩa ĐANG DÙNG: lịch Market là nick cá nhân (nhóm mục tiêu =
+    UID Marketplace), lịch Page là Page sau khi switch (nhóm mục tiêu = UID
+    Nhóm). Lịch Page phải qua `_dang_dung_page` trước khi gọi vào đây.
+    `dang_o` là danh sách đã đọc sẵn — có thì khỏi đọc lại (mỗi lần đọc mất cả
+    phút cuộn trang).
 
     `bao(da_roi)` được gọi sau mỗi 5 nhóm để bảng hiện tiến độ. Không có nó thì
     cột "Đã rời" đứng ở 0 suốt cả buổi: ngày 02/10 nick Mai Tùng phải rời 425
@@ -769,7 +807,11 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
         #  1. Nhóm bị ghi lỗi mà thật ra đã vào → sửa thành "mới tham gia".
         #     Lưới an toàn cho mọi kiểu đọc sai trạng thái trên trang nhóm.
         #  2. Làm sạch: rời nhóm ngoài danh sách mục tiêu.
-        lam_sach_nay = nguon == "MARKET" and lam_sach
+        lam_sach_nay = lam_sach
+        if lam_sach_nay and nguon != "MARKET" and not await _dang_dung_page(page, page_uid):
+            _log("warning", "🧹 BỎ QUA làm sạch: Facebook không xác nhận đang dùng "
+                            "Page — rời nhóm lúc này có thể là rời nhóm của NICK")
+            lam_sach_nay = False
         if nhom_loi or lam_sach_nay:
             try:
                 dang_o = await _lay_nhom_da_vao(page, chu_the)
