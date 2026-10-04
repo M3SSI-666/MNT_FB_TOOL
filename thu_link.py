@@ -29,37 +29,32 @@ import asyncio
 
 from utils import logger
 
-# Chờ bao lâu sau khi bấm Đăng rồi mới mở trang thông báo.
-# Facebook đẩy thông báo "Đã đăng chéo…" theo từng nhóm và KHÔNG đồng thời —
-# mở quá sớm thì mới về vài cái, thu thiếu link.
-#
-# Từng để 90s. Hạ xuống 60s vì 90s chiếm tới 37% cả chu trình đăng bài mà
-# phần lớn là đứng im. Đây là ĐÁNH ĐỔI có ý thức: đo cũ cho thấy 60s thu được
-# 8/9 nhóm, tức có thể hụt một link mỗi phiên. Chấp nhận được vì còn nguồn (c)
-# — nhật ký Page — tự chạy bù khi số link thu được ít hơn số nhóm đã tick.
-#
-# ĐÃ THỬ cách dò lặp để dừng sớm rồi BỎat: mỗi lượt dò tốn ~13s tải trang,
-# nên khi thông báo về chậm thì tổng lên tới 136s — tệ hơn cả ngủ thẳng 90s.
-# Một con số cố định đoán trước được tốt hơn một vòng lặp thông minh nửa vời.
-CHO_THONG_BAO_GIAY = 60
-
 # Số link lấy về mỗi lượt thu, tính từ bài MỚI NHẤT trở xuống.
 #
-# Từ bản 2.33 việc thu link chuyển sang đầu phiên sau, nên cửa sổ thời gian nới
-# rộng tới 24 giờ — đọc một lần là thấy thông báo của nhiều phiên trước. Đo ngày
-# 02/10: một lượt đọc ra 52 thông báo, 31 link mới. Nhiều hơn mức cần.
+# Thu chạy NGAY SAU phiên đăng, sau quãng lướt feed ~75s (xem
+# `fb_common.CHO_SAU_DANG_GIAY`), nhưng đọc cả cửa sổ 24 GIỜ chứ không chỉ mẻ
+# vừa đăng. Mục đích của cửa sổ rộng là VỚT LẠI: Facebook đẩy thông báo nhanh
+# chậm tuỳ lúc — hai phiên đo 02/10 ở cùng mốc 76s cho ra 9/9 và 7/9 — nên dù
+# chờ bao lâu vẫn có phiên hụt. Phiên sau đọc lại là nhặt được.
 #
-# Thư viện comment là CỬA SỔ TRƯỢT có hạn mức: link mới đẩy link cũ ra. Đổ 31
-# link mỗi phiên vào đó thì danh sách bị thay gần hết trước khi kịp đi comment.
-# Mười link gần nhất là đủ để luôn có bài mới mà không xáo tung thư viện.
+# Đây mới là thứ bảo đảm không mất link, không phải độ dài quãng chờ. Bằng
+# chứng từ phiên thật 03/10: tick 9 nhóm = 1 nhóm mở composer (không sinh thông
+# báo) + 8 nhóm đăng chéo, tức phiên đó nhiều nhất chỉ đẻ ra 8 thông báo. Lấy
+# về 10 link, TRÙNG 0 — nghĩa là ít nhất 2 link là của phiên trước về muộn mà
+# chưa từng vào thư viện. Cơ chế vớt chạy thật, không phải lý thuyết.
+#
+# Đo ngày 02/10: một lượt đọc cả 24 giờ ra 52 thông báo, 31 link mới — nhiều
+# hơn mức cần. Thư viện comment là CỬA SỔ TRƯỢT có hạn mức: link mới đẩy link
+# cũ ra. Đổ 31 link mỗi phiên vào đó thì danh sách bị thay gần hết trước khi
+# kịp đi comment.
 #
 # `thu_tu_thong_bao` xếp kết quả theo thứ tự ĐÁNG THU NHẤT trước khi trả về
 # (chưa đọc trước, rồi mới tới cũ — xem `xep_uu_tien`), nên cắt 10 phần tử đầu
 # là 10 bài cần thu nhất, không phải 10 dòng Facebook tình cờ bày lên trên.
 #
 # Đo 03/10 trên Page Jenniee Homestay: một đợt đăng chéo để lại ĐÚNG 8 thông
-# báo chưa đọc — khớp số nhóm đăng được. Mười chỗ là vừa đủ phủ một phiên mà
-# còn hai chỗ bù cho phiên trước.
+# báo — khớp số nhóm đăng được. Mười chỗ là vừa đủ phủ mẻ vừa đăng mà còn hai
+# chỗ vớt phần hụt của phiên trước.
 THU_LINK_MOI_NHAT = 10
 
 # Định danh nhóm có thể là SỐ hoặc SLUG chữ ("homestaytimescity",

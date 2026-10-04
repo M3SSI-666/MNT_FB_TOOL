@@ -1003,23 +1003,27 @@ _src_fbc2 = Path("fb_common.py").read_text(encoding="utf-8")
 #    Trình duyệt đứng im 60 giây ngay sau khi đăng tự nó đã là dấu hiệu lạ.
 check("bỏ bước hạ nhiệt riêng", "cooldown_sec = random.randint" not in _src_pvp2)
 
-# ── Thu link chuyển sang ĐẦU phiên sau ─────────────────────────────────────
-# Đo 02/10: ngồi chờ thông báo ngay sau khi đăng mất 85 giây MỖI PHIÊN mà vẫn
-# thu hụt — Facebook đẩy nhỏ giọt (29s: 2/9 · 58s: 5/9 · 76s: 9/9). Để sang
-# phiên sau thì thông báo đã nằm sẵn, đọc một lần là đủ và thu được nhiều hơn.
-check("KHÔNG còn chờ thông báo sau khi đăng",
-      "CHO_THONG_BAO_GIAY" not in _src_pvp2)
-check("thu link ở đầu phiên, sau khi chuyển Page",
-      "Thu link phiên trước" in _src_pvp2)
-_i_sw  = _src_pvp2.index("await _switch_to_page(page, ctx, page_uid)")
-_i_thu = _src_pvp2.index("Thu link phiên trước")
+# ── Thu link chạy SAU khi đăng, sau quãng lướt feed ────────────────────────
+# Facebook đẩy thông báo đăng chéo nhỏ giọt (29s: 2/9 · 58s: 5/9 · 76s: 9/9),
+# nên đọc trang thông báo ngay sau cú bấm Đăng thì không có gì mà đọc. Quãng
+# lướt feed 60-70s ở trên vừa là cửa sổ dò spam vừa là chỗ chờ này.
+check("KHÔNG còn thu link ở đầu phiên",
+      "Thu link phiên trước" not in _src_pvp2)
+check("thu link từ trang thông báo sau khi đăng",
+      "[b] Trang thông báo" in _src_pvp2)
+_i_sw   = _src_pvp2.index("await _switch_to_page(page, ctx, page_uid)")
 _i_dang = _src_pvp2.index("Thêm nhóm → tìm")
-check("thu link SAU khi chuyển Page, TRƯỚC khi đăng",
-      _i_sw < _i_thu < _i_dang)
-# Cửa sổ 5 phút cũ là để tránh vơ nhầm thông báo của loại lịch khác. Nới rộng
-# được vì đã kiểm: không Page nào phục vụ quá một loại lịch, và
-# them_comment_posts bỏ trùng theo URL.
-check("nới cửa sổ thời gian để lấy cả phiên trước",
+_i_luot = _src_pvp2.index("random.randint(*CHO_SAU_DANG_GIAY)")
+_i_thu  = _src_pvp2.index("[b] Trang thông báo")
+# Thứ tự này LÀ cơ chế: chuyển Page → đăng → lướt feed (chờ + canh spam) → thu.
+# Đảo bất kỳ cặp nào là hỏng: thu trước khi lướt thì chưa có thông báo, lướt
+# trước khi đăng thì chờ nhầm chỗ.
+check("chuyển Page → đăng → lướt feed → thu link",
+      _i_sw < _i_dang < _i_luot < _i_thu)
+# Cửa sổ 24 giờ chứ không chỉ mẻ vừa đăng: quãng chờ nằm dưới mốc 76s nên mỗi
+# phiên hụt 1-3 thông báo về muộn, phiên sau đọc lại là vớt được. An toàn vì
+# không Page nào phục vụ quá một loại lịch, và them_comment_posts bỏ trùng.
+check("đọc cả cửa sổ 24 giờ để vớt phần hụt",
       "toi_da_phut=1440" in _src_pvp2)
 # Cửa sổ rộng nhưng chỉ lấy N bài MỚI NHẤT. Đo 02/10: một lượt đọc ra 52 thông
 # báo, 31 link mới — nhiều hơn mức cần. Thư viện comment là cửa sổ trượt có hạn
@@ -1027,7 +1031,12 @@ check("nới cửa sổ thời gian để lấy cả phiên trước",
 import thu_link as _tl2
 check("chỉ lấy 10 bài mới nhất", _tl2.THU_LINK_MOI_NHAT == 10)
 check("cắt từ ĐẦU danh sách (đáng thu nhất trước)",
-      "_lay = _cu[:THU_LINK_MOI_NHAT]" in _src_pvp2)
+      "_tb[:THU_LINK_MOI_NHAT]" in _src_pvp2)
+# Nguồn (a) và (b) gộp vào MỘT danh sách rồi mới lưu: nhóm mở composer chỉ có ở
+# (a), các nhóm đăng chéo chỉ có ở (b). Lưu riêng hai lượt là ghi đè hạn mức
+# hai lần cho cùng một phiên.
+check("gộp link hai nguồn rồi mới lưu",
+      "_link_moi += [u for u in _lay if u not in _link_moi]" in _src_pvp2)
 
 # Cắt từ đầu chỉ đúng nếu danh sách THẬT SỰ xếp đáng thu nhất trước. Bản đầu
 # dựa vào thứ tự Facebook bày trên trang — tình cờ đúng, nhưng là giả định về
@@ -1092,6 +1101,31 @@ check("đăng xong ra feed Page lướt + thả tim",
       'await page.goto("https://www.facebook.com/",' in _src_pvp2
       and "Lướt feed Page" in _src_pvp2
       and "max_likes=1" in _src_pvp2)
+
+# ── Cửa sổ dò spam phải đủ dài ─────────────────────────────────────────────
+# Lỗi đã mắc ở v2.33.0: bỏ 85 giây chờ thông báo đăng chéo để rút ngắn phiên,
+# mà KHÔNG nhận ra bước dò cảnh báo gỡ bài đang ăn nhờ chính quãng chờ đó.
+# Cửa sổ tụt từ ~100-115s còn ~17-28s. `kiem_vi_pham` nói rõ trong docstring là
+# "phải chờ vài chục giây SAU khi đăng, dò sớm quá chỉ thấy vụ của hôm trước".
+#
+# Hai test dưới chốt sự phụ thuộc đó lại: bước lướt feed sau khi đăng KHÔNG
+# được rút ngắn mà không sửa luôn bước dò spam.
+import fb_common as _fbc2
+check("quãng chờ sau khi đăng quanh 75 giây",
+      _fbc2.CHO_SAU_DANG_GIAY == (72, 78))
+# Phải bám mốc 76s — dưới mốc đó là chắc chắn hụt link mỗi phiên. Trên mốc thì
+# vẫn có thể hụt (phiên A đo 02/10 mới được 7/9 ở giây 76), nhưng ít hơn hẳn.
+check("quãng chờ chạm được mốc 76 giây",
+      max(_fbc2.CHO_SAU_DANG_GIAY) >= 76)
+check("Hybrid lướt feed đúng bằng cửa sổ dò spam",
+      "random.randint(*CHO_SAU_DANG_GIAY)" in _src_pvp2)
+# Lướt feed phải ĐỨNG TRƯỚC dò spam, nếu không thì cửa sổ bằng 0.
+_i_luot = _src_pvp2.index("random.randint(*CHO_SAU_DANG_GIAY)")
+_i_dospam = _src_pvp2.index('kiem_vi_pham(page, acc_name, "phiên đăng Hybrid")')
+check("lướt feed trước, dò spam sau", _i_luot < _i_dospam)
+# Con số sống ở MỘT nơi, cạnh chính hàm phụ thuộc vào nó.
+check("không ghi cứng lại con số ở poster",
+      "randint(55, 65)" not in _src_pvp2)
 # Nguồn (a) phải giữ: nhóm mở composer KHÔNG sinh thông báo đăng chéo nào, bỏ
 # đi là mất đúng một link mỗi lần đăng.
 check("vẫn giữ nguồn bắt link từ phản hồi mạng",

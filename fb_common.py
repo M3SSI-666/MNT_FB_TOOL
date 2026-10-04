@@ -571,10 +571,60 @@ def _quen_canh_bao(page):
     _MOC_DA_DANG.pop(id(page), None)
 
 
+# Bao nhiêu giây phải trôi qua giữa lúc đăng xong và lúc dò cảnh báo.
+#
+# Đây KHÔNG phải thời gian chờ suông — nó được tiêu vào việc lướt feed và thả
+# tim, và nó phục vụ HAI việc cùng lúc:
+#
+#   1. DÒ SPAM. Facebook gỡ bài rồi mới đổ thông báo về, dò sớm quá chỉ thấy vụ
+#      của hôm trước. Quan trọng hơn: phần lớn vi phạm bắt được là nhờ VÒNG
+#      CANH nền chứ không phải cú dò tại chỗ (xem `_CANH_BAO_DA_THAY` — vòng
+#      canh thấy dialog 252 lần, dò tại chỗ chỉ đọc được 65 lần), mà vòng canh
+#      chỉ chạy khi trình duyệt còn mở. Phiên ngắn đi là cửa sổ canh ngắn theo.
+#   2. CHỜ THÔNG BÁO ĐĂNG CHÉO. Đo ngày 02/10: sau 29s mới về 2/9 link, 58s
+#      được 5/9, phải tới 76s mới đủ 9/9. Đọc trang thông báo trước mốc này thì
+#      không có gì mà đọc.
+#
+# 72-78 giây (trung bình 75) là mức Duong chốt ngày 04/10, nâng từ 60-70 để bám
+# sát mốc 76s.
+#
+# KHÔNG phải là bảo đảm, đừng hiểu nhầm: hai phiên đo ngày 02/10 lệch nhau hẳn
+# ở cùng mốc 76 giây — phiên B về đủ 9/9, phiên A mới được 7/9. Chờ thêm chỉ
+# nâng xác suất chứ không chốt được, vì Facebook đẩy nhanh chậm tuỳ lúc.
+#
+# Thứ THỰC SỰ bảo đảm không mất link là cửa sổ đọc 24 giờ ở bước (b): thông báo
+# về muộn quá phiên này thì phiên sau đọc lại là nhặt được. Cơ chế đó đã chạy
+# đúng — xem `THU_LINK_MOI_NHAT` trong thu_link.py.
+#
+# CHƯA ĐO ĐƯỢC đường cong thông báo GỠ BÀI về (muốn đo thì phải có acc đang
+# thật sự bị gỡ, không dựng được) — con số này bám theo đường cong thông báo
+# đăng chéo và theo mức của bản cũ, không phải theo số đo riêng cho việc dò.
+#
+# ĐÃ THỬ dò lặp để dừng sớm khi đủ link, rồi BỎ: mỗi lượt dò tốn ~13s tải
+# trang, nên khi thông báo về chậm thì tổng lên tới 136s — tệ hơn cả ngủ thẳng.
+# Một con số cố định đoán trước được tốt hơn một vòng lặp thông minh nửa vời.
+#
+# Sự cố ngày 03/10, ghi lại để không lặp: bản v2.33.0 bỏ 85 giây chờ ở đây để
+# rút ngắn phiên mà KHÔNG nhận ra bước dò spam đang ăn nhờ chính quãng đó —
+# cửa sổ tụt từ ~100-115 giây xuống ~17-28 giây, không có gì báo.
+CHO_SAU_DANG_GIAY = (72, 78)
+
+
 async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
     """Sau mỗi phiên đăng bài / comment: xem Facebook có vừa gỡ gì không.
 
     Trả True nếu VỪA dính spam (có vụ mới so với lần đo trước).
+
+    Cửa sổ thực tế của từng đường (tính từ lúc đăng xong tới lúc đọc cảnh báo,
+    đã gồm ~7-10s mà chính hàm này tiêu để mở trang và chờ):
+
+        Hybrid      ~97-112s  (lướt feed Page CHO_SAU_DANG_GIAY + đọc thông báo)
+        tường Page  ~20-33s   (cooldown 10-20s)
+        VIA         ~15-22s   (cooldown 8-12s)
+        comment     ~15-22s   (KET_GIAY 8-12s)
+
+    Ba đường dưới ngắn hơn Hybrid vì Duong chủ động hạ thời gian lướt feed
+    ngày 02/10. Chưa nới lại vì chưa có số đo nói là đang bỏ lọt.
 
     Đặt ở đây để cả bốn đường — đăng Hybrid, đăng VIA, đăng tường Page, và đi
     comment — dùng chung MỘT bản. Trước đây chỉ đường Hybrid có kiểm, ba đường

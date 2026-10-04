@@ -48,7 +48,8 @@ from config import HEADLESS
 from utils import logger, ComposerBiChan, jitter_ms, CookieDeadError, LoiBuoc
 from fb_common import (kiem_vi_pham, composer_bi_chan, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, danh_dau_da_dang, browser_launch_kwargs,
-                       human_delay, jwait, clipboard_paste, browse_and_like)
+                       human_delay, jwait, clipboard_paste, browse_and_like,
+                       CHO_SAU_DANG_GIAY)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -281,46 +282,6 @@ async def _run_page_via(
         # ════════════════════════════════════════════════════════════════
         logger.info(f"  [3/5] 🔄 Switch → Page {page_uid}...")
         await _switch_to_page(page, ctx, page_uid)
-
-        # ── THU LINK CỦA PHIÊN TRƯỚC ─────────────────────────────────────
-        # Thu ở ĐẦU phiên này chứ không phải cuối phiên trước. Lý do:
-        #
-        # Facebook đẩy thông báo đăng chéo về nhỏ giọt trong nhiều phút — đo hai
-        # phiên ngày 02/10: sau 29s mới có 2/9 link, sau 58s được 5/9, phải tới
-        # 76s mới đủ 9/9. Ngồi chờ ngay sau khi đăng là mất 85 giây MỖI PHIÊN mà
-        # vẫn thường xuyên thu hụt.
-        #
-        # Chờ tới phiên sau thì thông báo đã nằm sẵn ở đó từ lâu: đọc một lần là
-        # đủ, tốn khoảng 5 giây, và thu được NHIỀU HƠN cách chờ.
-        #
-        # Hai điều kiện khiến cách này an toàn, đã kiểm trên dữ liệu thật:
-        #   - Không Page nào phục vụ quá một loại lịch (0/12), nên link của phiên
-        #     trước luôn cùng hạng mục với phiên này — không gán nhầm.
-        #   - `them_comment_posts` bỏ trùng theo URL, nên cửa sổ thời gian rộng
-        #     không sinh link lặp. Chính vì vậy mới nới được từ 5 phút lên 24 giờ.
-        if loai_comment:
-            try:
-                from thu_link import (thu_tu_thong_bao, THU_LINK_MOI_NHAT,
-                                      la_chua_doc)
-                _cu = await thu_tu_thong_bao(page, toi_da_phut=1440)
-                # Cắt N bài đáng thu nhất: `thu_tu_thong_bao` đã xếp chưa đọc
-                # trước, rồi mới trước cũ, nên cắt từ đầu là đúng.
-                _lay = _cu[:THU_LINK_MOI_NHAT]
-                _moi = sum(1 for _, m in _lay if la_chua_doc(m))
-                if _lay:
-                    # Ném thẳng vào thư viện, KHÔNG kiểm sống/chết ở đây — xem
-                    # ghi chú trong thu_link.py: tốn 16s mỗi phiên mà không bắt
-                    # được gì, vì bài bị gỡ muộn hơn lúc thu. `comment_bai` dọn.
-                    from db import them_comment_posts
-                    _n = them_comment_posts(loai_comment, [u for u, _ in _lay],
-                                            page=page_uid, acc=acc_name)
-                    logger.info(f"  🔗 Thu link phiên trước: {len(_cu)} thông báo "
-                                f"({_moi} chưa đọc) → lấy {len(_lay)} bài đáng thu nhất "
-                                f"→ {_n} link mới vào thư viện '{loai_comment}'")
-                else:
-                    logger.info("  🔗 Thu link phiên trước: chưa có thông báo nào")
-            except Exception as e:
-                logger.warning(f"  ⚠️  Thu link phiên trước lỗi: {e}")
 
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 5 — Chui vào nhóm đầu, paste nội dung + upload ảnh
@@ -682,29 +643,55 @@ async def _run_page_via(
         except Exception as e:
             logger.warning(f"  ⚠️  Thu link từ phản hồi lỗi: {e}")
 
-        # (b) KHÔNG còn chờ thông báo ở đây nữa — việc đó chuyển sang ĐẦU
-        #     phiên sau, ngay sau khi chuyển vai Page (xem bước [3/5]).
-        #
-        #     Đo ngày 02/10: ngồi chờ ngay sau khi đăng mất 85 giây mỗi phiên mà
-        #     vẫn thu hụt, vì Facebook đẩy thông báo nhỏ giọt — sau 29s mới có
-        #     2/9 link, 58s được 5/9, phải tới 76s mới đủ. Để sang phiên sau thì
-        #     thông báo đã nằm sẵn ở đó, đọc một lần là đủ và thu được nhiều hơn.
-        #
-        #     Bước (c) nhật ký Page cũng bỏ: nó vốn chỉ chạy để bù khi (b) hụt.
-
         # ── Lướt feed của Page rồi thả tim 1 bài ────────────────────────
         # Ra FEED chứ không ở lại nhóm vừa đăng: ngồi lại chính chỗ mình vừa
         # đăng mà cuộn lên cuộn xuống là hành vi lạ. Đang mang vai Page nên
         # facebook.com chính là feed của Page.
+        #
+        # Quãng này làm BA việc một lúc, nên không rút ngắn được:
+        #   1. hạ nhiệt — thay cho bước hạ nhiệt riêng đã bỏ;
+        #   2. cửa sổ để vòng canh nền bắt hộp cảnh báo gỡ bài (nó chỉ chạy khi
+        #      trình duyệt còn mở) và để bước dò spam ở dưới đọc được vụ MỚI;
+        #   3. thời gian cho Facebook đẩy thông báo đăng chéo về, để bước (b)
+        #      ngay sau đó có cái mà đọc.
+        # Xem `fb_common.CHO_SAU_DANG_GIAY`.
         try:
             await page.goto("https://www.facebook.com/",
                             wait_until="domcontentloaded", timeout=30000)
             await _jwait(page, 1500)
-            _luot = random.randint(8, 12)
-            logger.info(f"  📜 Lướt feed Page {_luot}s + thả tim 1 bài...")
+            _luot = random.randint(*CHO_SAU_DANG_GIAY)
+            logger.info(f"  📜 Lướt feed Page {_luot}s + thả tim 1 bài "
+                        f"(vừa hạ nhiệt, vừa chờ thông báo, vừa là cửa sổ dò spam)...")
             await _browse_and_like(page, duration_sec=_luot, max_likes=1)
         except Exception as e:
             logger.warning(f"  ⚠️  Lướt feed Page lỗi: {e}")
+
+        # (b) Trang thông báo — nguồn CHÍNH, chạy SAU quãng lướt feed ở trên.
+        #
+        # Đọc ngay sau khi đăng thì chưa có gì: đo ngày 02/10, sau 29s mới về
+        # 2/9 link, 58s được 5/9, phải tới 76s mới đủ 9/9. Vì vậy phải để quãng
+        # lướt feed chạy trước — nó vừa là cửa sổ dò spam vừa là chỗ chờ này.
+        #
+        # Cửa sổ 24 giờ chứ không phải 5 phút như bản cũ, để thông báo của phiên
+        # TRƯỚC về muộn vẫn được vớt lại ở phiên này. An toàn vì không Page nào
+        # phục vụ quá một loại lịch (0/12) nên không gán nhầm hạng mục, và
+        # `them_comment_posts` bỏ trùng theo URL nên link cũ vào lại là vô hại.
+        if loai_comment:
+            try:
+                from thu_link import thu_tu_thong_bao, THU_LINK_MOI_NHAT
+                _tb = await thu_tu_thong_bao(page, toi_da_phut=1440)
+                # `thu_tu_thong_bao` đã xếp theo tuổi nên cắt từ đầu là lấy đúng
+                # N bài mới nhất — tức mẻ vừa đăng, rồi mới tới phiên trước.
+                _lay = [u for u, _ in _tb[:THU_LINK_MOI_NHAT]]
+                logger.info(f"  🔗 [b] Trang thông báo: {len(_tb)} link trong 24h "
+                            f"→ lấy {len(_lay)} bài mới nhất")
+                _link_moi += [u for u in _lay if u not in _link_moi]
+            except Exception as e:
+                logger.warning(f"  ⚠️  Thu link từ trang thông báo lỗi: {e}")
+
+        # (c) Nhật ký Page đã bỏ hẳn: nó vốn chỉ chạy bù khi (b) hụt, mà đo thật
+        #     chỉ ra 2 link trong khi (b) ra 18, và bị chính các lượt "thích bài
+        #     viết" của phiên nuôi/comment lấp đầy nên gần như vô dụng.
 
         logger.info(f"  🔗 TỔNG: {len(_link_moi)} link / {_groups_posted or '?'} nhóm đã tick")
         for _u in _link_moi[:15]:
@@ -731,18 +718,22 @@ async def _run_page_via(
                 logger.warning(f"  ⚠️  Không lưu được link: {e}")
 
         # ── Dò xem Facebook vừa gỡ bài của nick này chưa ───────────────
-        # Đặt ở ĐÂY vì đây là lúc muộn nhất trong phiên: đã qua 90s chờ thông
-        # báo, mà theo quan sát thực tế Facebook đẩy thông báo gỡ bài về trong
-        # vài chục giây sau khi đăng. Dò sớm hơn (bước 1) chỉ thấy vụ của hôm
-        # trước.
+        # Đặt ở ĐÂY vì đây là lúc muộn nhất trong phiên: đã qua ~60s lướt feed
+        # ở trên, mà theo quan sát thực tế Facebook đẩy thông báo gỡ bài về
+        # trong vài chục giây sau khi đăng. Dò sớm hơn (bước 1) chỉ thấy vụ của
+        # hôm trước.
+        #
+        # Quãng ~60s đó là lý do bước lướt feed KHÔNG được rút ngắn — đã rút
+        # một lần ở v2.33.0 và làm cửa sổ dò tụt còn ~17-28s.
         #
         # Không tin "thấy dialog = vừa dính": dialog hiện lại y nguyên nhiều
         # ngày sau đó. Phải so SỐ VỤ với lần đo trước mới biết có vụ mới.
         await kiem_vi_pham(page, acc_name, "phiên đăng Hybrid")
 
-        # KHÔNG còn bước hạ nhiệt riêng: việc lướt feed + like 1 bài đã làm
-        # TRONG lúc chờ thông báo đăng chéo ở trên. Tách ra thành bước riêng là
-        # vừa tốn thêm ~11 giây, vừa để trình duyệt đứng im suốt 60 giây ngay
+        # KHÔNG còn bước hạ nhiệt RIÊNG: bước lướt feed Page ~60s ở trên đã
+        # kiêm cả ba việc một lúc — hạ nhiệt, giữ trình duyệt mở cho vòng canh
+        # bắt cảnh báo, và tạo cửa sổ thời gian cho bước dò spam. Tách ra thành
+        # bước riêng là vừa tốn thêm ~11 giây, vừa để trình duyệt đứng im ngay
         # sau khi đăng — chính khoảng im đó mới là thứ trông lạ.
         logger.info(f"  ✅ Đóng Chrome")
         await ctx.close()
