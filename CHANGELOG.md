@@ -10,6 +10,69 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.34.0 — 04/10/2026
+
+**Dò spam: thấy cảnh báo sau khi đăng là gắn cờ ngay cho nick chạy phiên đó**
+
+Trước đây luật còn một điều kiện nữa: *trước khi đăng không được có hộp cảnh báo
+nào mở sẵn*. Điều kiện ấy sinh ra để khỏi đổ oan nick khoẻ, nhưng đo thật thì
+giá quá đắt. Hai ngày 03–04/10, phần mềm đọc được **49 lần** cảnh báo gỡ bài:
+
+| nick | đã gắn cờ | **bị bỏ qua** | tổng |
+|---|---|---|---|
+| Nguyen Ngan | 8 | **14** | 22 |
+| Ngân Nguyễn | 9 | **6** | 15 |
+| Ngan Thi | 4 | **8** | 12 |
+
+**28/49 lần bị bỏ qua**, mà cả 28 lần đều rơi vào đúng 3 nick *vốn đã* bị gắn cờ
+ở phiên khác — tức điều kiện đó không cứu được nick khoẻ nào, chỉ làm chậm việc
+với nick đang dính. Nay bỏ.
+
+Chốt duy nhất còn lại: **phiên này có đăng thật chưa**. Phiên hỏng giữa chừng mà
+trông thấy hộp cảnh báo cũ thì không gắn cờ — nick đó chưa đăng gì trong phiên
+này, hộp kia là chuyện của phiên trước.
+
+> **Lưu ý về cột số vi phạm:** con số ấy là **số nhiễu, chỉ để nhìn**, không
+> tham gia quyết định. Dù lấy từ nút "Xem tất cả (N)", đo ngày 04/10 vẫn thấy nó
+> nhảy 2 → 20 → 12 → 2 → 20 cho cùng một nick trong vài giờ.
+
+---
+
+**Thu link quay về sau khi đăng bài**
+
+Bản 2.33 chuyển việc thu link sang đầu phiên kế tiếp. Nay trả về sau khi đăng,
+chạy ngay sau quãng lướt feed — vì quãng đó vốn đã phải có sẵn vì lý do dưới,
+nên đọc trang thông báo ngay sau đó không tốn thêm gì.
+
+Vẫn đọc cả cửa sổ **24 giờ** chứ không chỉ mẻ vừa đăng. Facebook đẩy thông báo
+nhanh chậm tuỳ lúc — hai phiên đo ở cùng mốc 76 giây cho ra 9/9 và 7/9 — nên dù
+chờ bao lâu vẫn có phiên hụt; phiên sau đọc lại là nhặt được. **Đây mới là thứ
+bảo đảm không mất link, không phải độ dài quãng chờ.**
+
+---
+
+**Sửa: v2.33.0 làm hỏng cửa sổ dò spam mà không ai biết**
+
+Bản 2.33.0 bỏ 85 giây chờ thông báo để rút ngắn phiên, mà **không nhận ra bước
+dò cảnh báo gỡ bài đang ăn nhờ chính quãng chờ đó**. Cửa sổ từ lúc đăng xong
+tới lúc đọc cảnh báo tụt từ ~100–115 giây xuống **~17–28 giây**, không có gì báo.
+
+Nặng hơn: phần lớn vi phạm bắt được là nhờ **vòng canh nền** chứ không phải cú
+dò tại chỗ (đếm trên log: vòng canh thấy **252** lần, dò tại chỗ chỉ đọc được
+**65** lần) — mà vòng canh chỉ chạy khi trình duyệt còn mở. Phiên ngắn đi là cửa
+sổ canh ngắn theo.
+
+Nay sau khi đăng, phần mềm lướt feed Page **72–78 giây** và thả tim 1 bài. Quãng
+này làm ba việc một lúc: hạ nhiệt, giữ trình duyệt mở cho vòng canh, và chờ
+thông báo đăng chéo về. Cửa sổ dò spam trở lại **~108 giây**.
+
+---
+
+**Một phiên đăng nay khoảng 193 giây**, gồm 5 bước. Đo thật trên nick Thảo Ngân
+với Page Homestay Times City: 9 nhóm, 11 link, không có cảnh báo gỡ bài.
+
+---
+
 ## v2.33.1 — 03/10/2026
 
 **Thư viện link comment nới từ 300 lên 500 mỗi hạng mục**
