@@ -795,24 +795,19 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool, ly_do_loi: str = "") -> tuple[st
 
 def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool,
                      hom_nay: int = 0, chac_chan: bool = True,
-                     moi_hien: bool = False) -> tuple[bool, int]:
+                     da_dang: bool = False) -> tuple[bool, int]:
     """
     Ghi số vụ Facebook gỡ bài đo được sau một phiên đăng.
 
     Trả `(vua_dinh, so_cu)`.
 
-    HAI CHỐT CHỐNG BÁO LẠI, cả hai đều học từ nick 'Nguyen Ngan' ngày 22/09 —
-    hôm đó nó bị đánh spam 12 LẦN cho đúng MỘT sự việc:
+    `da_dang`: phiên này đã thật sự đưa bài lên chưa. Thấy cảnh báo gỡ bài mà
+    phiên đã đăng thì gán cờ ngay cho nick đang chạy phiên đó.
 
-    1. Tín hiệu "có vụ đề ngày hôm nay" chỉ được nổ MỘT LẦN MỖI NGÀY. Hộp cảnh
-       báo giữ nguyên vụ của hôm nay tới hết ngày, nên mọi phiên sau đều đọc ra
-       y hệt — log cho thấy `hom_nay=6` ở cả 12 lần đo, không đổi một đơn vị.
-
-    2. Con số chỉ được dùng khi CHẮC CHẮN, tức lấy từ nút "Xem tất cả (N)".
-       Không có nút đó thì nó chỉ là số dòng đang hiện, mà số dòng render ra
-       thay đổi mỗi lần mở: 13, 19, 6, 19, 20, 20, 20, 15, 8, 17, 10, 20 trong
-       cùng một ngày. So "lớn hơn lần trước" trên con số ấy là tung đồng xu, và
-       nó cũng không được phép ghi đè mốc đã lưu.
+    CẢNH BÁO CHO NGƯỜI ĐỌC SAU: con số `so_moi` ghi vào đây là SỐ NHIỄU, đừng
+    dựa vào nó để quyết định bất cứ điều gì. Nó chỉ để nhìn. Dù lấy từ nút
+    "Xem tất cả (N)" và được gắn nhãn `chac_chan`, đo ngày 04/10 vẫn thấy nó
+    nhảy 2 → 20 → 12 → 2 → 20 cho cùng một nick trong vài giờ.
     """
     import suc_khoe_acc as sk
     ngay = datetime.now().strftime("%Y-%m-%d")
@@ -831,25 +826,26 @@ def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool,
         if chac_chan:
             con.execute("UPDATE accounts SET so_vi_pham=? WHERE id=?", (so_moi, r["id"]))
 
-        # LUẬT DUY NHẤT: cảnh báo gỡ bài MỚI XUẤT HIỆN sau khi phiên đăng xong.
+        # LUẬT (Duong chốt 04/10): thấy cảnh báo gỡ bài sau khi phiên đã đăng
+        # thật → gán cờ cho đúng nick chạy phiên đó. Không hỏi thêm gì nữa.
         #
-        # Cảnh báo thấy TRƯỚC khi đăng không kết luận được gì — đó là hệ quả của
-        # phiên trước, phần mềm chỉ việc bấm X tắt đi rồi làm tiếp. Chính vì
-        # luôn tắt nó ở đầu phiên nên một cảnh báo hiện lên SAU khi đăng mới thật
-        # sự là cảnh báo mới.
+        # `da_dang` là chốt duy nhất còn lại, và phải giữ: phiên hỏng giữa chừng
+        # mà trông thấy hộp cảnh báo cũ thì nick đó chưa đăng gì trong phiên
+        # này — hộp kia là chuyện của phiên trước, gán cờ là đổ oan thật.
         #
-        # Đã bỏ hẳn hai cách đoán từng dùng ở đây, vì đo ra là chúng sai:
+        # Đã bỏ hẳn BA cách lọc từng dùng ở đây:
         #   · "số vụ lớn hơn lần đo trước" — con số ấy là nhiễu. Cùng một ngày,
         #     12 lần đo của 'Nguyen Ngan' cho 13, 19, 6, 19, 20, 20, 20, 15, 8,
-        #     17, 10, 20 trong khi số vụ thật không đổi.
+        #     17, 10, 20 trong khi số vụ thật không đổi. (Vẫn đúng tới hôm nay:
+        #     'Ngan Thi' ngày 04/10 đọc ra 2 → 20 → 12 → 2 → 20 trong vài giờ,
+        #     cả 5 lần đều được gắn nhãn "chắc chắn".)
         #   · "có vụ đề ngày hôm nay" — hộp thoại mang ngày hôm nay suốt cả
         #     ngày, nên mọi phiên sau đều đọc ra y hệt (`hom_nay=6` ở cả 12 lần).
-        #
-        # Đánh đổi đã biết và chấp nhận: phiên nào mà hộp thoại cũ lỡ bật lên
-        # trước khi đăng thì bỏ qua, kể cả khi trong phiên đó có vụ gỡ bài thật.
-        # Thà bỏ sót còn hơn đổ oan cho nick khoẻ — nick bị gỡ bài thật vẫn bị
-        # bắt ở những phiên khác ('Nguyen Ngan' ngày 22/09: bắt được 8 phiên).
-        vua_dinh = bool(la_spam and moi_hien)
+        #   · "trước khi đăng không có hộp nào mở sẵn" — bỏ ngày 04/10. Nó sinh
+        #     ra để khỏi đổ oan, nhưng đo 2 ngày 03-04/10: nó chặn 28/49 lần
+        #     thấy cảnh báo, mà cả 28 lần đều rơi vào đúng 3 nick vốn đã bị gắn
+        #     cờ ở phiên khác. Tức không cứu được nick khoẻ nào, chỉ làm chậm.
+        vua_dinh = bool(la_spam and da_dang)
 
         if vua_dinh:
             con.execute("UPDATE accounts SET vi_pham_ngay=? WHERE id=?", (ngay, r["id"]))

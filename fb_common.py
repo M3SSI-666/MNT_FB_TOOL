@@ -528,6 +528,18 @@ def _nho_canh_bao(page, txt: str):
     _CANH_BAO_DA_THAY.setdefault(id(page), []).append((_t.time(), txt))
 
 
+def da_dang_trong_phien(page) -> bool:
+    """
+    Phiên này đã thật sự đưa nội dung lên Facebook chưa?
+
+    Chốt duy nhất còn lại trước khi gán cờ spam. Phải giữ: phiên hỏng giữa
+    chừng (không mở được ô soạn bài, không tìm thấy nút Đăng) mà lại trông thấy
+    hộp cảnh báo cũ còn mở thì KHÔNG được gán cờ — nick đó chưa đăng gì trong
+    phiên này, hộp kia là chuyện của phiên trước.
+    """
+    return _MOC_DA_DANG.get(id(page)) is not None
+
+
 def da_thay_truoc_khi_dang(page) -> bool:
     """
     Hộp cảnh báo ĐÃ MỞ SẴN trước khi phiên này đăng gì chưa?
@@ -656,14 +668,23 @@ async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
         if not vp:
             logger.info("  ✅ Không thấy cảnh báo gỡ bài")
             return False
-        # Cảnh báo MỚI XUẤT HIỆN sau khi đăng = chắc chắn phiên này bị gỡ bài.
-        # Hộp thoại đã mở sẵn từ trước thì không kết luận được gì — xem
-        # `da_thay_truoc_khi_dang`.
-        moi_hien = not da_thay_truoc_khi_dang(page)
+        # LUẬT TỪ 04/10, do Duong chốt: thấy cảnh báo gỡ bài sau khi đã đăng
+        # thì gán cờ cho ĐÚNG NICK đang chạy phiên đó, không hỏi thêm gì nữa.
+        #
+        # Mọi đường đọc được `vp` đều nằm SAU lúc đăng: cú dò tại chỗ chạy ở
+        # cuối phiên, còn đường dự phòng lấy đúng chữ vòng canh ghi được sau
+        # mốc đăng. Nên chỉ còn phải chắc một điều — phiên này có đăng thật.
+        #
+        # ĐÃ BỎ điều kiện "trước khi đăng không có hộp nào mở sẵn". Nó từng lọc
+        # thêm một tầng để khỏi đổ oan, nhưng giá phải trả đo được là quá đắt:
+        # trong 2 ngày 03-04/10 nó bỏ qua 28/49 lần thấy cảnh báo gỡ bài, mà cả
+        # 28 lần đều rơi vào đúng 3 nick vốn đã bị gắn cờ ở lần khác — tức nó
+        # không cứu được nick khoẻ nào, chỉ làm chậm việc cho nick đang dính.
+        da_dang = da_dang_trong_phien(page)
         moi, cu = _db.ghi_nhan_vi_pham(acc_name, vp["so"], vp["spam"],
                                        vp.get("hom_nay", 0),
                                        vp.get("chac_chan", True),
-                                       moi_hien)
+                                       da_dang)
         # Ghi cả `chắc chắn`: không có nó thì nhìn log không phân biệt được con
         # số lấy từ nút "Xem tất cả (N)" với con số đếm mò mấy dòng đang hiện —
         # mà hai thứ đó được xử lý khác hẳn nhau.
@@ -671,7 +692,8 @@ async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
                        f" (lần đo trước: {'chưa đo' if cu < 0 else cu}"
                        f" | hôm nay: {vp.get('hom_nay', 0)}"
                        f" | {'chắc chắn' if vp.get('chac_chan') else 'ĐẾM MÒ'}"
-                       f" | {'MỚI hiện sau khi đăng' if moi_hien else 'hộp thoại cũ đã mở sẵn'})")
+                       f" | {'phiên này CÓ đăng' if da_dang else 'phiên này chưa đăng gì'}"
+                       f" | {'hộp cũ đã mở sẵn từ trước' if da_thay_truoc_khi_dang(page) else 'hộp MỚI hiện'})")
         if moi:
             n, moc = _db.danh_dau_spam(acc_name, f"{vp['so'] - cu} bài mới bị gỡ")
             logger.error(

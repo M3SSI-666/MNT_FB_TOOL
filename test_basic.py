@@ -1968,23 +1968,24 @@ with db._conn() as _c:
 # hai trong cùng ngày.
 _m1, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 4, True, hom_nay=6, chac_chan=True)
 _m2, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 4, True, hom_nay=6, chac_chan=True)
-check("hộp thoại cũ mang ngày hôm nay -> KHÔNG còn tự gắn cờ",
+check("chưa đăng gì, dù mang ngày hôm nay -> KHÔNG gắn cờ",
       _m1 is False and _m2 is False)
 
-# Con số ĐẾM MÒ không được ghi đè mốc, cũng không được dùng để so.
+# Con số ĐẾM MÒ không được ghi đè mốc đã lưu.
 # 12 lần đo cùng ngày cho 13,19,6,19,20,20,20,15,8,17,10,20 trong khi số vụ
-# thật không đổi — so "lớn hơn lần trước" trên đó là tung đồng xu.
+# thật không đổi — ghi đè bằng con số đó là xoá mất mốc tốt bằng một số rác.
 with db._conn() as _c:
     _c.execute("UPDATE accounts SET so_vi_pham=13, vi_pham_ngay='' WHERE id=?", (_nid,))
 db.ghi_nhan_vi_pham("NGAYSPAM Test", 19, True, hom_nay=0, chac_chan=False)
 check("đếm mò KHÔNG ghi đè mốc",
       db.get_account_by_name("NGAYSPAM Test")["so_vi_pham"] == 13)
+# Con số KHÔNG còn tham gia quyết định — chỉ `da_dang` quyết.
 _m4, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 19, True, hom_nay=0, chac_chan=False)
-check("đếm mò tăng -> KHÔNG gắn cờ", _m4 is False)
+check("chưa đăng gì + đếm mò -> KHÔNG gắn cờ", _m4 is False)
 _m5, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 19, True, hom_nay=0, chac_chan=True)
-check("số chắc chắn tăng nhưng hộp thoại cũ -> không kết luận", _m5 is False)
-_m6, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 19, True, 0, True, moi_hien=True)
-check("cảnh báo MỚI hiện sau khi đăng -> gắn cờ, khỏi cần so số", _m6 is True)
+check("chưa đăng gì + số chắc chắn -> vẫn KHÔNG gắn cờ", _m5 is False)
+_m6, _ = db.ghi_nhan_vi_pham("NGAYSPAM Test", 19, True, 0, True, da_dang=True)
+check("đã đăng + thấy cảnh báo -> gắn cờ, khỏi cần so số", _m6 is True)
 db.delete_account(_nid)
 
 check("log ghi rõ số là chắc chắn hay đếm mò",
@@ -2043,36 +2044,41 @@ check("chỉ hiện sau khi đăng -> KHÔNG phải 'mở sẵn'",
       _fbc_vp.da_thay_truoc_khi_dang(_tg2) is False)
 _fbc_vp._quen_canh_bao(_tg2)
 
-# ── Đường CHÍNH: cảnh báo MỚI hiện sau khi đăng ───────────────────────────
-# Đếm trên log 21–22/09, số phiên có cảnh báo sau khi đăng:
-#     nick             chỉ-sau-khi-đăng   đã-mở-từ-trước
-#     Nguyen Ngan              8                 8
-#     Ngân Nấm                 0                 3
-#     Thị Sữa                  6                 1
-# 'Ngân Nấm' — nick người dùng khẳng định là khoẻ — chưa MỘT LẦN nào nhận cảnh
-# báo mới sau khi đăng. Thiếu phép phân biệt này thì nó bị đánh oan, còn
-# 'Nguyen Ngan' (bị gỡ thật, chỉ thu về 2/9 link) thì lẫn vào cùng một rổ.
+# ── LUẬT (Duong chốt 04/10): thấy cảnh báo sau khi đăng là gắn cờ ─────────
+# Chốt duy nhất còn lại là "phiên này có đăng thật không". Bỏ điều kiện cũ
+# "trước khi đăng không có hộp nào mở sẵn": đo 2 ngày 03-04/10, nó chặn 28/49
+# lần thấy cảnh báo gỡ bài, mà cả 28 lần đều rơi vào đúng 3 nick vốn đã bị gắn
+# cờ ở phiên khác — không cứu được nick khoẻ nào, chỉ làm chậm việc.
 _vid = db.upsert_account({"ten_acc": "VIPHAM Test", "trang_thai": "Active"})
 with db._conn() as _c:
     _c.execute("UPDATE accounts SET so_vi_pham=20 WHERE id=?", (_vid,))
-_v1, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 20, True, 6, True, moi_hien=True)
-check("cảnh báo MỚI hiện sau khi đăng -> gắn cờ NGAY", _v1 is True)
-_v2, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 20, True, 6, True, moi_hien=True)
+_v1, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 20, True, 6, True, da_dang=True)
+check("đã đăng + thấy cảnh báo -> gắn cờ NGAY", _v1 is True)
+_v2, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 20, True, 6, True, da_dang=True)
 check("bị gỡ lần nữa trong ngày -> vẫn gắn cờ (không giới hạn 1 lần/ngày)",
       _v2 is True)
-_v3, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 20, True, 6, True, moi_hien=False)
-check("hộp thoại cũ + số không tăng -> KHÔNG gắn cờ (ca 'Ngân Nấm')",
-      _v3 is False)
-# Hộp thoại đã mở TRƯỚC khi đăng thì KHÔNG kết luận gì — kể cả khi tổng số vụ
-# đọc ra có tăng. Đó là hệ quả của phiên trước; phần mềm chỉ bấm X tắt đi.
-_v4, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 25, True, 0, True, moi_hien=False)
-check("hộp thoại cũ + tổng số tăng -> VẪN không kết luận", _v4 is False)
-_v5, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 99, True, 6, False, moi_hien=False)
-check("hộp thoại cũ + số đếm mò -> KHÔNG kết luận", _v5 is False)
+# Đây là cái MỚI so với luật cũ: hộp mở sẵn từ trước KHÔNG còn là lý do tha.
+_v3, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 20, True, 6, True, da_dang=True)
+check("hộp cũ mở sẵn cũng KHÔNG tha nữa", _v3 is True)
+# Con số là nhiễu nên không được ảnh hưởng tới quyết định, dù tăng hay giảm.
+_v4, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 2, True, 0, True, da_dang=True)
+check("số vụ GIẢM vẫn gắn cờ (con số là nhiễu)", _v4 is True)
+_v5, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 99, True, 6, False, da_dang=True)
+check("số đếm mò vẫn gắn cờ", _v5 is True)
+# Chốt phải giữ: phiên hỏng giữa chừng, chưa đăng gì thì KHÔNG gán cờ — hộp
+# cảnh báo trông thấy khi đó là chuyện của phiên trước, gán là đổ oan thật.
+_v6, _ = db.ghi_nhan_vi_pham("VIPHAM Test", 20, True, 6, True, da_dang=False)
+check("chưa đăng gì -> KHÔNG gắn cờ", _v6 is False)
 db.delete_account(_vid)
 
-check("log ghi rõ cảnh báo mới hiện hay hộp thoại cũ",
-      "MỚI hiện sau khi đăng" in Path("fb_common.py").read_text(encoding="utf-8"))
+_src_fbc_vp = Path("fb_common.py").read_text(encoding="utf-8")
+check("gắn cờ theo 'phiên này có đăng', không theo hộp cũ/mới",
+      "vua_dinh = bool(la_spam and da_dang)" in Path("db.py").read_text(encoding="utf-8")
+      and "da_dang = da_dang_trong_phien(page)" in _src_fbc_vp)
+# Vẫn log cả hai mặt để còn đọc lại được, dù chỉ một mặt dùng để quyết định.
+check("log ghi rõ phiên có đăng chưa và hộp cũ hay mới",
+      "phiên này CÓ đăng" in _src_fbc_vp
+      and "hộp cũ đã mở sẵn từ trước" in _src_fbc_vp)
 
 _fbc_vp._quen_canh_bao(_tg)
 check("đóng trang thì xoá, không rò sang phiên sau",
@@ -2113,18 +2119,18 @@ with db._conn() as _c:
                    "trang_thai,hoat_dong) VALUES ('homestay',900,'X',?,?,'Chờ',?)",
                    ("SPAM Test", _g, _hd))
 
-# Luật DUY NHẤT: cảnh báo MỚI xuất hiện sau khi phiên đăng xong.
+# Luật DUY NHẤT: phiên đã đăng thật + thấy cảnh báo gỡ bài = gắn cờ nick đó.
 # Không còn "lần đo đầu chỉ ghi mốc" — luật cũ cần nó để khỏi đánh spam hàng
 # loạt lúc mới bật tính năng, nhưng luật mới vốn đã là tín hiệu theo TỪNG PHIÊN
 # nên không thể nổ vì dữ liệu cũ.
-_moi1, _cu1 = db.ghi_nhan_vi_pham("SPAM Test", 12, True, moi_hien=True)
-check("cảnh báo MỚI sau khi đăng -> dính spam ngay",
+_moi1, _cu1 = db.ghi_nhan_vi_pham("SPAM Test", 12, True, da_dang=True)
+check("đã đăng + thấy cảnh báo -> dính spam ngay",
       _moi1 is True and _cu1 == -1)
-_moi2, _cu2 = db.ghi_nhan_vi_pham("SPAM Test", 12, True, moi_hien=False)
-check("hộp thoại cũ -> không kết luận",  _moi2 is False and _cu2 == 12)
-_moi3, _cu3 = db.ghi_nhan_vi_pham("SPAM Test", 15, True, moi_hien=False)
-check("hộp thoại cũ dù số vụ tăng -> vẫn không kết luận",
-      _moi3 is False and _cu3 == 12)
+_moi2, _cu2 = db.ghi_nhan_vi_pham("SPAM Test", 12, True, da_dang=False)
+check("chưa đăng gì -> không kết luận",  _moi2 is False and _cu2 == 12)
+_moi3, _cu3 = db.ghi_nhan_vi_pham("SPAM Test", 15, True, da_dang=True)
+check("đã đăng, số vụ tăng -> vẫn gắn cờ (số không tham gia quyết định)",
+      _moi3 is True and _cu3 == 12)
 
 _n_slot, _moc_spam = db.danh_dau_spam("SPAM Test", "3 bài mới bị gỡ", gio=_GIO_MOC)
 check("chuyển trạng thái sang Spam",
