@@ -10,6 +10,46 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.34.1 — 04/10/2026
+
+**Mỗi phiên đăng tự ghi thời lượng vào log**
+
+Trước đây muốn biết một phiên tốn bao lâu phải chạy công cụ đo riêng, nên không
+ai biết phiên thật tốn bao nhiêu cho tới lúc đi đo. Nay mỗi phiên tự ghi một
+dòng:
+
+```
+⏱️  Phiên Hybrid [Thao Ngan]: 189 giây
+```
+
+Ghi **cả khi phiên hỏng** — phiên hỏng mà mất 400 giây là chuyện khác hẳn phiên
+hỏng sau 20 giây, mà nhìn log lỗi thì không phân biệt được. Đếm từ trước bước
+tải ảnh chứ không từ lúc mở Chrome, vì tải ảnh cũng là một phần của phiên.
+
+---
+
+**Một phiên hiện tốn bao lâu** — đo thật trên nick Thảo Ngân với Page Homestay
+Times City, ngày 04/10:
+
+| khâu | tốn |
+|---|---|
+| Login acc cá nhân | 7s |
+| Lướt newsfeed cá nhân | 12s |
+| Chuyển vai sang Page | 10s |
+| Vào nhóm + soạn bài | 20s |
+| Thêm nhóm → tìm → tick 9 nhóm | 19s |
+| Bấm Đăng + chờ ô soạn bài đóng | 15s |
+| Lấy link từ phản hồi mạng | 5s |
+| **Lướt feed Page + thả tim** *(cũng là cửa sổ dò spam)* | **72s** |
+| Đọc trang thông báo (52 link/24h → lấy 10) | 19s |
+| Lưu link + dò cảnh báo gỡ bài | 9s |
+| **Tổng** | **189s** |
+
+Quãng lướt feed chiếm 38% cả phiên nhưng **không cắt được** — nó đồng thời là
+cửa sổ để phát hiện acc bị gỡ bài. Cắt nó chính là lỗi của bản 2.33.0.
+
+---
+
 ## v2.34.0 — 04/10/2026
 
 **Dò spam: thấy cảnh báo sau khi đăng là gắn cờ ngay cho nick chạy phiên đó**
