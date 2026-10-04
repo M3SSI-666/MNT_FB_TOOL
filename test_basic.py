@@ -1132,6 +1132,25 @@ check("vẫn giữ nguồn bắt link từ phản hồi mạng",
       "[a] Phản hồi mạng" in _src_pvp2)
 check("Hybrid còn 5 bước", "[5/5]" in _src_pvp2 and "[6/6]" not in _src_pvp2)
 
+# ── Mỗi phiên tự ghi thời lượng ────────────────────────────────────────────
+# Trước đây muốn biết một phiên tốn bao lâu phải chạy script đo riêng, nên
+# không ai biết phiên thật tốn bao nhiêu cho tới khi đi đo. Nay tự ghi.
+check("phiên Hybrid tự ghi thời lượng",
+      "Phiên Hybrid [{acc_name}]" in _src_pvp2 and "_t0 = time.time()" in _src_pvp2)
+# Phải nằm trong `finally`: phiên HỎNG mà mất 400 giây là chuyện khác hẳn phiên
+# hỏng sau 20 giây, mà nhìn log lỗi thì không phân biệt được.
+_i_try  = _src_pvp2.index("        ok = asyncio.run(_run_page_via(")
+_i_fin  = _src_pvp2.index("    finally:", _i_try)
+_i_ghi  = _src_pvp2.index("⏱️  Phiên Hybrid")
+check("ghi thời lượng cả khi phiên hỏng", _i_ghi > _i_fin)
+# Đo từ trước bước tải ảnh, không phải từ lúc mở Chrome — tải ảnh cũng là một
+# phần của phiên. Neo trong THÂN `post_page_via`: dòng tải ảnh có ở cả hàm đăng
+# tường Page phía trên, tìm từ đầu file là bắt nhầm hàm kia.
+_i_pvia = _src_pvp2.index("def post_page_via(")
+check("tính cả thời gian tải ảnh",
+      _src_pvp2.index("_t0 = time.time()", _i_pvia)
+      < _src_pvp2.index("📥 Download ảnh", _i_pvia))
+
 # 2. Tìm nút bằng MỘT lần hỏi DOM thay cho chuỗi wait_for_selector. Đo 02/10:
 #    riêng bước tìm nút "Chuyển" tiêu 8 giây để rồi không tìm thấy gì.
 check("chuyển Page tìm nút trong một lần hỏi",

@@ -1111,6 +1111,9 @@ def post_page_via(
     """
     local_photos = []
     temp_dir     = None
+    # Đo từ ĐÂY chứ không từ lúc mở Chrome: tải ảnh cũng là một phần phiên, và
+    # đã có lần nó là khâu tốn nhất mà không ai biết vì không ai đo.
+    _t0 = time.time()
 
     if image_url:
         try:
@@ -1149,6 +1152,10 @@ def post_page_via(
         logger.error(f"❌ [{acc_name}] Lỗi PageVia: {e}")
         raise
     finally:
+        # Ghi thời lượng phiên — kể cả khi phiên HỎNG. Phiên hỏng mà mất 400
+        # giây là một chuyện khác hẳn phiên hỏng sau 20 giây, và chỉ nhìn log
+        # lỗi thì không phân biệt được.
+        logger.info(f"  ⏱️  Phiên Hybrid [{acc_name}]: {time.time() - _t0:.0f} giây")
         if temp_dir:
             try:
                 cleanup_temp(temp_dir)
