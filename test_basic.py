@@ -1094,6 +1094,84 @@ check("ghi lại vì sao bỏ, kèm số đo",
 _src_cb2 = Path("comment_bai.py").read_text(encoding="utf-8")
 check("comment_bai vẫn dọn link chết",
       "BAI_KHONG_XEM_DUOC" in _src_cb2 and "chet=True" in _src_cb2)
+
+# ── Gặp link chết thì BÙ link khác cho đủ số bài ───────────────────────────
+# Trước đây link chết chỉ bị xoá rồi bỏ trống chỗ, nên phiên hụt đúng bấy nhiêu
+# bài mà không có gì bù. Nay bốc một link khác CŨNG CỦA PAGE NÀY nối vào cuối.
+_lc = "bu_link_test"
+db.xoa_het_comment_posts(_lc)
+db.them_comment_posts(_lc, [f"https://www.facebook.com/groups/g{i}/posts/{i}00/"
+                            for i in range(1, 7)], page="PAGE_A")
+db.them_comment_posts(_lc, ["https://www.facebook.com/groups/gx/posts/999/"],
+                      page="PAGE_LA")
+_ds3 = db.boc_bai_de_comment(_lc, 3, page="PAGE_A")
+check("bốc đúng số bài yêu cầu", len(_ds3) == 3)
+# Loại trừ theo NHÓM, không chỉ theo bài: luật 1 link/nhóm/phiên phải giữ cả
+# khi bù, nếu không hai comment cùng Page vào cùng nhóm cách nhau vài phút.
+_nhom3 = {(r.get("nhom") or "").strip() for r in _ds3}
+_id3   = {r["id"] for r in _ds3}
+_bu = db.boc_bai_de_comment(_lc, 1, page="PAGE_A",
+                            bo_qua_nhom=_nhom3, bo_qua_id=_id3)
+check("bù được link khác khi loại trừ nhóm đã dùng", len(_bu) == 1)
+check("link bù KHÔNG trùng nhóm đã dùng",
+      (_bu[0].get("nhom") or "").strip() not in _nhom3)
+check("link bù vẫn đúng Page của phiên", _bu[0]["page"] == "PAGE_A")
+# Hết nhóm thì trả rỗng chứ TUYỆT ĐỐI không vơ sang Page khác — lấy bài Page lạ
+# cho đủ số chính là thứ từng làm nick dính spam.
+_het = db.boc_bai_de_comment(_lc, 1, page="PAGE_A",
+                             bo_qua_nhom={f"g{i}" for i in range(1, 7)})
+check("hết nhóm thì trả rỗng, không vơ sang Page khác", _het == [])
+db.xoa_het_comment_posts(_lc)
+
+_src_cb3 = Path("comment_bai.py").read_text(encoding="utf-8")
+check("có hàm bù link chết", "def _bu_mot_bai(" in _src_cb3)
+check("gặp link chết là gọi bù ngay", "_them = _bu_mot_bai(" in _src_cb3)
+# Hàng đợi phải DÀI THÊM ĐƯỢC — vòng for trên zip cố định thì không bù được.
+check("hàng đợi dài thêm được", "while i < len(viec):" in _src_cb3
+      and "viec.append(_them)" in _src_cb3)
+# Báo tiến trình theo SỐ BÀI XONG trên mục tiêu, không theo chỉ số hàng đợi:
+# hàng đợi dài thêm mỗi lần bù, nhìn "12/10" thì tưởng hỏng.
+check("tiến trình báo theo mục tiêu, không theo hàng đợi",
+      "tien_trinh(min(ok_n, muc_tieu), muc_tieu)" in _src_cb3)
+
+# ── Không được đọc tên biến không tồn tại ──────────────────────────────────
+# Ngày 22/09, commit "Sửa: quy kết spam cho sai nick" để lại trong
+# `comment_bai._ket_phien` một dòng đọc biến `kq` vốn không có ở đó. Dòng ấy
+# nằm trong try/except Exception nên NameError bị nuốt thành log hiền lành
+# "Kết phiên không trọn vẹn", và bước DÒ SPAM của phiên comment không hề chạy
+# suốt 13 ngày — 178 lần hỏng trên 184 phiên mà bảng vẫn báo bình thường.
+#
+# Python không bắt được loại này lúc nạp module. Chỗ nguy hiểm nhất lại chính
+# là nhánh hiếm chạy, bọc trong except rộng — đúng chỗ mắt người khó soi nhất.
+from kiem_ten_bien import quet as _quet_ten
+_ten_loi = _quet_ten(".")
+if _ten_loi:
+    # In ra ngay chỗ hỏng, đừng để người đọc phải tự đi dò lại cả dự án.
+    for _f, _l, _h, _t in _ten_loi[:8]:
+        print(f"        → {_f}:{_l} trong {_h}() đọc '{_t}' mà không có")
+check("không file nào đọc tên biến không tồn tại", not _ten_loi)
+# Máy quét phải thật sự bắt được — dựng lại đúng lỗi 22/09 để kiểm chứng.
+import tempfile as _tf2
+with _tf2.TemporaryDirectory() as _d2:
+    Path(_d2, "gia.py").write_text(
+        "async def f(page):\n    try:\n        if kq.get('x'):\n"
+        "            pass\n    except Exception:\n        pass\n", encoding="utf-8")
+    check("máy quét bắt được đúng lỗi 22/09",
+          any(t == "kq" for *_, t in _quet_ten(_d2)))
+# Và bước dò spam của phiên comment phải thật sự gọi được tới.
+# KHÔNG so vị trí trong file: `_ket_phien` được ĐỊNH NGHĨA phía trên vòng lặp
+# comment nhưng CHẠY sau nó. So thứ tự dòng ở đây là so nhầm thứ.
+check("đánh mốc ngay khi câu comment ĐẦU TIÊN lên",
+      "if ok_n == 1:" in _src_cb2 and "danh_dau_da_dang(page)" in _src_cb2)
+# Mốc phải nằm trong vòng lặp comment, không phải trong hàm kết phiên — đánh ở
+# kết phiên là muộn, cảnh báo vòng canh bắt giữa phiên sẽ nằm trước mốc.
+_i_ket  = _src_cb2.index("async def _ket_phien")
+_i_chay = _src_cb2.index("async def _chay_phien")
+_i_moc  = _src_cb2.index("danh_dau_da_dang(page)")
+check("mốc nằm trong vòng lặp comment, không nằm ở hàm kết phiên",
+      _i_moc > _i_chay and not (_i_ket < _i_moc < _i_chay))
+check("hàm kết phiên KHÔNG còn tự đánh mốc",
+      "danh_dau_da_dang" not in _src_cb2[_i_ket:_i_chay])
 check("chỉ một nơi giữ dấu hiệu bài chết",
       "BAI_KHONG_XEM_DUOC" not in _src_tl)
 # Đăng xong thì ra FEED của Page, không ngồi lại nhóm vừa đăng.

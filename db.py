@@ -1716,7 +1716,9 @@ def xoa_het_comment_posts(loai: str) -> int:
         return con.execute("DELETE FROM comment_posts WHERE loai=?", (loai,)).rowcount
 
 
-def boc_bai_de_comment(loai: str, so_bai: int, page: str = "") -> list[dict]:
+def boc_bai_de_comment(loai: str, so_bai: int, page: str = "",
+                       bo_qua_nhom: set = None,
+                       bo_qua_id: set = None) -> list[dict]:
     """
     Bốc tối đa `so_bai` bài để comment trong một phiên, theo hai luật:
 
@@ -1745,13 +1747,30 @@ def boc_bai_de_comment(loai: str, so_bai: int, page: str = "") -> list[dict]:
        mà lấy bừa cả kho thì đúng vào thứ vừa bỏ.
 
     `page`: UID Page của slot. Bỏ trống = không có gì để lấy.
+
+    `bo_qua_nhom` / `bo_qua_id`: nhóm và bài đã dùng trong phiên này. Dùng khi
+    phiên gặp link chết và cần bốc link THAY THẾ cho đủ số bài — phải loại trừ
+    chứ không bốc lại, vì luật (1) ở trên vẫn phải giữ: hai comment từ cùng một
+    Page vào cùng một nhóm cách nhau vài phút là thứ admin nhóm để ý nhất.
     """
     n = max(0, int(so_bai or 0))
     if n == 0 or not (page or "").strip():
         return []
 
+    bo_qua_nhom = {(x or "").strip() for x in (bo_qua_nhom or set()) if (x or "").strip()}
+    bo_qua_id   = set(bo_qua_id or set())
+
+    # Bài không có tên nhóm thì tự đứng một mình. Dùng CHUNG một cách đặt khoá
+    # với chỗ gom nhóm bên dưới — hai cách đặt khác nhau thì bài lẻ sẽ lọt lưới
+    # loại trừ và bị bốc lại.
+    def khoa_nhom(r):
+        return (r.get("nhom") or "").strip() or f"__le_{r['id']}"
+
     page = page.strip()
-    ds = [r for r in get_comment_posts(loai) if (r.get("page") or "") == page]
+    ds = [r for r in get_comment_posts(loai)
+          if (r.get("page") or "") == page
+          and r["id"] not in bo_qua_id
+          and khoa_nhom(r) not in bo_qua_nhom]
 
     # Trong mỗi nhóm lấy đúng MỘT ứng viên: ít comment nhất trước → cũ nhất trước.
     # Không còn bậc "chính chủ" vì ds đã lọc cứng, mọi bài đều là của Page mình.
@@ -1760,7 +1779,7 @@ def boc_bai_de_comment(loai: str, so_bai: int, page: str = "") -> list[dict]:
 
     ung_vien = {}
     for r in ds:
-        nhom = (r.get("nhom") or "").strip() or f"__le_{r['id']}"
+        nhom = khoa_nhom(r)
         k = khoa(r)
         if nhom not in ung_vien or k < ung_vien[nhom][0]:
             ung_vien[nhom] = (k, r)

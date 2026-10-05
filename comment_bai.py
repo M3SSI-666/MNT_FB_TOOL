@@ -192,6 +192,35 @@ def chia_cau_cho_bai(bai: list, pool: list, so_cau: int,
     return ra_bai, cum
 
 
+def _bu_mot_bai(loai: str, page_uid: str, so_cau: int, pool: list,
+                da_thu_id: set, da_dung_nhom: set, rng=random):
+    """
+    Gặp link chết thì bốc MỘT link khác thay vào, trả `(bài, cụm_câu)` hoặc None.
+
+    Chỉ lấy bài CỦA CHÍNH PAGE NÀY — y như lượt bốc đầu phiên. Lấy bài của Page
+    lạ để cho đủ số là đúng thứ từng làm nick dính spam.
+
+    Loại trừ nhóm đã dùng trong phiên, không chỉ loại trừ bài đã thử: luật "mỗi
+    nhóm tối đa 1 link mỗi phiên" vẫn phải giữ khi bù. Hai comment từ cùng một
+    Page vào cùng một nhóm cách nhau vài phút là thứ admin nhóm để ý nhất — bù
+    cho đủ số mà phá luật đó thì lợi bất cập hại.
+
+    Hệ quả cần biết: số bài một phiên vẫn bị chặn trên bởi SỐ NHÓM mà Page đó
+    có trong thư viện. Đo 05/10, chỉ 4/12 Page có từ 10 nhóm trở lên.
+    """
+    ds = db.boc_bai_de_comment(loai, 1, page=page_uid,
+                               bo_qua_nhom=da_dung_nhom, bo_qua_id=da_thu_id)
+    if not ds:
+        return None
+    bai, cum = chia_cau_cho_bai(ds, pool, so_cau, page_uid, rng=rng)
+    if not bai:
+        return None
+    b = bai[0]
+    da_thu_id.add(b["id"])
+    da_dung_nhom.add((b.get("nhom") or "").strip() or f"__le_{b['id']}")
+    return (b, cum[0])
+
+
 def tach_cau(raw: str) -> list:
     """Thư viện câu: mỗi dòng một câu, bỏ dòng trống và trùng lặp."""
     ra, da_co = [], set()
@@ -353,9 +382,11 @@ async def _ket_phien(page, acc_name: str = "") -> None:
         await browse_and_like(page, duration_sec=giay, max_likes=KET_LIKE)
         # Comment bị gỡ cũng là dính spam, y như bài đăng bị gỡ. Dò SAU khi
         # lướt feed vì Facebook cần vài chục giây mới đổ thông báo về.
-        # Comment đã lên rồi mới đánh mốc — cảnh báo thấy trước đó là chuyện cũ.
-        if kq.get("da_comment"):
-            danh_dau_da_dang(page)
+        #
+        # Mốc "đã đưa nội dung lên" KHÔNG đánh ở đây mà đánh ngay lúc câu
+        # comment đầu tiên lên (xem vòng lặp trong `_chay_phien`). Đánh ở đây là
+        # muộn: cảnh báo vòng canh bắt được giữa phiên sẽ nằm TRƯỚC mốc và bị
+        # loại khỏi đường dự phòng của `kiem_vi_pham`.
         await kiem_vi_pham(page, acc_name, "phiên comment")
     except Exception as e:
         logger.warning(f"    ⚠️  Kết phiên không trọn vẹn: {e}")
@@ -527,13 +558,31 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
     ok_n, loi_n, cau_n = 0, 0, 0        # bài xong / bài hỏng / TỔNG CÂU đã lên
     chet = []                                  # link chết gặp trong phiên này
     chet_theo_acc = {}                         # acc đã đăng các bài chết đó
+
+    # Hàng đợi việc — DÀI THÊM ĐƯỢC. Gặp link chết thì bốc một link khác CŨNG
+    # CỦA PAGE NÀY nối vào cuối, để phiên vẫn comment đủ số bài đã đặt. Trước
+    # đây link chết chỉ bị xoá rồi bỏ trống chỗ, nên phiên hụt đúng bấy nhiêu
+    # bài mà không có gì bù.
+    viec = list(zip(bai, cum))
+    muc_tieu = len(viec)
+    da_thu_id   = {b["id"] for b, _ in viec}
+    da_dung_nhom = {(b.get("nhom") or "").strip() or f"__le_{b['id']}"
+                    for b, _ in viec}
+    # Câu cho link thay thế: bốc TRƯỚC và bốc từ phần pool chưa dùng, để comment
+    # thay thế không lặp lại đúng câu vừa dùng ở bài trước trong cùng phiên.
+    _da_dung_cau = {c for cc in cum for c in cc}
+    _con_cau = [c for c in pool if c not in _da_dung_cau] or pool
+
     async with async_playwright() as p:
         ctx, page = await _open_context(p, acc_name, c_user, headless)
         try:
             la_page = await _khoi_dong(page, ctx, page_uid)
             logger.info(f"  💬 Comment dưới danh nghĩa: "
                         f"{'Page ' + page_name if la_page else 'acc cá nhân ' + acc_name}")
-            for i, (b, cau_cum) in enumerate(zip(bai, cum), 1):
+            i = 0
+            while i < len(viec):
+                b, cau_cum = viec[i]
+                i += 1
                 try:
                     n_gui = await _comment_mot_bai(page, ctx, b["url"], cau_cum)
                     # so_lan phải cộng ĐÚNG số câu đã lên, không phải cộng 1 mỗi
@@ -542,8 +591,15 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
                     db.ghi_nhan_comment(b["id"], True, so_cau=n_gui)
                     ok_n   += 1
                     cau_n  += n_gui
+                    if ok_n == 1:
+                        # Đánh mốc ngay khi câu comment ĐẦU TIÊN lên. Từ giây
+                        # này phiên đã đưa nội dung lên Facebook, nên cảnh báo
+                        # gỡ bài thấy sau đó mới có thể là của phiên này — và
+                        # cảnh báo vòng canh bắt được ở những bài sau vẫn nằm
+                        # sau mốc, không bị loại oan.
+                        danh_dau_da_dang(page)
                     dau = "🎯" if la_chinh_chu(b, page_uid) else "  "
-                    logger.info(f"    ✅ [{i}/{len(bai)}] {dau} {n_gui} câu: "
+                    logger.info(f"    ✅ [{ok_n}/{muc_tieu}] {dau} {n_gui} câu: "
                                 f"{' | '.join(c[:24] for c in cau_cum[:n_gui])} "
                                 f"→ ...{b['url'][-32:]}")
                 except BaiDaChet as e:
@@ -551,34 +607,52 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
                     # thường. Xoá khỏi danh sách, nhưng GHI LẠI acc đã đăng bài
                     # đó — bài bị Facebook gỡ là tín hiệu spam, mà tín hiệu ấy
                     # chỉ dùng được khi biết nó của acc nào.
+                    #
+                    # KHÔNG phải tín hiệu spam của acc đang chạy phiên này: nó
+                    # chỉ đi comment, không đăng bài đó. Cảnh báo bật lên TRONG
+                    # lúc comment mới là của acc đang chạy — việc đó do
+                    # `kiem_vi_pham` ở cuối phiên xử lý, tách hẳn khỏi đây.
                     _xoa = db.ghi_nhan_comment(b["id"], False, chet=True)
                     chet.append(b["url"])
                     _cua = (_xoa or {}).get("acc") or "?"
-                    logger.warning(f"    💀 [{i}/{len(bai)}] LINK CHẾT: {e} "
+                    logger.warning(f"    💀 LINK CHẾT: {e} "
                                    f"→ bài do '{_cua}' đăng → {b['url']}")
                     if _cua != "?":
                         chet_theo_acc[_cua] = chet_theo_acc.get(_cua, 0) + 1
+                    # Bù lại một link khác CŨNG CỦA PAGE NÀY, nhóm chưa dùng.
+                    _them = _bu_mot_bai(loai, page_uid, so_minh, _con_cau,
+                                        da_thu_id, da_dung_nhom)
+                    if _them:
+                        viec.append(_them)
+                        logger.info(f"    ↩️  Thay bằng link khác cùng Page "
+                                    f"→ ...{_them[0]['url'][-32:]}")
+                    else:
+                        logger.warning("    ⚠️  Hết link thay thế cho Page này "
+                                       "— phiên sẽ thiếu 1 bài")
                 except CommentRestricted as e:
                     db.ghi_nhan_comment(b["id"], False, "bị chặn")
                     logger.error(f"    ⛔ Dừng phiên: {e} "
-                                 f"(đã comment {ok_n}/{len(bai)})")
+                                 f"(đã comment {ok_n}/{muc_tieu})")
                     raise
                 except CookieDeadError:
                     raise
                 except Exception as e:
                     db.ghi_nhan_comment(b["id"], False, str(e)[:30])
                     loi_n += 1
-                    logger.warning(f"    ⚠️  [{i}/{len(bai)}] hỏng: {e}")
+                    logger.warning(f"    ⚠️  [{ok_n}/{muc_tieu}] hỏng: {e}")
 
                 if tien_trinh:
                     # Hỏng ở đây (DB khoá, v.v.) không được kéo sập phiên —
                     # báo tiến trình chỉ để nhìn cho biết.
                     try:
-                        tien_trinh(i, len(bai))
+                        # Báo theo SỐ BÀI ĐÃ COMMENT XONG trên mục tiêu, không
+                        # theo chỉ số hàng đợi: hàng đợi dài thêm mỗi lần bù
+                        # link chết, nhìn "12/10" thì tưởng hỏng.
+                        tien_trinh(min(ok_n, muc_tieu), muc_tieu)
                     except Exception:
                         pass
 
-                if i < len(bai):
+                if i < len(viec):
                     await asyncio.sleep(random.uniform(st["comment_nghi_min"],
                                                        st["comment_nghi_max"]))
             # Chỉ kết phiên tử tế khi đã comment được ít nhất một bài. Đang bị
@@ -606,7 +680,7 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
                             sorted(chet_theo_acc.items(), key=lambda x: -x[1]))
             logger.warning(f"  📌 Bài bị gỡ thuộc về — {tk}")
     return {"da_comment": ok_n, "da_cau": cau_n, "loi": loi_n,
-            "link_chet": len(chet), "tong_bai": len(bai),
+            "link_chet": len(chet), "tong_bai": muc_tieu,
             "chet_theo_acc": chet_theo_acc}
 
 
