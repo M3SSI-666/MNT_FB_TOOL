@@ -128,6 +128,42 @@ _MOC_GO_BAI = ("đã gỡ bài viết", "ảnh đã bị gỡ",
                "removed your post", "your photo was removed")
 _MOC_SPAM   = ("spam",)
 
+# Gỡ BÌNH LUẬN. `doc_vi_pham` cố tình bỏ qua loại này vì nó đếm số vụ gỡ BÀI,
+# còn ở đây thì tính: Duong chốt 05/10 — đang đăng mà thấy popup gỡ bình luận
+# cũng là Facebook vừa ra tay với acc này, phải dừng phiên.
+_MOC_GO_BINH_LUAN = ("đã gỡ bình luận", "gỡ bình luận của bạn",
+                     "removed your comment", "your comment was removed")
+
+# Dấu cho biết đây THẬT SỰ là hộp cảnh báo vi phạm, không phải một trang bất kỳ
+# có chứa chữ "spam". Thiếu chốt này thì mọi trang trợ giúp nhắc tới spam đều
+# làm dừng phiên — chữ "spam" một mình quá rộng để tự nó là bằng chứng.
+_MOC_SU_VIEC = ("chúng tôi đã gỡ", "we removed", "sự việc",
+                "tiêu chuẩn cộng đồng", "community standards")
+
+
+def ly_do_dung_phien(text: str) -> str:
+    """
+    Hộp cảnh báo này có đủ nghiêm trọng để DỪNG phiên giữa chừng không?
+
+    Trả lý do ngắn để ghi vào trạng thái ("gỡ bài viết" / "gỡ bình luận" /
+    "spam"), hoặc chuỗi rỗng nếu không phải chuyện phải dừng.
+
+    Rộng hơn `doc_vi_pham` một bậc: hàm kia chỉ nhận gỡ BÀI VIẾT vì nó đếm số
+    vụ để so với lần đo trước, còn hàm này chỉ cần biết CÓ hay KHÔNG.
+    """
+    if not text:
+        return ""
+    thap = " ".join(text.split()).lower()
+    if not any(m in thap for m in _MOC_SU_VIEC):
+        return ""
+    if any(m in thap for m in _MOC_GO_BAI):
+        return "gỡ bài viết"
+    if any(m in thap for m in _MOC_GO_BINH_LUAN):
+        return "gỡ bình luận"
+    if any(m in thap for m in _MOC_SPAM):
+        return "spam"
+    return ""
+
 
 def doc_vi_pham(text: str) -> dict | None:
     """

@@ -22,7 +22,8 @@ from db import (
     update_account_field,
 )
 from cookie_exporter import load_cookie
-from utils import logger, jitter, CookieDeadError, ComposerBiChan, classify_error
+from utils import (logger, jitter, CookieDeadError, ComposerBiChan,
+                   DinhSpamGiuaPhien, classify_error)
 from config import CHECK_EVERY_SEC, WINDOW_MINUTES
 
 # ── Cấu hình ─────────────────────────────────────────────────
@@ -470,6 +471,18 @@ def _run_one(item: dict):
             _mark_cookie_dead(acc_name)
             # Cookie chết đã có trạng thái riêng và cách xử lý riêng (đăng nhập
             # lại), đừng tính vào sức khoẻ — nó không phải dấu hiệu bị FB chặn.
+            return
+
+        except DinhSpamGiuaPhien as e:
+            # Facebook bật hộp cảnh báo NGAY TRONG phiên, sau khi acc đã chui
+            # vào Page. `fb_common.dung_neu_dinh_spam` đã gắn cờ và chuyển slot
+            # rồi, ở đây chỉ ghi trạng thái cho bảng lịch.
+            #
+            # Để riêng khỏi nhánh lỗi chung vì cùng lý do với ComposerBiChan:
+            # rơi vào đó là bị ghi "lỗi [other]" rồi cộng vào lịch sử hỏng —
+            # sai bản chất, acc này không hỏng kỹ thuật mà đang bị Facebook sờ.
+            _update_status(sid, f"🚫 {datetime.now():%H:%M} Dính spam giữa phiên")
+            logger.error(f"🚫 STT {stt}: acc '{acc_name}' DỪNG PHIÊN — {e}")
             return
 
         except ComposerBiChan:

@@ -1152,6 +1152,72 @@ check("tiến trình báo theo mục tiêu, không theo số ứng viên",
       "tien_trinh(min(ok_n, muc_tieu), muc_tieu)" in _src_cb3)
 check("hụt bài thì báo rõ ra log", "Hụt {muc_tieu - ok_n} bài" in _src_cb3)
 
+# ── Thấy popup giữa phiên đăng thì DỪNG NGAY ───────────────────────────────
+# Duong chốt 05/10: sau khi chui vào Page mà thấy popup gỡ bài / gỡ bình luận /
+# spam thì gán cờ cho acc đang chạy phiên và dừng luôn, không đăng tiếp.
+# Khác hẳn cách cũ: cũ chỉ tổng kết ở CUỐI phiên, tức vẫn đăng xong rồi mới biết.
+import suc_khoe_acc as _skd
+_MAU_SU_VIEC = ("Sự việc 5 tháng 10, 2026 Chúng tôi đã gỡ một số nội dung "
+                "hoặc tin nhắn Spam Đã gỡ bài viết")
+check("popup gỡ bài -> dừng phiên",
+      _skd.ly_do_dung_phien(_MAU_SU_VIEC) == "gỡ bài viết")
+# Gỡ BÌNH LUẬN: `doc_vi_pham` cố tình bỏ qua vì nó đếm số vụ gỡ BÀI. Ở đây thì
+# tính — đang đăng mà bị gỡ bình luận cũng là Facebook vừa ra tay với acc này.
+check("popup gỡ bình luận -> cũng dừng phiên",
+      _skd.ly_do_dung_phien("Sự việc Chúng tôi đã gỡ bình luận của bạn")
+      == "gỡ bình luận")
+check("doc_vi_pham vẫn KHÔNG tính gỡ bình luận là vụ gỡ bài",
+      _skd.doc_vi_pham("Sự việc Chúng tôi đã gỡ bình luận của bạn") is None)
+check("popup chỉ có chữ spam -> vẫn dừng",
+      _skd.ly_do_dung_phien("Sự việc Chúng tôi đã gỡ nội dung Spam") == "spam")
+# Chữ "spam" một mình quá rộng để tự nó là bằng chứng — thiếu chốt "sự việc"
+# thì mọi trang trợ giúp nhắc tới spam đều làm dừng phiên.
+check("trang thường có chữ 'spam' -> KHÔNG dừng",
+      _skd.ly_do_dung_phien("Cách báo cáo spam trên Facebook - Trung tâm trợ giúp")
+      == "")
+check("chuỗi rỗng -> không dừng", _skd.ly_do_dung_phien("") == "")
+
+# Mốc "đã vào Page" phải TÁCH khỏi mốc "đã đăng": hộp Sự việc dính dai, thường
+# bật sẵn ngay lúc đăng nhập — đó là chuyện của phiên trước, không được tính.
+import fb_common as _fbc3
+class _TrangGia2:
+    pass
+_tg3 = _TrangGia2()
+_fbc3._nho_canh_bao(_tg3, "cảnh báo CŨ, thấy lúc đăng nhập")
+_fbc3.danh_dau_vao_page(_tg3)
+check("cảnh báo TRƯỚC khi vào Page -> không tính",
+      _fbc3.canh_bao_sau_khi_vao_page(_tg3) == "")
+_fbc3._nho_canh_bao(_tg3, _MAU_SU_VIEC)
+check("cảnh báo SAU khi vào Page -> tính",
+      _fbc3.canh_bao_sau_khi_vao_page(_tg3) == _MAU_SU_VIEC)
+_fbc3._quen_canh_bao(_tg3)
+check("quên cảnh báo thì xoá cả mốc vào Page",
+      _fbc3.canh_bao_sau_khi_vao_page(_tg3) == "")
+
+_src_pvp3 = Path("page_via_poster.py").read_text(encoding="utf-8")
+check("đánh mốc ngay sau khi chuyển sang Page",
+      "danh_dau_vao_page(page)" in _src_pvp3)
+# Dò ở NHIỀU chặng, trong đó chặng quan trọng nhất là NGAY TRƯỚC khi bấm Đăng —
+# sau cú bấm thì bài đã lên, dừng cũng không rút lại được.
+check("dò ít nhất 3 chặng trong phiên đăng",
+      _src_pvp3.count("await dung_neu_dinh_spam(") >= 3)
+check("có dò ngay trước khi bấm Đăng",
+      'dung_neu_dinh_spam(page, acc_name, "ngay trước khi bấm Đăng")' in _src_pvp3)
+_i_do_cuoi = _src_pvp3.index('"ngay trước khi bấm Đăng"')
+_i_bam     = _src_pvp3.index('# Click "Đăng"')
+check("dò ĐỨNG TRƯỚC cú bấm Đăng", _i_do_cuoi < _i_bam)
+# Phải đi đúng đường Spam, không rơi vào nhánh lỗi chung — ở đó nó bị ghi
+# "lỗi [other]" rồi cộng vào lịch sử hỏng, sai hẳn bản chất.
+_src_sch = Path("scheduler.py").read_text(encoding="utf-8")
+check("scheduler bắt riêng DinhSpamGiuaPhien",
+      "except DinhSpamGiuaPhien as e:" in _src_sch)
+_i_spam = _src_sch.index("except DinhSpamGiuaPhien")
+_i_chung = _src_sch.index("except Exception as e:", _i_spam)
+check("bắt TRƯỚC nhánh lỗi chung", _i_spam < _i_chung)
+check("là lỗi riêng, không phải Exception trống",
+      "class DinhSpamGiuaPhien(PostError):" in
+      Path("utils.py").read_text(encoding="utf-8"))
+
 # ── Không được đọc tên biến không tồn tại ──────────────────────────────────
 # Ngày 22/09, commit "Sửa: quy kết spam cho sai nick" để lại trong
 # `comment_bai._ket_phien` một dòng đọc biến `kq` vốn không có ở đó. Dòng ấy

@@ -90,6 +90,21 @@ class ComposerBiChan(PostError):
     """
 
 
+class DinhSpamGiuaPhien(PostError):
+    """
+    Đang trong phiên, sau khi đã chui vào Page, thì Facebook bật hộp cảnh báo
+    gỡ bài / gỡ bình luận / spam.
+
+    Khác hẳn cách dò cũ ở chỗ KHÔNG đợi hết phiên: thấy là dừng ngay, không đăng
+    tiếp. Lý do Duong chốt 05/10 — cảnh báo bật lên giữa lúc đang thao tác trong
+    Page nghĩa là Facebook vừa ra tay với chính acc đang chạy phiên này, cứ đăng
+    tiếp là tự chuốc thêm.
+
+    Đi cùng đường với `ComposerBiChan`: nghỉ, slot còn lại chuyển sang nuôi nick,
+    một tiếng sau nhử lại. Thông điệp chính là lý do, viết sẵn cho người đọc.
+    """
+
+
 class LoiBuoc(PostError):
     """
     Phiên dừng ở một bước cụ thể. Thông điệp CHÍNH LÀ tên bước, viết sẵn bằng

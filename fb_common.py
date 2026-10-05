@@ -514,6 +514,70 @@ _CANH_BAO_DA_THAY: dict = {}
 _MOC_DA_DANG: dict = {}
 
 
+# Thời điểm phiên CHUI VÀO PAGE xong (chiếm quyền hoạt động của Page).
+#
+# Khác `_MOC_DA_DANG`: mốc kia là lúc nội dung đã lên, mốc này sớm hơn — là lúc
+# phiên bắt đầu thao tác dưới danh nghĩa Page. Cảnh báo bật lên sau mốc này đã
+# đủ để dừng phiên, không cần đợi đăng xong.
+#
+# Vì sao không lấy luôn lúc mở trình duyệt: hộp "Sự việc" dính dai, nó thường
+# bật sẵn ngay lúc đăng nhập và đó là chuyện của phiên trước. Lấy mốc từ lúc
+# vào Page thì loại được đúng cái hộp cũ ấy mà không bỏ sót vụ mới.
+_MOC_VAO_PAGE: dict = {}
+
+
+def danh_dau_vao_page(page):
+    """Đánh mốc: phiên đã chiếm quyền Page, từ đây mọi cảnh báo đều đáng ngờ."""
+    import time as _t
+    _MOC_VAO_PAGE[id(page)] = _t.time()
+
+
+def canh_bao_sau_khi_vao_page(page) -> str:
+    """Chữ cảnh báo DÀI NHẤT vòng canh thấy sau khi phiên vào Page."""
+    moc = _MOC_VAO_PAGE.get(id(page))
+    if moc is None:
+        return ""
+    ds = _CANH_BAO_DA_THAY.get(id(page)) or []
+    sau = [t for ts, t in ds if ts >= moc]
+    return max(sau, key=len) if sau else ""
+
+
+async def dung_neu_dinh_spam(page, acc_name: str, cho: str = "") -> None:
+    """
+    Thấy cảnh báo gỡ bài / gỡ bình luận / spam sau khi vào Page → DỪNG PHIÊN.
+
+    Ném `DinhSpamGiuaPhien`. Nơi gọi (scheduler) bắt và cho acc nghỉ, chuyển
+    slot còn lại sang nuôi nick — cùng đường với `ComposerBiChan`.
+
+    Khác hẳn `kiem_vi_pham` ở cuối phiên: hàm kia tổng kết sau khi mọi việc đã
+    xong, hàm này cắt ngang. Cả hai cùng tồn tại vì bắt hai thời điểm khác nhau
+    — cảnh báo về muộn sau khi đăng thì chỉ hàm kia thấy.
+    """
+    import suc_khoe_acc as _sk
+    import db as _db
+    from utils import DinhSpamGiuaPhien
+
+    txt = canh_bao_sau_khi_vao_page(page)
+    ly_do = _sk.ly_do_dung_phien(txt)
+    if not ly_do:
+        return
+
+    vp = _sk.doc_vi_pham(txt) or {}
+    # `da_dang=True`: phiên đang thao tác dưới danh nghĩa Page thì đã hành động
+    # thật trên Facebook rồi, dù bài có lên hay chưa. Chốt `da_dang` sinh ra để
+    # chặn phiên hỏng-từ-đầu, không phải để tha cho phiên đang chạy giữa chừng.
+    _db.ghi_nhan_vi_pham(acc_name, vp.get("so", 1), True,
+                         vp.get("hom_nay", 0), vp.get("chac_chan", False),
+                         da_dang=True)
+    n, moc = _db.danh_dau_spam(acc_name, f"popup {ly_do} giữa phiên",
+                               ly_do=f"Dính spam ({ly_do})")
+    logger.error(f"  🚫 '{acc_name}' DÍNH SPAM giữa phiên ({ly_do}"
+                 f"{' — ' + cho if cho else ''}) — DỪNG NGAY, "
+                 f"{n} slot còn lại chuyển sang nuôi nick, nhử lại lúc {moc:%H:%M}")
+    logger.error(f"     Chữ trong hộp cảnh báo: {txt[:160]}")
+    raise DinhSpamGiuaPhien(f"popup {ly_do} giữa phiên")
+
+
 def danh_dau_da_dang(page):
     """Đánh mốc: từ đây trở đi, cảnh báo mới có thể là của phiên này."""
     import time as _t
@@ -581,6 +645,7 @@ def _canh_bao_sau_khi_dang(page) -> str:
 def _quen_canh_bao(page):
     _CANH_BAO_DA_THAY.pop(id(page), None)
     _MOC_DA_DANG.pop(id(page), None)
+    _MOC_VAO_PAGE.pop(id(page), None)
 
 
 # Bao nhiêu giây phải trôi qua giữa lúc đăng xong và lúc dò cảnh báo.

@@ -49,7 +49,7 @@ from utils import logger, ComposerBiChan, jitter_ms, CookieDeadError, LoiBuoc
 from fb_common import (kiem_vi_pham, composer_bi_chan, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, danh_dau_da_dang, browser_launch_kwargs,
                        human_delay, jwait, clipboard_paste, browse_and_like,
-                       CHO_SAU_DANG_GIAY)
+                       CHO_SAU_DANG_GIAY, danh_dau_vao_page, dung_neu_dinh_spam)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -282,10 +282,17 @@ async def _run_page_via(
         # ════════════════════════════════════════════════════════════════
         logger.info(f"  [3/5] 🔄 Switch → Page {page_uid}...")
         await _switch_to_page(page, ctx, page_uid)
+        # Từ đây mọi thao tác mang danh nghĩa Page. Cảnh báo bật lên SAU mốc này
+        # là Facebook vừa ra tay với acc đang chạy phiên — dừng ngay, đừng đăng
+        # tiếp. Hộp "Sự việc" bật sẵn từ lúc đăng nhập nằm TRƯỚC mốc nên không
+        # bị tính oan.
+        danh_dau_vao_page(page)
 
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 5 — Chui vào nhóm đầu, paste nội dung + upload ảnh
         # ════════════════════════════════════════════════════════════════
+        await dung_neu_dinh_spam(page, acc_name, "vừa chuyển sang Page")
+
         group_url = f"https://www.facebook.com/groups/{first_group_uid}/"
         logger.info(f"  [4/5] 📌 Vào nhóm: {group_url}")
         await page.goto(group_url, wait_until="domcontentloaded", timeout=30000)
@@ -412,6 +419,7 @@ async def _run_page_via(
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 6 — Thêm nhóm → gõ từ khóa → tick → Đăng
         # ════════════════════════════════════════════════════════════════
+        await dung_neu_dinh_spam(page, acc_name, "vừa soạn xong bài")
         logger.info(f"  [5/5] ➕ Thêm nhóm → tìm \"{search_kw}\" → tick → Đăng...")
 
         # Click "+ Thêm nhóm"
@@ -580,6 +588,11 @@ async def _run_page_via(
             _bat.bat_dau()
         except Exception as e:
             logger.warning(f"    ⚠️  Không gắn được bộ bắt link: {e}")
+
+        # Dò LẦN CUỐI ngay trước khi bấm Đăng — điểm có giá trị nhất: dừng
+        # trước khi nội dung thật sự đi ra ngoài. Sau cú bấm này thì bài đã lên,
+        # có dừng cũng không rút lại được.
+        await dung_neu_dinh_spam(page, acc_name, "ngay trước khi bấm Đăng")
 
         # Click "Đăng"
         await _human_delay(2000, 3000)
@@ -814,6 +827,11 @@ async def _run_page_wall(
         # ── BƯỚC 3 — Switch sang Page actor ───────────────────────────────────
         logger.info(f"  [3/5] 🔄 Switch → Page {page_uid}...")
         await _switch_to_page(page, ctx, page_uid)
+        # Từ đây mọi thao tác mang danh nghĩa Page. Cảnh báo bật lên SAU mốc này
+        # là Facebook vừa ra tay với acc đang chạy phiên — dừng ngay, đừng đăng
+        # tiếp. Hộp "Sự việc" bật sẵn từ lúc đăng nhập nằm TRƯỚC mốc nên không
+        # bị tính oan.
+        danh_dau_vao_page(page)
 
         # Về lại trang Page để chắc chắn composer là của tường Page
         await page.goto(
@@ -960,6 +978,8 @@ async def _run_page_wall(
                     break
             except PWTimeout:
                 continue
+
+        await dung_neu_dinh_spam(page, acc_name, "ngay trước khi bấm Đăng")
 
         # 5b. Click "Đăng" trong dialog "Cài đặt bài viết"
         await _human_delay(1000, 1800)
