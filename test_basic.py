@@ -866,32 +866,38 @@ check("thêm lại -> bỏ trùng",  db.them_comment_posts("homestay", _urls, pa
 check("nhóm được lưu sẵn",
       {r["nhom"] for r in db.get_comment_posts("homestay")} == {"g1", "g2", "g3"})
 
-# Luật 1: tối đa 1 link MỖI NHÓM. 3 nhóm thì xin 9 vẫn chỉ được 3 —
-# bốc 2 bài cùng nhóm trong một phiên là 2 comment liên tiếp vào cùng nhóm.
+# Luật 1: DÀN TRẢI theo nhóm — vòng 1 lấy một bài mỗi nhóm, hết mới sang vòng 2.
+# Trùng nhóm là HẠN CHẾ chứ không CẤM (Duong chốt 05/10): Page có ít nhóm hơn
+# số bài cần mà cấm cứng thì phiên hụt vĩnh viễn.
 _b = db.boc_bai_de_comment("homestay", 9, page="PG")
-check("xin 9 nhưng chỉ có 3 nhóm -> 3 bài", len(_b) == 3)
-check("mỗi nhóm đúng 1 bài",   len({r["nhom"] for r in _b}) == 3)
+check("xin 9 với 3 nhóm × 5 bài -> đủ 9", len(_b) == 9)
+check("3 phần tử ĐẦU phủ hết 3 nhóm", len({r["nhom"] for r in _b[:3]}) == 3)
+check("không lặp lại cùng một bài", len({r["id"] for r in _b}) == 9)
 _b2 = db.boc_bai_de_comment("homestay", 2, page="PG")
-check("xin ít hơn số nhóm -> đúng số xin", len(_b2) == 2)
+check("xin ít hơn số nhóm -> đúng số xin, khác nhóm", len(_b2) == 2
+      and len({r["nhom"] for r in _b2}) == 2)
 check("xin 0 -> rỗng",         db.boc_bai_de_comment("homestay", 0, page="PG") == [])
 # Không truyền Page thì không có "chính chủ" nào để so — trả rỗng, tuyệt đối không
 # lấy bừa cả kho. Đi comment dưới bài của Page lạ khiến nick dính spam.
 check("không truyền Page -> rỗng", db.boc_bai_de_comment("homestay", 9) == [])
+# Xin nhiều hơn số bài đang có thì trả hết, không bịa thêm.
+check("xin 99 -> trả hết 15 bài",
+      len(db.boc_bai_de_comment("homestay", 99, page="PG")) == 15)
 
-# Luật 2: ưu tiên bài CŨ NHẤT (order_idx nhỏ nhất) trong mỗi nhóm
-_idx = {r["nhom"]: r["order_idx"] for r in _b}
+# Luật 2: trong mỗi nhóm, bài CŨ NHẤT (order_idx nhỏ nhất) đi trước
+_idx = {r["nhom"]: r["order_idx"] for r in _b[:3]}
 _min = {}
 for r in db.get_comment_posts("homestay"):
     _min[r["nhom"]] = min(_min.get(r["nhom"], 10**9), r["order_idx"])
-check("bốc đúng bài cũ nhất mỗi nhóm", _idx == _min)
+check("vòng 1 bốc đúng bài cũ nhất mỗi nhóm", _idx == _min)
 
 # ...nhưng bài đã comment rồi phải nhường bài chưa comment, nếu không mỗi phiên
 # đều dội lại đúng một bài cho tới khi nó bị đẩy khỏi cửa sổ.
 db.ghi_nhan_comment(_b[0]["id"], True)
-_b3 = db.boc_bai_de_comment("homestay", 9, page="PG")
+_b3 = db.boc_bai_de_comment("homestay", 3, page="PG")
 _cua_nhom = [r for r in _b3 if r["nhom"] == _b[0]["nhom"]][0]
 check("bài đã comment nhường bài chưa comment", _cua_nhom["id"] != _b[0]["id"])
-check("vẫn giữ 1 bài mỗi nhóm", len({r["nhom"] for r in _b3}) == 3)
+check("vòng 1 vẫn 1 bài mỗi nhóm", len({r["nhom"] for r in _b3}) == 3)
 
 # so_lan phải cộng ĐÚNG số câu đã gửi. Bài chính chủ nhận 2 câu một lượt; cộng 1
 # mỗi lượt thì nó bị đếm thiếu một nửa và cứ được bốc lại mãi, vì so_lan chính là
@@ -1095,44 +1101,56 @@ _src_cb2 = Path("comment_bai.py").read_text(encoding="utf-8")
 check("comment_bai vẫn dọn link chết",
       "BAI_KHONG_XEM_DUOC" in _src_cb2 and "chet=True" in _src_cb2)
 
-# ── Gặp link chết thì BÙ link khác cho đủ số bài ───────────────────────────
-# Trước đây link chết chỉ bị xoá rồi bỏ trống chỗ, nên phiên hụt đúng bấy nhiêu
-# bài mà không có gì bù. Nay bốc một link khác CŨNG CỦA PAGE NÀY nối vào cuối.
-_lc = "bu_link_test"
+# ── Bốc DƯ ứng viên rồi comment tới khi đủ số bài ──────────────────────────
+# Trước đây bốc đúng 10 bài: gặp link chết là hụt đúng bấy nhiêu, không gì bù.
+# Nay bốc gấp đôi (20 ứng viên cho 10 bài) rồi đi lần lượt, đủ số thì dừng.
+_lc = "ung_vien_test"
 db.xoa_het_comment_posts(_lc)
-db.them_comment_posts(_lc, [f"https://www.facebook.com/groups/g{i}/posts/{i}00/"
-                            for i in range(1, 7)], page="PAGE_A")
-db.them_comment_posts(_lc, ["https://www.facebook.com/groups/gx/posts/999/"],
+# g1 có 4 bài, g2 có 2, g3 có 1 — để thấy rõ thứ tự theo vòng.
+for _g, _n in (("g1", 4), ("g2", 2), ("g3", 1)):
+    db.them_comment_posts(_lc, [f"https://www.facebook.com/groups/{_g}/posts/{i}/"
+                                for i in range(1, _n + 1)], page="PAGE_A")
+db.them_comment_posts(_lc, ["https://www.facebook.com/groups/gx/posts/9/"],
                       page="PAGE_LA")
-_ds3 = db.boc_bai_de_comment(_lc, 3, page="PAGE_A")
-check("bốc đúng số bài yêu cầu", len(_ds3) == 3)
-# Loại trừ theo NHÓM, không chỉ theo bài: luật 1 link/nhóm/phiên phải giữ cả
-# khi bù, nếu không hai comment cùng Page vào cùng nhóm cách nhau vài phút.
-_nhom3 = {(r.get("nhom") or "").strip() for r in _ds3}
-_id3   = {r["id"] for r in _ds3}
-_bu = db.boc_bai_de_comment(_lc, 1, page="PAGE_A",
-                            bo_qua_nhom=_nhom3, bo_qua_id=_id3)
-check("bù được link khác khi loại trừ nhóm đã dùng", len(_bu) == 1)
-check("link bù KHÔNG trùng nhóm đã dùng",
-      (_bu[0].get("nhom") or "").strip() not in _nhom3)
-check("link bù vẫn đúng Page của phiên", _bu[0]["page"] == "PAGE_A")
-# Hết nhóm thì trả rỗng chứ TUYỆT ĐỐI không vơ sang Page khác — lấy bài Page lạ
-# cho đủ số chính là thứ từng làm nick dính spam.
-_het = db.boc_bai_de_comment(_lc, 1, page="PAGE_A",
-                             bo_qua_nhom={f"g{i}" for i in range(1, 7)})
-check("hết nhóm thì trả rỗng, không vơ sang Page khác", _het == [])
+
+# Vòng 1 lấy một bài MỖI NHÓM rồi mới sang vòng 2 — đây là cách dàn trải.
+check("vòng 1 phủ hết các nhóm trước",
+      [r["nhom"] for r in db.boc_bai_de_comment(_lc, 3, page="PAGE_A")]
+      == ["g1", "g2", "g3"])
+check("hết nhóm mới quay lại nhóm cũ",
+      [r["nhom"] for r in db.boc_bai_de_comment(_lc, 5, page="PAGE_A")]
+      == ["g1", "g2", "g3", "g1", "g2"])
+# Xin nhiều hơn số bài đang có thì trả về hết, không lặp bài.
+_tat_ca = db.boc_bai_de_comment(_lc, 20, page="PAGE_A")
+check("xin dư thì trả hết, không lặp bài",
+      len(_tat_ca) == 7 and len({r["id"] for r in _tat_ca}) == 7)
+# TUYỆT ĐỐI không vơ sang Page khác để cho đủ số — đó là thứ từng làm dính spam.
+check("không vơ bài của Page khác",
+      all(r["page"] == "PAGE_A" for r in _tat_ca))
 db.xoa_het_comment_posts(_lc)
 
 _src_cb3 = Path("comment_bai.py").read_text(encoding="utf-8")
-check("có hàm bù link chết", "def _bu_mot_bai(" in _src_cb3)
-check("gặp link chết là gọi bù ngay", "_them = _bu_mot_bai(" in _src_cb3)
-# Hàng đợi phải DÀI THÊM ĐƯỢC — vòng for trên zip cố định thì không bù được.
-check("hàng đợi dài thêm được", "while i < len(viec):" in _src_cb3
-      and "viec.append(_them)" in _src_cb3)
-# Báo tiến trình theo SỐ BÀI XONG trên mục tiêu, không theo chỉ số hàng đợi:
-# hàng đợi dài thêm mỗi lần bù, nhìn "12/10" thì tưởng hỏng.
-check("tiến trình báo theo mục tiêu, không theo hàng đợi",
+check("bốc gấp đôi số bài cần", _cb.UNG_VIEN_GAP == 2
+      and "muc_tieu * UNG_VIEN_GAP" in _src_cb3)
+check("đủ số bài thì DỪNG", "if ok_n >= muc_tieu or not hang_cau:" in _src_cb3)
+# Trùng nhóm là HẠN CHẾ, không CẤM: Page có ít nhóm hơn số bài cần mà cấm cứng
+# thì phiên hụt vĩnh viễn. Việc dàn trải do thứ tự ứng viên lo.
+check("KHÔNG chặn cứng khi trùng nhóm",
+      "if _khoa_nhom(b) in da_xong_nhom:" not in _src_cb3)
+check("vẫn đếm và báo số lượt trùng nhóm",
+      "so_trung_nhom" in _src_cb3 and "lượt trùng nhóm" in _src_cb3)
+# Câu chỉ bị tiêu khi comment lên THẬT — link chết không được ăn mất một suất.
+check("link chết không tiêu mất cụm câu",
+      "hang_cau.pop(0)            # câu đã lên thật → mới tiêu" in _src_cb3)
+_i_pop  = _src_cb3.index("hang_cau.pop(0)")
+_i_chet = _src_cb3.index("except BaiDaChet")
+check("pop câu nằm ở nhánh THÀNH CÔNG, không ở nhánh link chết",
+      _i_pop < _i_chet)
+# Báo tiến trình theo SỐ BÀI XONG trên mục tiêu, không theo số ứng viên đã
+# duyệt: duyệt 20 ứng viên cho 10 bài, nhìn "14/10" thì tưởng hỏng.
+check("tiến trình báo theo mục tiêu, không theo số ứng viên",
       "tien_trinh(min(ok_n, muc_tieu), muc_tieu)" in _src_cb3)
+check("hụt bài thì báo rõ ra log", "Hụt {muc_tieu - ok_n} bài" in _src_cb3)
 
 # ── Không được đọc tên biến không tồn tại ──────────────────────────────────
 # Ngày 22/09, commit "Sửa: quy kết spam cho sai nick" để lại trong

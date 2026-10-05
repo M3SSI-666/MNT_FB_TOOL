@@ -1722,13 +1722,17 @@ def boc_bai_de_comment(loai: str, so_bai: int, page: str = "",
     """
     Bốc tối đa `so_bai` bài để comment trong một phiên, theo hai luật:
 
-    1. **Tối đa 1 link mỗi NHÓM.** Một đợt đăng chéo tạo 9 bài cùng nội dung ở
-       9 nhóm khác nhau, nên cả danh sách 300 link chỉ đến từ ~9 nhóm. Bốc ngẫu
-       nhiên 9–10 link thì chắc chắn có nhóm bị comment 2 lần trong cùng một
-       phiên — hai comment cách nhau vài phút từ cùng một Page là thứ làm admin
-       nhóm để ý nhất. Ràng buộc này cũng tự động cho ra content khác nhau, vì
-       mỗi nhóm chỉ góp một bài.
-       ⇒ Số bài mỗi phiên KHÔNG BAO GIỜ vượt quá số nhóm đang có trong danh sách.
+    1. **DÀN TRẢI theo nhóm — ưu tiên, không phải cấm.** Một đợt đăng chéo tạo
+       9 bài cùng nội dung ở 9 nhóm khác nhau, nên cả thư viện chỉ đến từ ~9
+       nhóm. Bốc ngẫu nhiên thì dễ dồn nhiều comment vào một nhóm — hai comment
+       cách nhau vài phút từ cùng một Page là thứ làm admin nhóm để ý nhất.
+
+       Nên trả về theo TỪNG VÒNG: vòng 1 lấy bài tốt nhất của mỗi nhóm, hết mới
+       sang vòng 2. Bên gọi cứ đi tuần tự là tự khắc phủ hết các nhóm trước khi
+       lặp lại nhóm nào.
+
+       Trùng nhóm KHÔNG bị cấm (Duong chốt 05/10): Page nào có ít nhóm hơn số
+       bài cần mà cấm cứng thì phiên hụt vĩnh viễn. Hạn chế, không chặn.
 
     2. **Ưu tiên bài cũ nhất còn trong cửa sổ**, nhưng xét `so_lan` trước:
        bài chưa comment lần nào đi trước bài đã comment rồi. Nếu chỉ xét tuổi
@@ -1772,19 +1776,39 @@ def boc_bai_de_comment(loai: str, so_bai: int, page: str = "",
           and r["id"] not in bo_qua_id
           and khoa_nhom(r) not in bo_qua_nhom]
 
-    # Trong mỗi nhóm lấy đúng MỘT ứng viên: ít comment nhất trước → cũ nhất trước.
+    # Xếp hạng trong một nhóm: ít comment nhất trước → cũ nhất trước.
     # Không còn bậc "chính chủ" vì ds đã lọc cứng, mọi bài đều là của Page mình.
     def khoa(r):
         return (int(r.get("so_lan") or 0), int(r.get("order_idx") or 0))
 
-    ung_vien = {}
+    theo_nhom = {}
     for r in ds:
-        nhom = khoa_nhom(r)
-        k = khoa(r)
-        if nhom not in ung_vien or k < ung_vien[nhom][0]:
-            ung_vien[nhom] = (k, r)
+        theo_nhom.setdefault(khoa_nhom(r), []).append(r)
+    for v in theo_nhom.values():
+        v.sort(key=khoa)
 
-    return [r for _, r in sorted(ung_vien.values(), key=lambda x: x[0])[:n]]
+    # Trả về theo TỪNG VÒNG: vòng 1 lấy bài tốt nhất của mỗi nhóm, vòng 2 lấy
+    # bài thứ hai của mỗi nhóm, v.v.
+    #
+    # Vì sao không dừng ở vòng 1 như trước: bên gọi nay bốc DƯ ứng viên (20 cho
+    # 10 bài) để còn cái mà thay khi gặp link chết. Dừng ở vòng 1 thì số ứng
+    # viên bị chặn bằng số nhóm — Page chỉ có 9 nhóm là không còn gì dự phòng.
+    #
+    # Lấy hai bài cùng một nhóm làm ỨNG VIÊN không hề phá luật "mỗi nhóm tối đa
+    # 1 comment mỗi phiên": nếu bài đầu chết thì bài sau vẫn chỉ là MỘT comment
+    # trong nhóm đó. Luật ấy nói về comment ĐÃ GỬI, không phải về ứng viên —
+    # việc chặn nhóm trùng do bên gọi giữ, xem `_chay_phien`.
+    #
+    # Thứ tự vẫn giữ: n phần tử đầu luôn là một-bài-mỗi-nhóm, đúng như cũ.
+    ra, vong = [], 0
+    while len(ra) < n:
+        lop = sorted(((khoa(v[vong]), v[vong]) for v in theo_nhom.values()
+                      if len(v) > vong), key=lambda x: x[0])
+        if not lop:
+            break
+        ra.extend(r for _, r in lop[:n - len(ra)])
+        vong += 1
+    return ra
 
 
 def ghi_nhan_comment(post_id: int, ok: bool, ghi_chu: str = "", chet: bool = False,

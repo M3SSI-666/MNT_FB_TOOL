@@ -94,6 +94,17 @@ FEED_GIAY  = (8, 12)      # [2/6] lướt newsfeed, KHÔNG like
 KET_GIAY   = (8, 12)      # [6/6] lướt cuối phiên
 KET_LIKE   = 1            # [6/6] like tối đa 1 bài — chỗ DUY NHẤT có like
 
+# Bốc bao nhiêu ứng viên so với số bài cần comment. Cần 10 bài thì lấy 20 link.
+#
+# Vì sao phải dư: link trong thư viện chết dần — đo thật 20–30% bài bị gỡ. Bốc
+# đúng 10 thì mỗi link chết là hụt đúng một bài, không có gì bù.
+#
+# Vì sao gấp 2 chứ không hơn: 20 ứng viên chịu được tới 50% link chết, cao hơn
+# hẳn mức 20–30% đo được. Lấy dư nữa chỉ tốn công đọc thư viện, mà hết 20 vẫn
+# chưa đủ 10 thì vấn đề nằm ở thư viện của Page đó chứ không phải ở số ứng viên
+# — cố vét thêm chỉ làm phiên dài ra mà vẫn hụt.
+UNG_VIEN_GAP = 2
+
 
 # Trần cứng cho một phiên comment.
 #
@@ -190,35 +201,6 @@ def chia_cau_cho_bai(bai: list, pool: list, so_cau: int,
         cum.append(day[i:i + k])
         i += k
     return ra_bai, cum
-
-
-def _bu_mot_bai(loai: str, page_uid: str, so_cau: int, pool: list,
-                da_thu_id: set, da_dung_nhom: set, rng=random):
-    """
-    Gặp link chết thì bốc MỘT link khác thay vào, trả `(bài, cụm_câu)` hoặc None.
-
-    Chỉ lấy bài CỦA CHÍNH PAGE NÀY — y như lượt bốc đầu phiên. Lấy bài của Page
-    lạ để cho đủ số là đúng thứ từng làm nick dính spam.
-
-    Loại trừ nhóm đã dùng trong phiên, không chỉ loại trừ bài đã thử: luật "mỗi
-    nhóm tối đa 1 link mỗi phiên" vẫn phải giữ khi bù. Hai comment từ cùng một
-    Page vào cùng một nhóm cách nhau vài phút là thứ admin nhóm để ý nhất — bù
-    cho đủ số mà phá luật đó thì lợi bất cập hại.
-
-    Hệ quả cần biết: số bài một phiên vẫn bị chặn trên bởi SỐ NHÓM mà Page đó
-    có trong thư viện. Đo 05/10, chỉ 4/12 Page có từ 10 nhóm trở lên.
-    """
-    ds = db.boc_bai_de_comment(loai, 1, page=page_uid,
-                               bo_qua_nhom=da_dung_nhom, bo_qua_id=da_thu_id)
-    if not ds:
-        return None
-    bai, cum = chia_cau_cho_bai(ds, pool, so_cau, page_uid, rng=rng)
-    if not bai:
-        return None
-    b = bai[0]
-    da_thu_id.add(b["id"])
-    da_dung_nhom.add((b.get("nhom") or "").strip() or f"__le_{b['id']}")
-    return (b, cum[0])
 
 
 def tach_cau(raw: str) -> list:
@@ -532,46 +514,63 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
         logger.warning(f"  ⏭️  Chưa có thư viện câu cho loại '{loai}' — bỏ phiên")
         return {"da_comment": 0, "loi": 0, "bo_qua": "thiếu thư viện câu"}
 
-    # Bài chính chủ đi trước, rồi LẤP ĐẦY bằng bài khác cùng hạng mục cho đủ số
-    # bài đã cài đặt. `page` là thứ tự ưu tiên chứ không phải bộ lọc cứng.
+    # Bốc DƯ ứng viên rồi mới comment lần lượt tới khi ĐỦ SỐ BÀI.
     #
-    # Trước đây lọc cứng nên acc yếu — chỉ đăng chéo được vào 1 nhóm, cả kho chỉ
-    # có 1 link của nó — mỗi phiên comment đúng 1 bài thay vì 10. Nhánh lùi về
-    # kho chung chỉ chạy khi có ĐÚNG 0 link chính chủ nên không cứu được ca đó.
+    # Trước đây bốc đúng 10 bài: gặp link chết là hụt đúng bấy nhiêu, không có
+    # gì bù. Nay bốc gấp đôi — 10 bài cần thì lấy 20 ứng viên — rồi đi lần lượt,
+    # đủ số thì dừng, link chết thì bỏ qua và dùng ứng viên kế tiếp.
+    #
+    # CHỈ lấy bài của chính Page này, y như cũ: lấy bài Page lạ cho đủ số là
+    # đúng thứ từng làm nick dính spam.
+    #
+    # Hết 20 ứng viên mà vẫn chưa đủ 10 thì dừng luôn, không đi bốc thêm —
+    # chết nhiều tới mức ấy thì thư viện của Page đó đang có vấn đề, cố vét cho
+    # đủ số chỉ làm phiên dài ra mà vẫn hụt.
     page_uid = _lay_page_uid(page_name)
-    bai = db.boc_bai_de_comment(loai, st["comment_so_bai"], page=page_uid)
+    muc_tieu = max(0, int(st["comment_so_bai"] or 0))
+    ung_vien = db.boc_bai_de_comment(loai, muc_tieu * UNG_VIEN_GAP, page=page_uid)
 
-    if not bai:
+    if not ung_vien:
         logger.warning(f"  ⏭️  Bỏ phiên — chưa có link nào trong danh sách '{loai}'")
         return {"da_comment": 0, "loi": 0, "bo_qua": "danh sách trống"}
 
     so_minh = max(0, int(st["comment_cau_chinh_chu"]))
-    bai, cum = chia_cau_cho_bai(bai, pool, so_minh, page_uid)
-    if not bai:
+    # Chia câu cho ĐÚNG SỐ BÀI CẦN, không chia cho cả 20 ứng viên: câu chỉ bị
+    # tiêu khi comment lên thật, nên giữ thành hàng đợi rồi lấy dần.
+    _bai_cau, cum = chia_cau_cho_bai(ung_vien[:muc_tieu], pool, so_minh, page_uid)
+    if not cum:
         logger.warning("  ⏭️  Bỏ phiên — số câu đang đặt 0")
         return {"da_comment": 0, "loi": 0, "bo_qua": "số câu đặt 0"}
+    muc_tieu = len(cum)
 
-    logger.info(f"  💬 Phiên comment: {len(bai)}/{st['comment_so_bai']} bài | "
-                f"{sum(len(c) for c in cum)} câu | thư viện {len(pool)} câu | "
-                f"tất cả là bài chính chủ ×{so_minh} câu")
+    logger.info(f"  💬 Phiên comment: cần {muc_tieu} bài | "
+                f"{len(ung_vien)} ứng viên | {sum(len(c) for c in cum)} câu | "
+                f"thư viện {len(pool)} câu | mỗi bài ×{so_minh} câu")
 
     ok_n, loi_n, cau_n = 0, 0, 0        # bài xong / bài hỏng / TỔNG CÂU đã lên
     chet = []                                  # link chết gặp trong phiên này
     chet_theo_acc = {}                         # acc đã đăng các bài chết đó
 
-    # Hàng đợi việc — DÀI THÊM ĐƯỢC. Gặp link chết thì bốc một link khác CŨNG
-    # CỦA PAGE NÀY nối vào cuối, để phiên vẫn comment đủ số bài đã đặt. Trước
-    # đây link chết chỉ bị xoá rồi bỏ trống chỗ, nên phiên hụt đúng bấy nhiêu
-    # bài mà không có gì bù.
-    viec = list(zip(bai, cum))
-    muc_tieu = len(viec)
-    da_thu_id   = {b["id"] for b, _ in viec}
-    da_dung_nhom = {(b.get("nhom") or "").strip() or f"__le_{b['id']}"
-                    for b, _ in viec}
-    # Câu cho link thay thế: bốc TRƯỚC và bốc từ phần pool chưa dùng, để comment
-    # thay thế không lặp lại đúng câu vừa dùng ở bài trước trong cùng phiên.
-    _da_dung_cau = {c for cc in cum for c in cc}
-    _con_cau = [c for c in pool if c not in _da_dung_cau] or pool
+    # Hàng đợi CÂU, tiêu dần. Link chết thì cụm câu của nó CHƯA tiêu — để
+    # nguyên cho ứng viên kế tiếp dùng. Nhờ vậy số câu luôn khớp số comment
+    # thật sự lên, không phí câu nào vào link chết.
+    hang_cau = list(cum)
+    # Nhóm đã comment THÀNH CÔNG trong phiên.
+    #
+    # KHÔNG dùng để chặn — Duong chốt 05/10: comment nhiều bài trong cùng một
+    # nhóm là được, chỉ cần DÀN TRẢI, hạn chế trùng chứ không cấm. Chặn cứng thì
+    # Page nào có ít nhóm hơn số bài cần là phiên hụt vĩnh viễn.
+    #
+    # Việc dàn trải do THỨ TỰ ỨNG VIÊN lo: `boc_bai_de_comment` trả về theo
+    # vòng — vòng 1 lấy một bài của mỗi nhóm, hết mới sang vòng 2. Nên cứ đi
+    # tuần tự là tự khắc phủ hết nhóm trước khi lặp lại nhóm nào.
+    #
+    # Giữ tập này chỉ để ĐẾM và báo ra log, cho thấy phiên có bị dồn nhóm không.
+    da_xong_nhom = set()
+    so_trung_nhom = 0
+
+    def _khoa_nhom(r):
+        return (r.get("nhom") or "").strip() or f"__le_{r['id']}"
 
     async with async_playwright() as p:
         ctx, page = await _open_context(p, acc_name, c_user, headless)
@@ -579,16 +578,21 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
             la_page = await _khoi_dong(page, ctx, page_uid)
             logger.info(f"  💬 Comment dưới danh nghĩa: "
                         f"{'Page ' + page_name if la_page else 'acc cá nhân ' + acc_name}")
-            i = 0
-            while i < len(viec):
-                b, cau_cum = viec[i]
-                i += 1
+            for b in ung_vien:
+                if ok_n >= muc_tieu or not hang_cau:
+                    break                      # đủ số bài → dừng
+                cau_cum = hang_cau[0]
                 try:
                     n_gui = await _comment_mot_bai(page, ctx, b["url"], cau_cum)
                     # so_lan phải cộng ĐÚNG số câu đã lên, không phải cộng 1 mỗi
                     # bài: nó là khoá xếp hạng "bài nào ít comment nhất đi trước",
                     # đếm thiếu thì bài chính chủ cứ được bốc lại mãi.
                     db.ghi_nhan_comment(b["id"], True, so_cau=n_gui)
+                    hang_cau.pop(0)            # câu đã lên thật → mới tiêu
+                    _nh = _khoa_nhom(b)
+                    if _nh in da_xong_nhom:
+                        so_trung_nhom += 1
+                    da_xong_nhom.add(_nh)
                     ok_n   += 1
                     cau_n  += n_gui
                     if ok_n == 1:
@@ -619,16 +623,9 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
                                    f"→ bài do '{_cua}' đăng → {b['url']}")
                     if _cua != "?":
                         chet_theo_acc[_cua] = chet_theo_acc.get(_cua, 0) + 1
-                    # Bù lại một link khác CŨNG CỦA PAGE NÀY, nhóm chưa dùng.
-                    _them = _bu_mot_bai(loai, page_uid, so_minh, _con_cau,
-                                        da_thu_id, da_dung_nhom)
-                    if _them:
-                        viec.append(_them)
-                        logger.info(f"    ↩️  Thay bằng link khác cùng Page "
-                                    f"→ ...{_them[0]['url'][-32:]}")
-                    else:
-                        logger.warning("    ⚠️  Hết link thay thế cho Page này "
-                                       "— phiên sẽ thiếu 1 bài")
+                    # KHÔNG tiêu cụm câu, KHÔNG đánh dấu nhóm đã xong: ứng viên
+                    # kế tiếp sẽ dùng đúng cụm câu này. Link chết không được
+                    # phép ăn mất một suất comment.
                 except CommentRestricted as e:
                     db.ghi_nhan_comment(b["id"], False, "bị chặn")
                     logger.error(f"    ⛔ Dừng phiên: {e} "
@@ -646,13 +643,13 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
                     # báo tiến trình chỉ để nhìn cho biết.
                     try:
                         # Báo theo SỐ BÀI ĐÃ COMMENT XONG trên mục tiêu, không
-                        # theo chỉ số hàng đợi: hàng đợi dài thêm mỗi lần bù
-                        # link chết, nhìn "12/10" thì tưởng hỏng.
+                        # theo số ứng viên đã duyệt: duyệt 20 ứng viên cho 10
+                        # bài, nhìn "14/10" thì tưởng hỏng.
                         tien_trinh(min(ok_n, muc_tieu), muc_tieu)
                     except Exception:
                         pass
 
-                if i < len(viec):
+                if ok_n < muc_tieu:
                     await asyncio.sleep(random.uniform(st["comment_nghi_min"],
                                                        st["comment_nghi_max"]))
             # Chỉ kết phiên tử tế khi đã comment được ít nhất một bài. Đang bị
@@ -665,8 +662,16 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
             except Exception:
                 pass
 
-    logger.info(f"  ✅ Xong phiên comment — {ok_n} bài / {cau_n} câu, "
-                f"{loi_n} lỗi, {len(chet)} link chết")
+    # Báo luôn độ DÀN TRẢI: bao nhiêu nhóm khác nhau, và bao nhiêu lượt rơi
+    # trùng nhóm. Trùng nhóm không phải lỗi, nhưng số đó tăng dần là dấu hiệu
+    # thư viện của Page đang hẹp lại — nhìn log thấy sớm hơn là đi dò sau.
+    logger.info(f"  ✅ Xong phiên comment — {ok_n}/{muc_tieu} bài / {cau_n} câu, "
+                f"{len(da_xong_nhom)} nhóm khác nhau"
+                + (f", {so_trung_nhom} lượt trùng nhóm" if so_trung_nhom else "")
+                + f", {loi_n} lỗi, {len(chet)} link chết")
+    if ok_n < muc_tieu:
+        logger.warning(f"  ⚠️  Hụt {muc_tieu - ok_n} bài — đã duyệt hết "
+                       f"{len(ung_vien)} ứng viên của Page này")
     if chet:
         # In hẳn ra log để người dùng biết mà dọn, không phải mở app mới thấy.
         logger.warning(f"  💀 {len(chet)} link chết — ĐÃ XOÁ khỏi danh sách:")
