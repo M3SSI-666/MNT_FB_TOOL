@@ -10,6 +10,64 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.35.0 — 05/10/2026
+
+**Sửa lỗi nặng: phiên comment chưa hề dò spam, suốt 13 ngày**
+
+Bước kết phiên có một dòng đọc biến không tồn tại. Dòng ấy nằm trong khối bắt
+lỗi chung nên lỗi bị nuốt thành một dòng ghi chú hiền lành *"Kết phiên không
+trọn vẹn"*, và **bước dò cảnh báo gỡ bài ngay bên dưới không bao giờ chạy tới**.
+
+Log xác nhận: **178 lần hỏng trên 184 phiên comment**. Đây là lời giải cho con
+số 209 phiên comment mà bắt được 0 vụ spam.
+
+Lỗi có từ 22/09. Nay mốc "đã đưa nội dung lên" đánh **ngay khi câu comment đầu
+tiên lên** thay vì cuối phiên — đánh ở cuối là muộn, cảnh báo thấy giữa phiên
+sẽ bị loại oan. Cửa sổ dò thực đo: **~3,8 phút** (trung vị trên 188 phiên).
+
+Kèm công cụ quét toàn bộ mã nguồn tìm đúng loại lỗi này, chạy cùng bộ kiểm thử.
+
+---
+
+**Thấy popup cảnh báo giữa phiên đăng là DỪNG NGAY**
+
+Trước đây cảnh báo chỉ được tổng kết ở *cuối* phiên — tức acc đang bị Facebook
+sờ vẫn đăng xong bài rồi mới biết.
+
+Nay sau khi chui vào Page, phần mềm dò ở **3 chặng**: vừa chuyển sang Page, vừa
+soạn xong bài, và **ngay trước khi bấm Đăng**. Thấy popup gỡ bài / **gỡ bình
+luận** / spam là gắn cờ cho đúng acc đang chạy phiên và dừng luôn, không đăng
+tiếp. Slot còn lại chuyển sang nuôi nick, một tiếng sau nhử lại.
+
+Chặng cuối đáng giá nhất: dừng *trước khi* nội dung đi ra ngoài. Sau cú bấm thì
+bài đã lên, dừng cũng không rút lại được.
+
+Hộp "Sự việc" bật sẵn từ lúc đăng nhập **không** bị tính — đó là chuyện của
+phiên trước. Và chữ "spam" một mình không đủ để dừng: phải đúng là hộp cảnh báo
+vi phạm, nếu không thì mọi trang trợ giúp nhắc tới spam đều làm dừng phiên oan.
+
+---
+
+**Phiên comment: bốc dư link để comment cho đủ số bài**
+
+Trước đây bốc đúng 10 link — gặp link chết là hụt đúng bấy nhiêu bài, không có
+gì bù. Và luật "mỗi nhóm tối đa 1 link" chặn cứng, nên Page nào ít nhóm hơn số
+bài cần thì **vĩnh viễn** không bao giờ comment đủ.
+
+Nay cần 10 bài thì **bốc 20 link**, đi lần lượt, đủ 10 là dừng. Link chết thì bỏ
+qua và dùng link kế tiếp. Chịu được tới 50% link chết, cao hơn hẳn mức 20–30%
+đo được.
+
+Trùng nhóm nay chỉ **hạn chế**, không cấm: danh sách link trả về theo từng vòng
+— vòng 1 lấy một bài của mỗi nhóm, hết mới sang vòng 2 — nên tự khắc phủ hết các
+nhóm trước khi lặp lại nhóm nào. Log cuối phiên báo rõ *bao nhiêu nhóm khác
+nhau* và *bao nhiêu lượt trùng nhóm*.
+
+**Vẫn tuyệt đối không comment bài của Page khác** — hai tầng lọc cứng giữ
+nguyên. Hết bài chính chủ thì phiên để trống chứ không vơ bừa.
+
+---
+
 ## v2.34.1 — 04/10/2026
 
 **Mỗi phiên đăng tự ghi thời lượng vào log**
