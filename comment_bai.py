@@ -56,7 +56,12 @@ import db
 
 # Giá trị mặc định — sửa được qua bảng settings / modal Cài đặt comment.
 DEFAULTS = {
-    "comment_so_bai":    9,     # số bài mỗi phiên (≤ số nhóm trong danh sách)
+    # Số bài mỗi phiên.
+    #
+    # Từng là 9, vì luật cũ cho mỗi nhóm đúng 1 link mỗi phiên mà một đợt đăng
+    # chéo chỉ phủ ~9 nhóm — đặt 10 cũng không bao giờ đạt tới. Luật ấy bỏ ngày
+    # 05/10 (trùng nhóm nay chỉ hạn chế, không cấm) nên trần đó không còn.
+    "comment_so_bai":    10,
     # Nghỉ giữa 2 bài (giây). Để một KHOẢNG chứ không một số cố định: comment
     # đều tăm tắp đúng một nhịp là dấu hiệu máy, chính thứ utils.jitter_ms sinh
     # ra để tránh.
