@@ -10,6 +10,52 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.35.1 — 05/10/2026
+
+**Mỗi phiên comment nay làm 10 bài thay vì 9**
+
+9 là con số của luật cũ: mỗi nhóm chỉ được comment 1 lần mỗi phiên, mà một đợt
+đăng chéo chỉ phủ ~9 nhóm — nên 9 là **trần vật lý**, đặt 10 cũng không bao giờ
+chạm tới. Luật ấy bỏ ở bản 2.35.0 nên trần đó không còn.
+
+Đo sức chứa thật (xin 20 link cho 10 bài): **11/12 Page** trả về đủ 20, thừa sức
+làm 10 bài. Một Page còn lại chỉ có 8 link trong cả thư viện nên tối đa 8 bài —
+nó thiếu **link**, không phải thiếu nhóm; muốn đủ 10 thì phải cho Page đó đăng
+được vào nhiều nhóm hơn.
+
+---
+
+### Chốt lại hai luồng chính sau đợt sửa 03–05/10
+
+**Phiên đăng Hybrid — khoảng 190 giây, 5 bước**
+
+Đăng nhập → lướt newsfeed cá nhân → chuyển vai sang Page → vào nhóm, dán nội
+dung, tải ảnh → thêm nhóm, tick, Đăng → lướt feed Page 72–78 giây và thả tim 1
+bài → đọc trang thông báo lấy 10 link mới nhất → dò cảnh báo gỡ bài.
+
+Quãng lướt feed sau khi đăng làm ba việc một lúc nên không cắt được: hạ nhiệt,
+chờ thông báo đăng chéo về, và làm cửa sổ để phát hiện acc bị gỡ bài. Cắt nó
+chính là lỗi của bản 2.33.0, đã sửa.
+
+**Phiên comment — khoảng 5–6 phút, 10 bài**
+
+Bốc 20 link của **chính Page mình** → comment lần lượt, mỗi bài 2 câu → đủ 10
+thì dừng; link chết thì bỏ qua, xoá khỏi thư viện và dùng link kế tiếp → lướt
+newsfeed, thả tim 1 bài → dò cảnh báo.
+
+Link trả về theo từng vòng nên tự dàn trải: phủ hết các nhóm rồi mới lặp lại
+nhóm nào. Chạy thật ngày 05/10 trên một nick: **9/9 bài vào 9 nhóm khác nhau,
+0 lỗi, 0 link chết**.
+
+**Dò spam, dùng chung cho cả hai luồng**
+
+Vòng canh nền quét mỗi 5 giây suốt phiên, thấy hộp cảnh báo thì ghi lại chữ rồi
+mới đóng. Trong phiên đăng, thấy popup gỡ bài / gỡ bình luận / spam sau khi đã
+vào Page là **dừng ngay**, không đăng tiếp. Cuối phiên còn một lượt dò tổng kết.
+Cả hai luồng đều gắn cờ cho **đúng acc đang chạy phiên đó**.
+
+---
+
 ## v2.35.0 — 05/10/2026
 
 **Sửa lỗi nặng: phiên comment chưa hề dò spam, suốt 13 ngày**
