@@ -551,6 +551,8 @@ def upsert_account(data: dict) -> int:
     # của 4 bảng khác — lệch một dấu cách là tra cứu theo tên trượt sạch.
     if isinstance(data.get("ten_acc"), str):
         data = {**data, "ten_acc": data["ten_acc"].strip()}
+    if "c_user" in data:
+        _chan_c_user_la_page(data["c_user"])
     cols   = [k for k in data if k != "id"]
     placeholders = ", ".join(["?"] * len(cols))
     values = [data[c] for c in cols]
@@ -594,6 +596,31 @@ def acc_trung_c_user(acc_id: int) -> list[str]:
             "ORDER BY order_idx, id", (cu, acc_id))]
 
 
+def page_trung_c_user(c_user: str) -> str:
+    """Tên Page có UID trùng `c_user`, hoặc "" nếu không trùng.
+
+    `c_user` là ID NICK CÁ NHÂN, không bao giờ là ID một Page. Dán nhầm ID Page
+    vào đây thì cookie dựng ra bị Facebook từ chối, phần mềm báo "Cookie hết
+    hạn" dù xs vẫn tốt. Gặp thật 03/10: 'Alex Tường' mang c_user = UID Page
+    'Long Sơn' suốt 3 ngày, mọi phiên đăng / nuôi / tham gia nhóm đều hỏng —
+    thử cùng xs đó với ID nick thật thì vào được ngay.
+    """
+    cu = (c_user or "").strip()
+    if not cu:
+        return ""
+    with _conn() as con:
+        r = con.execute("SELECT ten_page FROM pages WHERE TRIM(page_uid)=? LIMIT 1",
+                        (cu,)).fetchone()
+    return ((r["ten_page"] or cu) if r else "")
+
+
+def _chan_c_user_la_page(c_user):
+    ten = page_trung_c_user(str(c_user or ""))
+    if ten:
+        raise ValueError(f"c_user {str(c_user).strip()} là UID của Page '{ten}' — "
+                         f"c_user phải là ID nick cá nhân (xem link trang cá nhân)")
+
+
 def update_account_field(acc_id: int, field: str, value: str):
     safe = {
         "ten_acc","loai_dang","thoi_gian_nghi","link_profile","email_sdt",
@@ -611,6 +638,8 @@ def update_account_field(acc_id: int, field: str, value: str):
         if value not in LOAI_DANG_OPTIONS:
             raise ValueError(f"Loại đăng không hợp lệ: '{value}' "
                              f"(chỉ nhận: {', '.join(x or '(trống)' for x in LOAI_DANG_OPTIONS)})")
+    if field == "c_user":
+        _chan_c_user_la_page(value)
     cu, ten_acc = "", ""
     with _conn() as con:
         # Đọc trạng thái CŨ trước khi ghi đè. Cửa này là nơi cả giao diện lẫn

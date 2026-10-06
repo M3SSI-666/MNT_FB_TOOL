@@ -4051,6 +4051,51 @@ check("thiếu c_user/xs -> báo lỗi, không mở trình duyệt",
 check("có đọc UID thật từ mã trang", '"USER_ID"' in _src_thu)
 check("có so UID với c_user đang lưu", "uid != c_user" in _src_thu)
 
+# ── c_user KHÔNG được là UID một Page ──────────────────────────────────────
+# Gặp thật 03/10: 'Alex Tường' mang c_user = UID Page 'Long Sơn' suốt 3 ngày,
+# Facebook từ chối cookie nên mọi phiên báo "Cookie hết hạn" dù xs vẫn tốt.
+_pid_cu = db.upsert_page({"ten_page": "Page Chan CU", "page_uid": "61599999999002"})
+_aid_cu = db.upsert_account({"ten_acc": "Acc Chan CU", "c_user": "100000000000001",
+                             "trang_thai": "Active"})
+check("nhận ra c_user trùng UID Page", db.page_trung_c_user(" 61599999999002 ") == "Page Chan CU")
+check("c_user nick thường không bị coi là Page", db.page_trung_c_user("100000000000001") == "")
+try:
+    db.update_account_field(_aid_cu, "c_user", "61599999999002")
+    _chan_o = False
+except ValueError as _e_cu:
+    _chan_o = "Page Chan CU" in str(_e_cu)
+check("sửa ô c_user thành UID Page bị CHẶN, báo tên Page", _chan_o)
+check("bị chặn thì c_user cũ giữ nguyên",
+      (db.get_account_by_id(_aid_cu) or {}).get("c_user") == "100000000000001")
+try:
+    db.upsert_account({"id": _aid_cu, "ten_acc": "Acc Chan CU", "c_user": "61599999999002"})
+    _chan_form = False
+except ValueError:
+    _chan_form = True
+check("form Thêm/Sửa với c_user = UID Page bị CHẶN", _chan_form)
+db.update_account_field(_aid_cu, "c_user", "100000000000002")
+check("sửa c_user sang ID nick khác vẫn được",
+      (db.get_account_by_id(_aid_cu) or {}).get("c_user") == "100000000000002")
+_r_cu = _client.post(f"/api/accounts/{_aid_cu}/field",
+                     json={"field": "c_user", "value": "61599999999002"}).get_json()
+check("API sửa ô trả lỗi rõ ràng cho giao diện",
+      _r_cu.get("ok") is False and "UID của Page" in (_r_cu.get("error") or ""))
+db.delete_account(_aid_cu)
+with db._conn() as _c_cu:
+    _c_cu.execute("DELETE FROM pages WHERE id=?", (_pid_cu,))
+
+# Runner tham gia nhóm: _update_status gọi KHÔNG kèm cột nào (nhánh "Cookie hết
+# hạn") từng sinh "SET trang_thai=?,  WHERE" — lỗi cú pháp, che mất lỗi thật và
+# chặn luôn bước đánh dấu acc + báo Telegram. Gặp thật 03/10–06/10.
+_src_jr_cu = Path("join_groups_runner.py").read_text(encoding="utf-8")
+check("cập nhật trạng thái lịch không kèm cột vẫn đúng cú pháp",
+      'sets = "".join(f", {k}=?" for k in kwargs)' in _src_jr_cu
+      and 'SET trang_thai=?{sets} WHERE id=?' in _src_jr_cu)
+_re_cu = __import__("re")
+check("không còn chỗ nào ghép ', {sets}' cứng sau một cột cố định",
+      not _re_cu.search(r'SET \w+=\?, \{sets\}', _src_jr_cu + Path("db.py").read_text(encoding="utf-8")
+                        + Path("server.py").read_text(encoding="utf-8")))
+
 # ── Trùng c_user giữa hai dòng ─────────────────────────────────────────────
 # Dán nhầm CẢ CẶP c_user + xs của nick A vào dòng nick B thì cookie hợp lệ, và
 # phép đối chiếu UID ở trên cũng khớp (Facebook trả về A, ô c_user cũng ghi A).

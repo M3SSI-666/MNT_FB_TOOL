@@ -656,10 +656,15 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
     _log("info", f"📋 Tổng {total} nhóm cần kiểm tra")
 
     def _update_status(status, **kwargs):
+        # Mỗi cột tự mang dấu phẩy của nó. Bản cũ ghép ", {sets}" cứng nên gọi
+        # KHÔNG kèm cột nào ra "SET trang_thai=?,  WHERE" — lỗi cú pháp. Đúng
+        # nhánh "Cookie hết hạn" gọi như vậy: bảng hiện `near "WHERE": syntax
+        # error`, và phần đánh dấu acc + báo Telegram ngay sau đó không bao giờ
+        # chạy. Gặp thật 03/10–06/10 với nick 'Alex Tường'.
         with _conn() as con:
-            sets = ", ".join(f"{k}=?" for k in kwargs)
+            sets = "".join(f", {k}=?" for k in kwargs)
             vals = list(kwargs.values()) + [schedule_id]
-            con.execute(f"UPDATE join_schedules SET trang_thai=?, {sets} WHERE id=?",
+            con.execute(f"UPDATE join_schedules SET trang_thai=?{sets} WHERE id=?",
                         [status] + vals)
 
     # da_roi về 0 ngay từ đầu: để nguyên là số của lượt TRƯỚC còn hiện trên

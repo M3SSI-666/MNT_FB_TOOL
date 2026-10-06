@@ -1275,18 +1275,23 @@ async function startAccEdit(td){
 
     const inp=document.createElement("input"); inp.type="text"; inp.value=val==="-"?"":val;
     td.innerHTML=""; td.appendChild(inp); inp.focus(); inp.select();
-    async function commit(){
-        const nv=inp.value; td.classList.remove("editing");
+    // Vẽ ô theo giá trị `v` — dùng cả lúc lưu lẫn lúc hoàn tác khi server từ
+    // chối. Không hoàn tác thì ô vẫn hiện giá trị bị từ chối, nhìn như đã lưu.
+    function ve(v){
         const secret=ACC_SECRET_FIELDS.includes(field);
         // Không giữ credential trong DOM sau khi sửa xong — che lại ngay.
-        td.dataset.val = secret ? (nv?ACC_SECRET_MASK:"") : nv;
-        if(field==="link_profile") td.innerHTML=nv?`<a href="${nv}" target="_blank" style="color:var(--accent);font-size:12px">🔗</a>`:"-";
-        else if(secret) td.textContent=nv?ACC_SECRET_MASK:"-";
-        else td.textContent=nv||"-";
+        td.dataset.val = secret ? (v?ACC_SECRET_MASK:"") : v;
+        if(field==="link_profile") td.innerHTML=v?`<a href="${v}" target="_blank" style="color:var(--accent);font-size:12px">🔗</a>`:"-";
+        else if(secret) td.textContent=v?ACC_SECRET_MASK:"-";
+        else td.textContent=v||"-";
+    }
+    async function commit(){
+        const nv=inp.value; td.classList.remove("editing");
+        ve(nv);
         if(nv===val) return;
         td.classList.add("saving");
-        try{ const r=await API.updateAccField(parseInt(id),field,nv); td.classList.remove("saving"); if(r.ok){td.classList.add("saved");setTimeout(()=>td.classList.remove("saved"),1200);} else Toast.error(r.error); }
-        catch(e){ td.classList.remove("saving"); Toast.error(e.message); }
+        try{ const r=await API.updateAccField(parseInt(id),field,nv); td.classList.remove("saving"); if(r.ok){td.classList.add("saved");setTimeout(()=>td.classList.remove("saved"),1200);} else { Toast.error(r.error); ve(val); } }
+        catch(e){ td.classList.remove("saving"); Toast.error(e.message); ve(val); }
     }
     inp.addEventListener("blur",commit);
     inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault();inp.blur();} if(e.key==="Escape"){inp.value=val;inp.blur();} });
