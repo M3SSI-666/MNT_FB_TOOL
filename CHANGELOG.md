@@ -10,6 +10,60 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.35.2 — 06/10/2026
+
+**Sửa: nick bị "5 lỗi liên tiếp — không mở được ô soạn bài" trong khi đăng nhập
+bằng tay thì vẫn mở được**
+
+Nguyên nhân nằm ở bước **chuyển vai sang Page**, không phải ở nick cũng không
+phải ở nhóm. Phần mềm chờ trang Page khoảng 2–4 giây rồi tìm nút "Chuyển ngay"
+**đúng một lượt**. Nút đó do trang tự dựng bằng JavaScript — máy hoặc mạng chậm
+là nó chưa kịp hiện, phần mềm bỏ qua luôn và chỉ tiêm cookie. Tiêm cookie mà
+không bấm nút là **chuyển vai nửa vời**: vào nhóm thì ô soạn bài của Page không
+dựng ra.
+
+Đo trên **876 phiên** hai ngày 05–06/10:
+
+| | số phiên | hỏng composer | tỉ lệ |
+|---|---|---|---|
+| Bấm được nút "Chuyển ngay" | 833 | 3 | **0,4%** |
+| Không bấm được | 52 | 9 | **17,3%** |
+
+Gấp **43 lần**. Đã loại trừ các khả năng khác bằng số liệu: không phải lỗi nhóm
+(3 nick khác dùng đúng nhóm ấy vẫn đăng được cùng khung giờ), không phải lỗi máy
+(59 phiên của nick khác trong khung giờ đó đều chạy), không phải mất tư cách
+thành viên, không phải hỏng cách dò nút.
+
+**Nay sửa hai chỗ:**
+
+- Tìm nút "Chuyển ngay" **thử 2 lượt**, cách nhau khoảng 2,5 giây. Chỉ tốn thêm
+  thời gian đúng trong trường hợp đang hỏng.
+- Không mở được ô soạn bài thì **chuyển vai lại, vào lại nhóm, thử thêm một
+  lượt** rồi mới chịu thua.
+
+Chỗ thứ hai mới là chỗ quan trọng: mỗi nick chỉ dùng **một nhóm** làm cửa vào,
+nên hỏng ở bước này là **hỏng toàn bộ slot của nick đó**. Hai ngày qua có hai
+nick bị cho nghỉ đúng vì chuyện này.
+
+---
+
+**Sửa: tham gia nhóm báo lỗi SQL thay vì "Cookie hết hạn"**
+
+Nhánh báo "Cookie hết hạn" của runner tham gia nhóm gọi thiếu cột nên sinh câu
+lệnh SQL sai cú pháp. Bảng hiện `near "WHERE": syntax error` thay cho lỗi thật,
+và phần đánh dấu acc "Cookie hết hạn" rồi báo Telegram ngay sau đó **không bao
+giờ chạy** — nên tab Tài khoản vẫn ghi Active.
+
+Nguyên nhân gốc: ô **c_user** của một nick mang nhầm UID của một Page thay vì ID
+nick, từ khoảng 03/10. Facebook từ chối cookie nên mọi phiên đăng / nuôi / tham
+gia nhóm của nick đó đều báo "Cookie hết hạn" suốt 3 ngày.
+
+Nay nhập vào ô c_user một giá trị trùng UID của Page nào đó thì **bị từ chối**,
+báo rõ tên Page, và ô trả về giá trị cũ — trước đây ô vẫn hiện giá trị sai, nhìn
+như đã lưu.
+
+---
+
 ## v2.35.1 — 05/10/2026
 
 **Mỗi phiên comment nay làm 10 bài thay vì 9**
