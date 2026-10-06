@@ -1152,6 +1152,31 @@ check("tiến trình báo theo mục tiêu, không theo số ứng viên",
       "tien_trinh(min(ok_n, muc_tieu), muc_tieu)" in _src_cb3)
 check("hụt bài thì báo rõ ra log", "Hụt {muc_tieu - ok_n} bài" in _src_cb3)
 
+# ── Không mở được composer thì CHUYỂN VAI LẠI, đừng bỏ cuộc ────────────────
+# Đo trên log 876 phiên ngày 05-06/10:
+#     bấm được nút "Chuyển ngay" -> hỏng composer   3/833 = 0,4%
+#     KHÔNG bấm được             -> hỏng composer   9/52  = 17,3%  (gấp 43 lần)
+# Chỉ tiêm cookie i_user mà không bấm nút là chuyển vai không trọn vẹn, vào
+# nhóm thì ô soạn bài của Page không dựng ra. Mở đúng nhóm ấy bằng tay — cả vai
+# cá nhân lẫn vai Page — thì composer hiện bình thường, tức nhóm và acc không
+# sao. Mỗi nick chỉ dùng MỘT nhóm làm cửa vào nên bỏ cuộc ở đây là chết cả nick.
+_src_pvp4 = Path("page_via_poster.py").read_text(encoding="utf-8")
+check("tìm nút 'Chuyển ngay' thử 2 lượt",
+      "for _lan in range(2):" in _src_pvp4
+      and "Không thấy nút 'Chuyển ngay' sau 2 lượt" in _src_pvp4)
+check("không mở được composer thì chuyển vai lại rồi thử tiếp",
+      "chuyển vai Page lại rồi thử lần nữa" in _src_pvp4
+      and "Mở được composer sau khi chuyển vai lại" in _src_pvp4)
+# Lần thử lại phải ĐỨNG TRƯỚC chỗ ném lỗi, nếu không thì vô nghĩa.
+_i_thu_lai = _src_pvp4.index("chuyển vai Page lại rồi thử lần nữa")
+_i_nem     = _src_pvp4.index('raise LoiBuoc(f"Không mở được ô soạn bài')
+check("thử lại TRƯỚC khi bỏ cuộc", _i_thu_lai < _i_nem)
+# Và phải chuyển vai thật, không chỉ tải lại trang — chính cú chuyển vai mới là
+# thứ còn thiếu.
+_doan = _src_pvp4[_i_thu_lai:_i_nem]
+check("lần thử lại có gọi _switch_to_page",
+      "await _switch_to_page(page, ctx, page_uid)" in _doan)
+
 # ── Thấy popup giữa phiên đăng thì DỪNG NGAY ───────────────────────────────
 # Duong chốt 05/10: sau khi chui vào Page mà thấy popup gỡ bài / gỡ bình luận /
 # spam thì gán cờ cho acc đang chạy phiên và dừng luôn, không đăng tiếp.

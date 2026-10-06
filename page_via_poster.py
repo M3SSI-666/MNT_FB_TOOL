@@ -174,9 +174,30 @@ async def _switch_to_page(page, ctx, page_uid: str) -> bool:
         logger.info("    [Switch] Dismissed popup 'Dùng Trang'")
 
     # c) Click "Chuyển ngay" nếu xuất hiện
-    if await _bam_nut(page, "Chuyển ngay"):
-        await _jwait(page, 1500)
-        logger.info("    [Switch] Clicked 'Chuyển ngay'")
+    #
+    # Thử LẠI một lượt khi lượt đầu không thấy nút. Trang Page chỉ được chờ
+    # ~2-4 giây sau domcontentloaded, mà nút này do JavaScript dựng nên — máy
+    # chậm hoặc mạng chậm là nó chưa kịp hiện, và bản cũ bỏ qua luôn.
+    #
+    # Đo trên log 876 phiên: bấm được nút thì hỏng composer 3/833 = 0,4%;
+    # KHÔNG bấm được thì hỏng 9/52 = 17,3% — gấp 43 lần. Chỉ tiêm cookie i_user
+    # mà không bấm nút là chuyển vai không trọn vẹn, vào nhóm thì ô soạn bài
+    # của Page không dựng ra.
+    bam_duoc = False
+    for _lan in range(2):
+        if await _bam_nut(page, "Chuyển ngay"):
+            await _jwait(page, 1500)
+            bam_duoc = True
+            logger.info(f"    [Switch] Clicked 'Chuyển ngay'"
+                        + (" (lượt 2)" if _lan else ""))
+            break
+        if _lan == 0:
+            await _jwait(page, 2500)     # chờ nút kịp dựng rồi thử lại
+    if not bam_duoc:
+        # Không phải lúc nào cũng là lỗi: acc đã ở sẵn vai Page từ phiên trước
+        # thì nút này vốn không hiện. Nhưng ghi lại để còn đối chiếu khi phiên
+        # hỏng ở bước mở composer.
+        logger.info("    [Switch] ⚠️  Không thấy nút 'Chuyển ngay' sau 2 lượt")
 
     # d) Click "Chuyển" trong popup xác nhận
     switched = await _bam_nut(page, "Chuyển", "Switch", trong_dialog=True)
@@ -345,6 +366,46 @@ async def _run_page_via(
             da_don = await dong_hop_cookie(page)
             if not (da_don or await dong_dialog_canh_bao(page)):
                 break
+        if not opened:
+            # CHUYỂN VAI LẠI RỒI THỬ TIẾP, đừng bỏ cuộc ở đây.
+            #
+            # Triệu chứng này gần như luôn là chuyển vai Page không trọn vẹn
+            # chứ không phải acc bị chặn. Đo trên log 876 phiên: phiên bấm được
+            # nút "Chuyển ngay" hỏng composer 0,4%, phiên không bấm được hỏng
+            # 17,3%. Và mở đúng nhóm ấy bằng tay — cả vai cá nhân lẫn vai Page —
+            # thì ô soạn bài hiện bình thường, tức nhóm và acc đều không sao.
+            #
+            # Hậu quả của việc bỏ cuộc: mỗi nick chỉ dùng MỘT nhóm làm cửa vào,
+            # nên hỏng ở đây là hỏng toàn bộ slot của nick đó. Ngày 05-06/10 có
+            # hai nick bị cho nghỉ vì "5 lỗi liên tiếp" đúng kiểu này.
+            logger.warning("  ⚠️  Chưa mở được composer — chuyển vai Page lại rồi thử lần nữa")
+            try:
+                await _switch_to_page(page, ctx, page_uid)
+                await page.goto(group_url, wait_until="domcontentloaded", timeout=30000)
+                await _human_delay(3000, 5000)
+                await dong_hop_cookie(page)
+                await dong_dialog_canh_bao(page)
+                for sel in [
+                    ':text("Bạn viết gì đi")', ':text("Write something")',
+                    ':text("Bạn đang nghĩ gì?")',
+                    "div[role='button']:has-text('Tạo bài viết')",
+                    "[aria-label='Tạo bài viết']", "[aria-label='Create post']",
+                ]:
+                    try:
+                        el = await page.wait_for_selector(sel, timeout=5000, state="visible")
+                        if el:
+                            await el.hover()
+                            await _human_delay(400, 700)
+                            await el.click()
+                            await _human_delay(2000, 3000)
+                            opened = True
+                            logger.info("  ✅ Mở được composer sau khi chuyển vai lại")
+                            break
+                    except PWTimeout:
+                        continue
+            except Exception as e:
+                logger.warning(f"  ⚠️  Chuyển vai lại cũng hỏng: {e}")
+
         if not opened:
             logger.error(f"  ❌ Không mở được composer!")
             await ctx.close()
