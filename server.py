@@ -237,51 +237,6 @@ def api_versions():
     })
 
 
-@app.route("/api/profiles")
-def api_profiles():
-    """Liệt kê thư mục profile, đã xếp nhóm. CHỈ ĐỌC."""
-    from fb_common import phan_loai_profile
-    ds = phan_loai_profile(get_accounts())
-    return jsonify({"ok": True, "data": ds,
-                    "so_acc": len(get_accounts()),
-                    "xoa_duoc_mb": round(sum(x["mb"] for x in ds if x["xoa_duoc"]), 1)})
-
-
-@app.route("/api/profiles/xoa", methods=["POST"])
-def api_profiles_xoa():
-    """
-    Xoá các thư mục profile người dùng đã tích chọn.
-
-    KHÔNG nhận tên thư mục rồi xoá thẳng. Phân loại lại ngay tại đây rồi chỉ xoá
-    những cái CÓ TRONG danh sách được phép — bảng trên giao diện có thể cũ vài
-    phút, mà trong khoảng đó một thư mục `trùng` hoàn toàn có thể đã thành
-    `đang dùng` (người dùng vừa sửa c_user). Xoá theo bảng cũ là xoá mất phiên
-    đăng nhập đang chạy.
-    """
-    import shutil
-    from fb_common import phan_loai_profile, PROFILES_DIR
-
-    xin = set((request.get_json(silent=True) or {}).get("ten") or [])
-    if not xin:
-        return jsonify({"ok": False, "error": "Chưa chọn thư mục nào."})
-
-    cho_phep = {x["ten"] for x in phan_loai_profile(get_accounts()) if x["xoa_duoc"]}
-    tu_choi  = sorted(xin - cho_phep)
-    xoa, loi = [], []
-    for ten in sorted(xin & cho_phep):
-        p = os.path.join(str(PROFILES_DIR), ten)
-        try:
-            shutil.rmtree(p)
-            xoa.append(ten)
-        except Exception as e:
-            loi.append(f"{ten}: {e}")
-
-    if xoa:
-        logger.info(f"🧹 Đã xoá {len(xoa)} thư mục profile: {', '.join(xoa[:5])}"
-                    + (f" …và {len(xoa)-5} cái nữa" if len(xoa) > 5 else ""))
-    return jsonify({"ok": True, "da_xoa": len(xoa), "tu_choi": tu_choi, "loi": loi})
-
-
 @app.route("/api/update", methods=["POST"])
 def api_update():
     xin = (request.json or {}).get("version", "").strip()

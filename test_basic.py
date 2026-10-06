@@ -1239,18 +1239,75 @@ with _tf3.TemporaryDirectory() as _d4:
     finally:
         _fbc4.PROFILES_DIR = _goc_pf2
 
-_src_srv_pf = Path("server.py").read_text(encoding="utf-8")
-# Máy chủ KHÔNG được tin danh sách tên do giao diện gửi lên: bảng trên màn hình
-# có thể cũ vài phút, mà trong khoảng đó một thư mục 'trùng' hoàn toàn có thể
-# đã thành 'đang dùng' vì người dùng vừa sửa c_user.
-check("server phân loại LẠI trước khi xoá, không tin bảng của giao diện",
-      "cho_phep = {x[\"ten\"] for x in phan_loai_profile(get_accounts()) if x[\"xoa_duoc\"]}"
-      in _src_srv_pf and "xin & cho_phep" in _src_srv_pf)
-_src_ajs_pf = Path("static/js/app.js").read_text(encoding="utf-8")
-# Nút "tích tất cả" chỉ được đụng vào ô CÒN BẬT.
-check("tích tất cả KHÔNG đụng ô bị khoá",
-      '.pf-chon:not(:disabled)' in _src_ajs_pf)
-check("có hỏi lại trước khi xoá", "confirm(" in _src_ajs_pf.split("async function pfXoa")[1][:600])
+# ── Dọn TỰ ĐỘNG: bốn lớp chặn, không hỏi người dùng ────────────────────────
+# Không đưa việc này lên giao diện: người dùng không cần biết thư mục profile
+# là gì, thêm một bảng nữa chỉ làm họ rối. Nhưng chạy ngầm thì phải đủ bốn lớp
+# chặn, thiếu một lớp là không được phép chạy.
+import time as _tm3
+with _tf3.TemporaryDirectory() as _d5:
+    _goc_pf3 = _fbc4.PROFILES_DIR
+    _fbc4.PROFILES_DIR = Path(_d5)
+    try:
+        _cu = _tm3.time() - 30 * 86400      # 30 ngày trước
+        _moi = _tm3.time() - 1 * 86400      # hôm qua
+        def _tao2(t, moc):
+            d = Path(_d5, t); (d / "Default").mkdir(parents=True)
+            os.utime(d, (moc, moc)); os.utime(d / "Default", (moc, moc))
+        _tao2("Nick_A_111111111", _cu)      # đang dùng, nhưng CŨ
+        _tao2("Nick_A", _cu)                # trùng, cũ      -> xoá
+        _tao2("Nick_A_cu_moi", _cu)         # mồ côi, cũ     -> xoá
+        _tao2("Da_Xoa_999999999", _moi)     # mồ côi nhưng MỚI -> giữ
+        _tao2("_quet_market_X", _cu)        # phụ trợ, cũ    -> giữ
+        _acc2 = [{"ten_acc": "Nick A", "c_user": "111111111"}]
+
+        _r = _fbc4.don_profile_rac(_acc2, ngay_cho=14, that=False)
+        check("lớp 1+2: KHÔNG đụng thư mục đang dùng",
+              "Nick_A_111111111" not in _r["xoa"])
+        check("lớp 1: KHÔNG đụng thư mục phụ trợ", "_quet_market_X" not in _r["xoa"])
+        check("lớp 3: thư mục còn MỚI thì giữ, dù là mồ côi",
+              "Da_Xoa_999999999" not in _r["xoa"] and _r["bo_qua_vi_moi"] == 1)
+        check("xoá đúng thứ cần xoá", set(_r["xoa"]) == {"Nick_A", "Nick_A_cu_moi"})
+        check("that=False thì KHÔNG xoá thật", Path(_d5, "Nick_A").exists())
+
+        _r2 = _fbc4.don_profile_rac(_acc2, ngay_cho=14, that=True)
+        check("that=True thì xoá thật", not Path(_d5, "Nick_A").exists()
+              and Path(_d5, "Nick_A_111111111").exists()
+              and Path(_d5, "_quet_market_X").exists()
+              and Path(_d5, "Da_Xoa_999999999").exists())
+        # Chạy lại lần nữa phải KHÔNG còn gì — không được xoá lặp hay báo nhầm.
+        check("chạy lại lần nữa thì không còn gì để xoá",
+              _fbc4.don_profile_rac(_acc2, ngay_cho=14, that=True)["xoa"] == [])
+
+        # Ngưỡng ngày phải ĐỦ RỘNG. Acc nghỉ vì dính spam lâu nhất cũng chỉ vài
+        # ngày; đặt ngưỡng ngắn là xoá mất profile của nick đang nghỉ.
+        check("ngưỡng coi là rác ít nhất 7 ngày", _fbc4.NGAY_COI_LA_RAC >= 7)
+    finally:
+        _fbc4.PROFILES_DIR = _goc_pf3
+
+# Phân loại chỉ được HỎI, không được tạo thư mục — nếu không thì mỗi lượt quét
+# lại đẻ một thư mục rỗng cho nick chưa chạy phiên nào, tức tự sinh rác cho
+# chính mình dọn.
+with _tf3.TemporaryDirectory() as _d6:
+    _goc_pf4 = _fbc4.PROFILES_DIR
+    _fbc4.PROFILES_DIR = Path(_d6)
+    try:
+        _fbc4.phan_loai_profile([{"ten_acc": "Chua Chay", "c_user": "123456789"}])
+        check("phân loại KHÔNG tạo thư mục rỗng", os.listdir(_d6) == [])
+        check("find_profile_dir(tao_moi=False) trả rỗng khi chưa có",
+              _fbc4.find_profile_dir("Chua Chay", "123456789", tao_moi=False) == "")
+    finally:
+        _fbc4.PROFILES_DIR = _goc_pf4
+
+# Chạy ngầm trong scheduler, và CHỈ MỘT runner làm — năm runner cùng quét là
+# năm lượt đọc đĩa trùng nhau, lại giẫm chân nhau lúc xoá.
+_src_sch_pf = Path("scheduler.py").read_text(encoding="utf-8")
+check("scheduler có gọi dọn profile", "don_profile_rac(get_accounts())" in _src_sch_pf)
+check("chỉ MỘT runner quét, không phải cả năm",
+      'if LOAI == "homestay":' in _src_sch_pf)
+# Và KHÔNG đưa lên giao diện.
+check("không có bảng dọn profile trong giao diện",
+      "api/profiles" not in Path("server.py").read_text(encoding="utf-8")
+      and "pfXoa" not in Path("static/js/app.js").read_text(encoding="utf-8"))
 
 # ── Bản CÀI ĐẶT phải cập nhật được ─────────────────────────────────────────
 # Lỗi gặp trên máy vệ tinh mới 07/10: cài xong, bấm vào số phiên bản thì hiện

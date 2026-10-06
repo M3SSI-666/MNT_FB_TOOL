@@ -79,10 +79,6 @@ const API = {
     joinDelete:     (id)                            => API.del(`/api/join/${id}`),
     logsJoin:       (n=200)                         => API.get(`/api/logs/join?n=${n}`),
 
-    // Dọn thư mục profile (phiên đăng nhập Chrome của từng nick)
-    profiles:       ()      => API.get("/api/profiles"),
-    profilesXoa:    (ten)   => API.post("/api/profiles/xoa", {ten}),
-
     // Bài đi comment
     commentPosts:       (loai)       => API.get(`/api/comment-posts/${loai}`),
     commentPostsAdd:    (loai, urls) => API.post(`/api/comment-posts/${loai}/add`, {urls}),

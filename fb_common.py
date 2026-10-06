@@ -90,7 +90,7 @@ def _moc_thoi_gian(p: str) -> float:
         return 0.0
 
 
-def find_profile_dir(acc_name: str, c_user: str = "") -> str:
+def find_profile_dir(acc_name: str, c_user: str = "", tao_moi: bool = True) -> str:
     """
     Thư mục Chrome profile của acc. TÌM THƯ MỤC ĐÃ CÓ TRƯỚC, hết cách mới tạo mới.
 
@@ -146,6 +146,12 @@ def find_profile_dir(acc_name: str, c_user: str = "") -> str:
             return duong(max(bac, key=lambda d: _moc_thoi_gian(duong(d))))
 
     # Không có gì để dùng lại — tạo mới theo đúng quy ước cũ.
+    #
+    # `tao_moi=False`: chỉ HỎI xem nick này đang dùng thư mục nào, đừng tạo gì.
+    # Bộ dọn cần hỏi mà không được để lại dấu vết — nếu không thì mỗi lượt quét
+    # lại đẻ một thư mục rỗng cho nick chưa chạy phiên nào.
+    if not tao_moi:
+        return ""
     folder = f"{ten}_{c_user}" if c_user else ten
     path = duong(folder)
     os.makedirs(path, exist_ok=True)
@@ -181,8 +187,12 @@ def phan_loai_profile(accounts: list) -> list:
     dang_dung = {}
     for a in accounts or []:
         try:
-            p = find_profile_dir(a.get("ten_acc", ""), a.get("c_user") or "")
-            dang_dung[os.path.basename(p)] = a.get("ten_acc", "")
+            # `tao_moi=False`: chỉ hỏi, không tạo. Phân loại mà để lại thư mục
+            # rỗng thì mỗi lượt quét lại sinh thêm rác cho chính nó dọn.
+            p = find_profile_dir(a.get("ten_acc", ""), a.get("c_user") or "",
+                                 tao_moi=False)
+            if p:
+                dang_dung[os.path.basename(p)] = a.get("ten_acc", "")
         except Exception:
             pass
 
@@ -220,6 +230,81 @@ def phan_loai_profile(accounts: list) -> list:
             "xoa_duoc": nhom in ("trung", "mo_coi"),
         })
     return ra
+
+
+# Thư mục profile phải nằm yên bao nhiêu NGÀY mới được coi là rác.
+#
+# Đây là lớp chặn quan trọng nhất, và là lý do việc dọn này dám chạy tự động.
+# Ba lớp kia dựa vào phân loại — mà phân loại thì có thể sai. Lớp này không
+# dựa vào suy luận nào: thư mục hai tuần không ai mở thì KHÔNG giữ phiên đăng
+# nhập nào đang dùng, dù mình xếp nhóm đúng hay sai.
+#
+# Mười bốn ngày vì acc nghỉ dính spam lâu nhất cũng chỉ vài ngày, cộng thêm
+# biên rộng cho những nick chạy thưa.
+NGAY_COI_LA_RAC = 14
+
+
+def don_profile_rac(accounts: list, ngay_cho: int = NGAY_COI_LA_RAC,
+                    that: bool = True) -> dict:
+    """
+    Xoá thư mục profile không còn ai dùng. Chạy tự động, không hỏi người dùng.
+
+    `that=False` thì chỉ tính toán và trả kết quả, KHÔNG xoá — dùng cho kiểm thử.
+
+    VÌ SAO DÁM TỰ ĐỘNG. Thư mục profile chính là phiên đăng nhập Facebook, xoá
+    nhầm là nick phải đăng nhập lại và Facebook thấy thiết bị mới. Nên việc này
+    chỉ an toàn khi có ĐỦ BỐN LỚP CHẶN, thiếu một lớp là không được chạy ngầm:
+
+      1. Chỉ đụng nhóm `trung` và `mo_coi`. `dang_dung` và `phu_tro` miễn nhiễm.
+      2. Thư mục `dang_dung` do CHÍNH `find_profile_dir` chỉ ra — tức đúng thư
+         mục phần mềm sẽ mở ở phiên kế tiếp, không phải phỏng đoán.
+      3. Phải nằm yên ít nhất `ngay_cho` ngày. Lớp này không dựa vào phân loại
+         nên nó cứu được cả khi ba lớp kia sai.
+      4. Bỏ qua thư mục đang MỞ (Chrome khoá file). Xoá thư mục của phiên đang
+         chạy là làm hỏng chính phiên đó.
+
+    Trả `{"xoa": [...], "mb": .., "bo_qua_vi_moi": n, "bo_qua_vi_dang_mo": n}`.
+    """
+    import shutil, time as _t
+
+    ds = phan_loai_profile(accounts)
+    if not ds:
+        return {"xoa": [], "mb": 0.0, "bo_qua_vi_moi": 0, "bo_qua_vi_dang_mo": 0}
+
+    dang_mo = _profile_dang_mo()
+    han = _t.time() - max(1, int(ngay_cho)) * 86400
+    xoa, mb, moi, mo = [], 0.0, 0, 0
+
+    for x in ds:
+        if not x["xoa_duoc"]:
+            continue
+        p = os.path.join(str(PROFILES_DIR), x["ten"])
+        if x["dung_luc"] > han:
+            moi += 1
+            continue
+        if os.path.normcase(os.path.abspath(p)) in dang_mo:
+            mo += 1
+            continue
+        if that:
+            try:
+                shutil.rmtree(p)
+            except Exception as e:
+                logger.warning(f"    ⚠️  Không xoá được {x['ten']}: {e}")
+                continue
+        xoa.append(x["ten"])
+        mb += x["mb"]
+
+    if xoa:
+        logger.info(f"🧹 Dọn {len(xoa)} thư mục profile không ai dùng quá "
+                    f"{ngay_cho} ngày — thu lại {mb/1024:.2f} GB")
+        for t in xoa[:10]:
+            logger.info(f"       {t}")
+        if len(xoa) > 10:
+            logger.info(f"       …và {len(xoa)-10} thư mục nữa")
+    if moi or mo:
+        logger.info(f"    (giữ lại {moi} thư mục còn mới, {mo} đang mở)")
+    return {"xoa": xoa, "mb": round(mb, 1),
+            "bo_qua_vi_moi": moi, "bo_qua_vi_dang_mo": mo}
 
 
 # Thư mục cache của Chrome — xoá được mà KHÔNG mất đăng nhập.

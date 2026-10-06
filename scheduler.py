@@ -640,6 +640,24 @@ def main():
                 except Exception as e:
                     logger.warning(f"⚠️  Quét dọn cache lỗi (bỏ qua): {e}")
 
+                # Dọn luôn thư mục profile không còn ai dùng. Chạy ngầm, không
+                # hỏi: người dùng không cần biết thư mục profile là gì, thêm
+                # một bảng nữa vào giao diện chỉ làm họ rối.
+                #
+                # Dám chạy ngầm vì có bốn lớp chặn — xem `don_profile_rac`.
+                # Lớp đáng tin nhất là "nằm yên 14 ngày": nó không dựa vào phân
+                # loại nào cả, nên cứu được cả khi ba lớp kia sai.
+                #
+                # CHỈ runner 'homestay' làm việc này. Năm runner cùng quét là
+                # năm lượt đọc đĩa trùng nhau, lại còn giẫm chân nhau lúc xoá.
+                if LOAI == "homestay":
+                    try:
+                        from fb_common import don_profile_rac
+                        from db import get_accounts
+                        don_profile_rac(get_accounts())
+                    except Exception as e:
+                        logger.warning(f"⚠️  Dọn profile lỗi (bỏ qua): {e}")
+
             # Refresh cookie mỗi 10 phút
             if time.time() - last_refresh_check >= 600:
                 _check_refresh()

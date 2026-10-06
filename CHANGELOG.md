@@ -10,6 +10,40 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.37.0 — 07/10/2026
+
+**Dọn thư mục profile nay chạy ngầm — đã bỏ bảng trong tab Hành động**
+
+Bản 2.36.0 thêm một bảng để tự tay tích chọn và xoá. Bỏ đi: người dùng không
+cần biết thư mục profile là gì, thêm một bảng nữa chỉ làm rối.
+
+Nay phần mềm **tự dọn**, lúc khởi động và mỗi đầu ngày, không hỏi gì.
+
+Việc này chỉ an toàn khi có **đủ bốn lớp chặn**:
+
+1. Chỉ đụng thư mục **thừa** (bản cũ của một nick) và **mồ côi** (nick đã xoá
+   khỏi phần mềm). Thư mục đang dùng và thư mục của tính năng quét nhóm miễn nhiễm.
+2. Thư mục "đang dùng" do **chính phần mềm chỉ ra** — đúng cái nó sẽ mở ở phiên
+   kế tiếp, không phải phỏng đoán.
+3. Phải **nằm yên ít nhất 14 ngày**.
+4. Bỏ qua thư mục **đang mở**.
+
+Lớp 3 là lớp đáng tin nhất, vì nó không dựa vào phân loại nào cả — thư mục hai
+tuần không ai mở thì không giữ phiên đăng nhập nào đang dùng, dù phần mềm xếp
+nhóm đúng hay sai. Đó là thứ cho phép bỏ bước hỏi.
+
+Việc dọn ghi vào Logs, nên vẫn xem lại được nó đã xoá những gì.
+
+---
+
+**Sửa: chỉ quét thôi cũng sinh ra thư mục rỗng**
+
+Phần phân loại gọi tới hàm tìm thư mục profile, mà hàm đó *tự tạo thư mục khi
+chưa có* — nên mỗi lượt quét lại đẻ một thư mục rỗng cho nick chưa chạy phiên
+nào. Bộ dọn tự sinh rác cho chính nó dọn. Nay phần quét chỉ hỏi, không tạo.
+
+---
+
 ## v2.36.0 — 07/10/2026
 
 **Sửa: đổi tên nick hoặc đổi c_user làm nick MẤT PHIÊN ĐĂNG NHẬP**
