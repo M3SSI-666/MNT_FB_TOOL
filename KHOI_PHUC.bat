@@ -74,8 +74,11 @@ echo  [2/4] Tat app dang chay...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8080 ^| findstr LISTENING 2^>nul') do (
     taskkill /F /PID %%a >nul 2>&1
 )
-powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'python' -and ($_.CommandLine -like '*scheduler.py*' -or $_.CommandLine -like '*join_groups_worker*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
-ping -n 3 127.0.0.1 >nul
+:: Cho 2 giay cho tien trinh chet han duoc GOP vao chinh lenh powershell nay
+:: (Start-Sleep), khong goi lenh ping nua: loi 06/10 cho thay ping.exe co the
+:: khong khoi dong duoc (0xc0000142) va bat hop thoai CHAN giua chung. Gop vao
+:: day thi khong sinh them tien trinh nao ca.
+powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'python' -and ($_.CommandLine -like '*scheduler.py*' -or $_.CommandLine -like '*join_groups_worker*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Start-Sleep -Seconds 2" >nul 2>&1
 
 :: --- [4] Sao luu du lieu ---
 :: Lam ca o day chu khong chi trong UPDATE.bat: may dang chay ban rat cu, buoc

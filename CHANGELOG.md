@@ -10,6 +10,43 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.35.3 — 06/10/2026
+
+**Sửa: chạy Cập nhật thì hiện lỗi PING.EXE rồi đứng, không cập nhật được**
+
+Hộp thoại hiện ra:
+
+> **PING.EXE - Application Error**
+> The application was unable to start correctly (0xc0000142).
+
+Nó **chặn** — phải bấm OK mới đi tiếp — nên bản cập nhật dừng giữa chừng.
+
+Nguyên nhân: `UPDATE.bat` dùng lệnh `ping` để **đếm giờ chờ**, không liên quan gì
+tới mạng. Mã `0xc0000142` nghĩa là tiến trình không khởi tạo được — lúc chạy cập
+nhật, máy đang có hàng trăm tiến trình Chromium của các phiên đăng bài, nên khởi
+động thêm bất kỳ chương trình nào cũng có thể trượt. Một việc vặt mà làm hỏng cả
+bản cập nhật.
+
+Nay chờ bằng Python (chương trình vừa chạy ngay trước đó nên chắc chắn khởi động
+được, và không cần gọi thêm chương trình hệ thống nào). Hỏng nốt thì lùi về
+PowerShell; cả hai hỏng thì **đi tiếp**, không chặn.
+
+Sửa cùng cách cho `RESTART.bat`. Với `KHOI_PHUC.bat` thì gộp thẳng thời gian chờ
+vào lệnh PowerShell đang có sẵn — không sinh thêm tiến trình nào cả.
+
+> **Lưu ý khi cập nhật:** nếu máy đang chạy nhiều phiên, nên bấm **Dừng tất cả**
+> rồi hãy Cập nhật. Lỗi trên là triệu chứng của máy đang quá tải tiến trình.
+
+---
+
+**Sửa thêm: một file .bat bị sai định dạng xuống dòng**
+
+`UNINSTALL_AUTOSTART.bat` dùng LF thay vì CRLF. File .bat dùng LF thì cmd phân
+tích sai — khối `if (...) else (...)` nhiều dòng mất tác dụng. Đã sửa, và thêm
+phép kiểm tự động cho toàn bộ file .bat để không tái diễn.
+
+---
+
 ## v2.35.2 — 06/10/2026
 
 **Sửa: nick bị "5 lỗi liên tiếp — không mở được ô soạn bài" trong khi đăng nhập

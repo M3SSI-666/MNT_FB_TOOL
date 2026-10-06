@@ -1152,6 +1152,52 @@ check("tiến trình báo theo mục tiêu, không theo số ứng viên",
       "tien_trinh(min(ok_n, muc_tieu), muc_tieu)" in _src_cb3)
 check("hụt bài thì báo rõ ra log", "Hụt {muc_tieu - ok_n} bài" in _src_cb3)
 
+# ── File .bat: không ngủ bằng ping.exe, và phải giữ CRLF ───────────────────
+# Lỗi gặp trên máy thật 06/10: chạy cập nhật thì bật hộp thoại
+#   "PING.EXE - Application Error (0xc0000142)"
+# Hộp thoại đó CHẶN, phải bấm OK mới đi tiếp, nên bản cập nhật đứng hẳn.
+# 0xc0000142 = tiến trình không khởi tạo được; lúc cập nhật máy đang có hàng
+# trăm tiến trình Chromium nên tạo thêm exe nào cũng có thể trượt. ping.exe ở
+# đó chỉ để ĐẾM GIỜ — một việc vặt mà làm hỏng cả bản cập nhật.
+_bat = sorted(Path(".").glob("*.bat"))
+check("có đủ file .bat để kiểm", len(_bat) >= 5)
+# Chỉ soi dòng LỆNH, bỏ qua dòng chú thích: chú thích có nhắc tới ping là
+# chuyện bình thường, chính chỗ sửa cũng phải giải thích vì sao bỏ nó.
+_ping = []
+for _f in _bat:
+    for _l in _f.read_text(encoding="utf-8", errors="ignore").splitlines():
+        _t = _l.strip().lower()
+        if _t.startswith("::") or _t.startswith("rem "):
+            continue
+        if "ping -n" in _t:
+            _ping.append(f"{_f.name}: {_l.strip()[:50]}")
+check("không file .bat nào ngủ bằng ping.exe", not _ping)
+
+# CRLF: file .bat dùng LF thì `call :nhãn` KHÔNG TÌM THẤY NHÃN — cmd báo
+# "The system cannot find the batch label specified". Tự dẫm phải khi sửa lỗi
+# này: ghi lại file bằng Python làm mất CRLF, và mọi `call :cho` hỏng im lìm.
+#
+# `.gitattributes` đã có `*.bat text eol=crlf` nên máy clone về luôn nhận CRLF.
+# Phép kiểm này canh chỗ khác: file bị CÔNG CỤ ghi đè ngay trong thư mục làm
+# việc — đúng thứ vừa xảy ra — mà git thì chuẩn hoá lúc commit nên không lộ ra
+# ở diff, chạy thử tại chỗ mới thấy.
+_lf = []
+for f in _bat:
+    b = f.read_bytes()
+    if b.count(b"\n") - b.count(b"\r\n") > 0:
+        _lf.append(f.name)
+check("mọi file .bat đều dùng CRLF", not _lf)
+
+# Đường chờ thay thế phải CÓ THẬT và có đường lui.
+for _f in ("UPDATE.bat", "RESTART.bat"):
+    _s = Path(_f).read_text(encoding="utf-8", errors="ignore")
+    check(f"{_f} có nhãn :cho", "\n:cho\r" in _s or "\n:cho\n" in _s)
+    check(f"{_f} gọi :cho thay cho ping", "call :cho " in _s)
+    # `timeout` KHÔNG dùng được làm đường lui: nó thoát ngay khi stdin bị
+    # chuyển hướng — đo thật: bảo chờ 1 giây mà chỉ tốn 0,02 giây.
+    check(f"{_f} đường lui dùng PowerShell, không dùng timeout",
+          "Start-Sleep -Seconds %1" in _s and "timeout /t %1" not in _s)
+
 # ── Không mở được composer thì CHUYỂN VAI LẠI, đừng bỏ cuộc ────────────────
 # Đo trên log 876 phiên ngày 05-06/10:
 #     bấm được nút "Chuyển ngay" -> hỏng composer   3/833 = 0,4%

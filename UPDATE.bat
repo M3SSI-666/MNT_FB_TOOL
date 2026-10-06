@@ -160,7 +160,7 @@ echo  Dang dung server + runner...
 call "%MNT_UPDATE_DIR%_TIM_PYTHON.bat"
 if errorlevel 1 exit /b 1
 %PY% -X utf8 "%MNT_UPDATE_DIR%dung_het.py" %SV_PID%
-ping -n 3 127.0.0.1 >nul
+call :cho 2
 echo.
 
 :: --- [3a] SAO LUU DU LIEU truoc khi dong vao code ---
@@ -263,5 +263,32 @@ echo  Du lieu cua ban duoc giu nguyen.
 echo ============================================================
 echo.
 echo  (Cua so nay tu dong dong sau 5 giay)
-ping -n 6 127.0.0.1 >nul
+call :cho 5
+exit /b 0
+
+:: ============================================================
+:: :cho <so giay> - ngu mot lat. KHONG dung ping.exe nua.
+::
+:: Loi gap tren may that ngay 06/10: chay cap nhat thi bat hop thoai
+::   "PING.EXE - Application Error - The application was unable to start
+::    correctly (0xc0000142)"
+:: Hop thoai do CHAN, phai bam OK moi di tiep, nen ban cap nhat dung han.
+::
+:: 0xc0000142 nghia la tien trinh KHONG KHOI TAO DUOC. Luc chay cap nhat may
+:: dang co hang tram tien trinh Chromium cua cac phien dang bai, nen tao them
+:: bat ky exe nao cung co the truot. ping.exe o day chi de DEM GIO, khong lien
+:: quan gi toi mang - mot viec vat ma lam hong ca ban cap nhat.
+::
+:: Nay dung Python da tim duoc o tren: no vua chay xong ngay truoc do nen chac
+:: chan khoi dong duoc, va khong phai goi them exe he thong nao.
+:: ============================================================
+:cho
+if not defined PY goto cho_lui
+%PY% -c "import time,sys;time.sleep(float(sys.argv[1]))" %1 >nul 2>&1
+if not errorlevel 1 exit /b 0
+:cho_lui
+:: KHONG dung `timeout` lam duong lui: no bao "Input redirection is not
+:: supported" roi thoat ngay khi stdin bi chuyen huong - da do that, bao cho
+:: 1 giay ma chi ton 0,02 giay. PowerShell thi chiu duoc.
+powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds %1" >nul 2>&1
 exit /b 0
