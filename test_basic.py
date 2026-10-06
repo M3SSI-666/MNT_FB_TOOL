@@ -1152,6 +1152,38 @@ check("tiến trình báo theo mục tiêu, không theo số ứng viên",
       "tien_trinh(min(ok_n, muc_tieu), muc_tieu)" in _src_cb3)
 check("hụt bài thì báo rõ ra log", "Hụt {muc_tieu - ok_n} bài" in _src_cb3)
 
+# ── Bản CÀI ĐẶT phải cập nhật được ─────────────────────────────────────────
+# Lỗi gặp trên máy vệ tinh mới 07/10: cài xong, bấm vào số phiên bản thì hiện
+# "Thư mục này chưa phải kho code git" — tức KHÔNG BAO GIỜ cập nhật được.
+#
+# Hai nguyên nhân chồng nhau, cả hai đều chỉ xảy ra với bản cài:
+#   1. Bộ cài lấy mã nguồn bằng `git archive` nên chỉ có FILE, không có `.git`.
+#   2. Máy mới không có git trong PATH; bộ cài gói MinGit vào `<app>\git\`,
+#      mà `_git` lại gọi bare "git" nên trượt hết.
+#
+# `UPDATE.bat` vốn tự dựng kho khi chạy, nhưng nút Cập nhật chết ngay từ bước
+# LIỆT KÊ nên không ai tới được chỗ đó.
+_src_srv_cn = Path("server.py").read_text(encoding="utf-8")
+check("link kho khớp giữa server.py và UPDATE.bat",
+      'REPO_URL = "https://github.com/M3SSI-666/MNT_FB_TOOL.git"' in _src_srv_cn
+      and "M3SSI-666/MNT_FB_TOOL.git" in Path("UPDATE.bat").read_text(encoding="utf-8",
+                                                                     errors="ignore"))
+check("ưu tiên git KÈM THEO bản cài trước git của máy",
+      'kem = BASE_DIR / "git" / "cmd" / "git.exe"' in _src_srv_cn
+      and 'return str(kem) if kem.exists() else "git"' in _src_srv_cn)
+check("mọi lệnh git đều đi qua _tim_git", "[_tim_git(), *args]" in _src_srv_cn
+      and '["git", *args]' not in _src_srv_cn)
+check("thiếu .git thì tự dựng kho", "def _dung_kho_neu_thieu" in _src_srv_cn
+      and '_git("remote", "add", "origin", REPO_URL)' in _src_srv_cn)
+# Phải dựng kho TRƯỚC khi fetch, nếu không thì fetch trượt rồi tag cũng trượt.
+_i_dung = _src_srv_cn.index("_dung_kho_neu_thieu()")
+_i_fetch = _src_srv_cn.index('_git("fetch", "--tags"')
+check("dựng kho TRƯỚC khi fetch", _i_dung < _i_fetch)
+# Hai nguyên nhân phải báo khác nhau — gộp một câu thì người dùng sửa nhầm thứ.
+check("phân biệt 'không có git' với 'chưa phải kho'",
+      "Không chạy được git trên máy này." in _src_srv_cn
+      and "Thư mục này chưa phải kho code git." in _src_srv_cn)
+
 # ── File .bat: không ngủ bằng ping.exe, và phải giữ CRLF ───────────────────
 # Lỗi gặp trên máy thật 06/10: chạy cập nhật thì bật hộp thoại
 #   "PING.EXE - Application Error (0xc0000142)"

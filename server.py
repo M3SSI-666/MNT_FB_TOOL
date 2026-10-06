@@ -136,10 +136,30 @@ def _dau_hieu(ten_file_py, *them):
             else (f"{goc}.py", *them))
 
 
+# Link kho code. Phải khớp REPO_URL trong UPDATE.bat — hai nơi lệch nhau thì
+# giao diện liệt kê bản của kho này còn UPDATE.bat kéo code từ kho kia.
+REPO_URL = "https://github.com/M3SSI-666/MNT_FB_TOOL.git"
+
+
+def _tim_git() -> str:
+    """
+    Đường dẫn tới git.
+
+    BẢN CÀI ĐẶT không có git trong PATH — bộ cài gói MinGit vào `<app>\\git\\`.
+    Gọi thẳng "git" thì mọi lệnh đều trượt, và giao diện báo "Thư mục này chưa
+    phải kho code git" dù lý do thật chỉ là không tìm thấy git.
+
+    Ưu tiên git KÈM THEO trước git của máy: bản cài có thể nằm trên máy chưa hề
+    cài git, mà cũng có thể nằm cạnh một bản git quá cũ.
+    """
+    kem = BASE_DIR / "git" / "cmd" / "git.exe"
+    return str(kem) if kem.exists() else "git"
+
+
 def _git(*args, timeout=90):
     """Chạy một lệnh git trong thư mục mã nguồn. Trả (ok, chữ ra)."""
     try:
-        r = subprocess.run(["git", *args], cwd=str(BASE_DIR), capture_output=True,
+        r = subprocess.run([_tim_git(), *args], cwd=str(BASE_DIR), capture_output=True,
                            text=True, encoding="utf-8", errors="replace",
                            timeout=timeout,
                            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
@@ -148,14 +168,48 @@ def _git(*args, timeout=90):
         return False, str(e)
 
 
+def _dung_kho_neu_thieu() -> bool:
+    """
+    Bản cài đặt chưa phải kho git → dựng kho ngay tại chỗ.
+
+    Bộ cài lấy mã nguồn bằng `git archive` nên chỉ có FILE, không có `.git`.
+    Thiếu nó thì `git tag` trượt, giao diện không liệt kê được bản nào, và
+    người dùng KHÔNG BAO GIỜ bấm cập nhật được — dù `UPDATE.bat` vốn tự dựng
+    kho khi chạy. Nút Cập nhật chết ngay từ bước liệt kê.
+
+    `git init` KHÔNG xoá file đang có, chỉ tạo thêm thư mục `.git`. Dữ liệu
+    (`data/`, `cookies/`, `profiles/`) nằm trong `.gitignore` nên về sau
+    `reset --hard` cũng không đụng tới.
+
+    Làm đúng như UPDATE.bat để hai đường không lệch nhau.
+    """
+    if (BASE_DIR / ".git").exists():
+        return True
+    ok, _ = _git("init")
+    if not ok:
+        return False
+    _git("remote", "add", "origin", REPO_URL)
+    return (BASE_DIR / ".git").exists()
+
+
 @app.route("/api/versions")
 def api_versions():
+    # Bản cài đặt chưa có `.git` — dựng kho trước, nếu không thì `git tag`
+    # trượt và người dùng không bao giờ bấm cập nhật được.
+    _dung_kho_neu_thieu()
+
     # Phải fetch: danh sách tag trên máy khách chỉ có tới bản họ đang cài, nên
     # không fetch thì không đời nào thấy được bản mới hơn.
     ok_fetch, loi_fetch = _git("fetch", "--tags", "--force", "origin")
     ok_tag, ra = _git("tag")
     if not ok_tag:
-        return jsonify({"ok": False, "error": "Thư mục này chưa phải kho code git.",
+        # Phân biệt hai nguyên nhân: không có git, với có git mà không phải kho.
+        # Gộp chung thành một câu thì người dùng đi sửa nhầm thứ.
+        co_git, _ = _git("--version")
+        loi = ("Không chạy được git trên máy này."
+               if not co_git else
+               "Thư mục này chưa phải kho code git.")
+        return jsonify({"ok": False, "error": loi,
                         "versions": [], "hien_tai": VERSION})
 
     tags = [t.strip() for t in ra.splitlines() if t.strip()]

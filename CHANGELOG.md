@@ -10,6 +10,35 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.35.4 — 07/10/2026
+
+**Sửa: bản cài đặt không cập nhật được — "Thư mục này chưa phải kho code git"**
+
+Máy cài bằng file `MNT_FB_Setup.exe` bấm vào số phiên bản thì chỉ hiện dòng báo
+lỗi đỏ, không liệt kê được bản nào, nên **không bao giờ cập nhật được**.
+
+Hai nguyên nhân chồng nhau, cả hai chỉ xảy ra với bản cài:
+
+1. Bộ cài lấy mã nguồn bằng `git archive` nên trong thư mục chỉ có **file**,
+   không có kho git.
+2. Máy mới thường chưa cài git. Bộ cài có gói sẵn git bên trong, nhưng phần mềm
+   lại đi tìm git ở đường hệ thống nên không thấy.
+
+Nút Cập nhật vốn tự dựng kho khi chạy, nhưng nó **chết ngay từ bước liệt kê**
+nên không ai tới được chỗ đó.
+
+Nay phần mềm dùng git kèm theo trước, và tự dựng kho khi thiếu. Dữ liệu không bị
+đụng tới — tài khoản, cookie, profile nằm ngoài phạm vi cập nhật.
+
+Hai lý do khác nhau nay báo khác nhau: *"Không chạy được git trên máy này"* và
+*"Thư mục này chưa phải kho code git"* — trước đây gộp làm một nên đi sửa nhầm.
+
+> Máy đang cài bản **2.35.3** gặp lỗi này: tải lại bộ cài mới ở trang phát hành
+> rồi cài đè lên. Dữ liệu được giữ nguyên. Từ bản này trở đi, nút Cập nhật trong
+> phần mềm chạy bình thường, không phải tải lại file cài nữa.
+
+---
+
 ## v2.35.3 — 06/10/2026
 
 **Sửa: chạy Cập nhật thì hiện lỗi PING.EXE rồi đứng, không cập nhật được**
