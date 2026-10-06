@@ -1152,6 +1152,106 @@ check("tiến trình báo theo mục tiêu, không theo số ứng viên",
       "tien_trinh(min(ok_n, muc_tieu), muc_tieu)" in _src_cb3)
 check("hụt bài thì báo rõ ra log", "Hụt {muc_tieu - ok_n} bài" in _src_cb3)
 
+# ── Profile: TÌM thư mục đã có trước, đừng dựng thư mục trắng ──────────────
+# Thư mục profile CHÍNH LÀ phiên đăng nhập Facebook. Bản cũ ghép cứng
+# `{Tên}_{c_user}`, nên sửa tên nick hoặc đổi c_user là dựng một thư mục TRẮNG:
+# nick phải đăng nhập lại, Facebook thấy THIẾT BỊ MỚI — đúng thứ làm tăng rủi
+# ro dính spam.
+#
+# Đo 07/10 trên máy thật: 13 tài khoản mà có 52 thư mục profile. 'Ngân Nguyễn'
+# 5 thư mục, 'Thị Sữa' 3, 'Ngan Thi' 3 với hai c_user khác nhau — di chứng của
+# lỗi tên dính dấu cách thừa và lỗi nhập nhầm UID Page vào ô c_user.
+import tempfile as _tf3
+import fb_common as _fbc4
+with _tf3.TemporaryDirectory() as _d3:
+    _goc_pf = _fbc4.PROFILES_DIR
+    _fbc4.PROFILES_DIR = Path(_d3)
+    try:
+        def _tao_pf(t):
+            (Path(_d3, t) / "Default").mkdir(parents=True)
+        def _thu_pf(ten, cu):
+            truoc = set(os.listdir(_d3))
+            r = Path(_fbc4.find_profile_dir(ten, cu)).name
+            return r, bool(set(os.listdir(_d3)) - truoc)
+
+        _tao_pf("Ngan_Thi_61593707204364")
+        _r, _moi = _thu_pf("Ngan Thi Moi", "61593707204364")
+        check("đổi TÊN nick -> dùng lại profile cũ, không mất đăng nhập",
+              _r == "Ngan_Thi_61593707204364" and not _moi)
+
+        _tao_pf("Thi_Sua")
+        _r, _moi = _thu_pf("Thi Sua", "99999999")
+        check("đổi c_user -> dùng lại profile cũ", _r == "Thi_Sua" and not _moi)
+
+        # Tên từng dính dấu cách thừa nên thư mục có HAI gạch dưới.
+        _tao_pf("Thị_Sữa__100091883813659")
+        _r, _moi = _thu_pf("Thị Sữa", "100091883813659")
+        check("thư mục hai gạch dưới (di chứng lỗi cũ) -> vẫn nhận ra",
+              _r == "Thị_Sữa__100091883813659" and not _moi)
+
+        _r, _moi = _thu_pf("Nguoi La", "123456789")
+        check("nick thật sự mới -> tạo thư mục mới", _moi)
+
+        # Chốt quan trọng nhất: KHÔNG được cướp profile của acc khác trùng tên.
+        _tao_pf("Trung_Ten_111111111")
+        _r, _moi = _thu_pf("Trung Ten", "222222222")
+        check("trùng tên nhưng khác c_user -> KHÔNG cướp profile",
+              _r == "Trung_Ten_222222222" and _moi)
+
+        # Nhiều thư mục cùng bậc -> lấy cái DÙNG GẦN ĐÂY NHẤT, không lấy cái to.
+        _tao_pf("Ai_Do"); _tao_pf("Ai_Do_111111111")
+        _t_moi = Path(_d3, "Ai_Do_111111111")
+        os.utime(_t_moi, (9e8, 9e8))            # đặt mốc CŨ
+        os.utime(_t_moi / "Default", (9e8, 9e8))
+        _r, _ = _thu_pf("Ai Do", "")
+        check("nhiều thư mục cùng bậc -> lấy cái dùng gần nhất", _r == "Ai_Do")
+    finally:
+        _fbc4.PROFILES_DIR = _goc_pf
+
+# ── Dọn thư mục profile: phân loại đúng, và KHOÁ cái đang dùng ─────────────
+# Xoá nhầm một profile đang dùng = nick phải đăng nhập lại = Facebook thấy
+# thiết bị mới. Nên phân loại phải chắc, và hai nhóm `đang dùng` / `phụ trợ`
+# tuyệt đối không được phép xoá.
+with _tf3.TemporaryDirectory() as _d4:
+    _goc_pf2 = _fbc4.PROFILES_DIR
+    _fbc4.PROFILES_DIR = Path(_d4)
+    try:
+        for _t in ("Nick_A_111111111", "Nick_A", "Nick_B_222222222",
+                   "Da_Xoa_999999999", "_quet_market_Nick_A"):
+            (Path(_d4, _t) / "Default").mkdir(parents=True)
+        _accs = [{"ten_acc": "Nick A", "c_user": "111111111"},
+                 {"ten_acc": "Nick B", "c_user": "222222222"}]
+        _pl = {x["ten"]: x for x in _fbc4.phan_loai_profile(_accs)}
+        check("profile đang dùng -> nhóm 'dang_dung'",
+              _pl["Nick_A_111111111"]["nhom"] == "dang_dung"
+              and _pl["Nick_B_222222222"]["nhom"] == "dang_dung")
+        check("bản cũ của cùng nick -> nhóm 'trung'",
+              _pl["Nick_A"]["nhom"] == "trung" and _pl["Nick_A"]["cua_nick"] == "Nick A")
+        check("nick đã xoá -> nhóm 'mo_coi'", _pl["Da_Xoa_999999999"]["nhom"] == "mo_coi")
+        # Thư mục "_" là của tính năng quét nhóm. Luật "13 acc = 13 thư mục"
+        # ngây thơ sẽ xoá oan chúng.
+        check("thư mục phụ trợ -> nhóm 'phu_tro', KHÔNG xoá",
+              _pl["_quet_market_Nick_A"]["nhom"] == "phu_tro"
+              and not _pl["_quet_market_Nick_A"]["xoa_duoc"])
+        check("CHỈ 'trung' và 'mo_coi' mới được xoá",
+              {t for t, x in _pl.items() if x["xoa_duoc"]}
+              == {"Nick_A", "Da_Xoa_999999999"})
+    finally:
+        _fbc4.PROFILES_DIR = _goc_pf2
+
+_src_srv_pf = Path("server.py").read_text(encoding="utf-8")
+# Máy chủ KHÔNG được tin danh sách tên do giao diện gửi lên: bảng trên màn hình
+# có thể cũ vài phút, mà trong khoảng đó một thư mục 'trùng' hoàn toàn có thể
+# đã thành 'đang dùng' vì người dùng vừa sửa c_user.
+check("server phân loại LẠI trước khi xoá, không tin bảng của giao diện",
+      "cho_phep = {x[\"ten\"] for x in phan_loai_profile(get_accounts()) if x[\"xoa_duoc\"]}"
+      in _src_srv_pf and "xin & cho_phep" in _src_srv_pf)
+_src_ajs_pf = Path("static/js/app.js").read_text(encoding="utf-8")
+# Nút "tích tất cả" chỉ được đụng vào ô CÒN BẬT.
+check("tích tất cả KHÔNG đụng ô bị khoá",
+      '.pf-chon:not(:disabled)' in _src_ajs_pf)
+check("có hỏi lại trước khi xoá", "confirm(" in _src_ajs_pf.split("async function pfXoa")[1][:600])
+
 # ── Bản CÀI ĐẶT phải cập nhật được ─────────────────────────────────────────
 # Lỗi gặp trên máy vệ tinh mới 07/10: cài xong, bấm vào số phiên bản thì hiện
 # "Thư mục này chưa phải kho code git" — tức KHÔNG BAO GIỜ cập nhật được.

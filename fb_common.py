@@ -15,6 +15,8 @@ User-Agent cũng để ở đây vì cả hai poster đều cần khai báo gi�
 """
 
 import os
+import re
+import unicodedata
 import asyncio
 import random
 
@@ -72,18 +74,152 @@ def browser_launch_kwargs(headless: bool) -> dict:
     )
 
 
+def _ten_goc(s: str) -> str:
+    """Tên thư mục rút về dạng so sánh được: bỏ dấu, bỏ hoa thường, bỏ ký tự lạ."""
+    s = unicodedata.normalize("NFKD", s or "")
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+def _moc_thoi_gian(p: str) -> float:
+    """Thư mục này được dùng gần đây nhất lúc nào. Không đọc được thì coi là 0."""
+    try:
+        return max(os.path.getmtime(p),
+                   os.path.getmtime(os.path.join(p, "Default"))
+                   if os.path.isdir(os.path.join(p, "Default")) else 0)
+    except OSError:
+        return 0.0
+
+
 def find_profile_dir(acc_name: str, c_user: str = "") -> str:
     """
-    Trả về thư mục Chrome profile cho acc.
-    Luôn dùng format {name}_{c_user} để đảm bảo mỗi acc một profile riêng,
-    kể cả khi nhiều acc có cùng tên.
+    Thư mục Chrome profile của acc. TÌM THƯ MỤC ĐÃ CÓ TRƯỚC, hết cách mới tạo mới.
+
+    VÌ SAO PHẢI TÌM TRƯỚC — đây không phải chuyện gọn gàng, mà là chuyện an toàn
+    tài khoản. Thư mục profile CHÍNH LÀ phiên đăng nhập Facebook. Bản cũ ghép
+    cứng `{Tên}_{c_user}`, nên hễ sửa tên nick hoặc đổi c_user là nó dựng một
+    thư mục TRẮNG: nick phải đăng nhập lại, Facebook thấy THIẾT BỊ MỚI — đúng
+    thứ làm tăng rủi ro dính spam.
+
+    Đo ngày 07/10 trên máy thật: 13 tài khoản mà có 52 thư mục profile.
+        Ngân Nguyễn  → 5 thư mục
+        Thị Sữa      → 3  (Thị_Sữa_<id>, Thị_Sữa__<id>, Thị_Sữa_)
+        Ngan Thi     → 3  (hai c_user khác nhau)
+    Hai gạch dưới là di chứng của lỗi tên nick dính dấu cách thừa; hai c_user
+    khác nhau là di chứng của lỗi nhập nhầm UID Page vào ô c_user. Cả hai lỗi
+    đã sửa, nhưng thư mục chúng đẻ ra thì còn nguyên.
+
+    Thứ tự tìm, từ chắc chắn nhất xuống:
+        1. đúng `{Tên}_{c_user}`
+        2. thư mục nào có đuôi số TRÙNG c_user   → nick đổi tên
+        3. đúng `{Tên}` trần
+        4. tên rút gọn trùng, và thư mục đó KHÔNG mang đuôi số
+                                                 → nick đổi c_user
+    Bước 4 đòi "không có đuôi số" để không bao giờ cướp thư mục của một acc khác
+    trùng tên nhưng khác c_user. Nhiều thư mục cùng khớp thì lấy cái ĐƯỢC DÙNG
+    GẦN ĐÂY NHẤT — không lấy cái to nhất, vì thư mục to có thể chỉ là cái cũ đã
+    tích đầy cache trước khi nick chuyển sang chỗ khác.
     """
-    root       = str(PROFILES_DIR)
-    exact_name = acc_name.replace(" ", "_")
-    folder     = f"{exact_name}_{c_user}" if c_user else exact_name
-    path       = os.path.join(root, folder)
+    root = str(PROFILES_DIR)
+    ten  = (acc_name or "").replace(" ", "_")
+    os.makedirs(root, exist_ok=True)
+
+    try:
+        co_san = [d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))]
+    except OSError:
+        co_san = []
+
+    def duong(d):
+        return os.path.join(root, d)
+
+    goc = _ten_goc(ten)
+    # Bốn BẬC ưu tiên, xét lần lượt. Bậc nào có thì dừng ngay ở bậc đó.
+    cac_bac = [
+        [d for d in co_san if c_user and d == f"{ten}_{c_user}"],
+        [d for d in co_san if c_user and d.endswith(f"_{c_user}")],
+        [d for d in co_san if d == ten],
+        [d for d in co_san
+         if goc and not re.search(r"_\d{6,}$", d) and _ten_goc(d) == goc],
+    ]
+    for bac in cac_bac:
+        if bac:
+            # Nhiều cái cùng bậc → lấy cái ĐƯỢC DÙNG GẦN ĐÂY NHẤT.
+            return duong(max(bac, key=lambda d: _moc_thoi_gian(duong(d))))
+
+    # Không có gì để dùng lại — tạo mới theo đúng quy ước cũ.
+    folder = f"{ten}_{c_user}" if c_user else ten
+    path = duong(folder)
     os.makedirs(path, exist_ok=True)
     return path
+
+
+def phan_loai_profile(accounts: list) -> list:
+    """
+    Soi thư mục profiles, xếp từng thư mục vào một nhóm. CHỈ ĐỌC, không xoá gì.
+
+    Trả [{ten, nhom, mb, dung_luc, cua_nick, xoa_duoc}, ...] — nơi gọi hiện ra
+    cho người dùng duyệt rồi mới xoá.
+
+    Bốn nhóm:
+        dang_dung  thư mục mà `find_profile_dir` sẽ chọn cho một nick đang có
+        trung      cùng nick đó nhưng là bản cũ, không còn được chọn
+        phu_tro    thư mục bắt đầu bằng "_" — của tính năng quét nhóm, KHÔNG
+                   thuộc nick nào. Đếm theo số acc là xoá oan chúng.
+        mo_coi     không khớp nick nào đang có — nick đã bị xoá khỏi phần mềm
+
+    VÌ SAO KHÔNG TỰ ĐỘNG XOÁ. Dọn cache thì an toàn (`don_cache_tat_ca` chạy
+    tự động trong scheduler) vì cache mất không kéo theo gì. Còn thư mục profile
+    CHÍNH LÀ phiên đăng nhập: xoá nhầm là nick phải đăng nhập lại, Facebook thấy
+    thiết bị mới — đúng thứ làm tăng rủi ro dính spam. Cái giá của xoá nhầm đắt
+    hơn nhiều so với vài trăm MB tiết kiệm được, nên để người dùng duyệt.
+    """
+    root = PROFILES_DIR
+    if not os.path.isdir(root):
+        return []
+
+    # Thư mục mà mỗi nick ĐANG thật sự dùng — hỏi chính hàm chọn profile, để
+    # bảng này không bao giờ lệch với thứ phần mềm làm lúc chạy.
+    dang_dung = {}
+    for a in accounts or []:
+        try:
+            p = find_profile_dir(a.get("ten_acc", ""), a.get("c_user") or "")
+            dang_dung[os.path.basename(p)] = a.get("ten_acc", "")
+        except Exception:
+            pass
+
+    cua_nick = {}
+    for a in accounts or []:
+        goc = _ten_goc((a.get("ten_acc") or "").replace(" ", "_"))
+        cu  = str(a.get("c_user") or "")
+        for d in os.listdir(root):
+            if cu and d.endswith(f"_{cu}"):
+                cua_nick[d] = a.get("ten_acc", "")
+            elif goc and _ten_goc(re.sub(r"_\d{6,}$", "", d)) == goc:
+                cua_nick.setdefault(d, a.get("ten_acc", ""))
+
+    ra = []
+    for d in sorted(os.listdir(root)):
+        p = os.path.join(root, d)
+        if not os.path.isdir(p):
+            continue
+        if d in dang_dung:
+            nhom, chu = "dang_dung", dang_dung[d]
+        elif d.startswith("_"):
+            nhom, chu = "phu_tro", ""
+        elif d in cua_nick:
+            nhom, chu = "trung", cua_nick[d]
+        else:
+            nhom, chu = "mo_coi", ""
+        ra.append({
+            "ten": d,
+            "nhom": nhom,
+            "mb": round(_dung_luong_mb(p), 1),
+            "dung_luc": _moc_thoi_gian(p),
+            "cua_nick": chu,
+            # Chỉ hai nhóm này được phép xoá. `dang_dung` là phiên đăng nhập
+            # đang chạy; `phu_tro` là của tính năng khác, không thuộc nick nào.
+            "xoa_duoc": nhom in ("trung", "mo_coi"),
+        })
+    return ra
 
 
 # Thư mục cache của Chrome — xoá được mà KHÔNG mất đăng nhập.

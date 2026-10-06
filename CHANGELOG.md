@@ -10,6 +10,59 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.36.0 — 07/10/2026
+
+**Sửa: đổi tên nick hoặc đổi c_user làm nick MẤT PHIÊN ĐĂNG NHẬP**
+
+Mỗi nick có một thư mục profile Chrome riêng — và **thư mục đó chính là phiên
+đăng nhập Facebook**. Phần mềm đặt tên thư mục theo `Tên_c_user`, nên hễ sửa tên
+nick hoặc đổi c_user là nó dựng một thư mục **trắng**: nick phải đăng nhập lại,
+Facebook thấy **thiết bị mới** — đúng thứ làm tăng rủi ro dính spam.
+
+Đo trên máy thật ngày 07/10: **13 tài khoản mà có 52 thư mục profile.**
+
+| nick | số thư mục |
+|---|---|
+| Ngân Nguyễn | 5 |
+| Thị Sữa | 3 |
+| Ngan Thi | 3 *(hai c_user khác nhau)* |
+
+Phần lớn là di chứng của hai lỗi đã sửa trước đó: tên nick dính dấu cách thừa,
+và nhập nhầm UID Page vào ô c_user.
+
+Nay phần mềm **tìm thư mục đã có trước**, hết cách mới tạo mới — theo bốn bậc,
+từ chắc chắn nhất xuống. Sửa tên nick hay đổi c_user **không còn làm mất đăng
+nhập**. Và nó **không bao giờ lấy nhầm** thư mục của một nick khác trùng tên.
+
+---
+
+**Mới: nút Dọn thư mục profile**
+
+Trong tab **Hành động**. Bấm vào là hiện bảng, mỗi thư mục được xếp vào một
+nhóm:
+
+| nhóm | xử lý |
+|---|---|
+| **Đang dùng** | **khoá**, không cho tích |
+| **Phụ trợ** *(của tính năng quét nhóm)* | **khoá**, không cho tích |
+| **Trùng** *(bản cũ của nick đó)* | tích sẵn, xoá được |
+| **Mồ côi** *(nick đã xoá khỏi phần mềm)* | tích sẵn, xoá được |
+
+Bảng hiện dung lượng và lần dùng gần nhất của từng thư mục, sắp xếp cái đáng dọn
+lên trước. Anh bỏ tích cái nào muốn giữ rồi mới xoá.
+
+**Phần mềm không tự xoá profile.** Dọn cache thì nó tự làm được vì cache mất
+không kéo theo gì, còn profile mất là mất đăng nhập — cái giá đắt hơn nhiều so
+với dung lượng tiết kiệm được, nên để người dùng duyệt.
+
+Khi bấm xoá, máy chủ **phân loại lại từ đầu** chứ không tin danh sách trên màn
+hình: bảng có thể đã cũ vài phút, mà trong khoảng đó một thư mục "trùng" hoàn
+toàn có thể đã thành "đang dùng".
+
+> Trên máy đang dùng để phát triển, bảng này tìm ra **34 thư mục thừa, 1,65 GB**.
+
+---
+
 ## v2.35.4 — 07/10/2026
 
 **Sửa: bản cài đặt không cập nhật được — "Thư mục này chưa phải kho code git"**
