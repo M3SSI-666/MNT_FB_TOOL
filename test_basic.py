@@ -4535,9 +4535,11 @@ check("mặc định: hạng mục Hộ gia đình", _cd_mkt["mkt_hang_muc"] == 
 check("mặc định: tình trạng Mới",       _cd_mkt["mkt_tinh_trang"] == "Mới")
 check("mặc định: vị trí Hai Bà Trưng",  _cd_mkt["mkt_vi_tri"] == "Hai Bà Trưng")
 check("mặc định: tối đa 20 nhóm",       _cd_mkt["mkt_so_nhom"] == "20")
-check("mặc định: từ khoá nhóm gồm cả biến thể thiếu chữ 's'",
-      db.tach_tu_khoa(_cd_mkt["mkt_tu_khoa"])
-      == ["Times City", "Time City", "làng Times"])
+# "Time" là chuỗi con của "Times" nên một mình nó đã vớt hết, nhưng giữ cả hai
+# cho người đọc ô cài đặt hiểu ngay là bắt cả hai lối viết. Đo trên 28 nhóm thật
+# của Sa Tran Anh: "Times, Time" vớt 26/28, đúng bằng bộ từ khoá dài trước đây.
+check("mặc định: từ khoá nhóm bắt cả 'Times' lẫn 'Time'",
+      db.tach_tu_khoa(_cd_mkt["mkt_tu_khoa"]) == ["Times", "Time"])
 # Từ khoá rỗng nghĩa là tick nhóm nào cũng được — đúng cái phải tránh. Để trống
 # thì lấy lại mặc định chứ không được coi là "không lọc".
 db.set_setting("mkt_tu_khoa", "")
@@ -5242,19 +5244,33 @@ _ten_bo = " | ".join(n["ten"] for n in _bo)
 check("chỉ còn loại 2 nhóm phòng trọ khác khu",
       len(_bo) == 2 and "KIM GIANG" in _ten_bo and "Bằng Liệt" in _ten_bo)
 
-# Khớp nhiều hơn hạn mức thì ưu tiên nhóm ĐÔNG thành viên.
+# Khớp nhiều hơn hạn mức thì bốc NGẪU NHIÊN, không ưu tiên nhóm đông nữa.
 _chon20, _bo20 = db.chon_nhom_marketplace(_ds, db.MKT_MAC_DINH["mkt_tu_khoa"], 20)
 check("đúng 20 nhóm khi hạn mức 20", len(_chon20) == 20)
-check("nhóm đông nhất đứng đầu",
-      db.doc_so_thanh_vien(_chon20[0]["ten"]) == 66300)
-check("xếp giảm dần theo số thành viên",
-      all(db.doc_so_thanh_vien(_chon20[i]["ten"])
-          >= db.doc_so_thanh_vien(_chon20[i + 1]["ten"])
-          for i in range(len(_chon20) - 1)))
-check("nhóm bị bỏ đều ít thành viên hơn nhóm được chọn cuối",
-      min(db.doc_so_thanh_vien(n["ten"]) for n in _chon20)
-      >= max(db.doc_so_thanh_vien(n["ten"]) for n in _bo20
-             if db.khop_tu_khoa(n["ten"], db.MKT_MAC_DINH["mkt_tu_khoa"])))
+check("mọi nhóm được chọn đều khớp từ khoá",
+      all(db.khop_tu_khoa(n["ten"], db.MKT_MAC_DINH["mkt_tu_khoa"])
+          for n in _chon20))
+
+# Thứ tự TICK cũng phải ngẫu nhiên, không phải từ trên xuống: tick theo đúng
+# thứ tự danh sách phiên nào cũng vậy là một dấu vết nhận ra máy.
+_vi_tri = {t: i for i, t in enumerate(_NHOM_THAT)}
+_xuoi = sum(1 for _ in range(8)
+            if [_vi_tri[n["ten"]] for n in
+                db.chon_nhom_marketplace(_ds, db.MKT_MAC_DINH["mkt_tu_khoa"], 20)[0]]
+            == sorted(_vi_tri[n["ten"]] for n in
+                      db.chon_nhom_marketplace(_ds, db.MKT_MAC_DINH["mkt_tu_khoa"], 20)[0]))
+check("thứ tự tick ngẫu nhiên, không phải từ trên xuống", _xuoi == 0)
+check("danh sách bỏ giữ đúng thứ tự màn hình",
+      [_vi_tri[n["ten"]] for n in _bo20]
+      == sorted(_vi_tri[n["ten"]] for n in _bo20))
+
+# Bốc ngẫu nhiên thật, không phải lúc nào cũng ra một bộ. 26 nhóm khớp mà chỉ
+# lấy 20 nên C(26,20) = 230.230 khả năng — năm lần ra y hệt nhau là chuyện
+# gần như không xảy ra, trừ khi hàm đã thôi ngẫu nhiên.
+_cac_lan = {tuple(n["ten"] for n in
+                  db.chon_nhom_marketplace(_ds, db.MKT_MAC_DINH["mkt_tu_khoa"], 20)[0])
+            for _ in range(5)}
+check("bốc ngẫu nhiên — 5 lần không ra cùng một bộ", len(_cac_lan) > 1)
 check("chọn + bỏ luôn bằng tổng số nhóm", len(_chon20) + len(_bo20) == 28)
 # Hạn mức 0 thì không tick gì — không được hiểu thành "không giới hạn".
 check("hạn mức 0 -> không chọn nhóm nào",

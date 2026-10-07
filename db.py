@@ -5,6 +5,7 @@ Thay thế hoàn toàn Google Sheets, không cần internet để đọc/ghi dat
 
 import sqlite3
 import os
+import random
 import re
 import unicodedata
 from pathlib import Path
@@ -1949,7 +1950,7 @@ MKT_MAC_DINH = {
     # KHÔNG để sẵn "Park Hill": trong danh sách thật nó không thêm nhóm nào mới
     # (các nhóm Park Hill đều đã khớp "Times City" hoặc "Time City") mà lại kéo
     # về nguy cơ nhóm Park Hill ở khu khác. Cần thì tự thêm.
-    "mkt_tu_khoa":    "Times City, Time City, làng Times",
+    "mkt_tu_khoa":    "Times, Time",
 }
 
 
@@ -2103,16 +2104,22 @@ def chon_nhom_marketplace(nhom: list[dict], chuoi_tu_khoa: str,
 
     `nhom`: [{"ten": <cả dòng chữ của nhóm>, ...}] theo đúng thứ tự trên màn hình.
 
-    Khớp nhiều hơn hạn mức thì ƯU TIÊN NHÓM ĐÔNG THÀNH VIÊN — số đó đọc được
-    ngay từ DOM nên không phải đoán. Đo thật trên nick Sa Tran Anh: 23 nhóm khớp
-    mà Facebook chỉ cho 20, nên chuyện phải bỏ bớt là bình thường chứ không hiếm.
+    Khớp nhiều hơn hạn mức thì bốc NGẪU NHIÊN. Bản trước ưu tiên nhóm đông
+    thành viên, nhưng đông không có nghĩa là ra đơn, mà cố định như thế thì
+    phiên nào cũng tick đúng một bộ nhóm — vài nhóm không bao giờ tới lượt.
+    Ngẫu nhiên thì qua nhiều phiên mọi nhóm đều được đăng.
+
+    Danh sách CHỌN trả về theo thứ tự đã bốc, tức là ngẫu nhiên luôn chứ không
+    phải từ trên xuống: thứ tự tick cố định cũng là một dấu vết nhận ra máy.
+    Danh sách BỎ giữ thứ tự màn hình cho dễ đọc log.
     """
-    khop = [n for n in nhom if khop_tu_khoa(n.get("ten", ""), chuoi_tu_khoa)]
-    loai = [n for n in nhom if n not in khop]
-    # sort ổn định: cùng số thành viên thì giữ nguyên thứ tự Facebook đưa ra.
-    khop.sort(key=lambda n: -doc_so_thanh_vien(n.get("ten", "")))
+    khop = [i for i, x in enumerate(nhom)
+            if khop_tu_khoa(x.get("ten", ""), chuoi_tu_khoa)]
     n = max(0, int(so_toi_da or 0))
-    return khop[:n], loai + khop[n:]
+    lay = random.sample(khop, n) if len(khop) > n else random.sample(khop, len(khop))
+    bo = set(range(len(nhom))) - set(lay)
+    return ([nhom[i] for i in lay],
+            [x for i, x in enumerate(nhom) if i in bo])
 
 
 def doc_cai_dat_mkt() -> dict:
