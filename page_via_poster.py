@@ -686,6 +686,11 @@ async def _run_page_via(
             # thấy sau mốc này mới có thể là của phiên này — xem ghi chú ở
             # `fb_common.danh_dau_da_dang`.
             danh_dau_da_dang(page)
+            try:
+                import nhip_dap
+                nhip_dap.ghi("dang_hybrid")
+            except Exception:
+                pass
         else:
             logger.warning(f"  ⚠️  Không chắc kết quả — kiểm tra thủ công trên Facebook")
 
@@ -1092,6 +1097,11 @@ async def _run_page_wall(
             # thấy sau mốc này mới có thể là của phiên này — xem ghi chú ở
             # `fb_common.danh_dau_da_dang`.
             danh_dau_da_dang(page)
+            try:
+                import nhip_dap
+                nhip_dap.ghi("dang_tuong_page")
+            except Exception:
+                pass
         else:
             logger.warning(f"  ⚠️  Không chắc kết quả — kiểm tra thủ công trên Facebook")
             await ctx.close()

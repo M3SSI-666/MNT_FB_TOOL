@@ -10,6 +10,54 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.38.0 — 08/10/2026
+
+**Mới: báo cáo tình hình từng chức năng về Telegram cuối ngày**
+
+Bản tin tổng kết hằng ngày nay có thêm một khối:
+
+```
+🩺 Tình hình từng chức năng
+  ✅ Đăng bài (Hybrid): 412 lần
+  ✅ Đi comment: 209 lần
+  ✅ Dò cảnh báo — phiên đăng: 410 lần
+  ✅ Dò cảnh báo — phiên comment: 209 lần
+  ✅ Thu link bài đã đăng: 405 lần
+  ✅ Dọn cache profile: 1 lần
+  ✅ Dọn thư mục profile: 1 lần
+```
+
+Có chuyện thì nó chỉ thẳng ra:
+
+```
+  🔴 Đi comment chạy nhưng KHÔNG dò cảnh báo gỡ bài lần nào (chạy 184 lần hôm nay)
+```
+
+**Vì sao cần.** Lỗi nguy hiểm nhất của phần mềm này không phải lỗi làm nó dừng
+— mà lỗi làm **một cơ chế an toàn chết lặng** trong khi mọi thứ khác vẫn chạy.
+Bảng vẫn xanh, log vẫn đẹp, bài vẫn lên; chỉ có điều không ai còn canh chừng.
+
+Bốn ca đã xảy ra, tìm ra trong tuần 03–07/10. Nặng nhất: bước dò cảnh báo gỡ
+bài của phiên comment **không hề chạy suốt 13 ngày** — 178 trên 184 phiên — vì
+một lỗi nằm trong khối bắt lỗi rộng, biến thành dòng ghi chú vô hại.
+
+Không có cách nào bắt loại này bằng cách đọc log, vì log không có gì bất
+thường. Thứ bất thường là **một dòng log đáng ra phải có mà không có**.
+
+Nên cách làm ở đây không phải đi bắt từng loại lỗi, mà bắt sự **im lặng**: mỗi
+chức năng tự ghi một nhịp khi chạy xong, rồi cuối ngày đối chiếu những cặp phải
+đi cùng nhau. Câu *"hôm nay đăng 412 phiên mà dò cảnh báo 0 lần"* bắt được cả
+bốn ca trên trong vòng một ngày, mà không cần đoán trước chúng hỏng kiểu gì.
+
+Chức năng **chưa từng chạy** trên máy thì không bị báo — máy không bật phiên
+comment thì "comment im lặng" là bình thường. Báo nhầm vài lần là người ta thôi
+đọc báo cáo, mà báo cáo không ai đọc thì vô dụng hơn cả không có.
+
+Việc ghi nhịp được bọc kín: mất một nhịp chỉ làm sai một dòng báo cáo, tuyệt
+đối không làm hỏng phiên đăng.
+
+---
+
 ## v2.37.0 — 07/10/2026
 
 **Dọn thư mục profile nay chạy ngầm — đã bỏ bảng trong tab Hành động**

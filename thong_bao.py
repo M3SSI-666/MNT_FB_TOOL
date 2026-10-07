@@ -433,9 +433,21 @@ def tom_tat() -> str:
         except Exception:
             pass
 
+        # Tình hình TỪNG CHỨC NĂNG. Khối này bắt loại hỏng mà danh sách acc ở
+        # dưới không bao giờ lộ ra: acc vẫn Active, bài vẫn lên, nhưng một cơ
+        # chế an toàn đã chết lặng. Xem nhip_dap.py — có bốn ca đã xảy ra, ca
+        # nặng nhất im 13 ngày.
+        try:
+            import nhip_dap
+            bc = nhip_dap.bao_cao()
+            if bc:
+                dong.append(bc)
+        except Exception as e:
+            logger.debug(f"báo cáo nhịp hỏng: {e}")
+
         if not xau:
             dong.append("")
-            dong.append("Tất cả đang chạy bình thường.")
+            dong.append("Tất cả tài khoản đang chạy bình thường.")
             return "\n".join(dong)
 
         dong.append("")

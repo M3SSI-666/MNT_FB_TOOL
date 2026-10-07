@@ -274,6 +274,20 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_comment_posts_loai ON comment_posts(loai);
 
+        -- ── Nhịp đập của từng cơ chế ─────────────────────────────────────
+        -- Mỗi cơ chế ghi một dòng "tôi vừa chạy". Cuối ngày đối chiếu để biết
+        -- bộ phận nào đã chết lặng — xem nhip_dap.py.
+        --
+        -- Một dòng cho mỗi cơ chế, cập nhật tại chỗ. KHÔNG ghi nhật ký từng
+        -- lần: mỗi ngày có hàng trăm phiên, giữ hết chỉ để đếm là phí, mà
+        -- bảng phình ra lại làm chậm chính việc ghi.
+        CREATE TABLE IF NOT EXISTS nhip_dap (
+            ten       TEXT PRIMARY KEY,
+            lan_cuoi  TEXT DEFAULT '',          -- 'YYYY-mm-dd HH:MM:SS'
+            ngay      TEXT DEFAULT '',          -- ngày của so_lan
+            so_lan    INTEGER DEFAULT 0         -- số lần TRONG NGÀY đó
+        );
+
         -- ── Cài đặt hệ thống ─────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS settings (
             key     TEXT PRIMARY KEY,

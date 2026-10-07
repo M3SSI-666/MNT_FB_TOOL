@@ -267,6 +267,12 @@ def don_profile_rac(accounts: list, ngay_cho: int = NGAY_COI_LA_RAC,
     """
     import shutil, time as _t
 
+    try:
+        import nhip_dap
+        nhip_dap.ghi("don_profile")
+    except Exception:
+        pass
+
     ds = phan_loai_profile(accounts)
     if not ds:
         return {"xoa": [], "mb": 0.0, "bo_qua_vi_moi": 0, "bo_qua_vi_dang_mo": 0}
@@ -437,6 +443,12 @@ def don_cache_tat_ca(nguong_mb: float = 200) -> float:
     dùng (không đăng, không nuôi) thì chẳng phiên nào chạm tới, cache cũ nằm lại
     mãi. Bỏ qua profile đang mở để không làm hỏng phiên đang chạy.
     """
+    try:
+        import nhip_dap
+        nhip_dap.ghi("don_cache")
+    except Exception:
+        pass
+
     goc = str(PROFILES_DIR)
     if not os.path.isdir(goc):
         return 0.0
@@ -943,6 +955,18 @@ async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
                         wait_until="domcontentloaded", timeout=30000)
         await asyncio.sleep(random.uniform(4, 6))
         txt = await dong_dialog_canh_bao(page)
+
+        # Nhịp đập: ghi NGAY khi bước dò thật sự chạy tới đây, trước cả khi
+        # biết có vi phạm hay không. Thứ cần theo dõi là "bước này CÓ chạy",
+        # không phải "bước này tìm thấy gì" — chính cái im lặng của nó mới là
+        # dấu hiệu hỏng (xem nhip_dap.py).
+        try:
+            import nhip_dap
+            nhip_dap.ghi("do_spam_comment" if "comment" in (sau_viec or "")
+                         else "do_spam_dang")
+        except Exception:
+            pass
+
         vp = _sk.doc_vi_pham(txt)
         if not vp:
             # Dò tại chỗ không thấy → dùng chữ vòng canh đã ghi lại trong

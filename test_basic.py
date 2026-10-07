@@ -1239,6 +1239,80 @@ with _tf3.TemporaryDirectory() as _d4:
     finally:
         _fbc4.PROFILES_DIR = _goc_pf2
 
+# ── Nhịp đập: bắt cơ chế chết lặng ─────────────────────────────────────────
+# Lỗi nguy hiểm nhất của phần mềm này không phải lỗi làm nó dừng, mà lỗi làm
+# một CƠ CHẾ AN TOÀN chết lặng trong khi mọi thứ khác vẫn chạy. Bốn ca đã xảy
+# ra trong tuần 03-07/10, ca nặng nhất im 13 ngày: biến `kq` không tồn tại
+# trong hàm kết phiên comment, nằm trong except rộng nên bước dò cảnh báo gỡ
+# bài của phiên comment KHÔNG HỀ CHẠY — 178/184 phiên, không ai biết.
+import nhip_dap as _nd
+db.init_db()
+with db._conn() as _c:
+    _c.execute("DELETE FROM nhip_dap")
+for _ in range(5):
+    _nd.ghi("dang_hybrid")
+_n = _nd.doc()
+check("ghi nhịp rồi đọc lại được", _n.get("dang_hybrid", {}).get("so_lan") == 5)
+check("nhịp mới ghi thì giờ im gần 0",
+      0 <= (_n["dang_hybrid"]["gio_im"] or 99) < 0.1)
+
+# Cặp đôi đứt gãy — đây là phần giá trị nhất, nó không cần biết hỏng vì lý do
+# gì, chỉ cần biết hai thứ đáng ra đi cùng nhau mà nay một cái biến mất.
+_nd.ghi("comment")
+_vd = dict((c, m) for m, c in _nd.soi())
+check("đăng bài chạy mà KHÔNG dò spam -> báo đỏ",
+      any("KHÔNG dò cảnh báo" in c and "Đăng bài" in c for c in _vd))
+check("comment chạy mà KHÔNG dò spam -> báo đỏ (đúng ca lỗi 13 ngày)",
+      any("KHÔNG dò cảnh báo" in c and "comment" in c for c in _vd))
+check("đăng bài chạy mà KHÔNG thu link -> báo đỏ",
+      any("KHÔNG thu link" in c for c in _vd))
+check("cặp đôi đứt gãy ở mức ĐỎ, không phải vàng",
+      all(m == "do" for m, _ in _nd.soi() if "KHÔNG" in _))
+
+# Đủ cặp thì im — báo nhầm vài lần là người ta thôi đọc báo cáo.
+for _ in range(5):
+    _nd.ghi("do_spam_dang"); _nd.ghi("thu_link")
+_nd.ghi("do_spam_comment")
+check("đủ cặp thì KHÔNG báo gì", _nd.soi() == [])
+check("báo cáo liệt kê số lần từng chức năng",
+      "Đăng bài (Hybrid): 5 lần" in _nd.bao_cao())
+
+# Cơ chế CHƯA TỪNG chạy thì không báo: máy không bật phiên comment thì
+# "comment im lặng" là bình thường. Báo nhầm làm người đọc quen với cảnh báo
+# giả rồi bỏ qua cả cảnh báo thật.
+with db._conn() as _c:
+    _c.execute("DELETE FROM nhip_dap")
+_nd.ghi("dang_hybrid"); _nd.ghi("do_spam_dang"); _nd.ghi("thu_link")
+check("cơ chế chưa từng chạy -> không báo lỗi", _nd.soi() == [])
+check("và cũng không hiện trong báo cáo", "Đi comment" not in _nd.bao_cao())
+
+# Ghi nhịp TUYỆT ĐỐI không được làm hỏng việc chính — mất một nhịp chỉ sai một
+# dòng báo cáo, còn ném lỗi ra là hỏng cả phiên đăng.
+_nd.ghi(None)
+check("ghi nhịp hỏng thì nuốt, không ném ra ngoài", True)
+
+# Mọi chỗ gắn nhịp đều phải bọc try/except vì lý do trên.
+for _f in ("fb_common.py", "page_via_poster.py", "comment_bai.py", "via_poster.py"):
+    _s = Path(_f).read_text(encoding="utf-8")
+    for _i, _l in enumerate(_s.splitlines()):
+        if "nhip_dap.ghi(" in _l:
+            _truoc = "\n".join(_s.splitlines()[max(0, _i-3):_i])
+            check(f"{_f}: nhịp được bọc try", "try:" in _truoc)
+# Bốn luồng đều phải có nhịp — thiếu một luồng là luồng đó mù.
+check("cả 4 luồng đều ghi nhịp",
+      'nhip_dap.ghi("dang_hybrid")' in Path("page_via_poster.py").read_text(encoding="utf-8")
+      and 'nhip_dap.ghi("dang_tuong_page")' in Path("page_via_poster.py").read_text(encoding="utf-8")
+      and 'nhip_dap.ghi("comment")' in Path("comment_bai.py").read_text(encoding="utf-8")
+      and 'nhip_dap.ghi("dang_hybrid")' in Path("via_poster.py").read_text(encoding="utf-8"))
+check("dò spam phân biệt phiên đăng với phiên comment",
+      'nhip_dap.ghi("do_spam_comment" if "comment" in (sau_viec or "")'
+      in Path("fb_common.py").read_text(encoding="utf-8"))
+# Và phải lọt vào bản tin Telegram cuối ngày, nếu không thì không ai đọc.
+check("báo cáo nhịp nằm trong bản tổng kết Telegram",
+      "nhip_dap.bao_cao()" in Path("thong_bao.py").read_text(encoding="utf-8"))
+with db._conn() as _c:
+    _c.execute("DELETE FROM nhip_dap")
+
 # ── Dọn TỰ ĐỘNG: bốn lớp chặn, không hỏi người dùng ────────────────────────
 # Không đưa việc này lên giao diện: người dùng không cần biết thư mục profile
 # là gì, thêm một bảng nữa chỉ làm họ rối. Nhưng chạy ngầm thì phải đủ bốn lớp
