@@ -2149,6 +2149,26 @@ def loai_content_cua_acc(loai_dang: str) -> str:
     return ""
 
 
+GIA_TOI_DA = 1000          # giá sinh ra luôn NHỎ HƠN mốc này
+
+
+def sinh_gia(rnd=None) -> str:
+    """Một giá chẵn ngẫu nhiên, dưới 1000. Trả về chuỗi để gõ thẳng vào ô Giá.
+
+    Trước đây giá bốc từ ô cài đặt `mkt_gia_list`. Bỏ cách đó vì danh sách cố
+    định chỉ có vài giá, mà Facebook so bài mới với bài cũ CÒN SỐNG của chính
+    nick đó: trùng giá là thêm một điểm giống nhau. Đo thật ngày 08/10 trên nick
+    Sa Tran Anh — hai bài cùng giá 86 ₫, cùng ảnh, cùng tiêu đề thì bài thứ hai
+    bị Facebook từ chối thẳng: "có vẻ giống một bài niêm yết khác nên chúng tôi
+    không đăng".
+
+    Chẵn vì giá lẻ trông như giá máy sinh ra. 499 khoảng giá có thể, đủ để hai
+    phiên liên tiếp gần như không bao giờ trùng.
+    """
+    r = rnd or random
+    return str(r.randrange(2, GIA_TOI_DA, 2))
+
+
 def tach_gia(chuoi: str) -> list[str]:
     """Tách ô Giá thành danh sách để bốc ngẫu nhiên.
 

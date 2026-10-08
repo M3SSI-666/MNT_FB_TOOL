@@ -2210,10 +2210,13 @@ else:
     # Cùng seed -> cùng kết quả. Cần cho việc dựng lại đúng ảnh đã đăng khi
     # phải đối chiếu về sau.
     import random as _rd
-    _ma = [_bt.sinh_ma(_rd.Random(i)) for i in range(200)]
-    check("mã đúng 8 ký tự",              all(len(m) == _bt.DAI_MA for m in _ma))
-    check("mã chỉ gồm chữ và số",         all(c in _bt.BANG_MA for m in _ma for c in m))
-    check("mã không lặp lại",             len(set(_ma)) == len(_ma))
+    _bo_so = [_bt.sinh_so_goc(_rd.Random(i)) for i in range(200)]
+    check("mỗi ảnh ra đúng 4 số",         all(len(s) == 4 for s in _bo_so))
+    check("số góc đều dưới 1000",         all(0 < n < 1000 for s in _bo_so for n in s))
+    # Bốn góc trùng số nhìn như lỗi, nên phải là sample chứ không phải 4 lần bốc.
+    check("4 góc 4 số khác nhau",         all(len(set(s)) == 4 for s in _bo_so))
+    check("bộ số không lặp giữa các ảnh",
+          len({tuple(s) for s in _bo_so}) == len(_bo_so))
 
     _r2 = _bt.tao_bien_the(str(_goc), str(_md / "r2"), seed=1, cuong_do="manh")
     check("cùng seed -> cùng kết quả",    Path(_ra).read_bytes() == Path(_r2).read_bytes())
@@ -4525,6 +4528,16 @@ check("tách giá: bỏ ký tự không phải số",
 check("tách giá: bỏ trùng", db.tach_gia("86, 68, 86") == ["86", "68"])
 check("tách giá: ô rỗng -> danh sách rỗng", db.tach_gia("") == [])
 check("tách giá: gõ toàn chữ -> danh sách rỗng", db.tach_gia("chưa điền") == [])
+
+# Giá bài Marketplace nay SINH ngẫu nhiên chứ không bốc từ danh sách cố định:
+# trùng giá với bài cũ còn sống là thêm một điểm giống nhau, mà Facebook so bài
+# mới với chính bài cũ của nick đó rồi từ chối nếu quá giống.
+_gia = [db.sinh_gia() for _ in range(400)]
+check("giá sinh ra toàn số",        all(g.isdigit() for g in _gia))
+check("giá đều CHẴN",               all(int(g) % 2 == 0 for g in _gia))
+check("giá đều dưới 1000",          all(0 < int(g) < db.GIA_TOI_DA for g in _gia))
+# 400 lần bốc trong 499 giá mà chỉ ra một hai giá trị thì hàm đã thôi ngẫu nhiên.
+check("giá trải rộng, không kẹt một chỗ", len(set(_gia)) > 100)
 
 # Chưa đặt lần nào thì phải ra đúng mặc định — người dùng mở phần mềm lần đầu
 # là dùng được ngay, không phải tự đi điền sáu ô.

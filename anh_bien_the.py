@@ -10,7 +10,8 @@ khớp ảnh bằng perceptual hash (PDQ — họ tự open-source), nghĩa là 
 Module làm 3 việc, theo yêu cầu:
   1. lệch nhẹ độ sáng
   2. lệch nhẹ độ tương phản
-  3. dán mã 8 ký tự chữ-số vào một trong 4 góc, mỗi ảnh một mã khác
+  3. dán 4 SỐ vào 4 GÓC — mỗi góc một số khác nhau, mỗi số dưới 1000, chữ đậm
+     màu vàng, KHÔNG làm mờ
 
 Ảnh gốc KHÔNG BAO GIỜ bị sửa. Mỗi lần đăng sinh một bản sao trong thư mục temp,
 đăng xong `storage.cleanup_temp()` xoá đi.
@@ -19,10 +20,12 @@ Module làm 3 việc, theo yêu cầu:
 ────────────────────────────────────────────────────────
 Đo trên ảnh thật (chạy CLI bên dưới để tự kiểm chứng):
 
-  • Mã ở góc:            ~0 bit. pHash hạ ảnh về lưới 32×32 rồi chỉ đọc 8×8 hệ
-                         số DCT tần số thấp nhất; vài chục pixel ở một góc bị
-                         làm nhoè gần hết ở bước đó. Mã dùng để TRA NGƯỢC bài
-                         đã đăng, không phải để né.
+  • Số ở góc:            ~0 bit. pHash hạ ảnh về lưới 32×32 rồi chỉ đọc 8×8 hệ
+                         số DCT tần số thấp nhất; vài chục pixel ở bốn góc bị
+                         làm nhoè gần hết ở bước đó. Số dùng để TRA NGƯỢC bài
+                         đã đăng và để mắt người nhìn ra hai bài khác nhau,
+                         không phải để né hash. Dán 4 số thay vì 1 cũng không
+                         đổi được điều đó — đã đo.
   • Sáng + tương phản:   ~4 bit. Vẫn nằm sâu dưới ngưỡng khớp chặt (8 bit).
   • Cộng lại:            vẫn dưới ngưỡng — Facebook nhiều khả năng vẫn coi là
                          cùng một ảnh.
@@ -83,37 +86,35 @@ ANH_TINH = {".jpg", ".jpeg", ".png", ".webp"}         # .gif động → bỏ qu
 # vẫn thấp — đổi lại ảnh bị crop/nghiêng rõ hơn.
 #
 # `sang`/`tuong_phan`: hệ số nhân, 1.0 = giữ nguyên.
-# `ma_co`: cỡ chữ mã, tính theo tỉ lệ bề rộng ảnh.
-# `ma_mo`: độ mờ của chữ mã (0 = tàng hình, 1 = đặc).
+# `ma_co`: cỡ chữ số, tính theo tỉ lệ bề rộng ảnh.
+#
+# Không còn `ma_mo`: số dán ở góc nay để ĐẬM, không làm mờ nữa.
 CUONG_DO = {
     "nhe": {
         "sang":       (0.98, 1.02),
         "tuong_phan": (0.98, 1.02),
         "ma_co":      0.030,
-        "ma_mo":      0.22,
         "chat":       (88, 94),     # JPEG quality
     },
     "vua": {
         "sang":       (0.96, 1.04),
         "tuong_phan": (0.96, 1.04),
         "ma_co":      0.036,
-        "ma_mo":      0.30,
         "chat":       (84, 92),
     },
     "manh": {
         "sang":       (0.94, 1.06),
         "tuong_phan": (0.94, 1.06),
         "ma_co":      0.042,
-        "ma_mo":      0.38,
         "chat":       (80, 90),
     },
 }
 CUONG_DO_MAC_DINH = "vua"
 
-# Bảng ký tự sinh mã. Bỏ O/0 và I/1/L để đọc log không nhầm khi cần dò lại một
-# bài đã đăng.
-BANG_MA = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-DAI_MA  = 8
+# Số dán ở góc: 1..999, bốn góc bốn số khác nhau.
+SO_TOI_DA = 1000
+VANG      = (255, 214, 0, 255)      # vàng đặc, không alpha
+VIEN      = (0, 0, 0, 215)          # viền tối, để số vàng còn đọc được trên nền sáng
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -121,8 +122,15 @@ DAI_MA  = 8
 # ═══════════════════════════════════════════════════════════════
 
 def _font(px: int):
-    """Font hệ thống cho chữ mã. Máy nào cũng phải ra được thứ gì đó."""
-    for ten in ("segoeui.ttf", "arial.ttf", "tahoma.ttf", "verdana.ttf"):
+    """
+    Font ĐẬM của hệ thống cho số ở góc. Máy nào cũng phải ra được thứ gì đó.
+
+    Thử font đậm trước; không có thì lùi về font thường và để `stroke_width`
+    của Pillow làm dày nét thay. Không làm vậy thì trên máy thiếu font đậm,
+    số dán ra mảnh dính — mà "đậm" chính là yêu cầu.
+    """
+    for ten in ("segoeuib.ttf", "arialbd.ttf", "tahomabd.ttf", "verdanab.ttf",
+                "segoeui.ttf", "arial.ttf", "tahoma.ttf", "verdana.ttf"):
         try:
             return ImageFont.truetype(ten, px)
         except OSError:
@@ -133,42 +141,50 @@ def _font(px: int):
         return ImageFont.load_default()
 
 
-def sinh_ma(rnd) -> str:
-    """Mã 8 ký tự chữ-số, mỗi ảnh một mã."""
-    return "".join(rnd.choice(BANG_MA) for _ in range(DAI_MA))
+def sinh_so_goc(rnd) -> list[int]:
+    """Bốn số KHÁC NHAU, mỗi số dưới 1000, cho bốn góc.
 
-
-def _dan_ma(im, ma: str, ts: dict, rnd):
+    `sample` chứ không phải bốn lần `randint`: bốn lần bốc độc lập thì cỡ 0,6%
+    số ảnh sẽ có hai góc trùng số, mà hai góc trùng số thì nhìn như lỗi.
     """
-    Dán mã vào một trong 4 góc, chọn ngẫu nhiên.
+    return rnd.sample(range(1, SO_TOI_DA), 4)
 
-    Chữ vàng nhạt, mờ, cỡ ~3–4% bề rộng ảnh (ảnh 1900px → chữ ~60–80px) — đọc
-    được trên bài đăng. Đây là đánh đổi có ý thức: đổi lại, mã được ghi vào log
-    nên tra ngược được bài nào dùng ảnh nào.
 
-    Lưu ý về hiệu quả né hash: đo thực tế cho thấy chữ ở góc gần như KHÔNG dịch
-    được pHash. Thuật toán hạ ảnh về lưới 32×32 rồi chỉ đọc 8×8 hệ số DCT tần
-    số thấp nhất — vài chục pixel ở một góc bị làm nhoè gần hết trong bước đó.
-    Phần né hash ở đây đến từ sáng/tương phản, không phải từ mã.
+def _dan_so(im, so: list[int], ts: dict, rnd):
     """
-    px = max(11, int(im.width * ts["ma_co"]))
-    f  = _font(px)
+    Dán bốn số vào bốn góc: trên-trái, trên-phải, dưới-trái, dưới-phải.
+
+    Chữ ĐẬM, vàng đặc, có viền tối. Viền không phải để trang trí: ảnh của Duong
+    nền hồng-trắng, số vàng đặt lên đó gần như không đọc nổi nếu không có viền.
+
+    Lưu ý về hiệu quả né hash: đo thực tế cho thấy số ở góc gần như KHÔNG dịch
+    được pHash, và dán 4 số thay vì 1 cũng vậy. Thuật toán hạ ảnh về lưới 32×32
+    rồi chỉ đọc 8×8 hệ số DCT tần số thấp nhất — vài chục pixel ở góc bị làm
+    nhoè gần hết trong bước đó. Phần né hash đến từ sáng/tương phản, không phải
+    từ số. Số ở đây để TRA NGƯỢC bài đã đăng và để mắt người phân biệt hai bài.
+    """
+    px   = max(14, int(im.width * ts["ma_co"]))
+    f    = _font(px)
+    vien = max(1, px // 10)
+    le   = max(8, int(im.width * 0.015))             # lề tính từ mép ảnh
+
     lop = Image.new("RGBA", im.size, (0, 0, 0, 0))
     d   = ImageDraw.Draw(lop)
 
-    l, t, r, b = d.textbbox((0, 0), ma, font=f)
-    tw, th = r - l, b - t
-    le = max(8, int(im.width * 0.015))               # lề tính từ mép ảnh
+    for i, s in enumerate(so[:4]):
+        txt = str(s)
+        # textbbox phải tính CẢ viền, không thì số ở mép phải/dưới bị cụt viền.
+        l, t, r, b = d.textbbox((0, 0), txt, font=f, stroke_width=vien)
+        tw, th = r - l, b - t
+        x, y = (
+            (le,                   le),                       # trên trái
+            (im.width - tw - le,   le),                       # trên phải
+            (le,                   im.height - th - le),      # dưới trái
+            (im.width - tw - le,   im.height - th - le),      # dưới phải
+        )[i]
+        d.text((x - l, y - t), txt, font=f, fill=VANG,
+               stroke_width=vien, stroke_fill=VIEN)
 
-    x, y = rnd.choice((
-        (le,                       le),                          # trên trái
-        (im.width - tw - le,       le),                          # trên phải
-        (le,                       im.height - th - le * 2),     # dưới trái
-        (im.width - tw - le,       im.height - th - le * 2),     # dưới phải
-    ))
-
-    d.text((x - l, y - t), ma, font=f,
-           fill=(255, 235, 140, int(255 * ts["ma_mo"])))
     # Trả về đúng mode ban đầu: ảnh PNG có nền trong suốt mà ép về RGB là mất
     # kênh alpha, nền trong biến thành đen.
     return Image.alpha_composite(im.convert("RGBA"), lop).convert(im.mode)
@@ -210,9 +226,9 @@ def tao_bien_the(nguon: str, dich: str, seed=None,
             im = ImageEnhance.Brightness(im).enhance(rnd.uniform(*ts["sang"]))
             im = ImageEnhance.Contrast(im).enhance(rnd.uniform(*ts["tuong_phan"]))
 
-            # 3. Mã 8 ký tự ở một góc ngẫu nhiên — mỗi ảnh, mỗi lượt đăng một mã.
-            ma = sinh_ma(rnd)
-            im = _dan_ma(im, ma, ts, rnd)
+            # 3. Bốn số ở bốn góc — mỗi ảnh, mỗi lượt đăng một bộ số khác.
+            so = sinh_so_goc(rnd)
+            im = _dan_so(im, so, ts, rnd)
 
             # 4. Ghi ra. Lưu lại là EXIF gốc (máy ảnh, GPS, ngày chụp) bị xoá
             #    sạch — bản thân EXIF trùng nhau cũng là một dấu vân tay.
@@ -223,7 +239,8 @@ def tao_bien_the(nguon: str, dich: str, seed=None,
                 ra = str(Path(dich).with_suffix(".jpg"))
                 im.save(ra, "JPEG", quality=rnd.randint(*ts["chat"]),
                         subsampling=rnd.choice((0, 2)), optimize=True)
-            logger.info(f"     🔖 {Path(nguon).name} → mã {ma}")
+            logger.info(f"     🔖 {Path(nguon).name} → số góc "
+                        f"{'-'.join(str(s) for s in so)}")
             return ra
 
     except Exception as e:

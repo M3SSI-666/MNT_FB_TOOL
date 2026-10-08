@@ -10,6 +10,45 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.40.0 — 09/10/2026
+
+**Marketplace: giá tự sinh ngẫu nhiên, ảnh đánh số 4 góc**
+
+Facebook so bài niêm yết mới với **bài cũ còn sống của chính nick đó**. Giống
+quá thì nó không đăng, và báo thẳng: *"Bài niêm yết này có vẻ giống một bài
+niêm yết khác nên chúng tôi không đăng."* Hai thay đổi để mỗi bài một vẻ:
+
+**Giá** nay tự sinh — một số **chẵn ngẫu nhiên dưới 1000** cho mỗi bài, 499
+khoảng giá có thể. Trước đây bốc từ danh sách cố định trong Cài đặt, chỉ vài
+giá nên hai bài liên tiếp dễ trùng.
+
+> Ô **Giá** trong Cài đặt Marketplace từ bản này **không còn tác dụng**. Bạn
+> không cần sửa gì, phần mềm tự sinh giá.
+
+**Ảnh** nay được đánh **4 số ở 4 góc**, mỗi góc một số khác nhau, mỗi số dưới
+1000. Chữ **đậm, màu vàng, có viền tối** để đọc rõ trên nền ảnh sáng — không
+còn làm mờ như trước. Mỗi lần đăng là một bộ số mới, ghi vào log để tra ngược
+sau này xem bài nào dùng ảnh nào.
+
+---
+
+## v2.39.0 — 09/10/2026
+
+**Marketplace: chọn nhóm ngẫu nhiên, từ khoá gọn lại**
+
+Trước đây phần mềm xếp nhóm theo số thành viên rồi lấy 20 nhóm đông nhất. Hệ
+quả: phiên nào cũng tick đúng một bộ nhóm, những nhóm ít thành viên **không
+bao giờ tới lượt** — mà nhóm đông chưa chắc ra đơn.
+
+Nay **bốc ngẫu nhiên 20 nhóm** trong số nhóm khớp từ khoá, và thứ tự tick cũng
+ngẫu nhiên. Qua nhiều phiên thì mọi nhóm đều được đăng.
+
+Ô **Từ khoá nhóm** rút gọn còn `Times, Time`. Đo trên 28 nhóm thật: bộ ngắn này
+vớt được 26/28 nhóm, đúng bằng bộ dài trước đây, lại thêm được những nhóm tên
+không có chữ "City" như *Chợ Nội thất Khu dân cư Times*.
+
+---
+
 ## v2.38.0 — 08/10/2026
 
 **Mới: báo cáo tình hình từng chức năng về Telegram cuối ngày**
