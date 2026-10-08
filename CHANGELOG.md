@@ -10,6 +10,16 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.41.1 — 09/10/2026
+
+**Sửa: biểu tượng điện thoại trên huy hiệu**
+
+Biểu tượng ống nghe trước đây được vẽ tay bằng cung tròn, nhìn không ra hình
+điện thoại. Nay dùng thẳng ký tự 📞 của font Segoe UI Symbol có sẵn trên
+Windows — gọn và đúng hình hơn.
+
+---
+
 ## v2.41.0 — 09/10/2026
 
 **Ảnh đăng được dán huy hiệu số điện thoại**

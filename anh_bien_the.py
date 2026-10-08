@@ -147,35 +147,22 @@ def _font(px: int):
         return ImageFont.load_default()
 
 
-def _ong_nghe(dm: int):
-    """Ống nghe điện thoại màu trắng, nền trong suốt, cỡ dm×dm.
+def _ve_ong_nghe(d, cx: float, cy: float, dm: int) -> None:
+    """Ống nghe trắng, vẽ vào giữa (cx, cy).
 
-    Tự vẽ bằng cung tròn chứ không mượn ký tự ☎ của font: font thiếu ký tự thì
-    Pillow vẽ ra ô vuông rỗng, mà lỗi đó chỉ lộ ra trên máy khách chứ không lộ
-    ở đây. Vẽ to gấp 4 rồi thu nhỏ cho hết răng cưa.
+    Dùng ký tự 📞 của Segoe UI Symbol — font này có sẵn trên mọi bản Windows.
+    Thiếu font thì bỏ qua, để vòng tròn xanh trơn: thà đơn giản còn hơn Pillow
+    vẽ ra ô vuông rỗng.
     """
-    s   = max(16, dm) * 4
-    im  = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-    d   = ImageDraw.Draw(im)
-    trang = (255, 255, 255, 255)
-
-    # Cung phải ĐỦ DÀI và ĐỦ CONG mới ra hình ống nghe. Bản đầu để bán kính
-    # 0,23 cạnh mà nét dày 0,15 — cung ngắn hơn bề dày nên nhìn ra con sâu.
-    pad = int(s * 0.14)
-    day = int(s * 0.115)
-    ban = s / 2 - pad
-
-    # Thân: cung phía trên, miệng mở xuống dưới.
-    d.arc([pad, pad, s - pad, s - pad], start=192, end=348, fill=trang, width=day)
-    # Hai loa to hơn nét thân, như ống nghe thật.
-    r = int(day * 0.95)
-    for goc in (192, 348):
-        cx = s / 2 + ban * math.cos(math.radians(goc))
-        cy = s / 2 + ban * math.sin(math.radians(goc))
-        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=trang)
-
-    # Nghiêng như biểu tượng gọi điện quen thuộc.
-    return im.rotate(-35, resample=Image.BICUBIC).resize((dm, dm), Image.LANCZOS)
+    for ch in ("\U0001F4DE", "☎"):               # 📞 rồi mới tới ☎
+        try:
+            f = ImageFont.truetype("seguisym.ttf", max(8, int(dm * 0.74)))
+        except OSError:
+            return
+        l, t, r, b = d.textbbox((0, 0), ch, font=f)
+        d.text((cx - (l + r) / 2, cy - (t + b) / 2), ch, font=f,
+               fill=(255, 255, 255, 255))
+        return
 
 
 def _dan_sdt(im, sdt: str, ts: dict, rnd) -> str:
@@ -221,9 +208,7 @@ def _dan_sdt(im, sdt: str, ts: dict, rnd) -> str:
     # Vòng tròn xanh + ống nghe trắng.
     cx, cy = bx + dem, y + (bh - dm) // 2
     d.ellipse([cx, cy, cx + dm, cy + dm], fill=XANH_DT)
-    ong = _ong_nghe(int(dm * 0.82))
-    lop.alpha_composite(ong, (cx + (dm - ong.width) // 2,
-                              cy + (dm - ong.height) // 2))
+    _ve_ong_nghe(d, cx + dm / 2, cy + dm / 2, dm)
 
     # Số điện thoại.
     d.text((bx + dem + dm + khe - l, y + (bh - th) // 2 - t),
