@@ -10,6 +10,29 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.41.0 — 09/10/2026
+
+**Ảnh đăng được dán huy hiệu số điện thoại**
+
+Thay cho 4 số ở 4 góc của bản trước, mỗi ảnh nay được dán **một huy hiệu số
+điện thoại** vào một góc ngẫu nhiên: viên thuốc nền trắng, vòng tròn xanh có
+ống nghe, số đỏ đậm, hai bên có tia xanh — đúng kiểu huy hiệu bạn vẫn chèn tay
+vào ảnh.
+
+Số mặc định là **0333 194 822**. Đổi được bằng khoá cài đặt `anh_bien_the_sdt`
+trong cơ sở dữ liệu (chưa có ô trong giao diện, giống các tuỳ chọn biến thể ảnh
+khác).
+
+> Huy hiệu này áp cho **mọi luồng đăng** — Hybrid, comment, Marketplace — vì
+> chúng dùng chung một bộ xử lý ảnh.
+
+> **Không trông chờ huy hiệu chống trùng ảnh.** Đo thật: hai lần đăng cùng một
+> ảnh gốc cho ra hai ảnh lệch nhau 0–2/64 bit, tức Facebook vẫn nhìn là một.
+> Muốn hai bài khác nhau thật thì phải **dùng content khác nhau** — hai content
+> khác nhau lệch 26–36 bit.
+
+---
+
 ## v2.40.0 — 09/10/2026
 
 **Marketplace: giá tự sinh ngẫu nhiên, ảnh đánh số 4 góc**

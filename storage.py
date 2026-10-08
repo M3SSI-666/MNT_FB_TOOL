@@ -122,15 +122,17 @@ def quet_anh_mo_coi(xoa: bool = False, bo_qua_moi_giay: int = 3600) -> dict:
 # Download ảnh để đăng bài (trả về local paths cho poster)
 # ═══════════════════════════════════════════════════════════════
 
-def _cai_dat_bien_the() -> tuple[bool, str, bool]:
+def _cai_dat_bien_the() -> tuple[bool, str, bool, str]:
     """Đọc cài đặt biến thể ảnh. Lỗi DB thì coi như tắt — không chặn đăng bài."""
     try:
         from db import get_setting
+        from anh_bien_the import SDT_MAC_DINH
         return (get_setting("anh_bien_the_bat", "0") == "1",
                 get_setting("anh_bien_the_cuong_do", "vua"),
-                get_setting("anh_bien_the_lat_ngang", "0") == "1")
+                get_setting("anh_bien_the_lat_ngang", "0") == "1",
+                (get_setting("anh_bien_the_sdt", SDT_MAC_DINH) or "").strip())
     except Exception:
-        return False, "vua", False
+        return False, "vua", False, ""
 
 
 def prepare_images_for_post(image_urls: str,
@@ -158,7 +160,7 @@ def prepare_images_for_post(image_urls: str,
     if not urls:
         return [], None
 
-    bien_the, cuong_do, lat_ngang = _cai_dat_bien_the()
+    bien_the, cuong_do, lat_ngang, sdt = _cai_dat_bien_the()
 
     local_paths = []
     temp_dir    = None
@@ -209,7 +211,8 @@ def prepare_images_for_post(image_urls: str,
                 # temp, ghi đè lên nhau thì mất ảnh.
                 local_paths = bien_the_ca_bo(
                     local_paths, os.path.join(temp_dir, "bt"),
-                    seed_key=seed_key, cuong_do=cuong_do, lat_ngang=lat_ngang)
+                    seed_key=seed_key, cuong_do=cuong_do, lat_ngang=lat_ngang,
+                    sdt=sdt)
                 logger.info(f"  🎲 Biến thể ảnh ({cuong_do}"
                             f"{', lật ngang' if lat_ngang else ''}): "
                             f"{len(local_paths)} ảnh")

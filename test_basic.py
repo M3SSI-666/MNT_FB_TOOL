@@ -2210,13 +2210,27 @@ else:
     # Cùng seed -> cùng kết quả. Cần cho việc dựng lại đúng ảnh đã đăng khi
     # phải đối chiếu về sau.
     import random as _rd
-    _bo_so = [_bt.sinh_so_goc(_rd.Random(i)) for i in range(200)]
-    check("mỗi ảnh ra đúng 4 số",         all(len(s) == 4 for s in _bo_so))
-    check("số góc đều dưới 1000",         all(0 < n < 1000 for s in _bo_so for n in s))
-    # Bốn góc trùng số nhìn như lỗi, nên phải là sample chứ không phải 4 lần bốc.
-    check("4 góc 4 số khác nhau",         all(len(set(s)) == 4 for s in _bo_so))
-    check("bộ số không lặp giữa các ảnh",
-          len({tuple(s) for s in _bo_so}) == len(_bo_so))
+    _GOC = {"trên trái", "trên phải", "dưới trái", "dưới phải"}
+    _dat = [_bt._dan_sdt(_im, "0333 194 822", _bt.CUONG_DO["vua"], _rd.Random(i))
+            for i in range(60)]
+    check("huy hiệu rơi đúng một trong 4 góc",
+          {g for g, _ in _dat} <= _GOC)
+    check("qua nhiều lần dùng đủ cả 4 góc",
+          {g for g, _ in _dat} == _GOC)
+    check("dán huy hiệu không đổi kích thước ảnh",
+          all(a.size == _im.size for _, a in _dat))
+    check("dán huy hiệu giữ nguyên mode ảnh",
+          all(a.mode == _im.mode for _, a in _dat))
+    # Ảnh PNG nền trong: ép về RGB là nền trong hoá đen.
+    _png = _Im.new("RGBA", (300, 200), (0, 0, 0, 0))
+    check("ảnh RGBA vẫn ra RGBA",
+          _bt._dan_sdt(_png, "0333 194 822", _bt.CUONG_DO["vua"],
+                       _rd.Random(0))[1].mode == "RGBA")
+    # Số điện thoại phải lấy theo tham số, không được hard-code.
+    _sdt_khac = _bt.tao_bien_the(str(_goc), str(_md / "sdt"), seed=1,
+                                 cuong_do="manh", sdt="0987 654 321")
+    check("đổi số điện thoại thì ra ảnh khác",
+          Path(_sdt_khac).read_bytes() != Path(_ra).read_bytes())
 
     _r2 = _bt.tao_bien_the(str(_goc), str(_md / "r2"), seed=1, cuong_do="manh")
     check("cùng seed -> cùng kết quả",    Path(_ra).read_bytes() == Path(_r2).read_bytes())
