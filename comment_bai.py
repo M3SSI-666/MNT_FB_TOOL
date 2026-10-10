@@ -607,11 +607,8 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
                         # cảnh báo vòng canh bắt được ở những bài sau vẫn nằm
                         # sau mốc, không bị loại oan.
                         danh_dau_da_dang(page)
-                        try:
-                            import nhip_dap
-                            nhip_dap.ghi("comment")
-                        except Exception:
-                            pass
+                        import nhip_dap
+                        nhip_dap.ghi("comment")
                     dau = "🎯" if la_chinh_chu(b, page_uid) else "  "
                     logger.info(f"    ✅ [{ok_n}/{muc_tieu}] {dau} {n_gui} câu: "
                                 f"{' | '.join(c[:24] for c in cau_cum[:n_gui])} "

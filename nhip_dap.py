@@ -73,7 +73,12 @@ CAP_DOI = [
 
 
 def ghi(ten: str) -> None:
-    """Ghi một nhịp. Hỏng thì nuốt — mất nhịp không được phép làm hỏng việc chính."""
+    """Ghi một nhịp. Hỏng thì nuốt — mất nhịp không được phép làm hỏng việc chính.
+
+    Hàm này KHÔNG BAO GIỜ ném lỗi ra ngoài, nên bên gọi cứ gọi thẳng, đừng bọc
+    thêm `try/except` nữa: bọc thêm chỉ che mất dòng cảnh báo bên dưới chứ
+    không bảo vệ gì.
+    """
     try:
         import db
         hom_nay = datetime.now().strftime("%Y-%m-%d")
@@ -87,7 +92,11 @@ def ghi(ten: str) -> None:
                 "  ngay     = excluded.ngay",
                 (ten, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), hom_nay))
     except Exception as e:
-        logger.debug(f"ghi nhịp {ten} hỏng: {e}")
+        # WARNING chứ không phải DEBUG. Cả module này sinh ra để phát hiện
+        # chức năng chết câm; nếu chính nó chết câm thì báo cáo cuối ngày đếm
+        # thiếu, và "comment: 0 lần" sẽ bị đọc thành "hôm nay không chạy
+        # comment" thay vì "bộ đếm hỏng".
+        logger.warning(f"⚠️  Ghi nhịp {ten!r} hỏng: {e}")
 
 
 def doc() -> dict:

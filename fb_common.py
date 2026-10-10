@@ -267,11 +267,8 @@ def don_profile_rac(accounts: list, ngay_cho: int = NGAY_COI_LA_RAC,
     """
     import shutil, time as _t
 
-    try:
-        import nhip_dap
-        nhip_dap.ghi("don_profile")
-    except Exception:
-        pass
+    import nhip_dap
+    nhip_dap.ghi("don_profile")
 
     ds = phan_loai_profile(accounts)
     if not ds:
@@ -443,11 +440,8 @@ def don_cache_tat_ca(nguong_mb: float = 200) -> float:
     dùng (không đăng, không nuôi) thì chẳng phiên nào chạm tới, cache cũ nằm lại
     mãi. Bỏ qua profile đang mở để không làm hỏng phiên đang chạy.
     """
-    try:
-        import nhip_dap
-        nhip_dap.ghi("don_cache")
-    except Exception:
-        pass
+    import nhip_dap
+    nhip_dap.ghi("don_cache")
 
     goc = str(PROFILES_DIR)
     if not os.path.isdir(goc):
@@ -960,12 +954,9 @@ async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
         # biết có vi phạm hay không. Thứ cần theo dõi là "bước này CÓ chạy",
         # không phải "bước này tìm thấy gì" — chính cái im lặng của nó mới là
         # dấu hiệu hỏng (xem nhip_dap.py).
-        try:
-            import nhip_dap
-            nhip_dap.ghi("do_spam_comment" if "comment" in (sau_viec or "")
-                         else "do_spam_dang")
-        except Exception:
-            pass
+        import nhip_dap
+        nhip_dap.ghi("do_spam_comment" if "comment" in (sau_viec or "")
+                     else "do_spam_dang")
 
         vp = _sk.doc_vi_pham(txt)
         if not vp:

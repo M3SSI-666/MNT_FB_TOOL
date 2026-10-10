@@ -1288,16 +1288,47 @@ check("và cũng không hiện trong báo cáo", "Đi comment" not in _nd.bao_ca
 
 # Ghi nhịp TUYỆT ĐỐI không được làm hỏng việc chính — mất một nhịp chỉ sai một
 # dòng báo cáo, còn ném lỗi ra là hỏng cả phiên đăng.
+#
+# Kiểm bằng HÀNH VI chứ không dò chữ "try:" trong file như bản trước. Bản trước
+# bắt mọi chỗ gọi phải tự bọc try/except, nhưng `ghi()` vốn đã tự nuốt rồi: lớp
+# bọc ngoài chỉ che mất dòng cảnh báo của nó chứ không bảo vệ thêm gì. Tệ hơn,
+# phép kiểm dò chữ ấy lại ÉP người sau phải giữ lớp bọc thừa đó.
 _nd.ghi(None)
-check("ghi nhịp hỏng thì nuốt, không ném ra ngoài", True)
+check("tên nhịp sai kiểu -> nuốt, không ném ra ngoài", True)
 
-# Mọi chỗ gắn nhịp đều phải bọc try/except vì lý do trên.
+
+def _ghi_voi_db_hong():
+    """Gọi ghi() khi DB hỏng hoàn toàn. Không được ném gì ra ngoài."""
+    import sqlite3 as _sq
+    that = db._conn
+
+    def _no(*a, **k):
+        raise _sq.OperationalError("database is locked")
+    db._conn = _no
+    try:
+        _nd.ghi("dang_hybrid")
+        return True
+    except Exception:
+        return False
+    finally:
+        db._conn = that
+
+
+check("DB hỏng thì ghi nhịp vẫn nuốt, không kéo sập phiên", _ghi_voi_db_hong())
+
+# Nuốt thì được, nhưng phải KÊU LÊN. Cả module này sinh ra để phát hiện chức
+# năng chết câm; chính nó chết câm thì báo cáo đếm thiếu mà không ai biết.
+check("ghi nhịp hỏng thì ghi log mức WARNING, không phải DEBUG",
+      "logger.warning" in Path("nhip_dap.py").read_text(encoding="utf-8")
+      .split("def ghi(")[1].split("def ")[0])
+
+# Và bên gọi KHÔNG được bọc thêm try/except — bọc là che mất cảnh báo trên.
 for _f in ("fb_common.py", "page_via_poster.py", "comment_bai.py", "via_poster.py"):
-    _s = Path(_f).read_text(encoding="utf-8")
-    for _i, _l in enumerate(_s.splitlines()):
+    _s = Path(_f).read_text(encoding="utf-8").splitlines()
+    for _i, _l in enumerate(_s):
         if "nhip_dap.ghi(" in _l:
-            _truoc = "\n".join(_s.splitlines()[max(0, _i-3):_i])
-            check(f"{_f}: nhịp được bọc try", "try:" in _truoc)
+            _truoc = "\n".join(_s[max(0, _i - 3):_i])
+            check(f"{_f}:{_i+1} nhịp KHÔNG bị bọc try thừa", "try:" not in _truoc)
 # Bốn luồng đều phải có nhịp — thiếu một luồng là luồng đó mù.
 check("cả 4 luồng đều ghi nhịp",
       'nhip_dap.ghi("dang_hybrid")' in Path("page_via_poster.py").read_text(encoding="utf-8")
@@ -3731,6 +3762,35 @@ check("nhãn trạng thái được cập nhật cả khi nạp lẫn khi lưu",
 check("thong_bao.py không dùng requests", "import requests" not in _src_tb)
 check("thong_bao.py không dùng thư viện ngoài nào",
       "cryptography" not in _src_tb and "httpx" not in _src_tb)
+
+# ── Kênh Telegram chết thì PHẢI KÊU LÊN ─────────────────────────────────────
+# Đây là lối ra duy nhất của mọi cảnh báo. Trước đây cả ba đường hỏng đều im:
+# `_goi_api` trả None và ghi log mức debug; `_luong_chay` thấy kq=None thì
+# điều kiện `if kq and not kq.get("ok")` là False nên không làm gì; Telegram
+# từ chối mà không kèm retry_after cũng rơi vào đúng nhánh đó. Kết quả: token
+# hết hạn là ngừng nhận cảnh báo mà log sạch bong, và im lặng bị hiểu thành
+# "hôm nay không có vấn đề gì" — đúng cơ chế đã gây ra lỗi câm 13 ngày.
+_src_tb2 = Path("thong_bao.py").read_text(encoding="utf-8")
+check("gọi API Telegram hỏng -> log WARNING, không phải DEBUG",
+      'logger.warning(f"⚠️  Telegram {method} hỏng' in _src_tb2)
+check("luồng gửi có đếm số lần hỏng LIÊN TIẾP", "_ghi_ket_qua(kq, hong)" in _src_tb2)
+check("hỏng quá ngưỡng thì báo MẤT KÊNH ở mức ERROR",
+      "MẤT KÊNH TELEGRAM" in _src_tb2 and "logger.error" in _src_tb2)
+check("gửi lại được thì báo đã hồi phục",
+      "gửi lại được sau" in _src_tb2)
+
+# `kq` sau nhánh retry_after phải được GÁN LẠI, không thì lần gửi lại thành
+# công vẫn bị đếm là hỏng.
+check("gửi lại sau retry_after thì cập nhật lại kq",
+      "kq = _goi_api(\"sendMessage\"" in _src_tb2)
+
+_dem = []
+for _kq, _hong in ((None, 0), ({"ok": False, "description": "bad token"}, 1),
+                   ({"ok": True}, 2)):
+    _dem.append(_tb._ghi_ket_qua(_kq, _hong))
+check("không gọi được API -> tăng số lần hỏng", _dem[0] == 1)
+check("Telegram từ chối -> tăng số lần hỏng",   _dem[1] == 2)
+check("gửi được -> đếm lại từ 0",               _dem[2] == 0)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Sao lưu — bản sao chỉ có giá trị nếu MỞ ĐƯỢC

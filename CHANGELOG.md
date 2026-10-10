@@ -10,6 +10,25 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.43.0 — 10/10/2026
+
+**Sửa: kênh Telegram có thể chết mà không báo gì**
+
+Rà lại toàn bộ chỗ bắt lỗi trong mã nguồn và tìm ra một lỗ nghiêm trọng: nếu
+Telegram ngừng nhận tin — hết token, sai chat_id, mất mạng, bị chặn — phần mềm
+**im lặng hoàn toàn**. Không một dòng ghi chú nào. Bạn sẽ ngừng nhận cảnh báo
+mà vẫn tưởng là mọi thứ bình thường.
+
+Từ bản này:
+
+- Mỗi lần gửi hỏng đều được ghi lại rõ ràng.
+- Hỏng **3 lần liên tiếp** thì báo đỏ: *"MẤT KÊNH TELEGRAM — từ giờ bạn sẽ
+  KHÔNG nhận được cảnh báo nào cho tới khi sửa"*.
+- Gửi lại được thì báo đã hồi phục.
+
+Bộ theo dõi sức khoẻ từng chức năng cũng vậy: trước đây nó hỏng thì chỉ ghi
+thầm, khiến báo cáo cuối ngày đếm thiếu mà không ai biết. Nay hỏng là kêu.
+
 ## v2.42.0 — 10/10/2026
 
 **Sửa: huy hiệu số điện thoại lẽ ra chỉ dành cho Marketplace**

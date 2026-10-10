@@ -460,11 +460,8 @@ async def _run_crosspost(
             # thấy sau mốc này mới có thể là của phiên này — xem ghi chú ở
             # `fb_common.danh_dau_da_dang`.
             danh_dau_da_dang(page)
-            try:
-                import nhip_dap
-                nhip_dap.ghi("dang_hybrid")
-            except Exception:
-                pass
+            import nhip_dap
+            nhip_dap.ghi("dang_hybrid")
         else:
             logger.warning(f"  ⚠️  Không chắc kết quả — kiểm tra thủ công trên Facebook")
 

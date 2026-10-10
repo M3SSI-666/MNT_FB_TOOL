@@ -120,7 +120,10 @@ def _goi_api(method: str, tham_so: dict, token: str = "") -> dict | None:
         with urllib.request.urlopen(req, timeout=CHO_GIAY) as r:
             return json.loads(r.read().decode("utf-8"))
     except Exception as e:
-        logger.debug(f"Telegram {method} hỏng: {e}")
+        # WARNING chứ không phải DEBUG: đây là lối ra duy nhất của mọi cảnh
+        # báo. Để mức debug thì kênh chết mà log sạch bong, và im lặng sẽ bị
+        # hiểu là "hôm nay không có vấn đề gì".
+        logger.warning(f"⚠️  Telegram {method} hỏng: {e}")
         return None
 
 
@@ -181,9 +184,37 @@ def gui_file(duong_dan, chu_thich: str = "", chat_id: str = "") -> tuple[bool, s
         return False, f"Không gửi được: {e}"
 
 
+# Hỏng liên tiếp bấy nhiêu lần thì coi như MẤT KÊNH và kêu to lên.
+NGUONG_MAT_KENH = 3
+
+
+def _ghi_ket_qua(kq, hong: int) -> int:
+    """Đếm số lần gửi hỏng LIÊN TIẾP, kêu lên khi kênh có vẻ đã đứt.
+
+    `_goi_api` trả None khi hỏng bất kể vì sao, nên không kiểm ở đây thì mạng
+    chết hay token sai đều trôi qua lặng lẽ — mà mất kênh Telegram nghĩa là
+    mất toàn bộ cảnh báo, không chỉ một tin.
+    """
+    if kq and kq.get("ok"):
+        if hong:
+            logger.info(f"  ✅ Telegram gửi lại được sau {hong} lần hỏng")
+        return 0
+
+    hong += 1
+    ly_do = (kq or {}).get("description") or "không gọi được API"
+    logger.warning(f"⚠️  Telegram không nhận tin ({hong} lần liên tiếp): {ly_do}")
+    if hong == NGUONG_MAT_KENH:
+        logger.error(
+            f"❌ MẤT KÊNH TELEGRAM — {hong} tin liên tiếp không gửi được. "
+            f"Từ giờ bạn sẽ KHÔNG nhận được cảnh báo nào cho tới khi sửa. "
+            f"Kiểm tra token và chat_id trong Cài đặt.")
+    return hong
+
+
 def _luong_chay():
     """Luồng nền: rút tin khỏi hàng đợi rồi gửi. Chết là chết một mình."""
     lan_truoc = 0.0
+    hong = 0                                     # số lần gửi hỏng liên tiếp
     while True:
         try:
             token, text = _hang.get()
@@ -215,13 +246,15 @@ def _luong_chay():
                 cho_them = (kq.get("parameters") or {}).get("retry_after")
                 if cho_them:
                     time.sleep(min(int(cho_them) + 1, 60))
-                    _goi_api("sendMessage",
-                             {"chat_id": c["chat_id"], "text": text,
-                              "disable_web_page_preview": "true"},
-                             token=token or c["token"])
+                    kq = _goi_api("sendMessage",
+                                  {"chat_id": c["chat_id"], "text": text,
+                                   "disable_web_page_preview": "true"},
+                                  token=token or c["token"])
                     lan_truoc = time.time()
+            hong = _ghi_ket_qua(kq, hong)
         except Exception as e:
-            logger.debug(f"Gửi Telegram hỏng: {e}")
+            hong += 1
+            logger.warning(f"⚠️  Gửi Telegram hỏng ({hong} lần liên tiếp): {e}")
         finally:
             try:
                 _hang.task_done()
