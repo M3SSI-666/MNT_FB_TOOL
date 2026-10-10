@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MNT AutoPost — Đăng nhập</title>
+<link rel="icon" href="/static/mnt.ico">
+<style>
+  :root{
+    --nen:#0f1115; --the:#171a21; --vien:#262b36;
+    --chu:#e8eaed; --mo:#8b93a1; --xanh:#2f80ed; --do:#e05260;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; display:flex; align-items:center;
+    justify-content:center; background:var(--nen); color:var(--chu);
+    font:15px/1.6 "Segoe UI",system-ui,sans-serif; padding:24px;
+  }
+  .the{
+    width:100%; max-width:420px; background:var(--the);
+    border:1px solid var(--vien); border-radius:14px; padding:38px 32px;
+    text-align:center;
+  }
+  h1{font-size:21px; margin:0 0 6px}
+  .phu{color:var(--mo); font-size:14px; margin:0 0 26px}
+  .ly-do{
+    background:rgba(224,82,96,.1); border:1px solid rgba(224,82,96,.35);
+    color:#ff9aa4; border-radius:9px; padding:11px 14px; font-size:14px;
+    margin-bottom:22px; text-align:left;
+  }
+  button{
+    width:100%; padding:13px; font-size:15px; font-weight:600; cursor:pointer;
+    border:0; border-radius:9px; background:var(--xanh); color:#fff;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+  }
+  button:hover{filter:brightness(1.1)}
+  button:disabled{opacity:.6; cursor:default}
+  .g{width:18px;height:18px;background:#fff;border-radius:50%;
+     display:flex;align-items:center;justify-content:center;
+     color:#4285f4;font-weight:700;font-size:12px}
+  .giup{color:var(--mo); font-size:13px; margin-top:24px; line-height:1.7}
+  .giup b{color:var(--chu); font-weight:600}
+  code{background:#0b0d11; padding:2px 6px; border-radius:4px; font-size:12px}
+</style>
+</head>
+<body>
+  <div class="the">
+    <h1>MNT FB AutoPost</h1>
+    <p class="phu">Đăng nhập bằng Gmail để dùng phần mềm</p>
+
+    {% if tt.ly_do and tt.ly_do != 'Chưa đăng nhập' %}
+      <div class="ly-do">{{ tt.ly_do }}</div>
+    {% endif %}
+
+    <button id="nut" onclick="dangNhap()">
+      <span class="g">G</span><span id="chu">Đăng nhập bằng Google</span>
+    </button>
+
+    <p class="giup">
+      Mỗi tài khoản chỉ dùng được trên <b>một máy</b>.<br>
+      Đăng nhập máy mới thì máy cũ tự thoát ra.<br>
+      Chưa có tài khoản? Liên hệ Zalo <b>0333 194 822</b>.
+    </p>
+  </div>
+
+<script>
+let dangCho = false;
+
+async function dangNhap(){
+  if (dangCho) return;
+  dangCho = true;
+  document.getElementById('nut').disabled = true;
+  document.getElementById('chu').textContent = 'Đang mở trình duyệt…';
+  try{
+    await fetch('/api/giay-phep/dang-nhap', {method:'POST'});
+  }catch(e){
+    thoiCho('Không mở được trình duyệt');
+    return;
+  }
+  doi();
+}
+
+// Hỏi lại cho tới khi đăng nhập xong. Cửa sổ Google nằm ở trình duyệt riêng
+// nên trang này không nhận được sự kiện gì — phải tự hỏi.
+function doi(){
+  let n = 0;
+  const h = setInterval(async () => {
+    n++;
+    try{
+      const tt = await (await fetch('/api/giay-phep/trang-thai')).json();
+      if (tt.dung_duoc){ clearInterval(h); location.reload(); return; }
+    }catch(e){ /* server đang bận, hỏi lại lượt sau */ }
+    if (n > 150){ clearInterval(h); thoiCho('Hết giờ chờ — thử lại nhé'); }
+  }, 2000);
+}
+
+function thoiCho(chu){
+  dangCho = false;
+  document.getElementById('nut').disabled = false;
+  document.getElementById('chu').textContent = chu;
+  setTimeout(() => {
+    document.getElementById('chu').textContent = 'Đăng nhập bằng Google';
+  }, 4000);
+}
+</script>
+</body>
+</html>

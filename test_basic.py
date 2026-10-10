@@ -5391,6 +5391,110 @@ check("hạn mức 0 -> không chọn nhóm nào",
       db.chon_nhom_marketplace(_ds, "Times City", 0)[0] == [])
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Giấy phép — đăng nhập Gmail, mỗi tài khoản một máy
+# ═══════════════════════════════════════════════════════════════════════════
+import giay_phep as _gp
+from datetime import datetime as _dt, timedelta as _td
+
+# ĐÂY LÀ PHÉP KIỂM QUAN TRỌNG NHẤT CỦA CẢ KHỐI NÀY.
+# Phần mềm đang chạy việc thật trên máy Duong và trên các máy đã phát đi. Bật
+# nhầm kèm một bản cập nhật là tất cả đồng loạt hiện màn hình đăng nhập trong
+# khi máy chủ giấy phép còn chưa dựng xong.
+_os.environ.pop("MNT_GIAY_PHEP", None)
+check("GIẤY PHÉP MẶC ĐỊNH LÀ TẮT", _gp.bat() is False)
+check("đang tắt thì KHÔNG chặn ai", _gp.trang_thai()["dung_duoc"] is True)
+check("đang tắt thì vòng canh không chạy", _gp.bat_dau_canh() is None)
+
+_os.environ["MNT_GIAY_PHEP"] = "1"
+check("bật bằng biến môi trường thì có hiệu lực", _gp.bat() is True)
+check("bật mà chưa đăng nhập -> chặn",
+      _gp.trang_thai() == {"dung_duoc": False, "email": "", "han_den": "",
+                           "ly_do": "Chưa đăng nhập"})
+
+# Mã máy phải cố định giữa các lần gọi, nếu không thì mỗi lần mở app là một
+# máy mới và khách bị đá khỏi chính mình.
+check("mã máy cố định", _gp.may_id() == _gp.may_id())
+check("mã máy đã băm, không lộ mã gốc", len(_gp.may_id()) == 32)
+
+_gp_tep_that = _gp.TEP
+_gp.TEP = Path(tempfile.mkdtemp(prefix="test_gp_")) / "gp.json"
+try:
+    _nay = _dt.now()
+
+    def _dat(**k):
+        _mac = {"email": "a@gmail.com", "token": "tk", "may_id": _gp.may_id(),
+                "han_den": (_nay + _td(days=30)).strftime("%Y-%m-%d"),
+                "kiem_cuoi": _nay.isoformat(timespec="seconds")}
+        _mac.update(k)
+        _gp._ghi(_mac)
+
+    _dat()
+    check("giấy phép đủ điều kiện -> dùng được", _gp.trang_thai()["dung_duoc"])
+
+    # Chép cả thư mục data/ sang máy khác là cách chia sẻ dễ nghĩ ra nhất.
+    _dat(may_id="cua-may-khac")
+    check("giấy phép của máy khác -> KHÔNG dùng được",
+          not _gp.trang_thai()["dung_duoc"])
+    check("và nói rõ vì sao", "máy khác" in _gp.trang_thai()["ly_do"].lower())
+
+    _dat(han_den=(_nay - _td(days=1)).strftime("%Y-%m-%d"))
+    check("hết hạn -> không dùng được", not _gp.trang_thai()["dung_duoc"])
+
+    # Ân hạn vừa là mức chịu mạng chập chờn, vừa là thời gian tối đa một máy
+    # BỊ ĐÁ còn chạy được. Hai thứ đó là một, không tách ra được.
+    check("ân hạn đúng 15 phút như Duong chọn", _gp.AN_HAN_PHUT == 15)
+    _dat(kiem_cuoi=(_nay - _td(minutes=_gp.AN_HAN_PHUT - 3))
+         .isoformat(timespec="seconds"))
+    check("mất mạng trong ân hạn -> vẫn chạy", _gp.trang_thai()["dung_duoc"])
+    _dat(kiem_cuoi=(_nay - _td(minutes=_gp.AN_HAN_PHUT + 3))
+         .isoformat(timespec="seconds"))
+    check("mất mạng quá ân hạn -> khoá", not _gp.trang_thai()["dung_duoc"])
+
+    # Mốc thời gian hỏng không được hiểu thành "vừa kiểm xong".
+    _dat(kiem_cuoi="rác")
+    check("mốc kiểm hỏng -> coi như đã lâu, khoá",
+          not _gp.trang_thai()["dung_duoc"])
+finally:
+    shutil.rmtree(_gp.TEP.parent, ignore_errors=True)
+    _gp.TEP = _gp_tep_that
+    _os.environ.pop("MNT_GIAY_PHEP", None)
+
+# Phân biệt "máy chủ nói KHÔNG" với "không gọi được máy chủ" là mấu chốt: gộp
+# hai thứ lại thì hoặc mất mạng cũng bị khoá, hoặc bị đá rồi vẫn chạy tiếp.
+_src_gp = Path("giay_phep.py").read_text(encoding="utf-8")
+check("không gọi được máy chủ thì trả None, không phải dict",
+      "return None" in _src_gp.split("def _goi(")[1].split("\ndef ")[0])
+check("máy chủ trả lời từ chối thì xoá giấy phép ngay",
+      "xoa()" in _src_gp.split("def kiem_tra(")[1].split("\ndef ")[0])
+
+# Bí mật của Google TUYỆT ĐỐI không được nằm trong bản phát cho khách — đó là
+# lý do app đi vòng qua máy chủ chứ không tự gọi Google.
+#
+# Bỏ chú thích và chuỗi tài liệu trước khi kiểm: `giay_phep.py` có NHẮC TỚI
+# client_secret ở phần giải thích vì sao không để nó ở đây, và đó là thứ nên
+# giữ lại chứ không phải thứ phải xoá đi cho qua phép kiểm.
+def _ma_khong_chu_thich(p: Path) -> str:
+    import io as _io
+    import tokenize as _tk
+    ra = []
+    try:
+        for t in _tk.generate_tokens(_io.StringIO(
+                p.read_text(encoding="utf-8", errors="ignore")).readline):
+            if t.type not in (_tk.COMMENT, _tk.STRING, _tk.NL, _tk.NEWLINE):
+                ra.append(t.string)
+    except Exception:
+        return p.read_text(encoding="utf-8", errors="ignore")
+    return " ".join(ra).lower()
+
+
+for _f in sorted(Path(".").glob("*.py")):
+    if _f.name == "test_basic.py":
+        continue
+    check(f"{_f.name}: không nhúng bí mật Google vào mã",
+          "client_secret" not in _ma_khong_chu_thich(_f))
+
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:

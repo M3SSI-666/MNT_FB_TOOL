@@ -21,6 +21,7 @@ import tien_trinh
 import capnhat
 import chromium_tai
 import db
+import giay_phep
 from db import (
     init_db,
     # accounts
@@ -605,7 +606,50 @@ def _shutdown_all():
 
 @app.route("/")
 def index():
+    # Chưa có giấy phép thì KHÔNG dựng giao diện chính. Trả màn hình đăng nhập
+    # chứ không chỉ ẩn nút: giao diện chính nạp xong là mọi API đều gọi được.
+    if not giay_phep.dung_duoc():
+        return render_template("dang_nhap.html",
+                               tt=giay_phep.trang_thai())
     return render_template("index.html")
+
+
+# ═══════════════════════════════════════════════════════════════
+# Giấy phép — đăng nhập Gmail, mỗi tài khoản một máy
+# ═══════════════════════════════════════════════════════════════
+
+@app.route("/api/giay-phep/trang-thai")
+def api_gp_trang_thai():
+    return jsonify(giay_phep.trang_thai())
+
+
+@app.route("/api/giay-phep/dang-nhap", methods=["POST"])
+def api_gp_dang_nhap():
+    """Mở trình duyệt cho khách chọn Gmail.
+
+    Chặn tới 5 phút nên chạy ở luồng riêng; giao diện hỏi lại trạng thái bằng
+    `/api/giay-phep/trang-thai`. Để chạy thẳng ở đây là treo cả server, không
+    bấm Huỷ được.
+    """
+    import threading as _th
+    _th.Thread(target=giay_phep.bat_dau_dang_nhap, daemon=True).start()
+    return jsonify(ok=True)
+
+
+@app.route("/api/giay-phep/dang-xuat", methods=["POST"])
+def api_gp_dang_xuat():
+    _kill_all_runners()
+    giay_phep.dang_xuat()
+    return jsonify(ok=True)
+
+
+def _mat_quyen(ly_do: str):
+    """Mất quyền giữa chừng — Duong chọn DỪNG NGAY, không chờ phiên chạy nốt."""
+    logger.warning(f"🔒 {ly_do} — dừng toàn bộ phiên đang chạy")
+    try:
+        _kill_all_runners()
+    except Exception as e:
+        logger.error(f"❌ Không dừng được runner khi mất quyền: {e}")
 
 
 @app.route("/api/app/shutdown", methods=["POST"])
@@ -2818,6 +2862,13 @@ def _serve():
         thong_bao.bat_dau_nen()
     except Exception as e:
         logger.warning(f"⚠️  Không bật được luồng Telegram: {e}")
+
+    # Vòng canh giấy phép: mỗi phút hỏi máy chủ "tôi còn là máy đang hoạt động
+    # không". Bị đá thì dừng ngay mọi phiên đang chạy.
+    try:
+        giay_phep.bat_dau_canh(khi_mat_quyen=_mat_quyen)
+    except Exception as e:
+        logger.warning(f"⚠️  Không bật được vòng canh giấy phép: {e}")
 
     # 127.0.0.1 — CHỈ máy này truy cập được. Trước đây bind 0.0.0.0 để điều
     # khiển từ xa, kéo theo việc mọi máy trong mạng LAN cũng chạm được cổng 8080.
