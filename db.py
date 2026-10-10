@@ -1937,6 +1937,11 @@ MKT_MAC_DINH = {
     "mkt_tinh_trang": "Mới",                # [6]
     "mkt_vi_tri":     "Hai Bà Trưng",       # [8] gõ rồi chọn gợi ý dòng đầu
     "mkt_so_nhom":    "20",                 # Facebook cho tick tối đa 20 nhóm
+    # Dán thành huy hiệu ở một góc ảnh — CHỈ bài Marketplace, vì đó là nơi
+    # khách bấm gọi ngay. Bài đăng nhóm đã có số trong nội dung rồi, và biến
+    # thể ảnh của những luồng đó giữ nguyên mã 8 ký tự như cũ.
+    # Để trống = không dán huy hiệu, ảnh quay về đánh mã như mọi luồng khác.
+    "mkt_sdt_anh":    "0333 194 822",
     # Chỉ tick nhóm có MỘT TRONG các từ khoá này trong tên, cách nhau bằng dấu
     # phẩy. Bước chọn nhóm của Marketplace KHÔNG có ô tìm kiếm (đo trên nick
     # Sa Tran Anh: 28 nhóm hiện thẳng ra thành danh sách tick), nên không mượn

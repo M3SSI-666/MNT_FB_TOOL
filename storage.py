@@ -122,27 +122,29 @@ def quet_anh_mo_coi(xoa: bool = False, bo_qua_moi_giay: int = 3600) -> dict:
 # Download ảnh để đăng bài (trả về local paths cho poster)
 # ═══════════════════════════════════════════════════════════════
 
-def _cai_dat_bien_the() -> tuple[bool, str, bool, str]:
+def _cai_dat_bien_the() -> tuple[bool, str, bool]:
     """Đọc cài đặt biến thể ảnh. Lỗi DB thì coi như tắt — không chặn đăng bài."""
     try:
         from db import get_setting
-        from anh_bien_the import SDT_MAC_DINH
         return (get_setting("anh_bien_the_bat", "0") == "1",
                 get_setting("anh_bien_the_cuong_do", "vua"),
-                get_setting("anh_bien_the_lat_ngang", "0") == "1",
-                (get_setting("anh_bien_the_sdt", SDT_MAC_DINH) or "").strip())
+                get_setting("anh_bien_the_lat_ngang", "0") == "1")
     except Exception:
-        return False, "vua", False, ""
+        return False, "vua", False
 
 
-def prepare_images_for_post(image_urls: str,
-                            seed_key: str = "") -> tuple[list[str], Optional[str]]:
+def prepare_images_for_post(image_urls: str, seed_key: str = "",
+                            sdt: str = "") -> tuple[list[str], Optional[str]]:
     """
     Chuẩn bị ảnh để đăng lên Facebook.
 
     Args:
         image_urls: Comma-separated URLs (có thể là /data/media/... local hoặc https:// external)
         seed_key:   Tên acc — để hai nick đăng cùng content vẫn ra ảnh khác nhau
+        sdt:        Số điện thoại dán thành huy hiệu ở góc ảnh. CHỈ Marketplace
+                    truyền tham số này. Bỏ trống (mặc định) thì ảnh được đánh mã
+                    8 ký tự như xưa nay — hybrid, comment và mọi luồng cũ đi
+                    đường đó, hành vi không đổi.
 
     Returns:
         (local_paths, temp_dir)
@@ -160,7 +162,7 @@ def prepare_images_for_post(image_urls: str,
     if not urls:
         return [], None
 
-    bien_the, cuong_do, lat_ngang, sdt = _cai_dat_bien_the()
+    bien_the, cuong_do, lat_ngang = _cai_dat_bien_the()
 
     local_paths = []
     temp_dir    = None

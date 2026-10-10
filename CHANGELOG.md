@@ -10,6 +10,29 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.42.0 — 10/10/2026
+
+**Sửa: huy hiệu số điện thoại lẽ ra chỉ dành cho Marketplace**
+
+Hai bản v2.41.0 và v2.41.1 đã đem huy hiệu số điện thoại áp cho **mọi luồng
+đăng**, và bỏ mất mã 8 ký tự mà biến thể ảnh vẫn dùng từ trước. Đó là làm quá
+phạm vi: huy hiệu chỉ được thử nghiệm cho Marketplace.
+
+Nay trả lại đúng chỗ:
+
+- **Hybrid, comment, mọi luồng cũ**: biến thể ảnh y như trước — mã 8 ký tự mờ
+  ở một góc ngẫu nhiên. Không đổi một li.
+- **Marketplace**: dán huy hiệu số điện thoại thay cho mã.
+
+Số điện thoại chuyển sang ô cài đặt Marketplace `mkt_sdt_anh`, mặc định
+**0333 194 822**. Để trống thì bài Marketplace cũng quay về đánh mã như các
+luồng khác.
+
+> Nếu bạn đã cài v2.41.0 hoặc v2.41.1, bản này cần thiết để ảnh của Hybrid và
+> comment trở lại bình thường.
+
+---
+
 ## v2.41.1 — 09/10/2026
 
 **Sửa: biểu tượng điện thoại trên huy hiệu**

@@ -2210,6 +2210,25 @@ else:
     # Cùng seed -> cùng kết quả. Cần cho việc dựng lại đúng ảnh đã đăng khi
     # phải đối chiếu về sau.
     import random as _rd
+    _ma = [_bt.sinh_ma(_rd.Random(i)) for i in range(200)]
+    check("mã đúng 8 ký tự",              all(len(m) == _bt.DAI_MA for m in _ma))
+    check("mã chỉ gồm chữ và số",         all(c in _bt.BANG_MA for m in _ma for c in m))
+    check("mã không lặp lại",             len(set(_ma)) == len(_ma))
+
+    # ── Huy hiệu số điện thoại: CHỈ bật khi bên gọi truyền `sdt` ────────────
+    # Hybrid và comment không truyền gì, nên chúng phải vẫn ra mã 8 ký tự y
+    # như trước. Đây là phép kiểm giữ cho huy hiệu của Marketplace không lan
+    # sang các luồng khác.
+    check("không truyền sdt -> vẫn dán mã như cũ, không ra huy hiệu",
+          "_dan_ma(im, dau, ts, rnd)" in Path("anh_bien_the.py").read_text(
+              encoding="utf-8"))
+    _khong_sdt = _bt.tao_bien_the(str(_goc), str(_md / "ko_sdt"), seed=7,
+                                  cuong_do="manh")
+    _co_sdt    = _bt.tao_bien_the(str(_goc), str(_md / "co_sdt"), seed=7,
+                                  cuong_do="manh", sdt="0333 194 822")
+    check("có sdt hay không cho ra hai ảnh khác hẳn",
+          Path(_khong_sdt).read_bytes() != Path(_co_sdt).read_bytes())
+
     _GOC = {"trên trái", "trên phải", "dưới trái", "dưới phải"}
     _dat = [_bt._dan_sdt(_im, "0333 194 822", _bt.CUONG_DO["vua"], _rd.Random(i))
             for i in range(60)]
@@ -2221,6 +2240,14 @@ else:
           all(a.size == _im.size for _, a in _dat))
     check("dán huy hiệu giữ nguyên mode ảnh",
           all(a.mode == _im.mode for _, a in _dat))
+    # Ép góc: cần khi muốn mọi ảnh của một bài nằm cùng một chỗ.
+    check("ép góc thì luôn dán đúng góc đó",
+          all(_bt._dan_sdt(_im, "0333 194 822", _bt.CUONG_DO["vua"],
+                           _rd.Random(i), "dưới phải")[0] == "dưới phải"
+              for i in range(12)))
+    check("ép góc không hợp lệ thì quay về ngẫu nhiên",
+          _bt._dan_sdt(_im, "0333 194 822", _bt.CUONG_DO["vua"],
+                       _rd.Random(0), "chỗ nào đó")[0] in _GOC)
     # Ảnh PNG nền trong: ép về RGB là nền trong hoá đen.
     _png = _Im.new("RGBA", (300, 200), (0, 0, 0, 0))
     check("ảnh RGBA vẫn ra RGBA",

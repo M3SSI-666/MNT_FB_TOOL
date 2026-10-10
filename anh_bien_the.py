@@ -10,8 +10,7 @@ khớp ảnh bằng perceptual hash (PDQ — họ tự open-source), nghĩa là 
 Module làm 3 việc, theo yêu cầu:
   1. lệch nhẹ độ sáng
   2. lệch nhẹ độ tương phản
-  3. dán HUY HIỆU SỐ ĐIỆN THOẠI vào MỘT góc ngẫu nhiên trong 4 góc — viên thuốc
-     nền trắng, vòng tròn xanh có ống nghe, số đỏ đậm, hai bên có tia xanh
+  3. dán mã 8 ký tự chữ-số vào một trong 4 góc, mỗi ảnh một mã khác
 
 Ảnh gốc KHÔNG BAO GIỜ bị sửa. Mỗi lần đăng sinh một bản sao trong thư mục temp,
 đăng xong `storage.cleanup_temp()` xoá đi.
@@ -20,15 +19,10 @@ Module làm 3 việc, theo yêu cầu:
 ────────────────────────────────────────────────────────
 Đo trên ảnh thật (chạy CLI bên dưới để tự kiểm chứng):
 
-  • Huy hiệu ở góc:      ~0 bit GIỮA HAI BIẾN THỂ. Đo thật 09/10 trên ảnh H1:
-                         biến thể ↔ ảnh gốc 6/64, nhưng biến thể ↔ biến thể chỉ
-                         0–2/64 — tức hai lần đăng cùng một ảnh gốc thì Facebook
-                         vẫn nhìn là MỘT. pHash hạ ảnh về lưới 32×32 rồi chỉ đọc
-                         8×8 hệ số DCT tần số thấp nhất; vài chục pixel ở một
-                         góc bị làm nhoè gần hết ở bước đó.
-                         Huy hiệu để KHÁCH GỌI ĐƯỢC và để tra ngược bài đã đăng,
-                         KHÔNG phải để né hash. Đừng phóng to nó với hy vọng né
-                         tốt hơn — đã thử bản 4 số to đậm ở 4 góc, vẫn 0–2 bit.
+  • Mã ở góc:            ~0 bit. pHash hạ ảnh về lưới 32×32 rồi chỉ đọc 8×8 hệ
+                         số DCT tần số thấp nhất; vài chục pixel ở một góc bị
+                         làm nhoè gần hết ở bước đó. Mã dùng để TRA NGƯỢC bài
+                         đã đăng, không phải để né.
   • Sáng + tương phản:   ~4 bit. Vẫn nằm sâu dưới ngưỡng khớp chặt (8 bit).
   • Cộng lại:            vẫn dưới ngưỡng — Facebook nhiều khả năng vẫn coi là
                          cùng một ảnh.
@@ -89,38 +83,52 @@ ANH_TINH = {".jpg", ".jpeg", ".png", ".webp"}         # .gif động → bỏ qu
 # vẫn thấp — đổi lại ảnh bị crop/nghiêng rõ hơn.
 #
 # `sang`/`tuong_phan`: hệ số nhân, 1.0 = giữ nguyên.
-# `ma_co`: cỡ chữ số điện thoại, tính theo tỉ lệ bề rộng ảnh.
-#
-# Không còn `ma_mo`: huy hiệu phải ĐỌC RÕ để khách gọi được, không làm mờ.
+# `ma_co`: cỡ chữ mã, tính theo tỉ lệ bề rộng ảnh.
+# `ma_mo`: độ mờ của chữ mã (0 = tàng hình, 1 = đặc).
 CUONG_DO = {
     "nhe": {
         "sang":       (0.98, 1.02),
         "tuong_phan": (0.98, 1.02),
         "ma_co":      0.030,
+        "ma_mo":      0.22,
         "chat":       (88, 94),     # JPEG quality
     },
     "vua": {
         "sang":       (0.96, 1.04),
         "tuong_phan": (0.96, 1.04),
         "ma_co":      0.036,
+        "ma_mo":      0.30,
         "chat":       (84, 92),
     },
     "manh": {
         "sang":       (0.94, 1.06),
         "tuong_phan": (0.94, 1.06),
         "ma_co":      0.042,
+        "ma_mo":      0.38,
         "chat":       (80, 90),
     },
 }
 CUONG_DO_MAC_DINH = "vua"
 
-# Huy hiệu số điện thoại — màu lấy theo đúng mẫu ảnh Duong đang dùng.
-SDT_MAC_DINH = "0333 194 822"
+# Bảng ký tự sinh mã. Bỏ O/0 và I/1/L để đọc log không nhầm khi cần dò lại một
+# bài đã đăng.
+BANG_MA = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+DAI_MA  = 8
+
+# ── Huy hiệu số điện thoại — CHỈ dùng cho Marketplace ──────────────────────
+#
+# Đây là thứ THAY CHO mã 8 ký tự, không phải thêm vào: truyền `sdt` thì dán huy
+# hiệu, không truyền thì vẫn dán mã như mọi luồng xưa nay vẫn làm. Hybrid và
+# comment không truyền gì nên hành vi của chúng không đổi một li.
+#
+# Lý do chỉ cho Marketplace: bài niêm yết là nơi khách bấm gọi ngay, còn bài
+# đăng nhóm thì số điện thoại đã nằm trong nội dung bài rồi.
+GOC_HOP_LE = ("trên trái", "trên phải", "dưới trái", "dưới phải")
 NEN_HUY_HIEU = (255, 255, 255, 240)   # viên thuốc trắng
 XANH_DT      = (37, 211, 102, 255)    # vòng tròn ống nghe
 DO_SO        = (225, 20, 25, 255)     # chữ số
 XANH_TIA     = (46, 204, 113, 255)    # tia hai bên
-BONG         = (0, 0, 0, 55)          # bóng đổ nhẹ cho viên thuốc nổi trên nền sáng
+BONG         = (0, 0, 0, 55)          # bóng đổ, để viên thuốc nổi trên nền sáng
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -128,15 +136,8 @@ BONG         = (0, 0, 0, 55)          # bóng đổ nhẹ cho viên thuốc nổ
 # ═══════════════════════════════════════════════════════════════
 
 def _font(px: int):
-    """
-    Font ĐẬM của hệ thống cho số ở góc. Máy nào cũng phải ra được thứ gì đó.
-
-    Thử font đậm trước; không có thì lùi về font thường và để `stroke_width`
-    của Pillow làm dày nét thay. Không làm vậy thì trên máy thiếu font đậm,
-    số dán ra mảnh dính — mà "đậm" chính là yêu cầu.
-    """
-    for ten in ("segoeuib.ttf", "arialbd.ttf", "tahomabd.ttf", "verdanab.ttf",
-                "segoeui.ttf", "arial.ttf", "tahoma.ttf", "verdana.ttf"):
+    """Font hệ thống cho chữ mã. Máy nào cũng phải ra được thứ gì đó."""
+    for ten in ("segoeui.ttf", "arial.ttf", "tahoma.ttf", "verdana.ttf"):
         try:
             return ImageFont.truetype(ten, px)
         except OSError:
@@ -147,38 +148,57 @@ def _font(px: int):
         return ImageFont.load_default()
 
 
-def _ve_ong_nghe(d, cx: float, cy: float, dm: int) -> None:
-    """Ống nghe trắng, vẽ vào giữa (cx, cy).
+def sinh_ma(rnd) -> str:
+    """Mã 8 ký tự chữ-số, mỗi ảnh một mã."""
+    return "".join(rnd.choice(BANG_MA) for _ in range(DAI_MA))
 
-    Dùng ký tự 📞 của Segoe UI Symbol — font này có sẵn trên mọi bản Windows.
-    Thiếu font thì bỏ qua, để vòng tròn xanh trơn: thà đơn giản còn hơn Pillow
-    vẽ ra ô vuông rỗng.
-    """
-    for ch in ("\U0001F4DE", "☎"):               # 📞 rồi mới tới ☎
+
+def _font_dam(px: int):
+    """Font ĐẬM cho số điện thoại trên huy hiệu. Thiếu thì lùi về font thường."""
+    for ten in ("segoeuib.ttf", "arialbd.ttf", "tahomabd.ttf", "verdanab.ttf"):
         try:
-            f = ImageFont.truetype("seguisym.ttf", max(8, int(dm * 0.74)))
+            return ImageFont.truetype(ten, px)
         except OSError:
-            return
-        l, t, r, b = d.textbbox((0, 0), ch, font=f)
-        d.text((cx - (l + r) / 2, cy - (t + b) / 2), ch, font=f,
-               fill=(255, 255, 255, 255))
-        return
+            continue
+    return _font(px)
 
 
-def _dan_sdt(im, sdt: str, ts: dict, rnd) -> str:
+def _ve_ong_nghe(d, cx: float, cy: float, dm: int) -> None:
+    """Ống nghe trắng vẽ vào giữa (cx, cy), bằng ký tự 📞 của Segoe UI Symbol.
+
+    Đã thử 4 font × 3 ký tự rồi nhìn bằng mắt: seguisym vẽ được cả U+1F4DE,
+    U+260E, U+2706; segoeui và arial đều ra ô vuông rỗng. Thiếu font thì bỏ qua,
+    để vòng tròn xanh trơn — thà đơn giản còn hơn hiện ô vuông.
     """
-    Dán huy hiệu số điện thoại vào MỘT góc ngẫu nhiên trong bốn góc.
+    try:
+        f = ImageFont.truetype("seguisym.ttf", max(8, int(dm * 0.74)))
+    except OSError:
+        return
+    l, t, r, b = d.textbbox((0, 0), "\U0001F4DE", font=f)
+    d.text((cx - (l + r) / 2, cy - (t + b) / 2), "\U0001F4DE", font=f,
+           fill=(255, 255, 255, 255))
 
-    Huy hiệu dựng theo đúng mẫu Duong đang dùng: viên thuốc nền trắng, vòng
-    tròn xanh có ống nghe, số đỏ đậm, hai bên ba tia xanh.
+
+def _dan_sdt(im, sdt: str, ts: dict, rnd, goc_ep: str = ""):
+    """
+    Dán huy hiệu số điện thoại vào một góc: viên thuốc nền trắng, vòng tròn
+    xanh có ống nghe, số đỏ đậm, hai bên ba tia xanh.
 
     Nền trắng và bóng đổ là bắt buộc chứ không phải trang trí: ảnh homestay
-    phần lớn tường trắng và sàn gỗ sáng, chữ đỏ đặt thẳng lên đó bị chìm.
+    phần lớn tường trắng sàn gỗ sáng, chữ đỏ đặt thẳng lên đó bị chìm.
 
-    Trả về tên góc đã dán, để ghi log tra ngược.
+    `goc_ep` ép dán vào đúng một góc; để rỗng thì bốc ngẫu nhiên.
+
+    ĐỪNG TRÔNG CHỜ HUY HIỆU NÉ ĐƯỢC HASH. Đo 09/10: biến thể ↔ ảnh gốc 6–12
+    bit, nhưng hai biến thể của CÙNG ảnh gốc chỉ lệch 0–2 bit (ảnh poster H1)
+    đến 4–14 bit (ảnh phòng H2, mượt nên huy hiệu ăn vào hash hơn) — đều dưới
+    ngưỡng 10–32. Thứ tạo khác biệt thật là ĐỔI CONTENT: hai content khác nhau
+    lệch 26–36 bit.
+
+    Trả về (tên góc đã dán, ảnh).
     """
     px = max(16, int(im.width * ts["ma_co"] * 1.15))
-    f  = _font(px)
+    f  = _font_dam(px)
 
     lop = Image.new("RGBA", im.size, (0, 0, 0, 0))
     d   = ImageDraw.Draw(lop)
@@ -191,48 +211,77 @@ def _dan_sdt(im, sdt: str, ts: dict, rnd) -> str:
     tia  = int(px * 0.70)                 # bề ngang cụm tia mỗi bên
     bw   = dem * 2 + dm + khe + tw
     bh   = max(dm, th) + dem * 2
-    tong_w = bw + tia * 2                 # cả tia hai bên
+    tong_w = bw + tia * 2
 
-    le   = max(10, int(im.width * 0.018))
-    goc  = rnd.choice(("trên trái", "trên phải", "dưới trái", "dưới phải"))
+    le  = max(10, int(im.width * 0.018))
+    goc = goc_ep if goc_ep in GOC_HOP_LE else rnd.choice(GOC_HOP_LE)
     x = le if "trái" in goc else im.width - tong_w - le
     y = le if "trên" in goc else im.height - bh - le
     bx = x + tia                          # mép trái viên thuốc
 
-    # Bóng đổ nhẹ rồi mới tới viên thuốc.
     d.rounded_rectangle([bx + 3, y + 4, bx + bw + 3, y + bh + 4],
                         radius=bh // 2, fill=BONG)
     d.rounded_rectangle([bx, y, bx + bw, y + bh], radius=bh // 2,
                         fill=NEN_HUY_HIEU)
 
-    # Vòng tròn xanh + ống nghe trắng.
     cx, cy = bx + dem, y + (bh - dm) // 2
     d.ellipse([cx, cy, cx + dm, cy + dm], fill=XANH_DT)
     _ve_ong_nghe(d, cx + dm / 2, cy + dm / 2, dm)
 
-    # Số điện thoại.
     d.text((bx + dem + dm + khe - l, y + (bh - th) // 2 - t),
            sdt, font=f, fill=DO_SO)
 
-    # Ba tia mỗi bên, như mẫu.
     nen = max(2, px // 9)
     for ben in (-1, 1):
         goc_x = bx - int(tia * 0.30) if ben < 0 else bx + bw + int(tia * 0.30)
-        for k, (dy, dai) in enumerate(((-0.26, 0.46), (0.0, 0.60), (0.26, 0.46))):
+        for dy, dai in ((-0.26, 0.46), (0.0, 0.60), (0.26, 0.46)):
             y0 = y + bh / 2 + bh * dy
-            x0 = goc_x - ben * int(tia * dai * 0.5)
-            x1 = goc_x + ben * int(tia * dai * 0.5)
-            d.line([x0, y0 - bh * dy * 0.35, x1, y0 + bh * dy * 0.35],
+            d.line([goc_x - ben * int(tia * dai * 0.5), y0 - bh * dy * 0.35,
+                    goc_x + ben * int(tia * dai * 0.5), y0 + bh * dy * 0.35],
                    fill=XANH_TIA, width=nen)
 
+    return goc, Image.alpha_composite(im.convert("RGBA"), lop).convert(im.mode)
+
+
+def _dan_ma(im, ma: str, ts: dict, rnd):
+    """
+    Dán mã vào một trong 4 góc, chọn ngẫu nhiên.
+
+    Chữ vàng nhạt, mờ, cỡ ~3–4% bề rộng ảnh (ảnh 1900px → chữ ~60–80px) — đọc
+    được trên bài đăng. Đây là đánh đổi có ý thức: đổi lại, mã được ghi vào log
+    nên tra ngược được bài nào dùng ảnh nào.
+
+    Lưu ý về hiệu quả né hash: đo thực tế cho thấy chữ ở góc gần như KHÔNG dịch
+    được pHash. Thuật toán hạ ảnh về lưới 32×32 rồi chỉ đọc 8×8 hệ số DCT tần
+    số thấp nhất — vài chục pixel ở một góc bị làm nhoè gần hết trong bước đó.
+    Phần né hash ở đây đến từ sáng/tương phản, không phải từ mã.
+    """
+    px = max(11, int(im.width * ts["ma_co"]))
+    f  = _font(px)
+    lop = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    d   = ImageDraw.Draw(lop)
+
+    l, t, r, b = d.textbbox((0, 0), ma, font=f)
+    tw, th = r - l, b - t
+    le = max(8, int(im.width * 0.015))               # lề tính từ mép ảnh
+
+    x, y = rnd.choice((
+        (le,                       le),                          # trên trái
+        (im.width - tw - le,       le),                          # trên phải
+        (le,                       im.height - th - le * 2),     # dưới trái
+        (im.width - tw - le,       im.height - th - le * 2),     # dưới phải
+    ))
+
+    d.text((x - l, y - t), ma, font=f,
+           fill=(255, 235, 140, int(255 * ts["ma_mo"])))
     # Trả về đúng mode ban đầu: ảnh PNG có nền trong suốt mà ép về RGB là mất
     # kênh alpha, nền trong biến thành đen.
-    return goc, Image.alpha_composite(im.convert("RGBA"), lop).convert(im.mode)
+    return Image.alpha_composite(im.convert("RGBA"), lop).convert(im.mode)
 
 
 def tao_bien_the(nguon: str, dich: str, seed=None,
                  cuong_do: str = CUONG_DO_MAC_DINH,
-                 lat_ngang: bool = False, sdt: str = "") -> str:
+                 lat_ngang: bool = False, sdt: str = "", goc: str = "") -> str:
     """
     Đọc `nguon`, ghi một biến thể ra `dich` (không kể đuôi — hàm tự chọn .jpg
     hoặc .png), trả về đường dẫn file đã ghi.
@@ -266,8 +315,16 @@ def tao_bien_the(nguon: str, dich: str, seed=None,
             im = ImageEnhance.Brightness(im).enhance(rnd.uniform(*ts["sang"]))
             im = ImageEnhance.Contrast(im).enhance(rnd.uniform(*ts["tuong_phan"]))
 
-            # 3. Huy hiệu số điện thoại ở một góc ngẫu nhiên.
-            goc, im = _dan_sdt(im, sdt or SDT_MAC_DINH, ts, rnd)
+            # 3. Dấu ở góc. Mặc định là mã 8 ký tự như xưa nay; chỉ khi bên gọi
+            #    truyền `sdt` (hiện chỉ Marketplace) mới thay bằng huy hiệu số
+            #    điện thoại. Hybrid và comment không truyền gì nên không đổi.
+            if sdt:
+                dau, im = _dan_sdt(im, sdt, ts, rnd, goc)
+                dau = f"{sdt} ở {dau}"
+            else:
+                dau = sinh_ma(rnd)
+                im  = _dan_ma(im, dau, ts, rnd)
+                dau = f"mã {dau}"
 
             # 4. Ghi ra. Lưu lại là EXIF gốc (máy ảnh, GPS, ngày chụp) bị xoá
             #    sạch — bản thân EXIF trùng nhau cũng là một dấu vân tay.
@@ -278,8 +335,7 @@ def tao_bien_the(nguon: str, dich: str, seed=None,
                 ra = str(Path(dich).with_suffix(".jpg"))
                 im.save(ra, "JPEG", quality=rnd.randint(*ts["chat"]),
                         subsampling=rnd.choice((0, 2)), optimize=True)
-            logger.info(f"     🔖 {Path(nguon).name} → "
-                        f"{sdt or SDT_MAC_DINH} ở {goc}")
+            logger.info(f"     🔖 {Path(nguon).name} → {dau}")
             return ra
 
     except Exception as e:
@@ -290,7 +346,7 @@ def tao_bien_the(nguon: str, dich: str, seed=None,
 
 def bien_the_ca_bo(duong_dan: list, thu_muc_ra: str, seed_key: str = "",
                    cuong_do: str = CUONG_DO_MAC_DINH,
-                   lat_ngang: bool = False, sdt: str = "") -> list:
+                   lat_ngang: bool = False, sdt: str = "", goc: str = "") -> list:
     """
     Biến thể cả một bộ ảnh của một bài đăng, ghi vào `thu_muc_ra`.
 
@@ -312,7 +368,7 @@ def bien_the_ca_bo(duong_dan: list, thu_muc_ra: str, seed_key: str = "",
         ra.append(tao_bien_the(
             p, os.path.join(thu_muc_ra, str(i).zfill(pad)),
             seed=f"{goc_seed}|{i}", cuong_do=cuong_do, lat_ngang=lat_ngang,
-            sdt=sdt))
+            sdt=sdt, goc=goc))
     return ra
 
 
