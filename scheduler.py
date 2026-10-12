@@ -205,6 +205,23 @@ def _attempt_post(item: dict) -> str:
             raise Exception("Đăng chéo về 0 nhóm mà không báo lỗi bước nào")
         return f" ({count} nhóm)"
 
+    # ── MODE MARKETPLACE ──────────────────────────────────────
+    # Đăng bài niêm yết dưới tên acc cá nhân, tự tick nhóm. KHÔNG cần Page UID,
+    # KHÔNG cần từ khoá hay UID nhóm đầu: nhóm được chọn ngay trên trang niêm
+    # yết, lọc theo từ khoá trong Cài đặt Marketplace.
+    if mode in ("MARKETPLACE", "MKT", "MARKET"):
+        from market_poster import post_marketplace
+        if not link_anh:
+            raise Exception("Mode=Marketplace nhưng content không có ảnh")
+        acc_data = get_account_by_name(acc_name, page_name)
+        c_user_v = acc_data.get("c_user", "") if acc_data else ""
+        so_nhom = post_marketplace(
+            acc_name=acc_name, message=content,
+            image_url=link_anh, c_user=c_user_v)
+        if not so_nhom:
+            raise Exception("Marketplace về 0 nhóm mà không báo lỗi bước nào")
+        return f" ({so_nhom} nhóm)"
+
     # ── MODE VIA ──────────────────────────────────────────────
     if mode == "VIA":
         from via_poster import post_via_crosspost

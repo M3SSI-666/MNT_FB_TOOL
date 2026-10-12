@@ -10,6 +10,39 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.45.0 — 13/10/2026
+
+**Mới: đăng bài Marketplace tự động**
+
+Thêm kiểu đăng **Marketplace** vào lịch. Một phiên tự làm trọn: lướt newsfeed
+cho mềm tay → điền bài niêm yết (ảnh, tiêu đề, giá, hạng mục, tình trạng, mô
+tả) → chọn nhóm → đăng → kiểm cảnh báo gỡ bài. Đo thật ~2,5 phút một bài.
+
+- **Giá** tự sinh ngẫu nhiên mỗi bài (số chẵn, dưới 1000).
+- **Nhóm** lọc theo từ khoá trong Cài đặt Marketplace rồi bốc ngẫu nhiên tối
+  đa 20 — qua nhiều phiên thì mọi nhóm đều được đăng.
+- **Ảnh** dán huy hiệu số điện thoại (số đặt ở Cài đặt Marketplace).
+
+> **Mỗi slot lịch nên để một content khác nhau.** Facebook so bài mới với bài
+> cũ còn sống của chính nick đó, trùng tiêu đề + mô tả + ảnh thì từ chối. Nếu
+> bài bị chặn vì trùng, phần mềm ghi cảnh báo nhắc đổi content.
+
+Để dùng: đặt kiểu đăng (mode) của dòng lịch là **Marketplace**.
+
+---
+
+## v2.44.0 — 11/10/2026
+
+**Mới: đăng nhập Gmail, mỗi tài khoản một máy (nền thương mại hoá)**
+
+Thêm bước đăng nhập bằng Gmail; mỗi tài khoản chỉ dùng được trên một máy, đăng
+nhập máy mới thì máy cũ tự thoát.
+
+> Tính năng này **mặc định TẮT** — máy của bạn và các máy đã cài vẫn chạy y
+> như cũ. Chỉ bật khi đã dựng xong máy chủ cấp phép.
+
+---
+
 ## v2.43.0 — 10/10/2026
 
 **Sửa: kênh Telegram có thể chết mà không báo gì**

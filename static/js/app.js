@@ -3315,8 +3315,7 @@ function _renderGenAccs(accs, contents){
                 <div class="field-group">
                     <label>Mode</label>
                     <select id="acc-m-${i}">
-                        <option value="Hybrid" selected>Hybrid</option>
-                        <option value="Via">Via</option>
+                        ${["Hybrid","Via","Marketplace"].map(m=>`<option value="${m}" ${(acc.mode||"Hybrid")===m?"selected":""}>${m}</option>`).join("")}
                     </select>
                 </div>
             </div>

@@ -49,6 +49,7 @@ from utils import logger
 CO_CHE = {
     "dang_hybrid":     ("Đăng bài (Hybrid)",        6),
     "dang_tuong_page": ("Đăng tường Page",         24),
+    "dang_marketplace":("Đăng Marketplace",        24),
     "comment":         ("Đi comment",              12),
     "nuoi_nick":       ("Nuôi nick",               24),
     "do_spam_dang":    ("Dò cảnh báo — phiên đăng",  6),
