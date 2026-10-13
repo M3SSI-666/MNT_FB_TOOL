@@ -2260,10 +2260,15 @@ def _ma_nhom_yc() -> str:
 
     Giá trị lạ quy về '' chứ KHÔNG báo lỗi: ghi nhầm mã sheet mà vẫn ghi được
     thì dữ liệu lọt sang sheet không tồn tại, chẳng tab nào hiện ra.
+
+    Dùng get_json(silent=True), KHÔNG dùng request.json: trình duyệt gắn
+    Content-Type: application/json cho MỌI request kể cả GET body rỗng, nên
+    request.json (không im lặng) sẽ ném 400 ngay khi ma_nhom rỗng — đúng là tab
+    UID Nhóm (ma=''). silent=True trả None thay vì ném.
     """
     v = request.args.get("ma_nhom") or ""
-    if not v and request.is_json:
-        v = (request.json or {}).get("ma_nhom") or ""
+    if not v:
+        v = ((request.get_json(silent=True) or {}).get("ma_nhom") or "")
     if not v:
         v = request.form.get("ma_nhom") or ""
     return "MARKET" if str(v).strip().upper() == "MARKET" else ""

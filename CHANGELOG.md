@@ -10,6 +10,18 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.47.2 — 14/10/2026
+
+**Sửa tiếp: xuất Excel UID Nhóm báo HTTP 400**
+
+Sau khi nút Xuất gọi đúng địa chỉ (v2.47.1), tab **UID Nhóm** vẫn lỗi 400. Lý
+do: trình duyệt gắn `Content-Type: application/json` cho mọi yêu cầu kể cả khi
+không có nội dung, khiến máy chủ cố đọc nội dung JSON rỗng và báo lỗi — đúng ở
+tab UID Nhóm (mã sheet rỗng). Tab Marketplace không bị vì mã sheet khác rỗng.
+Đã sửa để máy chủ đọc "im lặng", không báo lỗi khi không có nội dung.
+
+---
+
 ## v2.47.1 — 13/10/2026
 
 **Sửa: nút Xuất Excel ở tab UID nhóm không chạy**

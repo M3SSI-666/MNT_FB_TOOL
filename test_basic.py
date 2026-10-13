@@ -2422,6 +2422,16 @@ _rows   = _res.get_json()["data"]
 _row    = next((r for r in _rows if r["id"] == _acc_id), None)
 
 check("/api/accounts trả về acc",      _row is not None)
+
+# Xuất Excel UID nhóm: trình duyệt gắn Content-Type: application/json cho MỌI
+# request kể cả GET body rỗng. _ma_nhom_yc() từng gọi request.json (không im
+# lặng) nên ma_nhom='' (tab UID Nhóm) ném HTTP 400. Nút Xuất hỏng im cho tới
+# khi thử tay. Giả lập ĐÚNG request của trình duyệt.
+_hdr_json = {"Content-Type": "application/json"}
+_ex1 = _client.get("/api/uid-groups/export-excel", headers=_hdr_json)
+check("xuất UID Nhóm (ma='') không 400", _ex1.status_code == 200)
+_ex2 = _client.get("/api/uid-groups/export-excel?ma_nhom=MARKET", headers=_hdr_json)
+check("xuất UID Marketplace không 400",  _ex2.status_code == 200)
 if _row:
     check("password bị che",           _row["password"] == server.SECRET_MASK)
     check("xs bị che",                 _row["xs"] == server.SECRET_MASK)
