@@ -14,8 +14,8 @@ sử phát triển trong git):
 
 Luồng, đo trên nick Sa Tran Anh ~145 giây/bài:
   khởi động (lướt newsfeed) → trang điền thông tin (ảnh, tiêu đề, giá, hạng
-  mục, tình trạng, mô tả) → Tiếp → trang chọn nhóm (tick 20) → Đăng → kết
-  phiên (lướt + like + kiểm vi phạm).
+  mục, tình trạng, mô tả, vị trí) → Tiếp → trang chọn nhóm (tick 20) → Đăng →
+  kết phiên (lướt + like + kiểm vi phạm).
 
 GIỚI HẠN ĐÃ BIẾT — đọc trước khi mong đợi:
 Facebook so bài mới với bài CŨ CÒN SỐNG của chính nick đó. Trùng tiêu đề + mô
@@ -136,8 +136,117 @@ async def _chon_lua(page, gt: str) -> bool:
     return True
 
 
+def _khong_dau(s: str) -> str:
+    """Bỏ dấu + chữ thường để so khớp: "Quận Hai Bà Trưng" ~ "hai ba trung"."""
+    import unicodedata
+    s = unicodedata.normalize("NFD", (s or "").replace("đ", "d").replace("Đ", "D"))
+    return " ".join("".join(c for c in s if unicodedata.category(c) != "Mn").lower().split())
+
+
+# Gợi ý vị trí đang hiện, khớp chữ đã gõ (đã bỏ dấu). KHÔNG bấm mù dòng đầu: đo
+# 13/10, gõ "Hai Bà Trưng" ra "Quận Hai Bà Trưng, Hanoi" rồi tới Trịnh Châu, Hải
+# Khẩu… — gõ một chữ hơi khác là dòng đầu có thể là nơi khác hẳn.
+_JS_GOI_Y_VI_TRI = r"""(can) => {
+    const kd = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
+                    .replace(/đ/g,'d').replace(/Đ/g,'D').toLowerCase().replace(/\s+/g,' ');
+    for (const e of document.querySelectorAll('[role=option]')) {
+        const b = e.getBoundingClientRect();
+        if (b.width <= 0 || b.height <= 0) continue;
+        if (!kd(e.innerText).includes(can)) continue;
+        return [Math.round(b.x + b.width / 2), Math.round(b.y + b.height / 2)];
+    }
+    return null;
+}"""
+
+
+async def _chon_vi_tri(page, vi_tri: str):
+    """Ô Vị trí: gõ cài đặt `mkt_vi_tri`, chọn gợi ý khớp, rồi ĐỌC LẠI ô.
+
+    Ô này nằm trong mục "Xem thêm chi tiết" (thu gọn sẵn). Facebook tự điền vị
+    trí nó nhớ cho nick — Mai Tùng ra "Quận Hai Bà Trưng" — nên bỏ qua bước này
+    thì phiên vẫn đăng được, chỉ là mỗi nick mang một vị trí tuỳ Facebook. Ô
+    Vị trí ở tab Marketplace có từ v2.30.0 mà bộ đăng chưa từng đọc tới.
+
+    Luôn chọn lại kể cả khi ô đã đúng: một đường chạy duy nhất, lần nào cũng
+    được kiểm chứng. Không chọn được thì DỪNG, không đăng với vị trí sai.
+    """
+    vi_tri = (vi_tri or "").strip()
+    if not vi_tri:
+        return
+    sel = 'input[aria-label="Vị trí"]'
+    o = await page.query_selector(sel)
+    if not o or not await o.is_visible():
+        mo = await page.query_selector('div[role="button"]:has-text("Xem thêm chi tiết")')
+        if mo:
+            await mo.scroll_into_view_if_needed()
+            await human_delay(500, 900)
+            await mo.click()
+            await human_delay(1500, 2200)
+        try:
+            o = await page.wait_for_selector(sel, timeout=8000, state="visible")
+        except Exception:
+            raise LoiBuoc("Không thấy ô Vị trí (mục \"Xem thêm chi tiết\")")
+
+    truoc = await o.input_value()
+    await o.scroll_into_view_if_needed()
+    await human_delay(500, 900)
+    await o.click()
+    await human_delay(500, 900)
+    await page.keyboard.press("Control+A")
+    await page.keyboard.press("Backspace")
+    await o.type(vi_tri, delay=random.randint(70, 120))
+    await human_delay(3000, 4000)
+
+    xy = await page.evaluate(_JS_GOI_Y_VI_TRI, _khong_dau(vi_tri))
+    if not xy:
+        raise LoiBuoc(f"Không thấy gợi ý vị trí khớp {vi_tri!r}")
+    await page.mouse.click(xy[0], xy[1])
+    await human_delay(1500, 2200)
+
+    sau = await o.input_value()
+    if _khong_dau(vi_tri) not in _khong_dau(sau):
+        raise LoiBuoc(f"Chọn vị trí không ăn: ô đang ghi {sau!r}, cần {vi_tri!r}")
+    logger.info(f"    📍 Vị trí: {sau}" + (f"  (Facebook điền sẵn: {truoc})" if truoc != sau else ""))
+
+
+ANH_TOI_DA = 10      # Facebook ghi trên trang: "Bạn có thể thêm đến 10 ảnh"
+
+# Bộ đếm ảnh của trang tạo bài: "Ảnh · 6/10 - Bạn có thể thêm đến 10 ảnh."
+_JS_DEM_ANH = r"""() => {
+    const m = (document.body.innerText || '').match(/Ảnh\s*·\s*(\d+)\s*\/\s*\d+/);
+    return m ? parseInt(m[1], 10) : -1;
+}"""
+
+
+async def _tai_anh(page, anh: list):
+    """Tải ĐỦ ảnh của content lên (tối đa 10), rồi chờ bộ đếm của Facebook báo
+    đủ thay vì chờ một quãng cố định.
+
+    Bản đầu cắt cứng `anh[:3]` không ghi lý do: content 6 ảnh lên Marketplace
+    chỉ còn 3 (gặp 13/10). Nhiều ảnh thì tải lâu hơn — chờ cố định 6–8 giây là
+    có lúc bấm Tiếp khi ảnh chưa lên xong.
+    """
+    can = anh[:ANH_TOI_DA]
+    if len(anh) > ANH_TOI_DA:
+        logger.warning(f"    ⚠️  Content có {len(anh)} ảnh, Marketplace chỉ nhận {ANH_TOI_DA} — "
+                       f"lấy {ANH_TOI_DA} ảnh đầu")
+    await page.set_input_files("input[type=file]", can)
+    da = -1
+    for _ in range(20):                    # tối đa ~40 giây
+        await asyncio.sleep(2)
+        da = await page.evaluate(_JS_DEM_ANH)
+        if da >= len(can):
+            break
+    if da == 0:
+        raise LoiBuoc("Tải ảnh lên Marketplace không ăn (bộ đếm vẫn 0)")
+    if 0 <= da < len(can):
+        logger.warning(f"    ⚠️  Facebook mới nhận {da}/{len(can)} ảnh sau 40 giây — đăng tiếp")
+    logger.info(f"    🖼️  Ảnh: {da if da >= 0 else '?'}/{len(can)} đã lên")
+    await human_delay(2000, 3000)
+
+
 async def _dien_thong_tin(page, cd: dict, tieu_de: str, gia: str, mo_ta: str, anh: list):
-    """Trang điền thông tin: ảnh, tiêu đề, giá, hạng mục, tình trạng, mô tả.
+    """Trang điền thông tin: ảnh, tiêu đề, giá, hạng mục, tình trạng, mô tả, vị trí.
 
     Tiêu đề lấy từ content (cột `tieu_de_mkt`), giá sinh ngẫu nhiên, tình
     trạng cố định `db.MKT_TINH_TRANG` — ba thứ này không còn ở cài đặt.
@@ -151,8 +260,7 @@ async def _dien_thong_tin(page, cd: dict, tieu_de: str, gia: str, mo_ta: str, an
 
     if not anh:
         raise LoiBuoc("Marketplace bắt buộc có ảnh nhưng không tải được ảnh nào")
-    await page.set_input_files("input[type=file]", anh[:3])
-    await human_delay(6000, 8000)
+    await _tai_anh(page, anh)
 
     for nhan, gt in (("Tiêu đề", tieu_de), ("Giá", str(gia))):
         el = await page.wait_for_selector(
@@ -185,6 +293,9 @@ async def _dien_thong_tin(page, cd: dict, tieu_de: str, gia: str, mo_ta: str, an
         except Exception:
             continue
     await human_delay(2000, 3000)
+
+    await _chon_vi_tri(page, cd["mkt_vi_tri"])
+
     await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
     await human_delay(2000, 3000)
 

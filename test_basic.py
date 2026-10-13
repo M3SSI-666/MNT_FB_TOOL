@@ -4827,7 +4827,35 @@ check("bộ đăng không còn đọc tiêu đề / giá / tình trạng / số 
                                      'cd["mkt_tinh_trang"]', 'cd["mkt_so_nhom"]')))
 check("bộ đăng dùng Tình trạng và số nhóm cố định",
       '("Tình trạng", db.MKT_TINH_TRANG)' in _src_mp and "so_nhom = db.MKT_SO_NHOM" in _src_mp)
+# Vị trí: ô ở tab Marketplace có từ v2.30.0 mà bộ đăng chưa từng đọc tới —
+# bài mang vị trí Facebook tự điền, mỗi nick một khác. Nay chọn theo cài đặt.
+_than_dien = _src_mp[_src_mp.index("async def _dien_thong_tin"):]
+_than_dien = _than_dien[:_than_dien.index("\nasync def ")]
+check("điền thông tin có bước chọn vị trí theo cài đặt, TRƯỚC khi bấm Tiếp",
+      'await _chon_vi_tri(page, cd["mkt_vi_tri"])' in _than_dien
+      and _than_dien.index("_chon_vi_tri(") < _than_dien.index('_bam_dung_chu(page, "Tiếp")'))
+_than_vt = _src_mp[_src_mp.index("async def _chon_vi_tri"):]
+_than_vt = _than_vt[:_than_vt.index("\nasync def ")]
+check("chọn vị trí xong phải ĐỌC LẠI ô, sai thì dừng",
+      "sau = await o.input_value()" in _than_vt and "raise LoiBuoc" in _than_vt)
+check("chọn gợi ý KHỚP chữ đã gõ, không bấm mù dòng đầu",
+      "_JS_GOI_Y_VI_TRI" in _than_vt and ".includes(can)" in _src_mp)
+# Ảnh: bản đầu cắt cứng anh[:3] — content 6 ảnh lên Marketplace chỉ còn 3.
+check("Marketplace tải đủ ảnh (tối đa 10), không cắt cứng 3",
+      'set_input_files("input[type=file]", anh[:3])' not in _src_mp
+      and 'set_input_files("input[type=file]", can)' in _src_mp
+      and "ANH_TOI_DA = 10" in _src_mp
+      and "await _tai_anh(page, anh)" in _than_dien)
+_than_anh = _src_mp[_src_mp.index("async def _tai_anh"):]
+_than_anh = _than_anh[:_than_anh.index("\nasync def ")]
+check("tải ảnh xong chờ bộ đếm của Facebook báo đủ, không chờ cố định",
+      "_JS_DEM_ANH" in _than_anh and "if da >= len(can):" in _than_anh)
 import market_poster as _mp_tdm
+check("so khớp vị trí bỏ dấu, không phân biệt hoa thường",
+      _mp_tdm._khong_dau("Hai Bà Trưng") in _mp_tdm._khong_dau("Quận Hai Bà Trưng, Hanoi"))
+check("so khớp vị trí: chữ đ", _mp_tdm._khong_dau("Đống Đa") == "dong da")
+check("so khớp vị trí: nơi khác KHÔNG khớp",
+      _mp_tdm._khong_dau("Hai Bà Trưng") not in _mp_tdm._khong_dau("Trịnh Châu Tỉnh/Thành phố"))
 try:
     _mp_tdm.post_marketplace("Ai Do", "mô tả", image_url="http://x/a.jpg", tieu_de="   ")
     _mp_loi = ""
