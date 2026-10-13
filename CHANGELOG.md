@@ -10,6 +10,51 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.47.0 — 13/10/2026
+
+**Marketplace: tiêu đề theo từng content, chọn đúng vị trí, đăng đủ ảnh**
+
+**Tiêu đề nay đặt cho TỪNG content.** Tab **Content** có thêm cột **Tiêu đề
+Market Place** (giữa "Sử dụng" và "Ghi chú"), sửa nhanh ngay trên bảng hoặc
+trong form Thêm/Sửa, và có trong file Xuất/Nhập Excel. Facebook so bài mới với
+bài cũ còn sống của chính nick đó — trùng tiêu đề + mô tả + ảnh là từ chối —
+nên một tiêu đề dùng chung cho mọi bài là tự thêm một điểm trùng.
+
+> **Cập nhật xong nhớ điền Tiêu đề Market Place cho các content sẽ đăng
+> Marketplace.** Content để trống tiêu đề thì slot Marketplace của nó bị bỏ
+> qua, ô trạng thái ghi rõ lý do. Bỏ qua kiểu này **không** tính là lỗi của
+> nick, nên không làm nick bị cho nghỉ.
+
+**Tab Marketplace gọn còn 4 ô**: Loại niêm yết, Hạng mục, Vị trí, Chọn nhóm
+(từ khoá). Đã bỏ:
+
+- **Tiêu đề** — chuyển sang Content như trên.
+- **Giá** — giá vẫn tự sinh ngẫu nhiên mỗi bài như từ v2.40.0.
+- **Tình trạng** — luôn là **Mới**.
+- **Số nhóm** — luôn **20 nhóm** khớp từ khoá.
+
+---
+
+**Sửa: ô Vị trí chưa từng được dùng**
+
+Ô **Vị trí** có trên tab Marketplace từ v2.30.0 nhưng bộ đăng chưa bao giờ
+đọc tới — bài mang vị trí Facebook tự điền, mỗi nick một khác. Nay phần mềm
+gõ vị trí, chọn **gợi ý khớp đúng chữ đã gõ** (gõ "Hai Bà Trưng" thì danh sách
+gợi ý còn lẫn cả Trịnh Châu, Hải Khẩu…), rồi đọc lại ô để chắc đã chọn đúng.
+Không chọn được thì dừng phiên, không đăng với vị trí sai.
+
+---
+
+**Sửa: content 6 ảnh lên Marketplace chỉ còn 3**
+
+Bản đầu chỉ tải 3 ảnh đầu tiên. Nay tải **đủ ảnh của content, tối đa 10** —
+mức Facebook cho — và chờ Facebook báo đã nhận đủ ảnh rồi mới đi tiếp.
+
+Thử thật trên nick Mai Tùng: ảnh 6/6, vị trí *Quận Hai Bà Trưng, Hanoi*, tick
+20/20 nhóm, đăng thành công, không cảnh báo gỡ bài, không bị chặn trùng.
+
+---
+
 ## v2.46.2 — 13/10/2026
 
 **Dễ nhìn: dòng Marketplace trong Lịch ghi rõ chữ "Market"**
