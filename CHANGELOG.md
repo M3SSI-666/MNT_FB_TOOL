@@ -10,6 +10,15 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.46.2 — 13/10/2026
+
+**Dễ nhìn: dòng Marketplace trong Lịch ghi rõ chữ "Market"**
+
+Trước chỉ hiện biểu tượng 🛒. Nay ghi **🛒 Market · <mã content>** cho dễ phân
+biệt với dòng đăng nhóm và comment.
+
+---
+
 ## v2.46.1 — 13/10/2026
 
 **Gọn: bỏ cột Mode khỏi bảng Lịch**

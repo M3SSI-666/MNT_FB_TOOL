@@ -3122,7 +3122,7 @@ function renderScheduleTable(loai,data){
             : hd==="comment"
             ? `<td style="text-align:center"><span class="badge" style="background:#1e3a5f;color:#93c5fd">💬 Comment</span></td>`
             : hd==="marketplace"
-            ? `<td style="text-align:center"><span class="badge" style="background:#143d2e;color:#6ee7b7">🛒 ${(r.ma_content||"").replace(/</g,"&lt;")}</span></td>`
+            ? `<td style="text-align:center"><span class="badge" style="background:#143d2e;color:#6ee7b7">🛒 Market${r.ma_content?" · "+(r.ma_content||"").replace(/</g,"&lt;"):""}</span></td>`
             : sc(r,"ma_content","text-align:center");
         return `<tr>
             ${sc(r,"gio_dang","font-weight:600;white-space:nowrap")}
