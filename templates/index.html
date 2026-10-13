@@ -156,9 +156,10 @@
                                 <th>Mã content</th><th>Nội dung</th>
                                 <th style="text-align:center">Ảnh</th>
                                 <th style="text-align:center">Sử dụng</th>
+                                <th title="Tiêu đề bài niêm yết khi content này được đăng Marketplace">Tiêu đề Market Place</th>
                                 <th>Ghi chú</th><th style="width:90px">Chỉnh sửa</th>
                             </tr></thead>
-                            <tbody id="content-table"><tr><td colspan="7" class="loading"><span class="spin">↻</span></td></tr></tbody>
+                            <tbody id="content-table"><tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -376,8 +377,10 @@
                  không theo số ô của form Facebook. -->
             <div class="page" id="page-marketplace" style="display:none">
                 <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px;max-width:680px">
-                    Giá trị dùng chung cho mọi bài niêm yết. Ảnh và Mô tả lấy từ
-                    <b>Content</b> theo cột <b>Loại đăng</b> bên Tài khoản.
+                    Giá trị dùng chung cho mọi bài niêm yết. Ảnh, Mô tả và
+                    <b>Tiêu đề</b> lấy từ <b>Content</b> (cột <b>Tiêu đề Market Place</b>)
+                    theo cột <b>Loại đăng</b> bên Tài khoản. Giá tự sinh ngẫu nhiên mỗi bài,
+                    Tình trạng luôn là <b>Mới</b>.
                 </p>
 
                 <div class="card" style="max-width:680px;padding:18px">
@@ -392,35 +395,17 @@
                         </select>
 
                         <span class="mkt-so">2</span>
-                        <label for="mkt-tieu-de">Tiêu đề</label>
-                        <input class="input" id="mkt-tieu-de" onchange="mktLuu()">
-
-                        <span class="mkt-so">3</span>
-                        <label for="mkt-gia-list">Giá</label>
-                        <input class="input" id="mkt-gia-list" onchange="mktLuu()">
-
-                        <span class="mkt-so">4</span>
                         <label for="mkt-hang-muc">Hạng mục</label>
                         <input class="input" id="mkt-hang-muc" onchange="mktLuu()">
 
-                        <span class="mkt-so">5</span>
-                        <label for="mkt-tinh-trang">Tình trạng</label>
-                        <select class="input" id="mkt-tinh-trang" onchange="mktLuu()">
-                            <option>Mới</option>
-                            <option>Đã qua sử dụng - Như mới</option>
-                            <option>Đã qua sử dụng - Tốt</option>
-                            <option>Đã qua sử dụng - Khá</option>
-                        </select>
-
-                        <span class="mkt-so">6</span>
+                        <span class="mkt-so">3</span>
                         <label for="mkt-vi-tri">Vị trí</label>
                         <input class="input" id="mkt-vi-tri" onchange="mktLuu()">
 
-                        <span class="mkt-so">7</span>
-                        <label for="mkt-so-nhom">Chọn nhóm</label>
+                        <span class="mkt-so">4</span>
+                        <label for="mkt-tu-khoa">Chọn nhóm</label>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                            <input class="input" id="mkt-so-nhom" style="width:64px" onchange="mktLuu()">
-                            <span style="color:var(--text-muted);white-space:nowrap">nhóm khớp từ khoá</span>
+                            <span style="color:var(--text-muted);white-space:nowrap">20 nhóm khớp từ khoá</span>
                             <input class="input" id="mkt-tu-khoa"
                                    style="flex:1;min-width:150px" onchange="mktLuu()">
                         </div>

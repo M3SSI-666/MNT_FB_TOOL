@@ -4664,15 +4664,31 @@ finally:
 
 
 # ── Marketplace: cài đặt của form "Tạo bài niêm yết" ───────────────────────
-# Form có 8 ô. Hai ô lấy thẳng từ thư viện Content ([2] Ảnh, [7] Mô tả), sáu ô
-# còn lại dùng chung cho mọi bài nên nằm ở bảng `settings`. Nhờ vậy bảng
-# `content` KHÔNG phải thêm cột nào — chốt này phải giữ, nếu không là quay lại
-# chuyện thêm cột rồi phải migrate dữ liệu đã nhập.
+# Form có 8 ô. Từ 13/10: Ảnh, Mô tả và TIÊU ĐỀ lấy từ Content (tiêu đề ở cột
+# riêng `tieu_de_mkt`); Giá sinh ngẫu nhiên; Tình trạng và số nhóm cố định.
+# Chỉ Loại niêm yết, Hạng mục, Vị trí, Từ khoá nhóm còn nằm ở `settings`.
+#
+# Tiêu đề chuyển về content vì Facebook so bài mới với bài cũ còn sống của
+# chính nick đó — trùng tiêu đề + mô tả + ảnh là từ chối. Một tiêu đề dùng
+# chung cho mọi bài là tự thêm một điểm trùng. Giá và vị trí thì vẫn KHÔNG có
+# cột riêng ở content.
 with db._conn() as _con_mkt:
     _cot_content = {r[1] for r in
                     _con_mkt.execute("PRAGMA table_info(content)").fetchall()}
-check("content KHÔNG có cột riêng cho Marketplace",
-      not {"tieu_de", "gia", "vi_tri"} & _cot_content)
+check("content CÓ cột Tiêu đề Market Place", "tieu_de_mkt" in _cot_content)
+check("content KHÔNG có cột giá / vị trí riêng",
+      not {"gia", "vi_tri"} & _cot_content)
+check("cài đặt KHÔNG còn Tiêu đề / Giá / Tình trạng / Số nhóm",
+      not {"mkt_tieu_de", "mkt_gia_list", "mkt_tinh_trang", "mkt_so_nhom"}
+          & set(db.MKT_MAC_DINH))
+# Khoá cũ còn sót trong bảng settings của máy đã dùng bản trước thì cũng KHÔNG
+# được đọc tới — không thì một Tình trạng cũ đặt tay cứ thế âm thầm áp dụng.
+db.set_setting("mkt_tinh_trang", "Đã qua sử dụng - Tốt")
+check("khoá cài đặt cũ còn sót không lọt vào cài đặt đọc ra",
+      "mkt_tinh_trang" not in db.doc_cai_dat_mkt())
+db.set_setting("mkt_tinh_trang", "")
+check("Tình trạng cố định là Mới", db.MKT_TINH_TRANG == "Mới")
+check("luôn tick tối đa 20 nhóm",  db.MKT_SO_NHOM == 20)
 
 # Marketplace KHÔNG có bảng phân công riêng: cột `loai_dang` bên Tài khoản đã
 # nói acc phụ trách loại content nào (nay chỉ còn 3 giá trị sạch).
@@ -4688,19 +4704,6 @@ check("giá trị lạ -> rỗng, không đoán bừa",
 check("khớp hai chiều với khop_loai_lich",
       all(db.khop_loai_lich(v, db.loai_content_cua_acc(v))
           for v in db.LOAI_DANG_OPTIONS if v))
-
-# Ô Giá nhận chuỗi tự do người dùng gõ tay, nên phải chịu được mọi kiểu gõ.
-check("tách giá: phân cách bằng dấu phẩy",
-      db.tach_gia("86, 68, 8686, 8386") == ["86", "68", "8686", "8386"])
-check("tách giá: phân cách bằng dấu cách / xuống dòng",
-      db.tach_gia("86 68\n8686") == ["86", "68", "8686"])
-check("tách giá: bỏ ký tự không phải số",
-      db.tach_gia("86đ, 68 VNĐ") == ["86", "68"])
-# Gõ nhầm hai lần cùng một giá thì giá đó được bốc gấp đôi mà người gõ không
-# hề biết mình vừa làm lệch tỉ lệ.
-check("tách giá: bỏ trùng", db.tach_gia("86, 68, 86") == ["86", "68"])
-check("tách giá: ô rỗng -> danh sách rỗng", db.tach_gia("") == [])
-check("tách giá: gõ toàn chữ -> danh sách rỗng", db.tach_gia("chưa điền") == [])
 
 # Giá bài Marketplace nay SINH ngẫu nhiên chứ không bốc từ danh sách cố định:
 # trùng giá với bài cũ còn sống là thêm một điểm giống nhau, mà Facebook so bài
@@ -4718,9 +4721,7 @@ _cd_mkt = db.doc_cai_dat_mkt()
 check("mặc định: loại niêm yết là Mặt hàng cần bán",
       _cd_mkt["mkt_loai_tin"] == "Mặt hàng cần bán")
 check("mặc định: hạng mục Hộ gia đình", _cd_mkt["mkt_hang_muc"] == "Hộ gia đình")
-check("mặc định: tình trạng Mới",       _cd_mkt["mkt_tinh_trang"] == "Mới")
 check("mặc định: vị trí Hai Bà Trưng",  _cd_mkt["mkt_vi_tri"] == "Hai Bà Trưng")
-check("mặc định: tối đa 20 nhóm",       _cd_mkt["mkt_so_nhom"] == "20")
 # "Time" là chuỗi con của "Times" nên một mình nó đã vớt hết, nhưng giữ cả hai
 # cho người đọc ô cài đặt hiểu ngay là bắt cả hai lối viết. Đo trên 28 nhóm thật
 # của Sa Tran Anh: "Times, Time" vớt 26/28, đúng bằng bộ từ khoá dài trước đây.
@@ -4731,8 +4732,6 @@ check("mặc định: từ khoá nhóm bắt cả 'Times' lẫn 'Time'",
 db.set_setting("mkt_tu_khoa", "")
 check("từ khoá để trống -> lấy lại mặc định, KHÔNG thành không lọc",
       db.doc_cai_dat_mkt()["mkt_tu_khoa"] == db.MKT_MAC_DINH["mkt_tu_khoa"])
-check("mặc định: giá đọc ra được 4 giá",
-      db.tach_gia(_cd_mkt["mkt_gia_list"]) == ["86", "68", "8686", "8386"])
 
 # Xoá trắng một ô rồi lưu thì phải quay về mặc định, KHÔNG được để rỗng — ô
 # Hạng mục rỗng nghĩa là lúc đăng không biết chọn gì và phiên hỏng giữa chừng.
@@ -4747,8 +4746,7 @@ db.set_setting("mkt_hang_muc", "")
 _r_mkt = _client.get("/api/marketplace/cai-dat").get_json()
 check("API trả cài đặt đã trộn mặc định",
       _r_mkt.get("ok") and _r_mkt["data"]["mkt_vi_tri"] == "Hai Bà Trưng")
-check("API trả sẵn danh sách giá đã tách",
-      _r_mkt.get("gia") == ["86", "68", "8686", "8386"])
+check("API không còn trả danh sách giá (giá tự sinh)", "gia" not in _r_mkt)
 
 # Mặc định chỉ được có MỘT nguồn (db.MKT_MAC_DINH). Nếu app.js tự giữ một bản
 # nữa thì hai bên sẽ lệch, và người dùng thấy một đằng còn Facebook nhận một nẻo.
@@ -4772,21 +4770,83 @@ check("Marketplace có tên ở thanh tiêu đề", 'marketplace:"Marketplace"' 
 # nhập là sinh ra nguồn thứ hai, rồi không ai biết lúc đăng lấy bản nào.
 check("KHÔNG có ô nhập Ảnh / Mô tả ở trang Marketplace",
       'id="mkt-anh"' not in _html_mkt and 'id="mkt-mo-ta"' not in _html_mkt)
-# Trang chỉ liệt kê những ô CẦN NHẬP: Ảnh và Mô tả lấy từ Content nên không có
-# dòng nào, và số thứ tự vì thế đánh liền 1..7 chứ không chừa chỗ trống.
+# Trang chỉ liệt kê những ô CẦN NHẬP, đánh số liền 1..4: Loại niêm yết, Hạng
+# mục, Vị trí, Chọn nhóm (từ khoá). Tiêu đề / Giá / Tình trạng / Số nhóm đã bỏ.
 import re as _re_mkt
 _khoi_mkt = _html_mkt[_html_mkt.index('id="page-marketplace"'):]
 _khoi_mkt = _khoi_mkt[:_khoi_mkt.index('id="page-hanh-dong"')]
-check("số thứ tự đánh liền 1..7",
+check("số thứ tự đánh liền 1..4",
       _re_mkt.findall(r'class="mkt-so">(\d+)<', _khoi_mkt)
-      == [str(i) for i in range(1, 8)])
-# Từ khoá dùng chung, đặt ngay cạnh ô Số nhóm — hai thứ này cùng nói về một
-# việc (tick nhóm nào), tách ra hai chỗ là người dùng chỉnh cái này quên cái kia.
-check("ô Từ khoá nằm cạnh ô Số nhóm",
-      'id="mkt-tu-khoa"' in _html_mkt
-      and 0 < _html_mkt.index('id="mkt-tu-khoa"') - _html_mkt.index('id="mkt-so-nhom"') < 400)
+      == [str(i) for i in range(1, 5)])
+check("KHÔNG còn ô Tiêu đề / Giá / Tình trạng / Số nhóm",
+      not any(f'id="{x}"' in _khoi_mkt
+              for x in ("mkt-tieu-de", "mkt-gia-list", "mkt-tinh-trang", "mkt-so-nhom")))
+check("app.js không còn đọc/ghi các ô đã bỏ",
+      not any(x in _ajs_mkt for x in ('"mkt-tieu-de"', '"mkt-gia-list"',
+                                      '"mkt-tinh-trang"', '"mkt-so-nhom"')))
+# Số nhóm ghi sẵn trên trang phải khớp hằng số mà bộ đăng dùng thật.
+check("chữ '20 nhóm' trên trang khớp MKT_SO_NHOM",
+      f"{db.MKT_SO_NHOM} nhóm khớp từ khoá" in _khoi_mkt)
 check("từ khoá được nạp và lưu",
       'el("mkt-tu-khoa").value' in _ajs_mkt and "mkt_tu_khoa:" in _ajs_mkt)
+
+# ── Tiêu đề Market Place theo từng content ─────────────────────────────────
+_html_ct = Path("templates/index.html").read_text(encoding="utf-8")
+_bang_ct = _html_ct[_html_ct.index("<th>Mã content</th>"):_html_ct.index('id="content-table"')]
+check("bảng Content: cột Tiêu đề Market Place nằm giữa Sử dụng và Ghi chú",
+      _bang_ct.index(">Sử dụng</th>") < _bang_ct.index(">Tiêu đề Market Place</th>")
+      < _bang_ct.index("<th>Ghi chú</th>"))
+check("bảng Content có ô sửa nhanh tiêu đề",
+      'ec(r,"tieu_de_mkt"' in _ajs_mkt)
+check("form Thêm/Sửa content có ô tiêu đề và gửi lên khi lưu",
+      'id="ce_tdm"' in _ajs_mkt and "tieu_de_mkt:" in _ajs_mkt)
+_cid_tdm = db.upsert_content({"loai": "homestay", "ma_content": "TDM1", "noi_dung": "nd"})
+_r_tdm = _client.post(f"/api/content/{_cid_tdm}/field",
+                      json={"field": "tieu_de_mkt", "value": "Căn hộ Times City"}).get_json()
+check("API sửa ô nhận cột tieu_de_mkt", _r_tdm.get("ok") is True)
+check("tiêu đề lưu vào content",
+      any(r["id"] == _cid_tdm and r["tieu_de_mkt"] == "Căn hộ Times City"
+          for r in db.get_content("homestay")))
+_cot_xuat = [k for k, _ in server.EXPORT_CONTENT_COLUMNS]
+check("xuất Excel content có cột tiêu đề, giữa Sử dụng và Ghi chú",
+      _cot_xuat.index("su_dung") + 1 == _cot_xuat.index("tieu_de_mkt")
+      == _cot_xuat.index("ghi_chu") - 1)
+db.import_content([{"ma_content": "TDM2", "noi_dung": "x",
+                    "tieu_de_mkt": "  Tiêu đề nhập  "}], "homestay")
+check("nhập Excel content giữ tiêu đề",
+      any(r["ma_content"] == "TDM2" and r["tieu_de_mkt"] == "Tiêu đề nhập"
+          for r in db.get_content("homestay")))
+with db._conn() as _c_tdm:
+    _c_tdm.execute("DELETE FROM content WHERE ma_content IN ('TDM1','TDM2')")
+
+# Bộ đăng: tiêu đề lấy từ content, KHÔNG từ cài đặt; thiếu thì dừng TRƯỚC khi
+# tải ảnh / mở trình duyệt.
+_src_mp = Path("market_poster.py").read_text(encoding="utf-8")
+check("bộ đăng không còn đọc tiêu đề / giá / tình trạng / số nhóm từ cài đặt",
+      not any(x in _src_mp for x in ('cd["mkt_tieu_de"]', 'cd["mkt_gia_list"]',
+                                     'cd["mkt_tinh_trang"]', 'cd["mkt_so_nhom"]')))
+check("bộ đăng dùng Tình trạng và số nhóm cố định",
+      '("Tình trạng", db.MKT_TINH_TRANG)' in _src_mp and "so_nhom = db.MKT_SO_NHOM" in _src_mp)
+import market_poster as _mp_tdm
+try:
+    _mp_tdm.post_marketplace("Ai Do", "mô tả", image_url="http://x/a.jpg", tieu_de="   ")
+    _mp_loi = ""
+except Exception as _e_tdm:
+    _mp_loi = str(_e_tdm)
+check("thiếu tiêu đề -> báo lỗi ngay, không mở trình duyệt",
+      "chưa có Tiêu đề Market Place" in _mp_loi)
+# Scheduler: thiếu tiêu đề là lỗi DỮ LIỆU — báo ở slot rồi bỏ qua, KHÔNG tính
+# vào sức khoẻ acc (5 slot như vậy là nick bị cho nghỉ oan).
+_src_sc = Path("scheduler.py").read_text(encoding="utf-8")
+_than_mkt_sc = _src_sc[_src_sc.index("def _run_marketplace_slot"):]
+_than_mkt_sc = _than_mkt_sc[:_than_mkt_sc.index("\ndef ", 10)]
+_i_thieu = _than_mkt_sc.index("if not tieu_de:")
+check("scheduler bỏ qua slot thiếu tiêu đề mà không ghi sức khoẻ acc",
+      "return" in _than_mkt_sc[_i_thieu:_i_thieu + 400]
+      and "ghi_nhan_phien_dang" not in _than_mkt_sc[_i_thieu:_i_thieu + 400]
+      and _i_thieu < _than_mkt_sc.index("post_marketplace("))
+check("scheduler truyền tiêu đề của content cho bộ đăng",
+      'ct.get("tieu_de_mkt")' in _than_mkt_sc and "tieu_de=tieu_de" in _than_mkt_sc)
 
 # ── Tham gia nhóm Market ───────────────────────────────────────────────────
 # Dùng chung bộ máy với "Tham gia nhóm", khác hai chỗ: nguồn nhóm và KHÔNG

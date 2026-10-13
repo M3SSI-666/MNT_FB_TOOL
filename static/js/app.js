@@ -450,18 +450,16 @@ let _mktMacDinh = {};
 
 async function mktNap(){
     const el = id => document.getElementById(id);
-    if(!el("mkt-tieu-de")) return;
+    // Tiêu đề / Giá / Tình trạng / Số nhóm không còn ở đây (13/10): tiêu đề
+    // theo từng content, giá tự sinh, tình trạng luôn "Mới", luôn 20 nhóm.
+    if(!el("mkt-loai-tin")) return;
     try{
         const r = await API.mktCaiDat();
         const d = r.data || {};
         _mktMacDinh = r.mac_dinh || {};
         el("mkt-loai-tin").value   = d.mkt_loai_tin   || "";
-        el("mkt-tieu-de").value    = d.mkt_tieu_de    || "";
-        el("mkt-gia-list").value   = d.mkt_gia_list   || "";
         el("mkt-hang-muc").value   = d.mkt_hang_muc   || "";
-        el("mkt-tinh-trang").value = d.mkt_tinh_trang || "";
         el("mkt-vi-tri").value     = d.mkt_vi_tri     || "";
-        el("mkt-so-nhom").value    = d.mkt_so_nhom    || "";
         el("mkt-tu-khoa").value    = d.mkt_tu_khoa    || "";
     }catch(e){ Toast.error("Không đọc được cài đặt Marketplace: "+e.message); }
 }
@@ -472,16 +470,12 @@ async function mktLuu(hienToast){
     try{
         await API.saveSettings({
             mkt_loai_tin:   el("mkt-loai-tin").value,
-            mkt_tieu_de:    el("mkt-tieu-de").value.trim(),
-            mkt_gia_list:   el("mkt-gia-list").value.trim(),
             mkt_hang_muc:   el("mkt-hang-muc").value.trim(),
-            mkt_tinh_trang: el("mkt-tinh-trang").value,
             mkt_vi_tri:     el("mkt-vi-tri").value.trim(),
-            mkt_so_nhom:    el("mkt-so-nhom").value.trim(),
             mkt_tu_khoa:    el("mkt-tu-khoa").value.trim(),
         });
-        // Đọc lại thay vì tự suy: ô để trống thì server thay bằng mặc định, và
-        // danh sách giá cũng do server tách. Không đọc lại là màn hình nói sai.
+        // Đọc lại thay vì tự suy: ô để trống thì server thay bằng mặc định.
+        // Không đọc lại là màn hình nói sai.
         await mktNap();
         if(hienToast) Toast.success("Đã lưu cài đặt Marketplace");
         if(kq){ kq.textContent = ""; }
@@ -1843,7 +1837,7 @@ async function loadContent(loai){
     renderContentTabs();
     document.querySelectorAll(".content-tab").forEach(b=>b.classList.toggle("active",b.dataset.loai===loai));
     const tbody=document.getElementById("content-table"); if(!tbody) return;
-    tbody.innerHTML=`<tr><td colspan="7" class="loading"><span class="spin">↻</span></td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr>`;
     try{
         const res=await API.content(loai);
         const total=res.data.length, active=res.data.filter(r=>r.su_dung==="Có").length;
@@ -1851,7 +1845,7 @@ async function loadContent(loai){
         if(box) box.innerHTML=[{l:"Tổng",v:total},{l:"Đang dùng",v:active,c:"var(--success)"},{l:"Dừng",v:total-active}]
             .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px;${s.c?"color:"+s.c:""}">${s.v}</div></div>`).join("");
 
-        if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="7" class="empty">Chưa có content</td></tr>`; return; }
+        if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="8" class="empty">Chưa có content</td></tr>`; return; }
 
         // Helper: inline-editable cell
         const ec=(r,field,style)=>{
@@ -1898,6 +1892,10 @@ async function loadContent(loai){
                     style="text-align:center;font-weight:600;font-size:12px;color:${suDung?"var(--success)":"var(--text-muted)"}"
                     onclick="startContentFieldEdit(this)">${r.su_dung||"-"}</td>
 
+                <!-- Tiêu đề Market Place: inline edit. Trống thì slot Marketplace
+                     của content này bị bỏ qua (scheduler báo rõ lý do). -->
+                ${ec(r,"tieu_de_mkt","font-size:12px;max-width:200px;word-break:break-word")}
+
                 <!-- Ghi chú: inline edit -->
                 ${ec(r,"ghi_chu","font-size:12px;color:var(--text-muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap")}
 
@@ -1909,7 +1907,7 @@ async function loadContent(loai){
                 </td>
             </tr>`;
         }).join("");
-    }catch(e){ tbody.innerHTML=`<tr><td colspan="7" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
+    }catch(e){ tbody.innerHTML=`<tr><td colspan="8" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
 }
 
 // Inline edit Nội dung bằng textarea (giữ xuống dòng)
@@ -1996,6 +1994,7 @@ function openContentEdit(data){
                 <input id="ce_imgs_file" type="file" accept="image/*" multiple style="display:none" onchange="_imgsFile(event)">
             </div>
         </div>
+        <div class="field-group"><label>Tiêu đề Market Place <span style="font-weight:400;color:var(--text-muted);font-size:11px">— tiêu đề bài niêm yết khi đăng Marketplace; để trống thì content này không đăng Marketplace được</span></label><input id="ce_tdm" value="${(data.tieu_de_mkt||"").replace(/"/g,"&quot;")}"></div>
         <div class="field-group"><label>Ghi chú</label><input id="ce_note" value="${data.ghi_chu||""}"></div>`;
     document.getElementById("cedit-overlay").style.display="block";
     document.getElementById("cedit-panel").style.display="flex";
@@ -2044,6 +2043,7 @@ async function saveContentEdit(){
         su_dung:    document.getElementById("ce_su")?.value||"Có",
         noi_dung:   document.getElementById("ce_nd")?.value||"",
         link_anh:   (window._ceImgUrls||[]).join(", "),
+        tieu_de_mkt:(document.getElementById("ce_tdm")?.value||"").trim(),
         ghi_chu:    document.getElementById("ce_note")?.value||"",
     };
     if(!data.id) delete data.id;

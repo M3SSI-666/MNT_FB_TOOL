@@ -406,6 +406,15 @@ def _run_marketplace_slot(item: dict):
         return
     content  = (ct.get("noi_dung") or "").strip()
     link_anh = (ct.get("link_anh") or "").strip()
+    tieu_de  = (ct.get("tieu_de_mkt") or "").strip()
+    # Thiếu tiêu đề là lỗi DỮ LIỆU, không phải lỗi của nick: báo rồi bỏ qua,
+    # KHÔNG ghi vào sức khoẻ acc — tính vào thì 5 slot như vậy là nick bị cho
+    # nghỉ oan dù nó chẳng làm gì sai.
+    if not tieu_de:
+        _update_status(sid, f"❌ {ts} Content '{item['ma_content']}' chưa có Tiêu đề Market Place")
+        logger.error(f"❌ STT {stt} Marketplace: content '{item['ma_content']}' "
+                     f"chưa có Tiêu đề Market Place — điền ở tab Content")
+        return
 
     logger.info(f"\n{'='*55}")
     logger.info(f"🛒 [{LOAI}] STT {stt} | {acc_name} | MARKETPLACE | {item['ma_content']} | {item['gio_dang']}")
@@ -417,7 +426,8 @@ def _run_marketplace_slot(item: dict):
         acc_data = get_account_by_name(acc_name)
         c_user_v = acc_data.get("c_user", "") if acc_data else ""
         so_nhom = post_marketplace(acc_name=acc_name, message=content,
-                                   image_url=link_anh, c_user=c_user_v)
+                                   image_url=link_anh, c_user=c_user_v,
+                                   tieu_de=tieu_de)
         done = datetime.now().strftime("%H:%M")
         _update_status(sid, f"✅ {done} 🛒 ({so_nhom} nhóm)")
         logger.info(f"✅ STT {stt} Marketplace xong: {so_nhom} nhóm")

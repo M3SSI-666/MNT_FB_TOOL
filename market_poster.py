@@ -136,8 +136,12 @@ async def _chon_lua(page, gt: str) -> bool:
     return True
 
 
-async def _dien_thong_tin(page, cd: dict, gia: str, mo_ta: str, anh: list):
-    """Trang điền thông tin: ảnh, tiêu đề, giá, hạng mục, tình trạng, mô tả."""
+async def _dien_thong_tin(page, cd: dict, tieu_de: str, gia: str, mo_ta: str, anh: list):
+    """Trang điền thông tin: ảnh, tiêu đề, giá, hạng mục, tình trạng, mô tả.
+
+    Tiêu đề lấy từ content (cột `tieu_de_mkt`), giá sinh ngẫu nhiên, tình
+    trạng cố định `db.MKT_TINH_TRANG` — ba thứ này không còn ở cài đặt.
+    """
     logger.info("  [2/5] 📝 Điền thông tin bài niêm yết...")
     await page.goto("https://www.facebook.com/marketplace/create/item",
                     wait_until="domcontentloaded", timeout=60000)
@@ -150,7 +154,7 @@ async def _dien_thong_tin(page, cd: dict, gia: str, mo_ta: str, anh: list):
     await page.set_input_files("input[type=file]", anh[:3])
     await human_delay(6000, 8000)
 
-    for nhan, gt in (("Tiêu đề", cd["mkt_tieu_de"]), ("Giá", str(gia))):
+    for nhan, gt in (("Tiêu đề", tieu_de), ("Giá", str(gia))):
         el = await page.wait_for_selector(
             f'label:has-text("{nhan}") input[type="text"]', timeout=8000, state="visible")
         await el.click()
@@ -159,7 +163,7 @@ async def _dien_thong_tin(page, cd: dict, gia: str, mo_ta: str, anh: list):
         await human_delay(1500, 2200)
 
     for nhan, gt in (("Hạng mục", cd["mkt_hang_muc"]),
-                     ("Tình trạng", cd["mkt_tinh_trang"])):
+                     ("Tình trạng", db.MKT_TINH_TRANG)):
         el = await page.wait_for_selector(
             f'label[role="combobox"]:has-text("{nhan}")', timeout=8000, state="visible")
         await el.click()
@@ -299,19 +303,20 @@ async def _dem_bi_chan(page) -> int:
 
 
 async def _run_marketplace(acc_name: str, message: str, local_photos: list,
-                           c_user: str = "") -> int:
+                           c_user: str = "", tieu_de: str = "") -> int:
     from playwright.async_api import async_playwright
 
     cd = db.doc_cai_dat_mkt()
     gia = db.sinh_gia()
-    so_nhom = int(cd["mkt_so_nhom"] or 20)
+    so_nhom = db.MKT_SO_NHOM
     mo_ta = (message or "").strip()
     if not mo_ta:
         raise LoiBuoc("Content rỗng — không có mô tả để đăng")
 
     profile_dir = find_profile_dir(acc_name, c_user)
     logger.info(f"  🗂️  Profile: {profile_dir}")
-    logger.info(f"  💰 Giá: {gia}  ·  📦 {cd['mkt_hang_muc']}/{cd['mkt_tinh_trang']}  "
+    logger.info(f"  🏷️  Tiêu đề: {tieu_de}")
+    logger.info(f"  💰 Giá: {gia}  ·  📦 {cd['mkt_hang_muc']}/{db.MKT_TINH_TRANG}  "
                 f"·  🔑 từ khoá: {cd['mkt_tu_khoa']}")
 
     async with async_playwright() as p:
@@ -362,7 +367,7 @@ async def _run_marketplace(acc_name: str, message: str, local_photos: list,
         bi_chan_truoc = await _dem_bi_chan(page)
 
         # ── [2/5] Điền thông tin · [3/5] Tick nhóm · [4/5] Đăng ─────────
-        await _dien_thong_tin(page, cd, gia, mo_ta, local_photos)
+        await _dien_thong_tin(page, cd, tieu_de, gia, mo_ta, local_photos)
         so_tick = await _tick_nhom(page, cd["mkt_tu_khoa"], so_nhom)
         da_dang = await _bam_dang(page, acc_name)
 
@@ -408,7 +413,7 @@ async def _run_marketplace(acc_name: str, message: str, local_photos: list,
 # ─────────────────────────────────────────────────────────────────────────────
 
 def post_marketplace(acc_name: str, message: str, image_url: str = "",
-                     c_user: str = "") -> int:
+                     c_user: str = "", tieu_de: str = "") -> int:
     """
     Hàm đồng bộ — gọi từ scheduler (chạy trong thread).
 
@@ -419,10 +424,16 @@ def post_marketplace(acc_name: str, message: str, image_url: str = "",
                    từ chối vì trùng bài cũ.
         image_url: Link ảnh (bắt buộc — Marketplace không đăng được nếu thiếu ảnh)
         c_user:    c_user của acc, khi có nhiều acc trùng tên
+        tieu_de:   Tiêu đề bài niêm yết — cột "Tiêu đề Market Place" của content
 
     Returns:
         Số nhóm đã tick nếu thành công. Raise LoiBuoc / CookieDeadError nếu hỏng.
     """
+    # Kiểm TRƯỚC khi tải ảnh và mở trình duyệt: thiếu tiêu đề thì nút "Tiếp"
+    # của Facebook khoá cứng, phiên chạy hết bước điền mới hỏng — phí cả phiên.
+    tieu_de = (tieu_de or "").strip()
+    if not tieu_de:
+        raise LoiBuoc("Content chưa có Tiêu đề Market Place")
     if not image_url:
         raise LoiBuoc("Marketplace bắt buộc có ảnh")
 
@@ -441,7 +452,7 @@ def post_marketplace(acc_name: str, message: str, image_url: str = "",
     try:
         return asyncio.run(_run_marketplace(
             acc_name=acc_name, message=message,
-            local_photos=local_photos, c_user=c_user))
+            local_photos=local_photos, c_user=c_user, tieu_de=tieu_de))
     except CookieDeadError:
         raise
     except Exception as e:

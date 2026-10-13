@@ -49,7 +49,7 @@ from db import (
     # settings
     get_setting, set_setting, get_all_settings,
     # marketplace
-    MKT_MAC_DINH, doc_cai_dat_mkt, tach_gia,
+    MKT_MAC_DINH, doc_cai_dat_mkt,
     tach_link_nhom, get_uid_groups, get_uid_groups_market, them_nhom_tu_link,
 )
 from utils import logger
@@ -1288,7 +1288,7 @@ def api_content_field(content_id):
     body  = request.json or {}
     field = body.get("field", "")
     value = body.get("value", "")
-    safe  = {"ma_content","noi_dung","link_anh","su_dung","ghi_chu"}
+    safe  = {"ma_content","noi_dung","link_anh","su_dung","tieu_de_mkt","ghi_chu"}
     if field not in safe:
         return jsonify({"ok": False, "error": f"Field không hợp lệ: {field}"})
     try:
@@ -1360,6 +1360,7 @@ EXPORT_CONTENT_COLUMNS = [
     ("noi_dung",   "Nội dung"),
     ("link_anh",   "Ảnh"),          # trong file chỉ chứa tên file, không phải URL
     ("su_dung",    "Sử dụng"),
+    ("tieu_de_mkt", "Tiêu đề Market Place"),
     ("ghi_chu",    "Ghi chú"),
 ]
 
@@ -2349,15 +2350,12 @@ def api_uid_quet_trang_thai():
 
 @app.route("/api/marketplace/cai-dat")
 def api_mkt_cai_dat():
-    """Cài đặt Marketplace đã trộn mặc định, kèm danh sách giá đã tách sẵn.
+    """Cài đặt Marketplace đã trộn mặc định.
 
     Giao diện KHÔNG tự giữ bản mặc định riêng — hỏi ở đây để chỉ có một nguồn
-    duy nhất (`db.MKT_MAC_DINH`). `gia` trả về để ô nhập hiện ngay "sẽ bốc
-    ngẫu nhiên trong N giá", người dùng gõ sai định dạng là thấy liền.
+    duy nhất (`db.MKT_MAC_DINH`).
     """
-    cd = doc_cai_dat_mkt()
-    return jsonify({"ok": True, "data": cd,
-                    "gia": tach_gia(cd["mkt_gia_list"]),
+    return jsonify({"ok": True, "data": doc_cai_dat_mkt(),
                     "mac_dinh": MKT_MAC_DINH})
 
 

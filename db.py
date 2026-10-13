@@ -244,6 +244,7 @@ def init_db():
             noi_dung        TEXT DEFAULT '',
             link_anh        TEXT DEFAULT '',        -- comma-separated URLs, đăng theo đúng thứ tự này
             su_dung         TEXT DEFAULT 'Có',      -- Có / Không
+            tieu_de_mkt     TEXT DEFAULT '',        -- tiêu đề bài niêm yết Marketplace
             ghi_chu         TEXT DEFAULT '',
             created_at      TEXT DEFAULT (datetime('now','localtime')),
             order_idx       INTEGER DEFAULT 0        -- thứ tự hiển thị (kéo-thả)
@@ -434,6 +435,9 @@ def init_db():
         # là hằng số và thứ tự thu về đúng tiêu chí cũ (id).
         _add_col("content",    "order_idx", "order_idx INTEGER DEFAULT 0")
         _add_col("uid_groups", "order_idx", "order_idx INTEGER DEFAULT 0")
+        # Tiêu đề Marketplace theo TỪNG content (13/10), thay cho một tiêu đề
+        # dùng chung ở cài đặt — xem chú thích trên MKT_MAC_DINH.
+        _add_col("content",    "tieu_de_mkt", "tieu_de_mkt TEXT DEFAULT ''")
         # Cột ghi chú "Acc quản lý" cho pages — chỉ để note, không dùng khi đăng bài.
         _add_col("pages",      "acc_quan_ly", "acc_quan_ly TEXT DEFAULT ''")
 
@@ -1528,10 +1532,11 @@ def import_content(records: list[dict], loai: str) -> tuple[int, int]:
             seen.add(ma)
             con.execute(
                 "INSERT INTO content (loai, ma_content, noi_dung, link_anh, "
-                "su_dung, ghi_chu, order_idx) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "su_dung, tieu_de_mkt, ghi_chu, order_idx) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (loai, ma, rec.get("noi_dung", "") or "",
                  rec.get("link_anh", "") or "",
                  rec.get("su_dung", "Có") or "Có",
+                 (rec.get("tieu_de_mkt", "") or "").strip(),
                  rec.get("ghi_chu", "") or "", nxt)
             )
             nxt += 1
@@ -2019,14 +2024,20 @@ def get_all_settings() -> dict:
 # Mặc định để ở ĐÂY chứ không để trong JavaScript: bộ đăng bài (Python) và
 # giao diện (JS) phải nhìn thấy CÙNG một mặc định. Chép làm hai bản thì sớm
 # muộn cũng lệch, và lúc đó người dùng thấy một đằng còn Facebook nhận một nẻo.
+# Ba ô của form "Tạo bài niêm yết" KHÔNG còn nằm ở cài đặt (bỏ 13/10):
+#   · Tiêu đề  → cột `tieu_de_mkt` của TỪNG content. Facebook so bài mới với
+#                bài cũ còn sống của chính nick đó, trùng tiêu đề + mô tả + ảnh
+#                là từ chối — một tiêu đề dùng chung cho mọi bài là tự tạo thêm
+#                một điểm trùng.
+#   · Giá      → sinh ngẫu nhiên mỗi bài, xem `sinh_gia`.
+#   · Tình trạng và số nhóm → cố định, xem hai hằng số dưới.
+MKT_TINH_TRANG = "Mới"
+MKT_SO_NHOM    = 20       # Facebook cho tick tối đa 20 nhóm mỗi bài
+
 MKT_MAC_DINH = {
     "mkt_loai_tin":   "Mặt hàng cần bán",   # [1] không phải Xe / Nhà cần bán
-    "mkt_tieu_de":    "",                   # [3] một tiêu đề dùng chung
-    "mkt_gia_list":   "86, 68, 8686, 8386",  # [4] bốc ngẫu nhiên một giá
     "mkt_hang_muc":   "Hộ gia đình",        # [5]
-    "mkt_tinh_trang": "Mới",                # [6]
     "mkt_vi_tri":     "Hai Bà Trưng",       # [8] gõ rồi chọn gợi ý dòng đầu
-    "mkt_so_nhom":    "20",                 # Facebook cho tick tối đa 20 nhóm
     # Dán thành huy hiệu ở một góc ảnh — CHỈ bài Marketplace, vì đó là nơi
     # khách bấm gọi ngay. Bài đăng nhóm đã có số trong nội dung rồi, và biến
     # thể ảnh của những luồng đó giữ nguyên mã 8 ký tự như cũ.
@@ -2220,8 +2231,9 @@ def chon_nhom_marketplace(nhom: list[dict], chuoi_tu_khoa: str,
 def doc_cai_dat_mkt() -> dict:
     """Cài đặt Marketplace, đã trộn sẵn mặc định cho khoá chưa từng lưu.
 
-    Ô để trống (hoặc chỉ có dấu cách) cũng coi như chưa đặt và lấy mặc định —
-    trừ Tiêu đề, vì mặc định của nó vốn đã là rỗng.
+    Ô để trống (hoặc chỉ có dấu cách) cũng coi như chưa đặt và lấy mặc định.
+    Khoá cũ đã bỏ (mkt_tieu_de, mkt_gia_list, mkt_tinh_trang, mkt_so_nhom) có
+    còn nằm trong bảng settings cũng không được đọc tới.
     """
     s = get_all_settings()
     return {k: ((s.get(k) or "").strip() or v) for k, v in MKT_MAC_DINH.items()}
@@ -2261,26 +2273,6 @@ def sinh_gia(rnd=None) -> str:
     """
     r = rnd or random
     return str(r.randrange(2, GIA_TOI_DA, 2))
-
-
-def tach_gia(chuoi: str) -> list[str]:
-    """Tách ô Giá thành danh sách để bốc ngẫu nhiên.
-
-    Nhận cả "86, 68, 8686" lẫn xuống dòng lẫn "86đ" — chỉ giữ chữ số, vì ô Giá
-    của Facebook không nhận ký tự khác.
-
-    BỎ TRÙNG: gõ nhầm hai lần cùng một giá thì giá đó được bốc gấp đôi, mà
-    người gõ không hề biết mình vừa làm lệch tỉ lệ.
-
-    Trả về chuỗi chứ không phải số: giá trị này đem gõ thẳng vào ô nhập.
-    """
-    ra, da_co = [], set()
-    for phan in re.split(r"[^0-9]+", chuoi or ""):
-        so = phan.lstrip("0") or phan          # "086" -> "86", nhưng "0" vẫn là "0"
-        if so and so not in da_co:
-            da_co.add(so)
-            ra.append(so)
-    return ra
 
 
 # ═══════════════════════════════════════════════════════════════
