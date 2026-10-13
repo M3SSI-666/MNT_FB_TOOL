@@ -2445,7 +2445,10 @@ async function deleteUidGroup(id){
 
 async function exportUidGroupsExcel(ma){
     try{
-        const res=await API.exportUidGroups(ma||"");
+        // Gọi THẲNG route server. Trước đây gọi API.exportUidGroups() — hàm này
+        // chưa bao giờ được định nghĩa, nên luôn ném "không phải hàm" và nút
+        // Xuất không bao giờ chạy.
+        const res=await API.get("/api/uid-groups/export-excel?ma_nhom="+encodeURIComponent(ma||""));
         if(!res.ok) throw new Error(res.error||"không rõ lỗi");
         Toast.show(`Đã lưu ${res.count} UID: ${res.path}`, "success", 10000);
     }catch(e){ Toast.error("Lỗi xuất Excel: "+e.message); }

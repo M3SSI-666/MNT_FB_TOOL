@@ -10,6 +10,16 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.47.1 — 13/10/2026
+
+**Sửa: nút Xuất Excel ở tab UID nhóm không chạy**
+
+Nút Xuất ở tab UID Nhóm và UID Marketplace gọi một hàm chưa bao giờ được định
+nghĩa (`API.exportUidGroups`), nên luôn báo lỗi và không xuất được file. Nay gọi
+thẳng đúng địa chỉ máy chủ — file .xlsx lưu vào Downloads như các bảng khác.
+
+---
+
 ## v2.47.0 — 13/10/2026
 
 **Marketplace: tiêu đề theo từng content, chọn đúng vị trí, đăng đủ ảnh**
