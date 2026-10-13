@@ -1961,38 +1961,48 @@ check("khung giờ ngược -> lịch rỗng", _xl.phan_bo_lich(_accs, _E, _S) =
 check("nghỉ = 0 không làm chia 0",    len(_xl.phan_bo_lich([{"ten": "A", "nghi": 0}], _S, _S + 60)) > 0)
 check("gen 2 lần ra kết quả giống nhau", _xl.phan_bo_lich(_mix, _S, _E) == _ra2)
 
-# ── Loại đăng: 7 lựa chọn (đã bỏ C_ = chỉ comment) ─────────────────────────
-# C_Home / C_Thuê / C_Bán từng là "chỉ comment, không đăng". Nay việc đó do
-# TRẠNG THÁI `Spam` đảm nhiệm và máy tự đặt, nên bỏ đi cho khỏi hai nguồn sự
-# thật cho cùng một tình huống.
-check("có đúng 7 lựa chọn",           len(db.LOAI_DANG_OPTIONS) == 7)
-check("không còn lựa chọn C_ nào",
-      not any(str(v).startswith("C_") for v in db.LOAI_DANG_OPTIONS))
-check("nhận diện loại hỗn hợp X_",
-      all(db.la_loai_hon_hop(v) for v in ("X_Home", "X_Thuê", "X_Bán")))
-check("loại chỉ đăng KHÔNG phải hỗn hợp",
-      not any(db.la_loai_hon_hop(v) for v in ("", "Homestay", "Thuê", "Bán")))
-check("X_Home -> lịch homestay",      db.khop_loai_lich("X_Home", "homestay"))
-check("X_Thuê KHÔNG lọt lịch bán",    not db.khop_loai_lich("X_Thuê", "ban"))
+# ── Loại đăng: 4 lựa chọn (bỏ X_ — comment/mkt nay là cột % riêng) ─────────
+# loai_dang nay chỉ quyết định mảng content. "% comment" / "% Marketplace" tách
+# sang hai cột số comment_pct / marketplace_pct — mỗi acc một tỉ lệ trên tổng
+# phiên của chính nó, độc lập với loại content.
+check("có đúng 4 lựa chọn",           len(db.LOAI_DANG_OPTIONS) == 4)
+check("không còn lựa chọn C_ / X_ nào",
+      not any(str(v).startswith(("C_", "X_")) for v in db.LOAI_DANG_OPTIONS))
 
-# "Chỉ comment" nay đọc từ trạng thái acc, không từ loại đăng.
+# % đọc từ cột số; >0 nghĩa là có chạy tính năng đó.
+check("comment_pct 25 -> acc_comment_pct 25", db.acc_comment_pct({"comment_pct": 25}) == 25)
+check("comment_pct 25 -> acc_co_comment",     db.acc_co_comment({"comment_pct": 25}))
+check("comment_pct 0 -> KHÔNG comment",       not db.acc_co_comment({"comment_pct": 0}))
+check("thiếu cột -> 0, KHÔNG comment",        db.acc_comment_pct({}) == 0 and not db.acc_co_comment({}))
+check("marketplace_pct 15 -> acc_marketplace_pct 15", db.acc_marketplace_pct({"marketplace_pct": 15}) == 15)
+check("marketplace_pct 0 -> KHÔNG marketplace", not db.acc_co_marketplace({"marketplace_pct": 0}))
+check("% rác -> 0",                           db.acc_comment_pct({"comment_pct": "abc"}) == 0)
+check("% âm/quá 100 bị kẹp",
+      db.acc_comment_pct({"comment_pct": -5}) == 0 and db.acc_comment_pct({"comment_pct": 150}) == 100)
+check("hai cột độc lập nhau",
+      db.acc_comment_pct({"comment_pct": 25, "marketplace_pct": 0}) == 25
+      and db.acc_marketplace_pct({"comment_pct": 25, "marketplace_pct": 0}) == 0)
+
+# "Chỉ comment" (acc dính spam) nay đọc từ trạng thái acc.
 check("acc Spam -> chỉ comment",      db.acc_dang_spam({"trang_thai": db.TRANG_THAI_SPAM}))
 check("acc Active -> KHÔNG chỉ comment", not db.acc_dang_spam({"trang_thai": "Active"}))
 check("acc thiếu trạng thái -> không", not db.acc_dang_spam({}))
 
-# Khớp lịch phải CHÍNH XÁC: "X_Thuê" chứa chuỗi con "Thuê", "X_Bán" chứa "Bán".
+# Khớp lịch theo loai_dang sạch (không còn tiền tố X_).
 check("Homestay -> lịch homestay",    db.khop_loai_lich("Homestay", "homestay"))
-check("X_Bán  -> đúng lịch bán",      db.khop_loai_lich("X_Bán", "ban"))
+check("Bán -> đúng lịch bán",         db.khop_loai_lich("Bán", "ban"))
 check("Thuê KHÔNG lọt vào lịch homestay", not db.khop_loai_lich("Thuê", "homestay"))
 check("để trống -> không vào lịch nào",
       not any(db.khop_loai_lich("", l) for l in ("homestay", "thue", "ban")))
-# Loại C_ cũ nay là giá trị KHÔNG hợp lệ, không được khớp lịch nào.
+# X_ và C_ cũ nay là giá trị KHÔNG hợp lệ, không được khớp lịch nào.
+check("X_Home cũ không còn khớp lịch",
+      not any(db.khop_loai_lich("X_Home", l) for l in ("homestay", "thue", "ban")))
 check("C_Home cũ không còn khớp lịch",
       not any(db.khop_loai_lich("C_Home", l) for l in ("homestay", "thue", "ban")))
 
 for _v in db.LOAI_DANG_OPTIONS:
     db.update_account_field(_acc_id, "loai_dang", _v)
-check("lưu được cả 7 giá trị hợp lệ",
+check("lưu được cả 4 giá trị hợp lệ",
       db.get_account_by_id(_acc_id)["loai_dang"] == db.LOAI_DANG_OPTIONS[-1])
 for _xau in ("C_Home", "C_home", "homestay", "Comment", "C_Nha", "Homestay,Thuê"):
     try:
@@ -2003,6 +2013,47 @@ for _xau in ("C_Home", "C_home", "homestay", "Comment", "C_Nha", "Homestay,Thuê
 db.update_account_field(_acc_id, "loai_dang", "  Homestay  ")
 check("khoảng trắng thừa được cắt bỏ",
       db.get_account_by_id(_acc_id)["loai_dang"] == "Homestay")
+
+# ── Mode: tập đóng Hybrid/Via ──────────────────────────────────────────────
+check("Mode có đúng 2 lựa chọn",      db.MODE_OPTIONS == ("Hybrid", "Via"))
+db.update_account_field(_acc_id, "mode", "Via")
+check("đổi Mode sang Via được",       db.get_account_by_id(_acc_id)["mode"] == "Via")
+for _m in ("Marketplace", "hybrid", "VIA", "Linh tinh"):
+    try:
+        db.update_account_field(_acc_id, "mode", _m)
+        check(f"chặn Mode sai '{_m}'", False)
+    except ValueError:
+        check(f"chặn Mode sai '{_m}'", True)
+db.update_account_field(_acc_id, "mode", "Hybrid")
+
+# ── Di trú X_* → loại sạch + comment_pct=25 ────────────────────────────────
+# Acc cũ mang X_Thuê phải tự thành Thuê + comment_pct = tỉ lệ mặc định, giữ y
+# nguyên hành vi comment. Mô phỏng câu lệnh di trú trong init_db trên acc thô.
+with db._conn() as _c:
+    _c.execute("INSERT INTO accounts (ten_acc, loai_dang, comment_pct) "
+               "VALUES ('MIGR_X', 'X_Thuê', 0)")
+    for _x, _sach in (("X_Home", "Homestay"), ("X_Thuê", "Thuê"), ("X_Bán", "Bán")):
+        _c.execute("UPDATE accounts SET loai_dang=?, comment_pct=? WHERE loai_dang=?",
+                   (_sach, db.TI_LE_COMMENT_MAC_DINH, _x))
+    _migr = _c.execute("SELECT loai_dang, comment_pct FROM accounts "
+                       "WHERE ten_acc='MIGR_X'").fetchone()
+    _c.execute("DELETE FROM accounts WHERE ten_acc='MIGR_X'")
+check("di trú X_Thuê -> loai_dang='Thuê'", _migr["loai_dang"] == "Thuê")
+check("di trú X_Thuê -> comment_pct=25",   _migr["comment_pct"] == db.TI_LE_COMMENT_MAC_DINH)
+
+# Cột % lưu và đọc lại được; chặn tổng comment+mkt > 100.
+db.update_account_field(_acc_id, "comment_pct", 30)
+db.update_account_field(_acc_id, "marketplace_pct", 20)
+check("lưu được comment_pct/marketplace_pct",
+      db.acc_comment_pct(db.get_account_by_id(_acc_id)) == 30
+      and db.acc_marketplace_pct(db.get_account_by_id(_acc_id)) == 20)
+try:
+    db.update_account_field(_acc_id, "marketplace_pct", 80)  # 30+80 > 100
+    check("chặn comment%+mkt% > 100", False)
+except ValueError:
+    check("chặn comment%+mkt% > 100", True)
+db.update_account_field(_acc_id, "comment_pct", 0)
+db.update_account_field(_acc_id, "marketplace_pct", 0)
 db.update_account_field(_acc_id, "loai_dang", "")
 
 # Page được phân công cho slot — bước khởi động CHUYỂN sang Page này.
@@ -2115,6 +2166,30 @@ check("acc không thuộc nhóm X_ -> bỏ qua", _xl.chuyen_slot_theo_ti_le(_sx3
 # Slot đã bị nuôi chiếm thì giữ nguyên — nên phải gọi SAU bước chuyển nuôi
 _sx4 = [{"ten_acc": "X1", "gio_dang": "05:00", "hoat_dong": "nuoi_nick"} for _ in range(10)]
 check("không cướp slot của nuôi nick", _xl.chuyen_slot_theo_ti_le(_sx4, {"X1"}, 50) == 0)
+
+# ── Chuyển slot sang MARKETPLACE (cùng hàm, khác hoat_dong) ────────────────
+# Marketplace dùng lại chuyen_slot_theo_ti_le với hoat_dong="marketplace",
+# không có hàm riêng — cùng một cơ chế thì chỉ một đường code để sửa.
+_smk = [{"ten_acc": "M1", "gio_dang": "05:00"} for _ in range(100)]
+_nmk = _xl.chuyen_slot_theo_ti_le(_smk, {"M1"}, 25, hoat_dong="marketplace")
+check("25% -> 25 slot marketplace", _nmk == 25)
+check("slot đổi mang đúng hoat_dong 'marketplace'",
+      sum(1 for r in _smk if r.get("hoat_dong") == "marketplace") == 25)
+check("không lẫn sang comment",
+      not any(r.get("hoat_dong") == "comment" for r in _smk))
+
+# Acc tick CẢ comment LẪN marketplace: chuyển comment trước rồi marketplace,
+# mỗi bước chỉ lấy từ slot còn 'dang_bai'. Nên marketplace lấy 25% của phần CÒN
+# LẠI (75), không phải của 100 — đúng thiết kế, hai bước không giẫm nhau.
+_sc = [{"ten_acc": "B1", "gio_dang": "05:00"} for _ in range(100)]
+_xl.chuyen_slot_theo_ti_le(_sc, {"B1"}, 25, hoat_dong="comment")
+_xl.chuyen_slot_theo_ti_le(_sc, {"B1"}, 25, hoat_dong="marketplace")
+_dem_hd = lambda hd: sum(1 for r in _sc if (r.get("hoat_dong") or "dang_bai") == hd)
+check("comment giữ nguyên 25 sau khi chuyển marketplace", _dem_hd("comment") == 25)
+check("marketplace chỉ lấy từ 75 slot còn lại (25% của 75 ≈ 19)",
+      _dem_hd("marketplace") == 19)
+check("không slot nào mang hai hoat_dong, tổng bảo toàn",
+      _dem_hd("comment") + _dem_hd("marketplace") + _dem_hd("dang_bai") == 100)
 
 # ── Chỉ comment vào bài CHÍNH CHỦ ──────────────────────────────────────────
 db.xoa_het_comment_posts("ban")
@@ -2944,7 +3019,7 @@ check("bật lại -> đăng bài được",       db.acc_duoc_chay("SPAM Test",
 # bỏ: lọc cứng 'Active' thì acc vừa bị đánh spam biến mất khỏi Gen — không còn
 # slot nào, kể cả slot comment — trong khi comment là việc duy nhất nó còn làm
 # được. Bước 3 của Gen sẽ quét mọi slot còn lại của nó thành comment.
-db.update_account_field(_sid, "loai_dang", "X_Home")
+db.update_account_field(_sid, "loai_dang", "Homestay")
 with db._conn() as _c:
     _c.execute("UPDATE accounts SET trang_thai=? WHERE id=?", (db.TRANG_THAI_SPAM, _sid))
 _ds = [a["ten_acc"] for a in db.accounts_theo_lich("homestay")]
@@ -4600,15 +4675,12 @@ check("content KHÔNG có cột riêng cho Marketplace",
       not {"tieu_de", "gia", "vi_tri"} & _cot_content)
 
 # Marketplace KHÔNG có bảng phân công riêng: cột `loai_dang` bên Tài khoản đã
-# nói acc phụ trách loại nào. Acc "X_" vừa đăng vừa comment nhưng vẫn chỉ thuộc
-# đúng một loại content.
+# nói acc phụ trách loại content nào (nay chỉ còn 3 giá trị sạch).
 check("Homestay -> content homestay", db.loai_content_cua_acc("Homestay") == "homestay")
-check("X_Home   -> content homestay", db.loai_content_cua_acc("X_Home")   == "homestay")
 check("Thuê     -> content thue",     db.loai_content_cua_acc("Thuê")     == "thue")
-check("X_Thuê   -> content thue",     db.loai_content_cua_acc("X_Thuê")   == "thue")
 check("Bán      -> content ban",      db.loai_content_cua_acc("Bán")      == "ban")
-check("X_Bán    -> content ban",      db.loai_content_cua_acc("X_Bán")    == "ban")
 check("acc chưa phân công -> rỗng",   db.loai_content_cua_acc("")         == "")
+check("X_ cũ -> rỗng, không đoán bừa", db.loai_content_cua_acc("X_Home")  == "")
 check("giá trị lạ -> rỗng, không đoán bừa",
       db.loai_content_cua_acc("C_Home") == "")
 # Hai chiều phải khớp nhau tuyệt đối, nếu không sẽ có acc Gen được lịch mà

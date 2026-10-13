@@ -31,32 +31,41 @@ BUSY_TIMEOUT_SEC = 15
 # ═══════════════════════════════════════════════════════════════
 # Loại đăng của tài khoản
 # ═══════════════════════════════════════════════════════════════
-# Một cột DUY NHẤT quyết định acc làm gì. Không có cờ phụ nào khác — trước đây
-# có thêm 2 cột `comment_bai` / `comment_interval` làm đúng việc của "X_", để
-# song song thì cùng một acc có hai nguồn sự thật mâu thuẫn nhau.
+# `loai_dang` chỉ còn quyết định MỘT việc: acc dùng mảng content nào và vào lịch
+# nào. Việc "có comment" / "có Marketplace" tách sang hai cột cờ riêng
+# (`co_comment` / `co_marketplace`) — mỗi cột một việc độc lập.
 #
-#   Homestay / Thuê / Bán  → chỉ đăng bài
-#   X_Home / X_Thuê / X_Bán → vừa đăng vừa comment, theo tỉ lệ (mặc định 75/25)
+#   Homestay / Thuê / Bán  → mảng content + lịch tương ứng
 #   (để trống)             → không vào lịch đăng nào
 #
-# Từng có thêm C_Home / C_Thuê / C_Bán nghĩa là "chỉ comment, không đăng", dành
-# cho acc bị Facebook dỡ bài. Đã bỏ vì trạng thái `Spam` làm đúng việc đó mà
-# KHÔNG cần người ngồi đổi cột: acc bị gỡ bài thì máy tự chuyển sang Spam, và
-# Gen lịch tự cho nó toàn slot comment. Giữ cả hai đường thì lại thành hai nguồn
-# sự thật cho cùng một tình huống — đúng lỗi đã mắc với `comment_bai` trước đây.
-LOAI_DANG_OPTIONS = ("", "Homestay", "Thuê", "Bán",
-                     "X_Home", "X_Thuê", "X_Bán")
+# Trước đây gộp cả "có comment" vào chính cột này bằng tiền tố "X_"
+# (X_Home/X_Thuê/X_Bán = vừa đăng vừa comment). Đã tách ra vì Duong cần bật
+# comment và Marketplace ĐỘC LẬP với loại content. Di trú tự động trong
+# `init_db`: X_* → loại sạch + `co_comment=1`.
+#
+# Lưu ý vì sao tách lần này KHÁC lỗi `comment_bai` cũ: lỗi đó là HAI cột cùng nói
+# một việc (có comment hay không) → hai nguồn sự thật. Còn đây ba cột nói ba việc
+# khác nhau (loại content / có comment / có Marketplace), không chồng lấn.
+LOAI_DANG_OPTIONS = ("", "Homestay", "Thuê", "Bán")
 
-# loại lịch  →  (chỉ đăng, vừa đăng vừa comment)
+# Cách đăng nhóm của acc — lưu theo từng acc (cột `mode`), không còn chọn lúc
+# Gen. Chỉ hai lựa chọn; Marketplace KHÔNG nằm ở đây mà là cột cờ riêng.
+MODE_OPTIONS = ("Hybrid", "Via")
+
+# loại lịch → giá trị loai_dang tương ứng
 LOAI_LICH_MAP = {
-    "homestay": ("Homestay", "X_Home"),
-    "thue":     ("Thuê",     "X_Thuê"),
-    "ban":      ("Bán",      "X_Bán"),
+    "homestay": ("Homestay",),
+    "thue":     ("Thuê",),
+    "ban":      ("Bán",),
 }
 
-# Bao nhiêu phần trăm slot của acc "X_" là phiên comment. 25 = 75% đăng, 25%
-# comment. Sửa được qua bảng settings (`comment_ti_le`).
+# Tỉ lệ comment MẶC ĐỊNH khi di trú acc X_* cũ (vốn chạy comment ở mức này).
+# Nay tỉ lệ đặt RIÊNG cho từng acc ở cột comment_pct, không còn một con số chung
+# qua settings nữa — hằng này chỉ dùng làm giá trị di trú.
 TI_LE_COMMENT_MAC_DINH = 25
+
+# Giá trị di trú cho cột cờ co_marketplace cũ (bản thử nghiệm giữa chừng).
+TI_LE_MARKETPLACE_MAC_DINH = 25
 
 # Trạng thái acc do máy tự đặt khi phát hiện acc chết (xem suc_khoe_acc.py).
 # Đặt vào chính cột trang_thai chứ không thêm cột cờ riêng: mọi chỗ đang lọc
@@ -115,17 +124,41 @@ def acc_dang_spam(acc: dict) -> bool:
     return (acc.get("trang_thai") or "") == TRANG_THAI_SPAM
 
 
-def la_loai_hon_hop(loai_dang: str) -> bool:
-    """Acc VỪA đăng VỪA comment theo tỉ lệ (X_*)."""
-    return (loai_dang or "").strip().upper().startswith("X_")
+def _pct(v) -> int:
+    """Ép về số nguyên 0–100. Giá trị rác coi như 0."""
+    try:
+        return max(0, min(100, int(v or 0)))
+    except (ValueError, TypeError):
+        return 0
+
+
+def acc_comment_pct(acc: dict) -> int:
+    """% tổng phiên/ngày của acc dành cho comment. 0 = tắt.
+
+    Thay cho `la_loai_hon_hop` + tỉ lệ chung cũ: nay mỗi acc một tỉ lệ riêng,
+    độc lập với loại content.
+    """
+    return _pct(acc.get("comment_pct"))
+
+
+def acc_marketplace_pct(acc: dict) -> int:
+    """% tổng phiên/ngày của acc dành cho Marketplace. 0 = tắt."""
+    return _pct(acc.get("marketplace_pct"))
+
+
+def acc_co_comment(acc: dict) -> bool:
+    """Acc có chạy comment không (pct > 0) — dùng cho badge/lọc."""
+    return acc_comment_pct(acc) > 0
+
+
+def acc_co_marketplace(acc: dict) -> bool:
+    """Acc có chạy Marketplace không (pct > 0)."""
+    return acc_marketplace_pct(acc) > 0
 
 
 def khop_loai_lich(loai_dang: str, loai_lich: str) -> bool:
-    """
-    Acc thuộc lịch nào. So khớp CHÍNH XÁC, không dùng `in`: "X_Thuê" chứa chuỗi
-    con "Thuê" và "X_Bán" chứa "Bán", nên so kiểu substring sẽ kéo nhầm acc
-    hỗn hợp vào nhóm chỉ đăng bài.
-    """
+    """Acc thuộc lịch nào. So khớp CHÍNH XÁC theo loai_dang (nay đã sạch, không
+    còn tiền tố X_)."""
     v = (loai_dang or "").strip()
     return v in LOAI_LICH_MAP.get(loai_lich, ())
 
@@ -168,7 +201,10 @@ def init_db():
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             order_idx       INTEGER DEFAULT 0,
             ten_acc         TEXT NOT NULL,
+            mode            TEXT DEFAULT 'Hybrid',  -- Hybrid / Via (cách đăng nhóm)
             loai_dang       TEXT DEFAULT '',        -- Bán / Thuê / Homestay
+            comment_pct     INTEGER DEFAULT 0,      -- % phiên/ngày dành cho comment (0 = tắt)
+            marketplace_pct INTEGER DEFAULT 0,      -- % phiên/ngày dành cho Marketplace (0 = tắt)
             thoi_gian_nghi  INTEGER DEFAULT 30,     -- phút
             link_profile    TEXT DEFAULT '',
             email_sdt       TEXT DEFAULT '',
@@ -331,6 +367,37 @@ def init_db():
         _add_col("accounts",  "vi_pham_ngay",  "vi_pham_ngay TEXT DEFAULT ''")
         _add_col("schedules", "hoat_dong",     "hoat_dong TEXT DEFAULT 'dang_bai'")
 
+        # ── Migration: tách loại đăng + cột % comment / Marketplace ─────────
+        # loai_dang gộp "có comment" qua tiền tố X_. Tách ra: cột `mode`
+        # (Hybrid/Via, trước ở màn Gen nay lưu theo acc) và HAI cột PHẦN TRĂM:
+        # comment_pct / marketplace_pct = bao nhiêu % tổng phiên/ngày của acc đó
+        # dành cho comment / Marketplace (0 = tắt). Đăng thuần = 100 - hai cái này.
+        #
+        # X_* cũ chạy comment ở tỉ lệ chung 25%, nên chuyển về loại sạch +
+        # comment_pct = TI_LE_COMMENT_MAC_DINH để giữ y hành vi.
+        _add_col("accounts", "mode",            "mode TEXT DEFAULT 'Hybrid'")
+        _add_col("accounts", "comment_pct",     "comment_pct INTEGER DEFAULT 0")
+        _add_col("accounts", "marketplace_pct", "marketplace_pct INTEGER DEFAULT 0")
+        for _x, _sach in (("X_Home", "Homestay"), ("X_Thuê", "Thuê"),
+                          ("X_Bán", "Bán")):
+            con.execute("UPDATE accounts SET loai_dang=?, comment_pct=? "
+                        "WHERE loai_dang=?",
+                        (_sach, TI_LE_COMMENT_MAC_DINH, _x))
+        # Bản thử nghiệm giữa chừng từng dùng hai cột cờ 0/1 (co_comment /
+        # co_marketplace). Nếu DB đã đi qua bản đó thì đổi cờ thành %: bật = tỉ
+        # lệ mặc định, tắt = 0. Rồi bỏ hai cột cờ cho khỏi hai nguồn sự thật.
+        _acc_cols_now = [r["name"] for r in con.execute("PRAGMA table_info(accounts)")]
+        if "co_comment" in _acc_cols_now:
+            con.execute("UPDATE accounts SET comment_pct=? "
+                        "WHERE co_comment=1 AND comment_pct=0",
+                        (TI_LE_COMMENT_MAC_DINH,))
+            con.execute("UPDATE accounts SET marketplace_pct=? "
+                        "WHERE co_marketplace=1 AND marketplace_pct=0",
+                        (TI_LE_MARKETPLACE_MAC_DINH,))
+            for _cot in ("co_comment", "co_marketplace"):
+                if _cot in _acc_cols_now:
+                    con.execute(f"ALTER TABLE accounts DROP COLUMN {_cot}")
+
         # ── Migration: bỏ 2 cột cờ comment ──────────────────────────────
         # `comment_bai` + `comment_interval` từng là cách thứ hai để acc vừa
         # đăng vừa comment. Nay việc đó do loại đăng "X_*" đảm nhiệm, để lại
@@ -423,14 +490,16 @@ def init_db():
         # trình riêng nên không đẩy thẳng toast lên web được, phải qua DB.
         _add_col("accounts", "canh_bao_moi",  "canh_bao_moi TEXT DEFAULT ''")
         # ── Migration: bỏ loại đăng "C_*" (chỉ comment) ─────────────────
-        # Việc đó nay do trạng thái `Spam` đảm nhiệm, tự động. Phải ĐỔI dữ liệu
-        # chứ không chỉ bỏ khỏi LOAI_DANG_OPTIONS: acc còn mang "C_Home" sẽ
-        # không khớp LOAI_LICH_MAP nữa nên rơi khỏi Gen lịch mà không báo gì —
-        # đúng kiểu hỏng im lặng khó lần ra nhất.
-        for _cu, _moi in (("C_Home", "X_Home"), ("C_Thuê", "X_Thuê"),
-                          ("C_Bán", "X_Bán")):
-            con.execute("UPDATE accounts SET loai_dang=? WHERE loai_dang=?",
-                        (_moi, _cu))
+        # Trước đây C_* được đổi sang X_* (vừa đăng vừa comment). Nay X_* lại
+        # được tách thành loại sạch + co_comment, nên đưa C_* thẳng về mô hình
+        # mới luôn — chạy sau di trú X_* ở trên nên phải tự xử lý, không ỷ vào đó.
+        # Phải ĐỔI dữ liệu chứ không chỉ bỏ khỏi LOAI_DANG_OPTIONS: acc còn mang
+        # "C_Home" sẽ không khớp LOAI_LICH_MAP nên rơi khỏi Gen lịch mà không báo
+        # gì — đúng kiểu hỏng im lặng khó lần ra nhất.
+        for _cu, _sach in (("C_Home", "Homestay"), ("C_Thuê", "Thuê"),
+                           ("C_Bán", "Bán")):
+            con.execute("UPDATE accounts SET loai_dang=?, comment_pct=? "
+                        "WHERE loai_dang=?", (_sach, TI_LE_COMMENT_MAC_DINH, _cu))
 
         # ── Migration: bỏ trạng thái "Hỏng", đổi "Tạm dừng" → "Dừng" ────
         # Phải ĐỔI dữ liệu chứ không chỉ bỏ khỏi TRANG_THAI_OPTIONS: acc còn
@@ -638,13 +707,34 @@ def _chan_c_user_la_page(c_user):
 
 def update_account_field(acc_id: int, field: str, value: str):
     safe = {
-        "ten_acc","loai_dang","thoi_gian_nghi","link_profile","email_sdt",
+        "ten_acc","mode","loai_dang","comment_pct","marketplace_pct",
+        "thoi_gian_nghi","link_profile","email_sdt",
         "password","ten_page","c_user","xs","refresh","trang_thai",
         "email_khoiphuc","pass_khoiphuc","twofa","ghi_chu",
         "nuoi_nick","nuoi_interval"
     }
     if field not in safe:
         raise ValueError(f"Field không hợp lệ: {field}")
+    # Mode cũng là tập đóng — giá trị lạ khiến scheduler rơi vào nhánh "không
+    # hỗ trợ". Chặn tại cửa ghi như loai_dang.
+    if field == "mode":
+        value = (value or "").strip() or "Hybrid"
+        if value not in MODE_OPTIONS:
+            raise ValueError(f"Mode không hợp lệ: '{value}' "
+                             f"(chỉ nhận: {', '.join(MODE_OPTIONS)})")
+    # % phải trong 0–100, và comment + Marketplace không được vượt 100 (đăng
+    # thuần = 100 - hai cái này, âm là vô nghĩa). Kiểm cả hai cùng lúc bằng cách
+    # đọc giá trị hiện có của cột kia.
+    if field in ("comment_pct", "marketplace_pct"):
+        value = _pct(value)
+        with _conn() as _c:
+            _r = _c.execute("SELECT comment_pct, marketplace_pct FROM accounts "
+                            "WHERE id=?", (acc_id,)).fetchone()
+        _kia = (_pct(_r["marketplace_pct"]) if field == "comment_pct"
+                else _pct(_r["comment_pct"])) if _r else 0
+        if value + _kia > 100:
+            raise ValueError(f"Comment% + Marketplace% không được vượt 100 "
+                             f"(đang cố đặt {value}, cột kia {_kia})")
     # Loại đăng là tập giá trị đóng. Giá trị lạ ("C_home", "Homestay " thừa
     # khoảng trắng) sẽ khiến Gen lịch âm thầm bỏ sót acc đó — hỏng kiểu im lặng,
     # khó lần ra nhất. Chặn ngay tại cửa ghi.
@@ -2140,9 +2230,8 @@ def doc_cai_dat_mkt() -> dict:
 def loai_content_cua_acc(loai_dang: str) -> str:
     """Acc này lấy content của loại nào: 'homestay' / 'thue' / 'ban' / ''.
 
-    Marketplace KHÔNG có bảng phân công riêng — cột `loai_dang` bên Tài khoản
-    đã nói acc phụ trách loại nào rồi. Acc "X_" vừa đăng vừa comment nhưng vẫn
-    chỉ thuộc đúng một loại content, nên vẫn ra một kết quả.
+    Cột `loai_dang` bên Tài khoản đã nói acc phụ trách loại nào rồi (nay chỉ còn
+    3 giá trị sạch, không tiền tố).
 
     Đây là chiều ngược của `khop_loai_lich`, và cùng đọc `LOAI_LICH_MAP` để hai
     chiều không bao giờ lệch nhau.

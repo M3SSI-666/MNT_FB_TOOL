@@ -925,8 +925,13 @@ async function shutdownApp(){
 // ── Accounts ──────────────────────────────────────────────────
 const ACC_FIELDS = [
     {key:"ten_acc",label:"Tên acc"},
+    {key:"mode",label:"Mode"},
     {key:"loai_dang",label:"Loại đăng"},
+    {key:"nuoi_nick",label:"Nuôi",type:"check",title:"Bật/tắt nuôi nick"},
+    {key:"nuoi_interval",label:"Chu kỳ (p)"},
     {key:"thoi_gian_nghi",label:"Nghỉ (p)"},
+    {key:"comment_pct",label:"Comment %"},
+    {key:"marketplace_pct",label:"Market %"},
     {key:"link_profile",label:"Link profile"},
     {key:"email_sdt",label:"Email/SDT"},
     {key:"password",label:"Password",mono:true},
@@ -935,8 +940,6 @@ const ACC_FIELDS = [
     {key:"xs",label:"xs",mono:true},
     {key:"refresh",label:"Refresh"},
     {key:"trang_thai",label:"Trạng thái"},
-    {key:"nuoi_nick",label:"Nuôi",type:"check"},
-    {key:"nuoi_interval",label:"Chu kỳ (p)"},
     {key:"email_khoiphuc",label:"Email KP"},
     {key:"pass_khoiphuc",label:"Pass KP"},
     {key:"twofa",label:"2FA"},
@@ -1076,7 +1079,7 @@ async function refreshCookiesNow(){
 async function loadAccounts(){
     const tbody=document.getElementById("acc-table");
     const thead=document.getElementById("acc-thead");
-    tbody.innerHTML=`<tr><td colspan="19" class="loading"><span class="spin">↻</span></td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="22" class="loading"><span class="spin">↻</span></td></tr>`;
     try{
         const res=await API.accounts();
         _accData=res.data;
@@ -1101,7 +1104,7 @@ async function loadAccounts(){
                 .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1;min-width:80px"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px;${s.c?"color:"+s.c:""}">${s.v}</div></div>`).join("");
         }
         renderAccTable(res.data);
-    }catch(e){ tbody.innerHTML=`<tr><td colspan="19" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
+    }catch(e){ tbody.innerHTML=`<tr><td colspan="22" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
 }
 
 function renderAccTable(data){
@@ -1110,9 +1113,9 @@ function renderAccTable(data){
     const filter=document.getElementById("acc-filter-loai")?.value||"";
     const rows=data.filter(r=>!filter||((r.loai_dang||"").trim()===filter));
     if(count) count.textContent=`${rows.length}/${data.length} tài khoản`;
-    if(!rows.length){ tbody.innerHTML=`<tr><td colspan="19" class="empty">Không có tài khoản nào</td></tr>`; return; }
+    if(!rows.length){ tbody.innerHTML=`<tr><td colspan="22" class="empty">Không có tài khoản nào</td></tr>`; return; }
     tbody.innerHTML=rows.map((r,i)=>{
-        const CENTER_KEYS=["loai_dang","thoi_gian_nghi","link_profile","refresh","trang_thai","nuoi_interval"];
+        const CENTER_KEYS=["mode","loai_dang","comment_pct","marketplace_pct","thoi_gian_nghi","link_profile","refresh","trang_thai","nuoi_interval"];
         const tds=ACC_FIELDS.map(f=>{
             const val=(r[f.key]||"").toString();
             const esc=val.replace(/"/g,"&quot;");
@@ -1120,7 +1123,7 @@ function renderAccTable(data){
                 const on=(val==="1");
                 return `<td style="text-align:center"><input type="checkbox" ${on?"checked":""}
                     onclick="toggleAccCheck(event,${r.id},'${f.key}')"
-                    style="width:16px;height:16px;cursor:pointer" title="Bật/tắt nuôi nick"></td>`;
+                    style="width:16px;height:16px;cursor:pointer" title="${f.title||""}"></td>`;
             }
             const center=CENTER_KEYS.includes(f.key)?"text-align:center;":"";
             const style=`${center}font-size:${f.mono?"11px":"12px"};color:var(--text-secondary);${f.mono?"font-family:var(--font-mono);":""}max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
@@ -1232,7 +1235,7 @@ async function startAccEdit(td){
     // Trạng thái cũng dùng dropdown như Loại đăng: đây là ô để bật lại acc bị
     // máy tắt, gõ tay lệch một ký tự thì acc nằm ngoài mọi bộ lọc 'Active' mà
     // nhìn vẫn như đã bật.
-    const CHON_SAN={loai_dang:LOAI_DANG_OPTIONS, trang_thai:TRANG_THAI_OPTIONS};
+    const CHON_SAN={mode:MODE_OPTIONS, loai_dang:LOAI_DANG_OPTIONS, trang_thai:TRANG_THAI_OPTIONS};
     if(CHON_SAN[field]){
         const sel=document.createElement("select");
         sel.style.cssText="width:100%;font-size:12px";
@@ -1297,10 +1300,13 @@ async function startAccEdit(td){
     inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault();inp.blur();} if(e.key==="Escape"){inp.value=val;inp.blur();} });
 }
 
-// Loại đăng — tiền tố "C_" nghĩa là acc CHỈ ĐI COMMENT cho mảng đó, không
-// đăng bài. Dùng cho acc bị Facebook dỡ bài nhưng vẫn comment được.
+// Loại đăng — chỉ còn 3 mảng content. Việc "có comment" / "có Marketplace" nay
+// là hai cột cờ riêng (co_comment / co_marketplace).
 // Danh sách phải khớp LOAI_DANG_OPTIONS trong db.py.
-const LOAI_DANG_OPTIONS = ["","Homestay","Thuê","Bán","X_Home","X_Thuê","X_Bán"];
+const LOAI_DANG_OPTIONS = ["","Homestay","Thuê","Bán"];
+
+// Cách đăng nhóm — khớp MODE_OPTIONS trong db.py. Marketplace KHÔNG ở đây.
+const MODE_OPTIONS = ["Hybrid","Via"];
 
 // Loại đăng của PAGE. Khác LOAI_DANG_OPTIONS ở trên — cái đó là của tài khoản.
 // Ô trống ở đầu là có chủ ý: Page để trống thì gen lịch BỎ QUA nó, dùng khi
@@ -1326,21 +1332,21 @@ const LOAI_PAGE_TRONG   = "—";        // chữ hiện ra cho ô trống
 // Đổi màu thì nên chạy lại phép đo đó trước.
 function mauLoaiDang(v){
     if(v==="Homestay") return "#34d399";   // xanh ngọc
-    if(v==="X_Home")   return "#22d3ee";   // xanh cyan
     if(v==="Thuê")     return "#60a5fa";   // xanh dương
-    if(v==="X_Thuê")   return "#c084fc";   // tím
     if(v==="Bán")      return "#fbbf24";   // vàng hổ phách
-    if(v==="X_Bán")    return "#f87171";   // đỏ san hô
     return "var(--text-secondary)";
 }
 
 function openAccForm(data={}){
     const f=(k,label,type="text")=>`<div class="field-group"><label>${label}</label><input type="${type}" id="af_${k}" value="${(data[k]||"").toString().replace(/"/g,"&quot;")}"></div>`;
     const fsel=(k,label,opts)=>`<div class="field-group"><label>${label}</label><select id="af_${k}">${opts.map(o=>`<option value="${o}" ${data[k]===o?"selected":""}>${o||"-"}</option>`).join("")}</select></div>`;
+    const fchk=(k,label)=>`<div class="field-group"><label>${label}</label><input type="checkbox" id="af_${k}" ${String(data[k])==="1"?"checked":""} style="width:18px;height:18px;cursor:pointer"></div>`;
     openModal(data.id?"Sửa tài khoản":"Thêm tài khoản",`
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            ${f("ten_acc","Tên acc")} ${fsel("loai_dang","Loại đăng",LOAI_DANG_OPTIONS)}
-            ${f("thoi_gian_nghi","Nghỉ (phút)")} ${f("ten_page","Tên Page")}
+            ${f("ten_acc","Tên acc")} ${fsel("mode","Mode",MODE_OPTIONS)}
+            ${fsel("loai_dang","Loại đăng",LOAI_DANG_OPTIONS)} ${f("thoi_gian_nghi","Nghỉ (phút)")}
+            ${f("comment_pct","Comment %","number")} ${f("marketplace_pct","Marketplace %","number")}
+            ${f("ten_page","Tên Page")}
             ${f("link_profile","Link profile")} ${f("email_sdt","Email/SDT")}
             ${f("password","Password")} ${f("c_user","c_user")}
             <div class="field-group" style="grid-column:1/-1"><label>xs</label><input id="af_xs" value="${(data.xs||"").toString().replace(/"/g,"&quot;")}"></div>
@@ -1357,9 +1363,13 @@ function openAccForm(data={}){
 
 async function saveAccForm(){
     const get=id=>document.getElementById(id)?.value||"";
+    const chk=id=>document.getElementById(id)?.checked?1:0;
     const data={
         id:        parseInt(get("af_id"))||undefined,
-        ten_acc:   get("af_ten_acc"), loai_dang: get("af_loai_dang"),
+        ten_acc:   get("af_ten_acc"), mode: get("af_mode")||"Hybrid",
+        loai_dang: get("af_loai_dang"),
+        comment_pct: parseInt(get("af_comment_pct"))||0,
+        marketplace_pct: parseInt(get("af_marketplace_pct"))||0,
         thoi_gian_nghi: parseInt(get("af_thoi_gian_nghi"))||30,
         ten_page:  get("af_ten_page"), link_profile: get("af_link_profile"),
         email_sdt: get("af_email_sdt"), password: get("af_password"),
@@ -2522,8 +2532,7 @@ function renderCommentPostsPage(){
         <div style="font-size:12px;line-height:1.7;color:var(--text-muted);margin-bottom:12px;padding:10px;background:var(--bg-hover);border-radius:var(--radius-sm)">
             Link ở đây <b>tự điền</b> sau mỗi lần đăng chéo — không phải dán tay.
             Đến phiên, acc mở vài bài và để lại một comment lấy từ thư viện câu → bài nổi lên đầu nhóm.<br>
-            Bật cho từng acc bằng cột <b>Loại đăng</b> ở bảng Tài khoản: <b>X_</b> = vừa đăng vừa comment,
-            <b>C_</b> = chỉ comment. Đổi xong nhớ <b>Gen lịch</b> lại.<br>
+            Bật cho từng acc bằng cách <b>tick cột Comment</b> ở bảng Tài khoản. Đổi xong nhớ <b>Gen lịch</b> lại.<br>
             Mỗi phiên bốc <b>tối đa 1 link mỗi nhóm</b>, ưu tiên bài cũ nhất chưa comment.
             Danh sách giữ <b><span class="cmt-gioi-han">${_cmtGioiHan}</span> link mới nhất</b>, link cũ bị đẩy ra sẽ xoá hẳn. Link chết (bài đã bị xoá) phát hiện lúc comment là <b>tự xoá khỏi danh sách</b>.
         </div>
@@ -2703,8 +2712,10 @@ async function openCommentSettings(){
             không lấp bằng bài của Page khác.
         </div>
 
-        ${row("Tỉ lệ comment của acc X_ (%)", num("comment_ti_le",25),
-              "25 = 75% slot đăng bài, 25% slot comment. Chỉ áp cho loại đăng X_Home / X_Thuê / X_Bán.")}
+        <div style="font-size:12px;color:var(--text-muted);padding:8px 0">
+            Tỉ lệ <b>Comment</b> và <b>Marketplace</b> nay đặt RIÊNG cho từng acc
+            ở bảng Tài khoản (cột Comment % / Market %), không còn chỉnh chung ở đây.
+        </div>
         ${row("Số bài mỗi phiên", num("comment_so_bai",9),
               "Tối đa 1 bài mỗi nhóm — nên không bao giờ vượt quá số nhóm đang có trong danh sách")}
         ${row("Nghỉ giữa 2 bài (giây)",
@@ -2782,7 +2793,6 @@ async function saveCommentSettings(){
     const g=id=>document.getElementById(`cs_${id}`);
     const gi=(id,dv)=>{ const n=parseInt(g(id)?.value); return isNaN(n)?dv:n; };
     const data={
-        comment_ti_le:    gi("comment_ti_le",25),
         comment_so_bai:   gi("comment_so_bai",9),
         comment_nghi_min: gi("comment_nghi_min",5),
         comment_nghi_max: gi("comment_nghi_max",7),
@@ -2798,9 +2808,6 @@ async function saveCommentSettings(){
     }
     if(data.comment_cau_chinh_chu > 3){
         Toast.error("Trên 3 câu một bài là spam thấy rõ — nhóm sẽ đá acc"); return;
-    }
-    if(data.comment_ti_le < 0 || data.comment_ti_le > 100){
-        Toast.error("Tỉ lệ comment phải từ 0 đến 100"); return;
     }
     // Bật comment mà thư viện rỗng thì phiên sẽ tự bỏ qua — báo trước cho khỏi
     // ngồi soi log tưởng hỏng cookie.
@@ -3114,6 +3121,8 @@ function renderScheduleTable(loai,data){
             ? `<td style="text-align:center"><span class="badge" style="background:#064e3b;color:#6ee7b7">🌱 Nuôi nick</span></td>`
             : hd==="comment"
             ? `<td style="text-align:center"><span class="badge" style="background:#1e3a5f;color:#93c5fd">💬 Comment</span></td>`
+            : hd==="marketplace"
+            ? `<td style="text-align:center"><span class="badge" style="background:#143d2e;color:#6ee7b7">🛒 ${(r.ma_content||"").replace(/</g,"&lt;")}</span></td>`
             : sc(r,"ma_content","text-align:center");
         return `<tr>
             ${sc(r,"gio_dang","font-weight:600;white-space:nowrap")}
@@ -3296,26 +3305,25 @@ function _renderGenAccs(accs, contents){
         const defC = contents[Math.floor(i * nc / n) % nc] || "";
         // Acc chỉ comment không dùng content lẫn mode — vẫn render <select> ẩn
         // để runGen đọc theo chỉ số i không bị lệch, nhưng không bày ra cho rối.
-        const oCmt = acc.chi_comment;          // đang dính spam — ẩn ô Content/Mode
-        const oMix = acc.hon_hop;              // X_* — vẫn đăng bài nên giữ nguyên ô
+        const oCmt = acc.chi_comment;          // đang dính spam — ẩn ô Content
+        const oMix = acc.hon_hop;              // tick Comment — vừa đăng vừa comment
+        const oMkt = acc.co_marketplace;       // tick Marketplace
+        // Mode (Hybrid/Via) nay đặt ở bảng Tài khoản, không chọn tại đây nữa —
+        // chỉ hiện để biết, lấy từ giá trị đã lưu của acc.
         return `
         <div style="background:var(--bg-hover);border:1px solid ${oCmt?"#c084fc55":"var(--border)"};border-radius:var(--radius-sm);padding:12px;margin-bottom:8px">
             <div style="font-weight:600;font-size:13px;margin-bottom:${oCmt?0:10}px">${acc.ten}
+                <span class="badge" style="background:#1e3a5f;color:#7dd3fc;margin-left:6px">${acc.mode||"Hybrid"}</span>
                 ${oCmt?`<span class="badge" style="background:#3b1f5e;color:#c084fc;margin-left:6px">💬 chỉ comment</span>`:""}
                 ${oMix?`<span class="badge" style="background:#4c1d3d;color:#f472b6;margin-left:6px">📝💬 đăng + comment</span>`:""}
+                ${oMkt?`<span class="badge" style="background:#143d2e;color:#6ee7b7;margin-left:6px">🛒 Marketplace</span>`:""}
                 <span style="font-size:11px;font-weight:400;color:var(--text-muted)"> — nghỉ ${acc.nghi}p · lực ${acc.luc_dang} phiên/h</span>
             </div>
-            <div style="display:${oCmt?"none":"grid"};grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div style="display:${oCmt?"none":"block"};margin-bottom:8px">
                 <div class="field-group">
                     <label>Content đầu <span style="color:var(--text-muted);font-weight:400">(bắt đầu từ)</span></label>
                     <select id="acc-c-${i}">
                         ${contents.map(c=>`<option value="${c}" ${c===defC?"selected":""}>${c}</option>`).join("")}
-                    </select>
-                </div>
-                <div class="field-group">
-                    <label>Mode</label>
-                    <select id="acc-m-${i}">
-                        ${["Hybrid","Via","Marketplace"].map(m=>`<option value="${m}" ${(acc.mode||"Hybrid")===m?"selected":""}>${m}</option>`).join("")}
                     </select>
                 </div>
             </div>
@@ -3354,7 +3362,7 @@ async function runGen(){
                 luc_dang:  acc.luc_dang,
                 c_offset:  _genContents.indexOf(document.getElementById(`acc-c-${i}`)?.value||"")||0,
                 first_group_url: firstGroup,
-                mode:      document.getElementById(`acc-m-${i}`)?.value||"Hybrid",
+                mode:      acc.mode||"Hybrid",
                 contents:  _genContents,
             }));
             res=await API.scheduleGen(_genLoai,{
@@ -3363,7 +3371,7 @@ async function runGen(){
                 keyword_pool:kwPool, acc_settings:accSettings,
             });
         }
-        if(res.ok){ Toast.success(`✅ Đã tạo ${res.total} dòng${res.nuoi?` · 🌱 ${res.nuoi} nuôi`:""} (${res.from}→${res.to})`); closeGen(); loadSchedule(_genLoai); }
+        if(res.ok){ Toast.success(`✅ Đã tạo ${res.total} dòng${res.nuoi?` · 🌱 ${res.nuoi} nuôi`:""}${res.comment?` · 💬 ${res.comment} comment`:""}${res.marketplace?` · 🛒 ${res.marketplace} MKT`:""} (${res.from}→${res.to})`); closeGen(); loadSchedule(_genLoai); }
         else Toast.error(res.error);
     }catch(e){ Toast.error(e.message); }
     btn.disabled=false; btn.innerHTML="▶ Tạo lịch";

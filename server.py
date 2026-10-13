@@ -42,9 +42,10 @@ from db import (
     get_comment_posts, them_comment_posts, update_comment_post_field,
     delete_comment_post, xoa_het_comment_posts,
     # loại đăng
-    LOAI_DANG_OPTIONS, LOAI_LICH_MAP, acc_dang_spam, la_loai_hon_hop,
+    LOAI_DANG_OPTIONS, MODE_OPTIONS, LOAI_LICH_MAP, acc_dang_spam,
+    acc_co_comment, acc_co_marketplace, acc_comment_pct, acc_marketplace_pct,
     JOIN_NGHI_MOI_MAC_DINH, JOIN_NGHI_BO_QUA_MAC_DINH,
-    TI_LE_COMMENT_MAC_DINH, accounts_theo_lich,
+    accounts_theo_lich,
     # settings
     get_setting, set_setting, get_all_settings,
     # marketplace
@@ -1867,7 +1868,7 @@ def api_schedule_gen(loai):
     #
     # `da_dat` gom mốc giờ của MỌI phiên đã chuyển và được truyền tiếp sang lượt
     # comment bên dưới, để phiên nuôi và phiên comment không rơi sát nhau.
-    n_warm, n_cmt = 0, 0
+    n_warm, n_cmt, n_mkt = 0, 0, 0
     da_dat = []
     try:
         from nuoi_nick import plan_warming_conversion
@@ -1886,28 +1887,45 @@ def api_schedule_gen(loai):
         # Giờ lịch cứ gen bình thường; việc đổi sang nuôi nick do scheduler làm
         # lúc slot tới giờ, và chỉ trong lúc acc còn đang nghỉ.
 
+        # TỔNG phiên/ngày của từng acc — đếm TRƯỚC khi chuyển gì cả, để
+        # comment% và marketplace% tính trên cùng con số này (giống cách Duong
+        # hình dung: nghỉ 12p → 5 phiên/h × 20h = 100 phiên, 25% comment = 25
+        # phiên). Đếm sau khi nuôi/comment đã lấy slot thì % bị tính trên phần
+        # còn lại, ra sai số.
+        tong_phien = {}
+        for r in schedule:
+            tong_phien[r["ten_acc"]] = tong_phien.get(r["ten_acc"], 0) + 1
+
         # 1. Nuôi nick — áp cho MỌI acc tick Nuôi, kể cả acc đang dính spam.
         warm_accs = {a["ten_acc"]: a.get("nuoi_interval")
                      for a in accs_db if int(a.get("nuoi_nick", 0) or 0) == 1}
         if warm_accs:
             n_warm = plan_warming_conversion(schedule, warm_accs, da_dat=da_dat)
 
-        # 2. Acc "X_*" — vừa đăng vừa comment theo TỈ LỆ (mặc định 75/25).
-        #    Chỉ 3 loại có danh sách bài + thư viện câu; lịch Page thì slot
-        #    comment tới giờ chỉ mở trình duyệt rồi bỏ qua — mất slot đăng mà
-        #    chẳng làm được gì.
+        # 2+3. Comment và Marketplace — MỖI ACC MỘT %, tính trên tổng phiên của
+        #      chính nó. Số lượng = round(pct% × tổng), rồi chuyển theo SỐ LƯỢNG
+        #      (chuyen_slot_so_luong) nên marketplace cũng là % của tổng, không
+        #      phải của phần còn lại sau comment. Đăng thuần = phần dôi ra.
+        #      Chỉ 3 loại có danh sách bài + thư viện câu.
         if loai in LOAI_LICH_MAP:
-            from xep_lich import chuyen_slot_theo_ti_le
-            hon_hop = {a["ten_acc"] for a in accs_db
-                       if la_loai_hon_hop(a.get("loai_dang"))}
-            if hon_hop:
-                ti_le = int(get_setting("comment_ti_le",
-                                        str(TI_LE_COMMENT_MAC_DINH))
-                            or TI_LE_COMMENT_MAC_DINH)
-                n_cmt += chuyen_slot_theo_ti_le(schedule, hon_hop, ti_le)
+            from xep_lich import chuyen_slot_so_luong
+
+            def _so(a, pct_fn):
+                t = tong_phien.get(a["ten_acc"], 0)
+                return int(round(pct_fn(a) / 100 * t))
+
+            han_cmt = {a["ten_acc"]: _so(a, acc_comment_pct)
+                       for a in accs_db if acc_comment_pct(a) > 0}
+            if han_cmt:
+                n_cmt += chuyen_slot_so_luong(schedule, han_cmt, "comment")
+
+            han_mkt = {a["ten_acc"]: _so(a, acc_marketplace_pct)
+                       for a in accs_db if acc_marketplace_pct(a) > 0}
+            if han_mkt:
+                n_mkt += chuyen_slot_so_luong(schedule, han_mkt, "marketplace")
 
     except Exception as e:
-        logger.warning(f"Chuyển slot nuôi/comment: bỏ qua ({e})")
+        logger.warning(f"Chuyển slot nuôi/comment/marketplace: bỏ qua ({e})")
 
     replace_schedules(loai, schedule)
 
@@ -1922,6 +1940,7 @@ def api_schedule_gen(loai):
     return jsonify({"ok": True, "total": len(schedule),
                     "nuoi": n_warm,
                     "comment": n_cmt,
+                    "marketplace": n_mkt,
                     "from": schedule[0]["gio_dang"],
                     "to":   schedule[-1]["gio_dang"]})
 
@@ -2097,8 +2116,12 @@ def api_schedule_gen_data(loai):
             "luc_dang": round(60 / nghi, 2),
             # Acc C_* chỉ đi comment — form gen ẩn ô Content/Mode cho họ, và
             # bảng lịch hiện badge 💬 thay vì mã content.
-            "chi_comment": acc_dang_spam(a),
-            "hon_hop":     la_loai_hon_hop(a.get("loai_dang")),
+            "chi_comment":    acc_dang_spam(a),
+            "hon_hop":        acc_co_comment(a),
+            "co_marketplace": acc_co_marketplace(a),
+            "comment_pct":    acc_comment_pct(a),
+            "marketplace_pct": acc_marketplace_pct(a),
+            "mode":           a.get("mode", "Hybrid") or "Hybrid",
         })
 
     contents = [r["ma_content"] for r in get_content(loai, su_dung="Có")]

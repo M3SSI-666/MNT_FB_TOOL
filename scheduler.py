@@ -205,22 +205,8 @@ def _attempt_post(item: dict) -> str:
             raise Exception("Đăng chéo về 0 nhóm mà không báo lỗi bước nào")
         return f" ({count} nhóm)"
 
-    # ── MODE MARKETPLACE ──────────────────────────────────────
-    # Đăng bài niêm yết dưới tên acc cá nhân, tự tick nhóm. KHÔNG cần Page UID,
-    # KHÔNG cần từ khoá hay UID nhóm đầu: nhóm được chọn ngay trên trang niêm
-    # yết, lọc theo từ khoá trong Cài đặt Marketplace.
-    if mode in ("MARKETPLACE", "MKT", "MARKET"):
-        from market_poster import post_marketplace
-        if not link_anh:
-            raise Exception("Mode=Marketplace nhưng content không có ảnh")
-        acc_data = get_account_by_name(acc_name, page_name)
-        c_user_v = acc_data.get("c_user", "") if acc_data else ""
-        so_nhom = post_marketplace(
-            acc_name=acc_name, message=content,
-            image_url=link_anh, c_user=c_user_v)
-        if not so_nhom:
-            raise Exception("Marketplace về 0 nhóm mà không báo lỗi bước nào")
-        return f" ({so_nhom} nhóm)"
+    # Marketplace KHÔNG đi qua đây: nó là một `hoat_dong` riêng (xem
+    # _run_marketplace_slot), không phải một `mode` đăng nhóm.
 
     # ── MODE VIA ──────────────────────────────────────────────
     if mode == "VIA":
@@ -401,6 +387,54 @@ def _run_commenting(item: dict):
             logger.error(f"❌ STT {stt} comment lỗi [{cat}]: {e}")
 
 
+def _run_marketplace_slot(item: dict):
+    """Slot đã bị chuyển thành phiên đăng Marketplace.
+
+    KHÔNG retry như phiên đăng nhóm: đăng lại cùng một content dễ bị Facebook
+    từ chối "giống một bài niêm yết khác". Một lần, rồi ghi nhận kết quả — nhưng
+    vẫn tính vào sức khoẻ acc (ghi_nhan_phien_dang) vì đây là phiên ĐĂNG.
+    """
+    sid      = item["id"]
+    stt      = item.get("stt", sid)
+    acc_name = item["ten_acc"]
+    ts       = datetime.now().strftime("%H:%M")
+
+    ct = get_content_by_code(item["ma_content"], LOAI)
+    if not ct:
+        _update_status(sid, f"❌ {ts} Không có content '{item['ma_content']}'")
+        logger.error(f"❌ STT {stt} Marketplace: thiếu content '{item['ma_content']}'")
+        return
+    content  = (ct.get("noi_dung") or "").strip()
+    link_anh = (ct.get("link_anh") or "").strip()
+
+    logger.info(f"\n{'='*55}")
+    logger.info(f"🛒 [{LOAI}] STT {stt} | {acc_name} | MARKETPLACE | {item['ma_content']} | {item['gio_dang']}")
+    logger.info(f"{'='*55}")
+    _update_status(sid, f"🛒 Đang đăng Marketplace {ts}")
+
+    try:
+        from market_poster import post_marketplace
+        acc_data = get_account_by_name(acc_name)
+        c_user_v = acc_data.get("c_user", "") if acc_data else ""
+        so_nhom = post_marketplace(acc_name=acc_name, message=content,
+                                   image_url=link_anh, c_user=c_user_v)
+        done = datetime.now().strftime("%H:%M")
+        _update_status(sid, f"✅ {done} 🛒 ({so_nhom} nhóm)")
+        logger.info(f"✅ STT {stt} Marketplace xong: {so_nhom} nhóm")
+        db.ghi_nhan_phien_dang(acc_name, True)
+    except CookieDeadError:
+        ts2 = datetime.now().strftime("%H:%M")
+        _update_status(sid, f"❌ {ts2} Cookie hết hạn")
+        logger.error(f"❌ STT {stt}: Cookie hết hạn khi đăng Marketplace — acc '{acc_name}'")
+        _mark_cookie_dead(acc_name)
+    except Exception as e:
+        ts2 = datetime.now().strftime("%H:%M")
+        cat, label = classify_error(e)
+        _update_status(sid, f"❌ {ts2} Marketplace lỗi: {label}")
+        logger.error(f"❌ STT {stt} Marketplace lỗi [{cat}]: {e}")
+        db.ghi_nhan_phien_dang(acc_name, False)
+
+
 def _bao_suc_khoe(stt, acc_name: str, hanh_dong: str, ly_do: str):
     """In ra log quyết định của bộ theo dõi sức khoẻ acc."""
     if hanh_dong == "nghi":
@@ -417,9 +451,9 @@ def _run_one(item: dict):
     #
     # Đổi được vì slot comment vẫn giữ nguyên ma_content / ma_nhom / tu_khoa:
     # lúc gen lịch, chuyển sang comment chỉ đổi mỗi cột hoat_dong.
-    if hd == "comment" and db.acc_can_tham_do(item["ten_acc"]):
+    if hd in ("comment", "marketplace") and db.acc_can_tham_do(item["ten_acc"]):
         logger.info(f"🔎 STT {item.get('stt', item['id'])} — acc "
-                    f"'{item['ten_acc']}' hết giờ nghỉ, đổi slot comment thành "
+                    f"'{item['ten_acc']}' hết giờ nghỉ, đổi slot {hd} thành "
                     f"PHIÊN NHỬ bằng đăng bài")
         hd = "dang_bai"
         item = {**item, "hoat_dong": "dang_bai"}
@@ -458,6 +492,9 @@ def _run_one(item: dict):
         return
     if hd == "comment":
         _run_commenting(item)
+        return
+    if hd == "marketplace":
+        _run_marketplace_slot(item)
         return
 
     sid      = item["id"]

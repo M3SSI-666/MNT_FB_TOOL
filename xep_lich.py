@@ -140,12 +140,7 @@ def chuyen_slot_theo_ti_le(schedule: list, accs, ti_le: int,
     accs = set(accs)
 
     # Danh sách slot đổi được, giữ đúng thứ tự thời gian của lịch.
-    vi_tri, chu = [], []
-    for i, row in enumerate(schedule):
-        ten = row.get("ten_acc")
-        if ten in accs and (row.get("hoat_dong") or "dang_bai") == "dang_bai":
-            vi_tri.append(i)
-            chu.append(ten)
+    vi_tri, chu = _slot_doi_duoc(schedule, accs)
     N = len(vi_tri)
     if N == 0:
         return 0
@@ -179,7 +174,54 @@ def chuyen_slot_theo_ti_le(schedule: list, accs, ti_le: int,
         i += 1
         if i > len(uu_tien) * 2:       # mọi acc đã đầy, không chia tiếp được
             break
-    K -= con                            # phần không chia được thì bỏ
+
+    return _rai_deu(schedule, vi_tri, chu, han, hoat_dong)
+
+
+def _slot_doi_duoc(schedule: list, accs: set):
+    """Vị trí + tên acc của các slot còn 'dang_bai' thuộc `accs`, theo thứ tự lịch."""
+    vi_tri, chu = [], []
+    for i, row in enumerate(schedule):
+        ten = row.get("ten_acc")
+        if ten in accs and (row.get("hoat_dong") or "dang_bai") == "dang_bai":
+            vi_tri.append(i)
+            chu.append(ten)
+    return vi_tri, chu
+
+
+def chuyen_slot_so_luong(schedule: list, han_map: dict,
+                         hoat_dong: str = "marketplace") -> int:
+    """Đổi ĐÚNG `han_map[acc]` slot của từng acc sang `hoat_dong`, rải đều.
+
+    Khác `chuyen_slot_theo_ti_le` ở chỗ nhận SỐ LƯỢNG tuyệt đối mỗi acc thay vì
+    một tỉ lệ chung. Cần cho trường hợp mỗi acc một % riêng tính trên TỔNG phiên
+    của chính nó: tính sẵn số lượng ngoài rồi gọi vào đây, nên comment% và
+    marketplace% đều là % của tổng chứ không phải của phần còn lại.
+
+    Số vượt quá slot acc đó còn trống thì tự cắt. Sửa tại chỗ, trả về số đã đổi.
+    """
+    accs = {t for t, k in han_map.items() if k > 0}
+    if not accs:
+        return 0
+    vi_tri, chu = _slot_doi_duoc(schedule, accs)
+    if not vi_tri:
+        return 0
+    dem = {}
+    for ten in chu:
+        dem[ten] = dem.get(ten, 0) + 1
+    # Không đổi nhiều hơn số slot acc đó thực có.
+    han = {ten: min(int(han_map.get(ten, 0) or 0), dem.get(ten, 0)) for ten in dem}
+    return _rai_deu(schedule, vi_tri, chu, han, hoat_dong)
+
+
+def _rai_deu(schedule: list, vi_tri: list, chu: list, han: dict,
+             hoat_dong: str) -> int:
+    """Đặt các phiên vào slot, rải đều trên trục, giữ `han` mỗi acc. Lõi dùng
+    chung cho cả chuyển theo tỉ lệ lẫn theo số lượng."""
+    N = len(vi_tri)
+    K = sum(han.values())
+    if N == 0 or K == 0:
+        return 0
 
     # Khoảng cách tối thiểu mong muốn giữa hai phiên comment. Bằng nửa nhịp lý
     # tưởng — đủ chặt để không dính cụm, đủ lỏng để luôn tìm được chỗ.

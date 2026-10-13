@@ -10,6 +10,32 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.46.0 — 13/10/2026
+
+**Tab Tài khoản: tách Loại đăng, thêm cột Mode + % Comment + % Marketplace**
+
+Trước đây một cột "Loại đăng" gộp cả loại content lẫn việc có comment hay không
+(X_Home = Homestay vừa đăng vừa comment). Nay tách rõ, mỗi cột một việc:
+
+- **Mode** (ngay sau Tên acc): Hybrid / Via — cách đăng nhóm, chọn cho từng acc
+  (trước đây chọn ở màn Gen, không nhớ theo acc).
+- **Loại đăng**: chỉ còn Homestay / Thuê / Bán.
+- Cụm **Nuôi + Chu kỳ** chuyển vào giữa Loại đăng và Nghỉ.
+- **Comment %** và **Market %**: nhập số phần trăm cho TỪNG acc, tính trên tổng
+  phiên trong ngày của chính acc đó. Ví dụ: nghỉ 12 phút → ~5 phiên/giờ × 20 giờ
+  = 100 phiên; để Comment 25 → 25 phiên comment, Market 15 → 15 phiên
+  Marketplace, còn lại **60 phiên đăng nhóm thuần**. Nhập 0 = tắt tính năng đó.
+
+Mỗi acc một tỉ lệ riêng, không còn một con số chung — bạn quyết acc nào comment
+nhiều, acc nào làm Marketplace, acc nào chỉ đăng. Content vẫn tự xoay vòng nên
+mỗi bài Marketplace một content khác (tránh Facebook từ chối trùng).
+
+> **Tự động chuyển dữ liệu cũ:** acc đang để X_Home/X_Thuê/X_Bán sẽ tự thành
+> Homestay/Thuê/Bán + đặt sẵn Comment 25% — hành vi giữ y nguyên, không phải sửa
+> tay. **Cập nhật xong nhớ mở lại phần mềm** để các cột mới hiện ra.
+
+---
+
 ## v2.45.0 — 13/10/2026
 
 **Mới: đăng bài Marketplace tự động**
