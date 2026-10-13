@@ -2506,9 +2506,9 @@ function renderSchedulePage(loai){
             <thead><tr>
                 <th>Giờ</th><th>Acc</th><th>Page</th><th>Content</th>
                 <th style="text-align:center">Từ khóa</th>
-                <th>Mode</th><th style="text-align:center">Trạng thái</th>
+                <th style="text-align:center">Trạng thái</th>
             </tr></thead>
-            <tbody id="${loai}-table"><tr><td colspan="7" class="loading"><span class="spin">↻</span></td></tr></tbody>
+            <tbody id="${loai}-table"><tr><td colspan="6" class="loading"><span class="spin">↻</span></td></tr></tbody>
         </table></div></div>`;
 }
 
@@ -3065,7 +3065,7 @@ async function loadSchedule(loai){
         renderScheduleTable(loai,res.data);
     }catch(e){
         const tb=document.getElementById(`${loai}-table`);
-        if(tb) tb.innerHTML=`<tr><td colspan="7" class="empty" style="color:var(--danger)">${e.message}</td></tr>`;
+        if(tb) tb.innerHTML=`<tr><td colspan="6" class="empty" style="color:var(--danger)">${e.message}</td></tr>`;
     }
 }
 
@@ -3092,7 +3092,7 @@ function renderScheduleTable(loai,data){
         return st===filter;
     });
     if(count) count.textContent=`${rows.length}/${(data||[]).length}`;
-    if(!rows.length){ tbody.innerHTML=`<tr><td colspan="7" class="empty">Không có dòng nào</td></tr>`; return; }
+    if(!rows.length){ tbody.innerHTML=`<tr><td colspan="6" class="empty">Không có dòng nào</td></tr>`; return; }
     const sc=(r,field,style)=>{
         const val=(r[field]||"").toString(); const esc=val.replace(/"/g,"&quot;");
         return `<td class="editable" data-id="${r.id}" data-loai="${loai}" data-field="${field}" data-val="${esc}" style="font-size:12px;${style||""}" onclick="startSchedEdit(this)">${val||"-"}</td>`;
@@ -3129,7 +3129,6 @@ function renderScheduleTable(loai,data){
             ${sc(r,"ten_acc","")} ${sc(r,"ten_page","color:var(--text-secondary)")}
             ${contentCell}
             ${sc(r,"tu_khoa","text-align:center;color:var(--text-secondary)")}
-            ${sc(r,"mode","text-align:center")}
             <td class="editable" data-id="${r.id}" data-loai="${loai}" data-field="trang_thai" data-val="${(r.trang_thai||"").replace(/"/g,"&quot;")}" style="text-align:center" onclick="startSchedEdit(this)">${stBadge}</td>
         </tr>`;
     }).join("");

@@ -10,6 +10,17 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.46.1 — 13/10/2026
+
+**Gọn: bỏ cột Mode khỏi bảng Lịch**
+
+Mode (Hybrid/Via) nay đặt theo từng acc ở tab Tài khoản, nên mọi dòng lịch của
+một acc đều cùng Mode — hiện lại ở bảng Lịch chỉ tổ rối, lại còn vô nghĩa với
+dòng comment/marketplace (hai loại đó không dùng Mode). Đã bỏ cột đó khỏi
+Lịch Homestay / Thuê / Bán. Xem Mode ở tab Tài khoản.
+
+---
+
 ## v2.46.0 — 13/10/2026
 
 **Tab Tài khoản: tách Loại đăng, thêm cột Mode + % Comment + % Marketplace**
