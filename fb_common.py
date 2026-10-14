@@ -769,7 +769,7 @@ def canh_bao_sau_khi_vao_page(page) -> str:
     return max(sau, key=len) if sau else ""
 
 
-async def dung_neu_dinh_spam(page, acc_name: str, cho: str = "") -> None:
+async def dung_neu_dinh_spam(page, acc_name: str, cho: str = "", c_user: str = "") -> None:
     """
     Thấy cảnh báo gỡ bài / gỡ bình luận / spam sau khi vào Page → DỪNG PHIÊN.
 
@@ -795,9 +795,9 @@ async def dung_neu_dinh_spam(page, acc_name: str, cho: str = "") -> None:
     # chặn phiên hỏng-từ-đầu, không phải để tha cho phiên đang chạy giữa chừng.
     _db.ghi_nhan_vi_pham(acc_name, vp.get("so", 1), True,
                          vp.get("hom_nay", 0), vp.get("chac_chan", False),
-                         da_dang=True)
+                         da_dang=True, c_user=c_user)
     n, moc = _db.danh_dau_spam(acc_name, f"popup {ly_do} giữa phiên",
-                               ly_do=f"Dính spam ({ly_do})")
+                               ly_do=f"Dính spam ({ly_do})", c_user=c_user)
     logger.error(f"  🚫 '{acc_name}' DÍNH SPAM giữa phiên ({ly_do}"
                  f"{' — ' + cho if cho else ''}) — DỪNG NGAY, "
                  f"{n} slot còn lại chuyển sang nuôi nick, nhử lại lúc {moc:%H:%M}")
@@ -914,7 +914,8 @@ def _quen_canh_bao(page):
 CHO_SAU_DANG_GIAY = (72, 78)
 
 
-async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
+async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên",
+                       c_user: str = "") -> bool:
     """Sau mỗi phiên đăng bài / comment: xem Facebook có vừa gỡ gì không.
 
     Trả True nếu VỪA dính spam (có vụ mới so với lần đo trước).
@@ -985,7 +986,7 @@ async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
         moi, cu = _db.ghi_nhan_vi_pham(acc_name, vp["so"], vp["spam"],
                                        vp.get("hom_nay", 0),
                                        vp.get("chac_chan", True),
-                                       da_dang)
+                                       da_dang, c_user=c_user)
         # Ghi cả `chắc chắn`: không có nó thì nhìn log không phân biệt được con
         # số lấy từ nút "Xem tất cả (N)" với con số đếm mò mấy dòng đang hiện —
         # mà hai thứ đó được xử lý khác hẳn nhau.
@@ -996,7 +997,8 @@ async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên") -> bool:
                        f" | {'phiên này CÓ đăng' if da_dang else 'phiên này chưa đăng gì'}"
                        f" | {'hộp cũ đã mở sẵn từ trước' if da_thay_truoc_khi_dang(page) else 'hộp MỚI hiện'})")
         if moi:
-            n, moc = _db.danh_dau_spam(acc_name, f"{vp['so'] - cu} bài mới bị gỡ")
+            n, moc = _db.danh_dau_spam(acc_name, f"{vp['so'] - cu} bài mới bị gỡ",
+                                       c_user=c_user)
             logger.error(
                 f"  🚫 '{acc_name}' DÍNH SPAM sau {sau_viec} — nghỉ đăng và "
                 f"comment, {n} slot còn lại chuyển sang nuôi nick, nhử lại lúc "

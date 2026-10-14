@@ -317,7 +317,7 @@ def _sync_xs_to_db(acc: dict, live: dict) -> str:
         return ""
 
 
-def dong_bo_xs(acc_name: str) -> str:
+def dong_bo_xs(acc_name: str, c_user: str = "") -> str:
     """
     TẦNG 0 — giữ cho `xs` trong DB không bị cũ đi.
 
@@ -342,10 +342,13 @@ def dong_bo_xs(acc_name: str) -> str:
         # KHÔNG dùng `get_account_by_name`: hàm đó chỉ trả acc Active/Spam, nên
         # acc đang 'Dừng' hay 'Cookie hết hạn' sẽ tra ra rỗng — đúng những acc
         # mà việc giữ `xs` cho mới là cần nhất.
+        # Có c_user thì tra đúng nick đó. `ten_acc=? LIMIT 1` với hai nick trùng
+        # tên (gặp thật: hai 'Tuấn Ngọc') LUÔN ra nick có id nhỏ hơn — nick kia
+        # không bao giờ được đồng bộ xs sau phiên của chính nó.
         import db as _db
+        k, kp = _db._khoa_acc(acc_name, c_user)
         with _db._conn() as con:
-            r = con.execute("SELECT * FROM accounts WHERE ten_acc=? LIMIT 1",
-                            (acc_name,)).fetchone()
+            r = con.execute(f"SELECT * FROM accounts WHERE {k} LIMIT 1", kp).fetchone()
         if not r:
             return ""
         acc = dict(r)

@@ -438,6 +438,22 @@ def init_db():
         # Tiêu đề Marketplace theo TỪNG content (13/10), thay cho một tiêu đề
         # dùng chung ở cài đặt — xem chú thích trên MKT_MAC_DINH.
         _add_col("content",    "tieu_de_mkt", "tieu_de_mkt TEXT DEFAULT ''")
+        # Dòng lịch nhớ c_user của nick, không chỉ tên — hai nick trùng tên
+        # (gặp thật: hai 'Tuấn Ngọc') thì tên không nói được dòng nào của nick
+        # nào. Xem `_khoa_acc`. Gắn cho dòng cũ chưa có; dòng nào không suy ra
+        # chắc chắn được thì để trống và rơi về cách tra theo tên như trước.
+        _add_col("schedules",      "c_user", "c_user TEXT DEFAULT ''")
+        _add_col("join_schedules", "c_user", "c_user TEXT DEFAULT ''")
+        for _bang in ("schedules", "join_schedules"):
+            for _r in con.execute(
+                    f"SELECT DISTINCT ten_acc, COALESCE(ten_page,'') tp FROM {_bang} "
+                    "WHERE COALESCE(c_user,'')=''").fetchall():
+                _cu = tim_c_user(con, _r["ten_acc"], _r["tp"])
+                if _cu:
+                    con.execute(
+                        f"UPDATE {_bang} SET c_user=? WHERE COALESCE(c_user,'')='' "
+                        "AND ten_acc=? AND COALESCE(ten_page,'')=?",
+                        (_cu, _r["ten_acc"], _r["tp"]))
         # Cột ghi chú "Acc quản lý" cho pages — chỉ để note, không dùng khi đăng bài.
         _add_col("pages",      "acc_quan_ly", "acc_quan_ly TEXT DEFAULT ''")
 
@@ -597,7 +613,7 @@ def get_account_by_id(acc_id: int) -> dict | None:
         return dict(r) if r else None
 
 
-def get_account_by_name(ten_acc: str, ten_page: str = "") -> dict | None:
+def get_account_by_name(ten_acc: str, ten_page: str = "", c_user: str = "") -> dict | None:
     """
     Tra acc theo tên. Nhận cả trạng thái 'Spam' chứ không chỉ 'Active'.
 
@@ -608,6 +624,12 @@ def get_account_by_name(ten_acc: str, ten_page: str = "") -> dict | None:
     """
     dung = (TRANG_THAI_SPAM, "Active")
     with _conn() as con:
+        # Có c_user → đúng nick đó, không đoán theo tên (xem `_khoa_acc`).
+        if (c_user or "").strip():
+            r = con.execute(
+                "SELECT * FROM accounts WHERE TRIM(c_user)=? AND trang_thai IN (?,?) LIMIT 1",
+                ((c_user or "").strip(), *dung)).fetchone()
+            return dict(r) if r else None
         if ten_page:
             r = con.execute(
                 "SELECT * FROM accounts WHERE ten_acc = ? AND ten_page = ? "
@@ -633,6 +655,57 @@ def get_account_by_cuser(c_user: str) -> dict | None:
         return dict(r) if r else None
 
 
+# ── Khoá xác định MỘT tài khoản: c_user, không phải tên ─────────────────────
+# Tên acc là tên Facebook — HAI nick khác nhau trùng tên là chuyện bình thường.
+# Gặp thật 14/10: hai nick cùng tên 'Tuấn Ngọc' (c_user khác nhau). Mọi chỗ tra
+# theo tên chọn bừa một trong hai: phiên comment 12:42 chạy NHẦM sang nick kia
+# (9 bình luận dưới danh nghĩa nick khác), đánh dấu "Cookie hết hạn" rơi nhầm
+# nick, hai nick thay nhau báo hết cookie. `UPDATE ... WHERE ten_acc=?` còn ghi
+# đè trạng thái lên CẢ HAI nick cùng lúc.
+#
+# Nay: có c_user thì xác định bằng c_user. Chỉ khi KHÔNG có c_user (dữ liệu cũ
+# chưa kịp gắn) mới rơi về tên — để không làm gãy gì đang chạy.
+
+def _khoa_acc(ten_acc: str, c_user: str = "") -> tuple[str, tuple]:
+    """Điều kiện WHERE trên bảng `accounts` trỏ đúng MỘT nick."""
+    cu = (c_user or "").strip()
+    if cu:
+        return "TRIM(c_user)=?", (cu,)
+    return "ten_acc=?", (ten_acc,)
+
+
+def _khoa_lich(ten_acc: str, c_user: str = "") -> tuple[str, tuple]:
+    """Điều kiện WHERE trên `schedules` / `join_schedules` cho các dòng của một
+    nick. Dòng cũ chưa gắn c_user vẫn được tính theo tên để không bị bỏ sót."""
+    cu = (c_user or "").strip()
+    if cu:
+        return ("(c_user=? OR (COALESCE(c_user,'')='' AND ten_acc=?))", (cu, ten_acc))
+    return "ten_acc=?", (ten_acc,)
+
+
+def tim_c_user(con, ten_acc: str, ten_page: str = "") -> str:
+    """c_user của nick mang tên `ten_acc`, dùng để gắn cho dòng lịch.
+
+    Tên duy nhất → nick đó. Trùng tên → thu hẹp dần: khớp Page, rồi nick có
+    Loại đăng (nick có mặt trong lịch), rồi nick Active. Vẫn còn hơn một → trả
+    "" (không đoán bừa) — dòng đó rơi về cách tra theo tên như trước.
+    """
+    ds = [dict(r) for r in con.execute(
+        "SELECT c_user, ten_page, loai_dang, trang_thai FROM accounts "
+        "WHERE ten_acc=? AND TRIM(COALESCE(c_user,''))!=''", (ten_acc,))]
+    if len(ds) == 1:
+        return ds[0]["c_user"].strip()
+    for loc in (lambda a: ten_page and (a["ten_page"] or "") == ten_page,
+                lambda a: bool((a["loai_dang"] or "").strip()),
+                lambda a: (a["trang_thai"] or "") == "Active"):
+        hep = [a for a in ds if loc(a)]
+        if len(hep) == 1:
+            return hep[0]["c_user"].strip()
+        if hep:
+            ds = hep
+    return ""
+
+
 def upsert_account(data: dict) -> int:
     # Cắt dấu cách thừa NGAY LÚC LƯU, không để lọt vào DB. Dán tên từ Excel hay
     # từ chỗ khác rất dễ kèm dấu cách cuối, mà tên acc lại là khoá tham chiếu
@@ -641,13 +714,22 @@ def upsert_account(data: dict) -> int:
         data = {**data, "ten_acc": data["ten_acc"].strip()}
     if "c_user" in data:
         _chan_c_user_la_page(data["c_user"])
+        _chan_c_user_trung(data["c_user"], data.get("id") or None)
     cols   = [k for k in data if k != "id"]
     placeholders = ", ".join(["?"] * len(cols))
     values = [data[c] for c in cols]
     with _conn() as con:
         if "id" in data and data["id"]:
+            _r = con.execute("SELECT c_user FROM accounts WHERE id=?", (data["id"],)).fetchone()
+            cu_cu = ((_r["c_user"] if _r else "") or "").strip()
             sets = ", ".join(f"{c}=?" for c in cols)
             con.execute(f"UPDATE accounts SET {sets} WHERE id=?", values + [data["id"]])
+            # Đổi c_user ở form Sửa: dòng lịch trỏ c_user cũ đi theo (xem
+            # update_account_field).
+            cu_moi = str(data.get("c_user") or "").strip()
+            if "c_user" in data and cu_cu and cu_moi and cu_moi != cu_cu:
+                for bang in ("schedules", "join_schedules"):
+                    con.execute(f"UPDATE {bang} SET c_user=? WHERE c_user=?", (cu_moi, cu_cu))
             return data["id"]
         else:
             cur = con.execute(
@@ -709,6 +791,20 @@ def _chan_c_user_la_page(c_user):
                          f"c_user phải là ID nick cá nhân (xem link trang cá nhân)")
 
 
+def _chan_c_user_trung(c_user, acc_id=None):
+    """c_user là KHOÁ xác định nick (xem `_khoa_acc`) nên không được trùng giữa
+    hai dòng — trùng thì mọi tra cứu theo c_user lại thành chọn bừa như tên."""
+    cu = str(c_user or "").strip()
+    if not cu:
+        return
+    with _conn() as con:
+        r = con.execute("SELECT ten_acc FROM accounts WHERE TRIM(c_user)=? AND id IS NOT ?",
+                        (cu, acc_id)).fetchone()
+    if r:
+        raise ValueError(f"c_user {cu} đã thuộc về tài khoản '{r['ten_acc']}' — "
+                         f"mỗi nick Facebook chỉ được nhập một lần")
+
+
 def update_account_field(acc_id: int, field: str, value: str):
     safe = {
         "ten_acc","mode","loai_dang","comment_pct","marketplace_pct",
@@ -747,17 +843,24 @@ def update_account_field(acc_id: int, field: str, value: str):
         if value not in LOAI_DANG_OPTIONS:
             raise ValueError(f"Loại đăng không hợp lệ: '{value}' "
                              f"(chỉ nhận: {', '.join(x or '(trống)' for x in LOAI_DANG_OPTIONS)})")
+    c_user_cu = None
     if field == "c_user":
         _chan_c_user_la_page(value)
-    cu, ten_acc = "", ""
+        _chan_c_user_trung(value, acc_id)
+        with _conn() as con:
+            _r = con.execute("SELECT c_user FROM accounts WHERE id=?", (acc_id,)).fetchone()
+        c_user_cu = ((_r["c_user"] if _r else "") or "").strip()
+    cu, ten_acc, cu_acc = "", "", ""
+    tra_ve_cho = 0
     with _conn() as con:
         # Đọc trạng thái CŨ trước khi ghi đè. Cửa này là nơi cả giao diện lẫn
         # scheduler đổi Trạng thái, nên bắt ở đây là bắt được cả hai đường.
         if field == "trang_thai":
-            r = con.execute("SELECT ten_acc, trang_thai FROM accounts WHERE id=?",
+            r = con.execute("SELECT ten_acc, trang_thai, c_user FROM accounts WHERE id=?",
                             (acc_id,)).fetchone()
             if r:
                 cu, ten_acc = (r["trang_thai"] or ""), (r["ten_acc"] or "")
+                cu_acc = (r["c_user"] or "").strip()
 
         con.execute(f"UPDATE accounts SET {field}=? WHERE id=?", (value, acc_id))
         # Người dùng bật acc về Active = "tôi đã xử lý xong". Phải xoá cả lịch sử
@@ -766,6 +869,28 @@ def update_account_field(acc_id: int, field: str, value: str):
         if field == "trang_thai" and value == "Active":
             con.execute("UPDATE accounts SET lich_su_phien='', nghi_den='', "
                         "canh_bao_moi='' WHERE id=?", (acc_id,))
+            # Và trả slot X😴 CÒN LẠI hôm nay về 'Chờ'. Lúc hết cookie / cho
+            # nghỉ, `danh_dau_x_con_lai_hom_nay` đánh X😴 mọi slot còn lại; bật
+            # lại Active mà không trả thì nick sống rồi vẫn ngồi im tới hết
+            # ngày — đúng chuyện người dùng gặp: sửa xs xong, lịch vẫn nằm nghỉ.
+            #
+            # Chỉ đụng X😴 (phần mềm tự đánh), KHÔNG đụng 'X' (người dùng tắt
+            # tay). Chỉ slot còn ở tương lai — slot đã lỡ giờ không chạy bù.
+            # Đúng nick theo c_user (tên có thể trùng — xem `_khoa_acc`).
+            if cu and cu != "Active" and ten_acc:
+                kl, klp = _khoa_lich(ten_acc, cu_acc)
+                tra_ve_cho = con.execute(
+                    "UPDATE schedules SET trang_thai='Chờ', "
+                    "updated_at=datetime('now','localtime') "
+                    f"WHERE {kl} AND trang_thai=? AND gio_dang > ?",
+                    (*klp, TT_LICH_X_TU_DONG, datetime.now().strftime("%H:%M"))).rowcount
+        # Sửa c_user (vd sửa nhập nhầm như vụ Alex Tường 03/10): dòng lịch đang
+        # trỏ c_user cũ phải đi theo, không thì chúng trỏ vào một nick không còn
+        # tồn tại và rơi về tra theo tên.
+        moi = str(value or "").strip()
+        if field == "c_user" and c_user_cu and moi and moi != c_user_cu:
+            for bang in ("schedules", "join_schedules"):
+                con.execute(f"UPDATE {bang} SET c_user=? WHERE c_user=?", (moi, c_user_cu))
 
     # Ngoài khối `with` để không giữ khoá cơ sở dữ liệu khi gọi mạng.
     if field == "trang_thai" and ten_acc:
@@ -774,6 +899,8 @@ def update_account_field(acc_id: int, field: str, value: str):
             thong_bao.bao_doi_trang_thai(ten_acc, value, trang_thai_cu=cu)
         except Exception:
             pass
+    # Số slot X😴 vừa trả về 'Chờ' (chỉ khác 0 khi bật lại Active) — để nơi gọi báo.
+    return tra_ve_cho
 
 
 # ── Sức khoẻ acc ────────────────────────────────────────────────────────
@@ -788,7 +915,8 @@ def _moc_nghi(nghi_den: str):
     return moc if datetime.now() < moc else None
 
 
-def acc_duoc_chay(ten_acc: str, hoat_dong: str = "dang_bai") -> tuple[bool, str]:
+def acc_duoc_chay(ten_acc: str, hoat_dong: str = "dang_bai",
+                  c_user: str = "") -> tuple[bool, str]:
     """
     Acc có được giao phiên này lúc này không.
 
@@ -804,9 +932,10 @@ def acc_duoc_chay(ten_acc: str, hoat_dong: str = "dang_bai") -> tuple[bool, str]
     là 'Hỏng' nên `get_account_by_name` cũng không tìm ra nó nữa — cho phiên nuôi
     chạy tiếp chỉ tổ đổ một đống lỗi vô nghĩa vào log.
     """
+    k, kp = _khoa_acc(ten_acc, c_user)
     with _conn() as con:
         r = con.execute("SELECT trang_thai, nghi_den FROM accounts "
-                        "WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
+                        f"WHERE {k} LIMIT 1", kp).fetchone()
     if not r:
         return True, ""
     tt = r["trang_thai"] or ""
@@ -834,16 +963,18 @@ def acc_duoc_chay(ten_acc: str, hoat_dong: str = "dang_bai") -> tuple[bool, str]
     return True, ""
 
 
-def ghi_nhan_phien_dang(ten_acc: str, ok: bool, ly_do_loi: str = "") -> tuple[str, str]:
+def ghi_nhan_phien_dang(ten_acc: str, ok: bool, ly_do_loi: str = "",
+                        c_user: str = "") -> tuple[str, str]:
     """
     Ghi kết quả một phiên đăng bài và áp quyết định của `suc_khoe_acc.danh_gia`.
 
     Trả `(hanh_dong, ly_do)` để nơi gọi ghi log; hanh_dong ∈ {"", "nghi"}.
     """
     import suc_khoe_acc as sk
+    k, kp = _khoa_acc(ten_acc, c_user)
     with _conn() as con:
         r = con.execute("SELECT id, lich_su_phien, trang_thai, nghi_den FROM accounts "
-                        "WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
+                        f"WHERE {k} LIMIT 1", kp).fetchone()
         if not r:
             return "", ""
 
@@ -868,9 +999,9 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool, ly_do_loi: str = "") -> tuple[st
         if _moc_nghi(r["nghi_den"]) is not None:
             return "", ""
         if ok:
-            n = het_spam(ten_acc)
+            n = het_spam(ten_acc, c_user=c_user)
             return "het_spam", f"thăm dò thành công — trả {n} slot về Chờ"
-        _, moc = danh_dau_spam(ten_acc, "thăm dò vẫn hỏng")
+        _, moc = danh_dau_spam(ten_acc, "thăm dò vẫn hỏng", c_user=c_user)
         return "tham_do_hong", f"thăm dò vẫn hỏng — dò lại lúc {moc:%H:%M}"
 
     with _conn() as con:
@@ -924,16 +1055,17 @@ def ghi_nhan_phien_dang(ten_acc: str, ok: bool, ly_do_loi: str = "") -> tuple[st
             # Đánh 'X😴' các slot còn lại hôm nay để nhìn bảng lịch là biết ngay
             # acc này nghỉ — không phải đợi từng slot tới giờ mới đổi thành 😴.
             # Dùng chung `con` đang mở (đừng gọi hàm mở _conn() lần nữa = khoá lồng).
+            kl, klp = _khoa_lich(ten_acc, c_user)
             con.execute(
                 "UPDATE schedules SET trang_thai=?, updated_at=datetime('now','localtime') "
-                "WHERE ten_acc=? AND trang_thai='Chờ' AND gio_dang > ?",
-                (TT_LICH_X_TU_DONG, ten_acc, datetime.now().strftime("%H:%M")))
+                f"WHERE {kl} AND trang_thai='Chờ' AND gio_dang > ?",
+                (TT_LICH_X_TU_DONG, *klp, datetime.now().strftime("%H:%M")))
         return hanh_dong, ly_do
 
 
 def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool,
                      hom_nay: int = 0, chac_chan: bool = True,
-                     da_dang: bool = False) -> tuple[bool, int]:
+                     da_dang: bool = False, c_user: str = "") -> tuple[bool, int]:
     """
     Ghi số vụ Facebook gỡ bài đo được sau một phiên đăng.
 
@@ -949,9 +1081,10 @@ def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool,
     """
     import suc_khoe_acc as sk
     ngay = datetime.now().strftime("%Y-%m-%d")
+    k, kp = _khoa_acc(ten_acc, c_user)
     with _conn() as con:
         r = con.execute("SELECT id, so_vi_pham, trang_thai, vi_pham_ngay FROM accounts "
-                        "WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
+                        f"WHERE {k} LIMIT 1", kp).fetchone()
         if not r:
             return False, -1
         so_cu = r["so_vi_pham"] if r["so_vi_pham"] is not None else -1
@@ -991,7 +1124,7 @@ def ghi_nhan_vi_pham(ten_acc: str, so_moi: int, la_spam: bool,
 
 
 def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None,
-                  ly_do: str = "") -> tuple[int, object]:
+                  ly_do: str = "", c_user: str = "") -> tuple[int, object]:
     """
     Cho acc nghỉ ĐĂNG và COMMENT vì Facebook vừa gỡ bài. Nuôi nick vẫn chạy.
 
@@ -1013,9 +1146,11 @@ def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None,
     import suc_khoe_acc as sk
     gio = gio or datetime.now().strftime("%H:%M")
     moc = datetime.now() + timedelta(minutes=sk.THAM_DO_PHUT)
+    k, kp = _khoa_acc(ten_acc, c_user)
+    kl, klp = _khoa_lich(ten_acc, c_user)
     with _conn() as con:
-        r = con.execute("SELECT id, trang_thai FROM accounts WHERE ten_acc=? LIMIT 1",
-                        (ten_acc,)).fetchone()
+        r = con.execute(f"SELECT id, trang_thai FROM accounts WHERE {k} LIMIT 1",
+                        kp).fetchone()
         if not r:
             return 0, None
         tt_cu = r["trang_thai"] or ""
@@ -1038,9 +1173,9 @@ def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None,
         # còn lại của ngày.
         n = con.execute(
             "SELECT COUNT(*) c FROM schedules "
-            "WHERE ten_acc=? AND trang_thai='Chờ' AND gio_dang > ? "
+            f"WHERE {kl} AND trang_thai='Chờ' AND gio_dang > ? "
             "AND COALESCE(hoat_dong,'dang_bai') IN ('dang_bai','comment')",
-            (ten_acc, gio)).fetchone()["c"]
+            (*klp, gio)).fetchone()["c"]
     # Báo ra Telegram. Đặt NGOÀI khối `with _conn()` để không giữ khoá cơ sở dữ
     # liệu trong lúc gọi mạng; bản thân hàm này cũng không chờ mạng.
     # Chỉ báo khi acc ĐANG CHẠY mà bị dừng. Hàm này còn được gọi lại mỗi tiếng
@@ -1056,14 +1191,15 @@ def danh_dau_spam(ten_acc: str, chi_tiet: str = "", gio: str = None,
     return n, moc
 
 
-def ghi_nhan_nuoi(ten_acc: str):
+def ghi_nhan_nuoi(ten_acc: str, c_user: str = ""):
     """Đánh mốc acc vừa chạy xong một phiên nuôi nick."""
+    k, kp = _khoa_acc(ten_acc, c_user)
     with _conn() as con:
-        con.execute("UPDATE accounts SET nuoi_lan_cuoi=? WHERE ten_acc=?",
-                    (datetime.now().isoformat(timespec="seconds"), ten_acc))
+        con.execute(f"UPDATE accounts SET nuoi_lan_cuoi=? WHERE {k}",
+                    (datetime.now().isoformat(timespec="seconds"), *kp))
 
 
-def den_gio_nuoi(ten_acc: str, bay_gio=None) -> bool:
+def den_gio_nuoi(ten_acc: str, bay_gio=None, c_user: str = "") -> bool:
     """Acc này đã tới lúc chạy một phiên nuôi nick chưa.
 
     Dùng khi acc bị chặn đăng: slot đăng/comment bỏ không thì phí, nhưng KHÔNG
@@ -1077,9 +1213,10 @@ def den_gio_nuoi(ten_acc: str, bay_gio=None) -> bool:
     thành 110 phiên nuôi một ngày, trong khi nhịp cài đặt là 150 phút (~9 phiên).
     Và acc 'Ngân Nấm' còn không hề tick Nuôi.
     """
+    k, kp = _khoa_acc(ten_acc, c_user)
     with _conn() as con:
         r = con.execute("SELECT nuoi_nick, nuoi_interval, nuoi_lan_cuoi "
-                        "FROM accounts WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
+                        f"FROM accounts WHERE {k} LIMIT 1", kp).fetchone()
     if not r or str(r["nuoi_nick"] or "0") != "1":
         return False                      # không tick Nuôi → không nuôi
     try:
@@ -1101,22 +1238,23 @@ def den_gio_nuoi(ten_acc: str, bay_gio=None) -> bool:
     return troi < 0 or troi >= phut
 
 
-def acc_dang_spam_nghi(ten_acc: str) -> bool:
+def acc_dang_spam_nghi(ten_acc: str, c_user: str = "") -> bool:
     """Acc đang dính spam VÀ còn trong giờ nghỉ.
 
     Scheduler hỏi để biết có nên đổi slot đăng/comment sang phiên nuôi nick
     không. Phải kèm điều kiện "còn trong giờ nghỉ": hết giờ thì slot đó chính
     là PHIÊN THĂM DÒ, phải để nó đăng thật mới biết Facebook đã thả chưa.
     """
+    k, kp = _khoa_acc(ten_acc, c_user)
     with _conn() as con:
         r = con.execute("SELECT trang_thai, nghi_den FROM accounts "
-                        "WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
+                        f"WHERE {k} LIMIT 1", kp).fetchone()
     if not r or (r["trang_thai"] or "") != TRANG_THAI_SPAM:
         return False
     return _moc_nghi(r["nghi_den"]) is not None
 
 
-def acc_can_tham_do(ten_acc: str) -> bool:
+def acc_can_tham_do(ten_acc: str, c_user: str = "") -> bool:
     """Acc đang Spam và đã nghỉ đủ giờ — slot kế tiếp là PHIÊN NHỬ.
 
     Phiên nhử luôn là ĐĂNG BÀI, kể cả khi slot đó vốn là slot comment. Một loại
@@ -1126,29 +1264,32 @@ def acc_can_tham_do(ten_acc: str) -> bool:
     Đổi được vì slot comment vẫn giữ nguyên `ma_content`, `ma_nhom`, `tu_khoa`:
     lúc gen lịch, chuyển sang comment chỉ đổi mỗi cột `hoat_dong`.
     """
+    k, kp = _khoa_acc(ten_acc, c_user)
     with _conn() as con:
         r = con.execute("SELECT trang_thai, nghi_den FROM accounts "
-                        "WHERE ten_acc=? LIMIT 1", (ten_acc,)).fetchone()
+                        f"WHERE {k} LIMIT 1", kp).fetchone()
     if not r or (r["trang_thai"] or "") != TRANG_THAI_SPAM:
         return False
     return _moc_nghi(r["nghi_den"]) is None      # hết giờ nghỉ
 
 
-def het_spam(ten_acc: str) -> int:
+def het_spam(ten_acc: str, c_user: str = "") -> int:
     """Thả hẳn acc: về 'Active', xoá mốc nghỉ, trả mọi slot 'Nghỉ Spam' về 'Chờ'."""
+    k, kp = _khoa_acc(ten_acc, c_user)
+    kl, klp = _khoa_lich(ten_acc, c_user)
     with _conn() as con:
-        _r = con.execute("SELECT trang_thai FROM accounts WHERE ten_acc=? LIMIT 1",
-                         (ten_acc,)).fetchone()
+        _r = con.execute(f"SELECT trang_thai FROM accounts WHERE {k} LIMIT 1",
+                         kp).fetchone()
         tt_cu = (_r["trang_thai"] or "") if _r else ""
         con.execute(
             "UPDATE accounts SET trang_thai='Active', nghi_den='', "
-            "lich_su_phien='', ly_do_nghi='', canh_bao_moi=? WHERE ten_acc=?",
-            (f"'{ten_acc}' thăm dò thành công — chạy lại bình thường", ten_acc))
+            f"lich_su_phien='', ly_do_nghi='', canh_bao_moi=? WHERE {k}",
+            (f"'{ten_acc}' thăm dò thành công — chạy lại bình thường", *kp))
         n = con.execute(
             "UPDATE schedules SET trang_thai='Chờ', "
             "updated_at=datetime('now','localtime') "
-            "WHERE ten_acc=? AND trang_thai=?",
-            (ten_acc, TT_LICH_NGHI_SPAM)).rowcount
+            f"WHERE {kl} AND trang_thai=?",
+            (*klp, TT_LICH_NGHI_SPAM)).rowcount
     # Tin vui cũng đáng báo: biết acc đã được thả thì mới biết KHÔNG cần đụng tay.
     try:
         import thong_bao
@@ -1183,16 +1324,17 @@ def mo_duong_tham_do() -> list[dict]:
         # trạng thái vẫn 'Active', slot đánh 'X😴') cũng cần được mở đường thăm
         # dò y hệt. Bỏ sót nó thì acc tầng 1 nằm im tới hết ngày.
         rows = con.execute(
-            "SELECT id, ten_acc, nghi_den, trang_thai FROM accounts "
+            "SELECT id, ten_acc, c_user, nghi_den, trang_thai FROM accounts "
             "WHERE COALESCE(nghi_den,'') != ''").fetchall()
         for r in rows:
             if _moc_nghi(r["nghi_den"]):
                 continue                      # vẫn còn đang nghỉ
+            kl, klp = _khoa_lich(r["ten_acc"], r["c_user"] or "")
             n = con.execute(
                 "UPDATE schedules SET trang_thai='Chờ', "
                 "updated_at=datetime('now','localtime') "
-                "WHERE ten_acc=? AND trang_thai IN (?,?)",
-                (r["ten_acc"], TT_LICH_NGHI_SPAM, TT_LICH_X_TU_DONG)).rowcount
+                f"WHERE {kl} AND trang_thai IN (?,?)",
+                (*klp, TT_LICH_NGHI_SPAM, TT_LICH_X_TU_DONG)).rowcount
             # Báo cả khi n == 0. Với acc dính spam thì slot đăng/comment nay
             # KHÔNG còn bị đánh dấu nữa (chúng ở nguyên 'Chờ' và chạy nuôi nick
             # thay), nên không có gì để đổi — nhưng acc VẪN vừa hết giờ nghỉ và
@@ -1679,7 +1821,7 @@ def reset_schedules_to_wait(loai: str, keep: tuple = ("X",)) -> int:
         return con.execute(sql, args).rowcount
 
 
-def danh_dau_x_con_lai_hom_nay(ten_acc: str, loai: str = None) -> int:
+def danh_dau_x_con_lai_hom_nay(ten_acc: str, loai: str = None, c_user: str = "") -> int:
     """Đánh 'X😴' cho các slot ĐANG 'Chờ' của acc mà giờ đăng còn ở tương lai
     trong hôm nay (gio_dang > giờ hiện tại). Chỉ đụng slot 'Chờ' — không ghi đè
     ✅/❌/X thủ công đã có. `loai=None` = đánh toàn bộ lịch của acc (acc dùng
@@ -1689,9 +1831,10 @@ def danh_dau_x_con_lai_hom_nay(ten_acc: str, loai: str = None) -> int:
     so giờ. Slot đã qua giờ mà còn 'Chờ' là slot lỡ — bỏ qua, để reset ngày mai lo.
     """
     gio = datetime.now().strftime("%H:%M")
+    kl, klp = _khoa_lich(ten_acc, c_user)
     sql = ("UPDATE schedules SET trang_thai=?, updated_at=datetime('now','localtime') "
-           "WHERE ten_acc=? AND trang_thai='Chờ' AND gio_dang > ?")
-    args = [TT_LICH_X_TU_DONG, ten_acc, gio]
+           f"WHERE {kl} AND trang_thai='Chờ' AND gio_dang > ?")
+    args = [TT_LICH_X_TU_DONG, *klp, gio]
     if loai:
         sql += " AND loai=?"; args.append(loai)
     with _conn() as con:
@@ -1737,12 +1880,16 @@ def replace_schedules(loai: str, rows: list[dict]):
             # Mặc định hoat_dong='dang_bai' nếu row không khai báo (lịch cũ / không nuôi).
             for r in rows:
                 r.setdefault("hoat_dong", "dang_bai")
+                # Mỗi dòng mang c_user của nick — nơi dựng dòng biết thì truyền
+                # thẳng; không thì suy từ tên + Page (xem `tim_c_user`).
+                if not (r.get("c_user") or "").strip():
+                    r["c_user"] = tim_c_user(con, r.get("ten_acc", ""), r.get("ten_page", "") or "")
             con.executemany(
                 """INSERT INTO schedules
                    (loai, stt, ma_content, ten_acc, ten_page, gio_dang,
-                    ma_nhom, tu_khoa, mode, trang_thai, hoat_dong)
+                    ma_nhom, tu_khoa, mode, trang_thai, hoat_dong, c_user)
                    VALUES (:loai,:stt,:ma_content,:ten_acc,:ten_page,:gio_dang,
-                           :ma_nhom,:tu_khoa,:mode,:trang_thai,:hoat_dong)""",
+                           :ma_nhom,:tu_khoa,:mode,:trang_thai,:hoat_dong,:c_user)""",
                 rows
             )
 

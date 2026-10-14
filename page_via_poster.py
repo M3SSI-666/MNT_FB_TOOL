@@ -312,7 +312,7 @@ async def _run_page_via(
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 5 — Chui vào nhóm đầu, paste nội dung + upload ảnh
         # ════════════════════════════════════════════════════════════════
-        await dung_neu_dinh_spam(page, acc_name, "vừa chuyển sang Page")
+        await dung_neu_dinh_spam(page, acc_name, "vừa chuyển sang Page", c_user=c_user)
 
         group_url = f"https://www.facebook.com/groups/{first_group_uid}/"
         logger.info(f"  [4/5] 📌 Vào nhóm: {group_url}")
@@ -480,7 +480,7 @@ async def _run_page_via(
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 6 — Thêm nhóm → gõ từ khóa → tick → Đăng
         # ════════════════════════════════════════════════════════════════
-        await dung_neu_dinh_spam(page, acc_name, "vừa soạn xong bài")
+        await dung_neu_dinh_spam(page, acc_name, "vừa soạn xong bài", c_user=c_user)
         logger.info(f"  [5/5] ➕ Thêm nhóm → tìm \"{search_kw}\" → tick → Đăng...")
 
         # Click "+ Thêm nhóm"
@@ -653,7 +653,7 @@ async def _run_page_via(
         # Dò LẦN CUỐI ngay trước khi bấm Đăng — điểm có giá trị nhất: dừng
         # trước khi nội dung thật sự đi ra ngoài. Sau cú bấm này thì bài đã lên,
         # có dừng cũng không rút lại được.
-        await dung_neu_dinh_spam(page, acc_name, "ngay trước khi bấm Đăng")
+        await dung_neu_dinh_spam(page, acc_name, "ngay trước khi bấm Đăng", c_user=c_user)
 
         # Click "Đăng"
         await _human_delay(2000, 3000)
@@ -804,7 +804,7 @@ async def _run_page_via(
         #
         # Không tin "thấy dialog = vừa dính": dialog hiện lại y nguyên nhiều
         # ngày sau đó. Phải so SỐ VỤ với lần đo trước mới biết có vụ mới.
-        await kiem_vi_pham(page, acc_name, "phiên đăng Hybrid")
+        await kiem_vi_pham(page, acc_name, "phiên đăng Hybrid", c_user=c_user)
 
         # KHÔNG còn bước hạ nhiệt RIÊNG: bước lướt feed Page ~60s ở trên đã
         # kiêm cả ba việc một lúc — hạ nhiệt, giữ trình duyệt mở cho vòng canh
@@ -1042,7 +1042,7 @@ async def _run_page_wall(
             except PWTimeout:
                 continue
 
-        await dung_neu_dinh_spam(page, acc_name, "ngay trước khi bấm Đăng")
+        await dung_neu_dinh_spam(page, acc_name, "ngay trước khi bấm Đăng", c_user=c_user)
 
         # 5b. Click "Đăng" trong dialog "Cài đặt bài viết"
         await _human_delay(1000, 1800)
@@ -1106,7 +1106,7 @@ async def _run_page_wall(
 
         # Đăng tường Page cũng bị gỡ như đăng nhóm. Dò sau cooldown vì Facebook
         # cần vài chục giây mới đổ thông báo về.
-        await kiem_vi_pham(page, acc_name, "phiên đăng tường Page")
+        await kiem_vi_pham(page, acc_name, "phiên đăng tường Page", c_user=c_user)
         logger.info(f"  ✅ Đóng Chrome")
         await ctx.close()
         return True

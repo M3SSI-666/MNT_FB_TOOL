@@ -964,6 +964,56 @@ def api_accounts_import_excel():
     return jsonify({"ok": True, "added": added, "skipped": skipped})
 
 
+# ── Dán xs mới cho nick "Cookie hết hạn" → tự thử ở nền ─────────────────────
+# Trước đây dán xs xong nick vẫn nằm "Cookie hết hạn" (cố ý — xs chưa thử thì
+# chưa tin), và phải nhớ bấm "Thử cookie" nó mới về Active. Quên bấm là nick
+# đã sửa xong mà vẫn ngồi im cả ngày. Nay dán xs là tự thử; được thì tự bật
+# Active (kéo theo trả slot X😴 còn lại về 'Chờ'), hỏng thì giữ nguyên và báo.
+_DANG_THU_XS: set = set()
+
+
+def _tu_thu_xs_moi(acc_id: int) -> bool:
+    """Khởi động lượt thử nền cho nick vừa được dán xs. Trả True nếu có thử."""
+    import threading
+    acc = db.get_account_by_id(acc_id)
+    if not acc or (acc.get("trang_thai") or "") != "Cookie hết hạn":
+        return False
+    if not (acc.get("xs") or "").strip() or not (acc.get("c_user") or "").strip():
+        return False
+    if acc_id in _DANG_THU_XS:          # đang thử dở thì thôi, khỏi mở hai trình duyệt
+        return True
+    _DANG_THU_XS.add(acc_id)
+
+    def _chay():
+        ten = acc.get("ten_acc", "")
+        try:
+            from cookie_exporter import thu_cookie
+            a = db.get_account_by_id(acc_id) or {}
+            ok, mo_ta = thu_cookie(a.get("ten_acc", ten), (a.get("c_user") or "").strip(),
+                                   (a.get("xs") or "").strip())
+            hien = db.get_account_by_id(acc_id) or {}
+            if (hien.get("trang_thai") or "") != "Cookie hết hạn":
+                return                  # có người tự đổi trạng thái trong lúc thử — để yên
+            if ok:
+                n = update_account_field(acc_id, "trang_thai", "Active") or 0
+                tin = (f"✅ '{ten}': xs mới dùng được — đã chạy lại"
+                       + (f", trả {n} slot hôm nay về Chờ" if n else ""))
+            else:
+                tin = f"❌ '{ten}': xs mới vẫn chưa dùng được — {mo_ta}"
+            logger.info(f"🍪 Tự thử xs mới: {tin}")
+            # Báo qua kênh cảnh báo — giao diện tự hiện thành thông báo nổi.
+            from db import _conn
+            with _conn() as con:
+                con.execute("UPDATE accounts SET canh_bao_moi=? WHERE id=?", (tin, acc_id))
+        except Exception as e:
+            logger.warning(f"⚠️  Tự thử xs mới '{ten}' hỏng: {e}")
+        finally:
+            _DANG_THU_XS.discard(acc_id)
+
+    threading.Thread(target=_chay, daemon=True).start()
+    return True
+
+
 @app.route("/api/accounts/save", methods=["POST"])
 def api_accounts_save():
     data = request.json or {}
@@ -974,7 +1024,8 @@ def api_accounts_save():
             data.pop(f)
     try:
         acc_id = upsert_account(data)
-        return jsonify({"ok": True, "id": acc_id})
+        dang_thu = bool(data.get("xs")) and _tu_thu_xs_moi(acc_id)
+        return jsonify({"ok": True, "id": acc_id, "dang_thu": dang_thu})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -987,7 +1038,8 @@ def api_accounts_field(acc_id):
     try:
         update_account_field(acc_id, body["field"],
                              ep_kieu_so(body["field"], body["value"]))
-        return jsonify({"ok": True})
+        dang_thu = body["field"] == "xs" and _tu_thu_xs_moi(acc_id)
+        return jsonify({"ok": True, "dang_thu": dang_thu})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -1030,9 +1082,10 @@ def api_accounts_thu_cookie(acc_id):
         from cookie_exporter import thu_cookie
         ok, mo_ta = thu_cookie(acc["ten_acc"], (acc.get("c_user") or "").strip(),
                                (acc.get("xs") or "").strip())
-        doi = False
+        doi, tra_slot = False, 0
         if ok and (acc.get("trang_thai") or "") == "Cookie hết hạn":
-            update_account_field(acc_id, "trang_thai", "Active")
+            # Bật Active cũng trả slot X😴 còn lại hôm nay về 'Chờ'.
+            tra_slot = update_account_field(acc_id, "trang_thai", "Active") or 0
             doi = True
         # Cảnh báo trùng c_user chạy DÙ cookie sống hay chết, và là phép thuần
         # DB nên không tốn thêm giây nào. Đây là dấu vết duy nhất của kiểu nhầm
@@ -1043,7 +1096,8 @@ def api_accounts_thu_cookie(acc_id):
                     f"{'OK' if ok else 'HỎNG'} — {mo_ta}"
                     + (f" | TRÙNG c_user với: {', '.join(trung)}" if trung else ""))
         return jsonify({"ok": True, "song": ok, "mo_ta": mo_ta,
-                        "da_bat_lai": doi, "trung_c_user": trung})
+                        "da_bat_lai": doi, "tra_slot": tra_slot,
+                        "trung_c_user": trung})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -1798,11 +1852,25 @@ def api_schedule_gen(loai):
     end_raw   = parse_hhmm(end_str, 3, 0)
     END_MIN   = end_raw if end_raw > START_MIN else end_raw + 24 * 60
 
+    # Khoá nội bộ của mỗi nick trong suốt lượt Gen = c_user, KHÔNG phải tên:
+    # hai nick trùng tên (gặp thật: hai 'Tuấn Ngọc') sẽ bị gộp làm một ở mọi
+    # bước bên dưới — phân bổ giờ, chuyển slot nuôi/comment/Marketplace đều gom
+    # theo `ten_acc`. Đổi khoá ở đây thì cả chuỗi chạy nguyên như cũ; trước khi
+    # lưu mới đặt lại tên hiển thị và ghi c_user vào từng dòng (xem cuối hàm).
+    # Giao diện cũ không gửi c_user → khoá vẫn là tên, y như trước.
+    ten_hien, cu_cua = {}, {}
+    for a in acc_settings:
+        cu = (a.get("c_user") or "").strip()
+        khoa = cu or a["ten"]
+        ten_hien[khoa], cu_cua[khoa] = a["ten"], cu
+        a["ten"] = khoa
+
     if not acc_settings:
         return jsonify({"ok": False, "error": "Không có acc nào"})
 
     # "Nhóm đầu" (UID/link mở composer) là bắt buộc — fail sớm thay vì lỗi lúc chạy.
-    thieu = [a["ten"] for a in acc_settings if not (a.get("first_group_url", "") or "").strip()]
+    thieu = [ten_hien.get(a["ten"], a["ten"]) for a in acc_settings
+             if not (a.get("first_group_url", "") or "").strip()]
     if thieu:
         return jsonify({"ok": False,
                         "error": "Thiếu 'Nhóm đầu' cho acc: " + ", ".join(thieu)})
@@ -1873,8 +1941,13 @@ def api_schedule_gen(loai):
     da_dat = []
     try:
         from nuoi_nick import plan_warming_conversion
+        # `ten_acc` của các dòng lúc này là KHOÁ nội bộ (c_user, hoặc tên nếu
+        # nick không có c_user) — gom acc trong DB theo đúng khoá đó.
+        def _khoa_db(a):
+            return (a.get("c_user") or "").strip() or a["ten_acc"]
         acc_names = {r["ten_acc"] for r in schedule}
-        accs_db   = [a for a in get_accounts() if a["ten_acc"] in acc_names]
+        accs_db   = [dict(a, ten_acc=_khoa_db(a)) for a in get_accounts()
+                     if _khoa_db(a) in acc_names]
 
         # KHÔNG còn xử lý riêng acc đang dính spam ở đây. Trước đây mọi slot
         # còn lại của acc spam bị đổi thành 'comment', vì mô hình cũ cho rằng
@@ -1927,6 +2000,12 @@ def api_schedule_gen(loai):
 
     except Exception as e:
         logger.warning(f"Chuyển slot nuôi/comment/marketplace: bỏ qua ({e})")
+
+    # Trả khoá nội bộ về tên hiển thị, và ghi c_user vào từng dòng.
+    for r in schedule:
+        k = r["ten_acc"]
+        r["ten_acc"] = ten_hien.get(k, k)
+        r["c_user"]  = cu_cua.get(k, "")
 
     replace_schedules(loai, schedule)
 
@@ -1997,10 +2076,13 @@ def api_schedule_nuoi_gen():
     start = body.get("start", "07:00")
     end   = body.get("end",   "23:00")
 
-    accs = [{"ten": a["ten_acc"], "interval": normalize_interval(a.get("nuoi_interval"))}
-            for a in get_accounts(trang_thai="Active")
-            if int(a.get("nuoi_nick", 0) or 0) == 1
-            and not (a.get("loai_dang") or "").strip()]
+    # Khoá theo c_user như Gen lịch đăng (hai nick trùng tên không bị gộp).
+    nuoi_db = [a for a in get_accounts(trang_thai="Active")
+               if int(a.get("nuoi_nick", 0) or 0) == 1
+               and not (a.get("loai_dang") or "").strip()]
+    ten_hien = {((a.get("c_user") or "").strip() or a["ten_acc"]): a["ten_acc"] for a in nuoi_db}
+    accs = [{"ten": (a.get("c_user") or "").strip() or a["ten_acc"],
+             "interval": normalize_interval(a.get("nuoi_interval"))} for a in nuoi_db]
 
     if not accs:
         return jsonify({"ok": False,
@@ -2010,6 +2092,10 @@ def api_schedule_nuoi_gen():
     rows = build_warming_schedule(accs, start, end)
     if not rows:
         return jsonify({"ok": False, "error": "Không tạo được lịch nuôi"})
+    for r in rows:
+        k = r["ten_acc"]
+        r["ten_acc"] = ten_hien.get(k, k)
+        r["c_user"]  = k if k != r["ten_acc"] else ""
 
     replace_schedules("nuoi", rows)
     set_setting("gen_prefs_nuoi", json.dumps({"start": start, "end": end}, ensure_ascii=False))
@@ -2112,6 +2198,7 @@ def api_schedule_gen_data(loai):
             nghi = 30
         accs.append({
             "ten":      a["ten_acc"],
+            "c_user":   (a.get("c_user") or "").strip(),   # khoá thật — tên có thể trùng
             "page":     a.get("ten_page", ""),
             "nghi":     nghi,
             "luc_dang": round(60 / nghi, 2),
@@ -2546,10 +2633,14 @@ def api_join_add():
         page_info = get_page_by_name(ten_page) if ten_page else None
         page_uid  = page_info.get("page_uid","") if page_info else ""
         with _conn() as con:
+            # Giao diện gửi kèm c_user của nick được chọn (tên có thể trùng);
+            # thiếu thì suy từ tên + Page.
+            from db import tim_c_user
+            cu = (body.get("c_user") or "").strip() or tim_c_user(con, ten_acc, ten_page)
             cur = con.execute(
-                "INSERT INTO join_schedules (ten_acc,ten_page,page_uid,gio_chay,nguon,created_at) "
-                "VALUES (?,?,?,?,?,datetime('now','localtime'))",
-                (ten_acc, ten_page, page_uid, gio_chay, nguon)
+                "INSERT INTO join_schedules (ten_acc,ten_page,page_uid,gio_chay,nguon,c_user,created_at) "
+                "VALUES (?,?,?,?,?,?,datetime('now','localtime'))",
+                (ten_acc, ten_page, page_uid, gio_chay, nguon, cu)
             )
         return jsonify({"ok": True, "id": cur.lastrowid})
     except Exception as e:
@@ -2581,22 +2672,31 @@ def api_join_gen_quick():
     try:
         from db import _conn, get_page_by_name
 
-        # Phân công hiện tại: {(acc, page): page_uid}
+        # Phân công hiện tại: {(khoá nick, page): (page_uid, tên, c_user)}.
+        # Khoá nick = c_user (tên có thể trùng — hai nick 'Tuấn Ngọc' từng bị
+        # gộp làm một ở đây); nick chưa có c_user mới dùng tên.
         mong_muon = {}
         for acc in get_accounts(trang_thai="Active"):
             ten_page = (acc.get("ten_page") or "").strip()
             if not ten_page:
                 continue
             p = get_page_by_name(ten_page)
-            mong_muon[(acc["ten_acc"], ten_page)] = (p or {}).get("page_uid", "") if p else ""
+            cu = (acc.get("c_user") or "").strip()
+            mong_muon[(cu or acc["ten_acc"], ten_page)] = (
+                (p or {}).get("page_uid", "") if p else "", acc["ten_acc"], cu)
 
         created = giu = xoa = dang_chay = 0
         with _conn() as con:
             dang_co = {}
+            from db import tim_c_user
             for r in con.execute(
-                    "SELECT id, ten_acc, ten_page FROM join_schedules "
+                    "SELECT id, ten_acc, ten_page, COALESCE(c_user,'') cu FROM join_schedules "
                     "WHERE COALESCE(nguon,'')=''").fetchall():
-                dang_co.setdefault((r["ten_acc"], r["ten_page"]), []).append(r["id"])
+                # Dòng cũ chưa gắn c_user: suy ra trước khi đối chiếu, không thì
+                # nó bị coi là "không khớp", bị xoá rồi tạo lại — mất cờ Làm sạch
+                # và số liệu của dòng.
+                cu = r["cu"] or tim_c_user(con, r["ten_acc"], r["ten_page"] or "")
+                dang_co.setdefault((cu or r["ten_acc"], r["ten_page"]), []).append(r["id"])
 
             for cap, ids in dang_co.items():
                 for sid in ids:
@@ -2615,11 +2715,11 @@ def api_join_gen_quick():
                         con.execute("DELETE FROM join_schedules WHERE id=?", (sid,))
                         xoa += 1
 
-            for (ten_acc, ten_page), page_uid in mong_muon.items():
+            for (_khoa, ten_page), (page_uid, ten_acc, cu) in mong_muon.items():
                 con.execute(
-                    "INSERT INTO join_schedules (ten_acc,ten_page,page_uid,gio_chay,trang_thai,created_at) "
-                    "VALUES (?,?,?,?,?,datetime('now','localtime'))",
-                    (ten_acc, ten_page, page_uid, "", "Chờ")
+                    "INSERT INTO join_schedules (ten_acc,ten_page,page_uid,gio_chay,trang_thai,c_user,created_at) "
+                    "VALUES (?,?,?,?,?,?,datetime('now','localtime'))",
+                    (ten_acc, ten_page, page_uid, "", "Chờ", cu)
                 )
                 created += 1
         return jsonify({"ok": True, "created": created, "skipped": giu,
@@ -2646,16 +2746,21 @@ def api_join_gen_quick_market():
         with _conn() as con:
             for acc in get_accounts(trang_thai="Active"):
                 ten_acc = acc["ten_acc"]
+                cu = (acc.get("c_user") or "").strip()
+                # Đã có lịch chưa — theo c_user. Theo tên thì nick thứ hai trùng
+                # tên (hai 'Tuấn Ngọc') bị coi là "đã có" và không bao giờ có lịch.
+                from db import _khoa_lich
+                kl, klp = _khoa_lich(ten_acc, cu)
                 if con.execute("SELECT id FROM join_schedules "
-                               "WHERE ten_acc=? AND COALESCE(nguon,'')='MARKET'",
-                               (ten_acc,)).fetchone():
+                               f"WHERE {kl} AND COALESCE(nguon,'')='MARKET'",
+                               klp).fetchone():
                     skipped += 1
                     continue
                 con.execute(
                     "INSERT INTO join_schedules "
-                    "(ten_acc,ten_page,page_uid,gio_chay,trang_thai,nguon,created_at) "
-                    "VALUES (?,'','','','Chờ','MARKET',datetime('now','localtime'))",
-                    (ten_acc,))
+                    "(ten_acc,ten_page,page_uid,gio_chay,trang_thai,nguon,c_user,created_at) "
+                    "VALUES (?,'','','','Chờ','MARKET',?,datetime('now','localtime'))",
+                    (ten_acc, cu))
                 created += 1
         return jsonify({"ok": True, "created": created, "skipped": skipped,
                         "so_nhom": so_nhom})

@@ -157,7 +157,7 @@ def _attempt_post(item: dict) -> str:
     # ── ĐĂNG BÀI PAGE (wall) — Playwright ────────────────────
     if LOAI == "page":
         from page_via_poster import post_page_wall
-        acc_data = get_account_by_name(acc_name)
+        acc_data = _tk(item)
         if not acc_data:
             raise Exception(f"Không tìm thấy acc '{acc_name}'")
         page_info = get_page_by_name(page_name)
@@ -169,7 +169,7 @@ def _attempt_post(item: dict) -> str:
             page_uid=page_uid,
             message=content,
             image_url=link_anh,
-            c_user=acc_data.get("c_user", ""),
+            c_user=_c_user_cua(item, acc_data),
         )
         if not ok:
             raise Exception("Đăng tường Page về kết quả rỗng mà không báo lỗi bước nào")
@@ -187,8 +187,8 @@ def _attempt_post(item: dict) -> str:
         first_uid = _parse_first_group_uid(ma_nhom)
         if not first_uid:
             raise Exception("Thiếu UID nhóm đầu để mở composer")
-        acc_data  = get_account_by_name(acc_name, page_name)
-        c_user_v  = acc_data.get("c_user", "") if acc_data else ""
+        acc_data  = _tk(item, theo_page=True)
+        c_user_v  = _c_user_cua(item, acc_data)
         count = post_page_via(
             acc_name=acc_name, page_uid=page_uid,
             first_group_uid=first_uid, search_kw=tu_khoa,
@@ -216,8 +216,8 @@ def _attempt_post(item: dict) -> str:
         first_uid = _parse_first_group_uid(ma_nhom)
         if not first_uid:
             raise Exception("Thiếu UID nhóm đầu để mở composer")
-        acc_data  = get_account_by_name(acc_name, page_name)
-        c_user_v  = acc_data.get("c_user", "") if acc_data else ""
+        acc_data  = _tk(item, theo_page=True)
+        c_user_v  = _c_user_cua(item, acc_data)
         count = post_via_crosspost(
             acc_name=acc_name, search_kw=tu_khoa,
             message=content, image_url=link_anh,
@@ -233,7 +233,25 @@ def _attempt_post(item: dict) -> str:
     raise Exception(f"Mode '{mode}' không được hỗ trợ (chỉ còn Hybrid/Via — Playwright)")
 
 
-def _don_cache_sau_phien(acc_name: str):
+def _cu(item: dict) -> str:
+    """c_user của dòng lịch — khoá thật của nick. Tên có thể trùng (gặp thật:
+    hai nick 'Tuấn Ngọc'), nên mọi chỗ cần biết "nick nào" đều hỏi qua đây."""
+    return (item.get("c_user") or "").strip()
+
+
+def _tk(item: dict, theo_page: bool = False) -> dict | None:
+    """Tài khoản của dòng lịch: theo c_user nếu dòng có, không thì theo tên (+Page)."""
+    return get_account_by_name(item["ten_acc"],
+                               item.get("ten_page", "") if theo_page else "",
+                               c_user=_cu(item))
+
+
+def _c_user_cua(item: dict, acc_data: dict | None) -> str:
+    """c_user để mở profile + dựng cookie: ưu tiên c_user của dòng lịch."""
+    return _cu(item) or ((acc_data or {}).get("c_user", "") or "")
+
+
+def _don_cache_sau_phien(acc_name: str, c_user: str = ""):
     """
     Dọn cache trình duyệt của acc NGAY SAU khi phiên vừa đóng.
 
@@ -253,23 +271,23 @@ def _don_cache_sau_phien(acc_name: str):
     # cũ dần: đo thực tế 12/12 acc có `xs` ở profile khác hẳn `xs` trong DB.
     try:
         from cookie_exporter import dong_bo_xs
-        dong_bo_xs(acc_name)
+        dong_bo_xs(acc_name, c_user=c_user)
     except Exception as e:
         logger.debug(f"Đồng bộ xs '{acc_name}' hỏng: {e}")
 
     try:
         from fb_common import find_profile_dir, don_cache_profile
-        a = get_account_by_name(acc_name)
-        don_cache_profile(find_profile_dir(acc_name, (a or {}).get("c_user", "")))
+        cu = c_user or (get_account_by_name(acc_name) or {}).get("c_user", "")
+        don_cache_profile(find_profile_dir(acc_name, cu))
     except Exception as e:
         logger.warning(f"  ⚠️  Dọn cache '{acc_name}' lỗi (bỏ qua): {e}")
 
 
-def _mark_cookie_dead(acc_name: str):
+def _mark_cookie_dead(acc_name: str, c_user: str = ""):
     """Đánh dấu account để dễ thấy trong tab Tài khoản, và đánh 'X😴' các slot
     lịch còn lại hôm nay của acc để nhìn bảng là biết ngay acc này ngưng chạy."""
     try:
-        a = get_account_by_name(acc_name)
+        a = get_account_by_name(acc_name, c_user=c_user)
         if a:
             # Không gọi thong_bao ở đây: update_account_field đã tự so trạng thái
             # cũ với mới rồi báo. Gọi thêm ở đây là mỗi sự cố nhắn hai lần.
@@ -278,7 +296,7 @@ def _mark_cookie_dead(acc_name: str):
         logger.warning(f"⚠️  Không đánh dấu được acc '{acc_name}' hết cookie: {e}")
     try:
         from db import danh_dau_x_con_lai_hom_nay
-        n = danh_dau_x_con_lai_hom_nay(acc_name)
+        n = danh_dau_x_con_lai_hom_nay(acc_name, c_user=c_user)
         if n:
             logger.info(f"  🚫 Đã đánh X {n} slot còn lại hôm nay của '{acc_name}'")
     except Exception as e:
@@ -303,21 +321,21 @@ def _run_warming(item: dict, ghi_chu: str = ""):
 
     try:
         from nuoi_nick import run_warming_session
-        acc_data = get_account_by_name(acc_name)
-        c_user_v = acc_data.get("c_user", "") if acc_data else ""
+        acc_data = _tk(item)
+        c_user_v = _c_user_cua(item, acc_data)
         run_warming_session(acc_name=acc_name, c_user=c_user_v)
         done = datetime.now().strftime("%H:%M")
         _update_status(sid, f"🌱 {done} (đã nuôi{' — ' + ghi_chu if ghi_chu else ''})")
         # Đánh mốc để lần sau biết đã tới nhịp nuôi chưa. Ghi cho CẢ hai đường —
         # slot nuôi vốn có và slot thay cho phiên bị chặn — không thì hai đường
         # đếm nhịp riêng và acc bị nuôi dày gấp đôi.
-        db.ghi_nhan_nuoi(acc_name)
+        db.ghi_nhan_nuoi(acc_name, c_user=_cu(item))
         logger.info(f"✅ STT {stt} nuôi xong")
     except CookieDeadError:
         ts2 = datetime.now().strftime("%H:%M")
         _update_status(sid, f"❌ {ts2} Cookie hết hạn")
         logger.error(f"❌ STT {stt}: Cookie hết hạn khi nuôi — acc '{acc_name}'")
-        _mark_cookie_dead(acc_name)
+        _mark_cookie_dead(acc_name, _cu(item))
     except Exception as e:
         ts2 = datetime.now().strftime("%H:%M")
         cat, label = classify_error(e)
@@ -339,8 +357,8 @@ def _run_commenting(item: dict):
 
     try:
         from comment_bai import chay_phien_comment
-        acc_data = get_account_by_name(acc_name)
-        c_user_v = acc_data.get("c_user", "") if acc_data else ""
+        acc_data = _tk(item)
+        c_user_v = _c_user_cua(item, acc_data)
         # Một phiên kéo dài 12–18 phút. Cập nhật đếm sau mỗi bài để nhìn bảng
         # lịch là biết đang chạy tới đâu, thay vì đứng im ở "Đang comment".
         def _bao(da_xong, tong):
@@ -373,7 +391,7 @@ def _run_commenting(item: dict):
         ts2 = datetime.now().strftime("%H:%M")
         _update_status(sid, f"❌ {ts2} Cookie hết hạn")
         logger.error(f"❌ STT {stt}: Cookie hết hạn khi comment — acc '{acc_name}'")
-        _mark_cookie_dead(acc_name)
+        _mark_cookie_dead(acc_name, _cu(item))
     except Exception as e:
         ts2 = datetime.now().strftime("%H:%M")
         cat, label = classify_error(e)
@@ -423,26 +441,26 @@ def _run_marketplace_slot(item: dict):
 
     try:
         from market_poster import post_marketplace
-        acc_data = get_account_by_name(acc_name)
-        c_user_v = acc_data.get("c_user", "") if acc_data else ""
+        acc_data = _tk(item)
+        c_user_v = _c_user_cua(item, acc_data)
         so_nhom = post_marketplace(acc_name=acc_name, message=content,
                                    image_url=link_anh, c_user=c_user_v,
                                    tieu_de=tieu_de)
         done = datetime.now().strftime("%H:%M")
         _update_status(sid, f"✅ {done} 🛒 ({so_nhom} nhóm)")
         logger.info(f"✅ STT {stt} Marketplace xong: {so_nhom} nhóm")
-        db.ghi_nhan_phien_dang(acc_name, True)
+        db.ghi_nhan_phien_dang(acc_name, True, c_user=_cu(item))
     except CookieDeadError:
         ts2 = datetime.now().strftime("%H:%M")
         _update_status(sid, f"❌ {ts2} Cookie hết hạn")
         logger.error(f"❌ STT {stt}: Cookie hết hạn khi đăng Marketplace — acc '{acc_name}'")
-        _mark_cookie_dead(acc_name)
+        _mark_cookie_dead(acc_name, _cu(item))
     except Exception as e:
         ts2 = datetime.now().strftime("%H:%M")
         cat, label = classify_error(e)
         _update_status(sid, f"❌ {ts2} Marketplace lỗi: {label}")
         logger.error(f"❌ STT {stt} Marketplace lỗi [{cat}]: {e}")
-        db.ghi_nhan_phien_dang(acc_name, False)
+        db.ghi_nhan_phien_dang(acc_name, False, c_user=_cu(item))
 
 
 def _bao_suc_khoe(stt, acc_name: str, hanh_dong: str, ly_do: str):
@@ -461,7 +479,7 @@ def _run_one(item: dict):
     #
     # Đổi được vì slot comment vẫn giữ nguyên ma_content / ma_nhom / tu_khoa:
     # lúc gen lịch, chuyển sang comment chỉ đổi mỗi cột hoat_dong.
-    if hd in ("comment", "marketplace") and db.acc_can_tham_do(item["ten_acc"]):
+    if hd in ("comment", "marketplace") and db.acc_can_tham_do(item["ten_acc"], c_user=_cu(item)):
         logger.info(f"🔎 STT {item.get('stt', item['id'])} — acc "
                     f"'{item['ten_acc']}' hết giờ nghỉ, đổi slot {hd} thành "
                     f"PHIÊN NHỬ bằng đăng bài")
@@ -471,7 +489,7 @@ def _run_one(item: dict):
     # Acc đang nghỉ hoặc đã bị tắt thì bỏ qua slot. Ghi trạng thái riêng chứ
     # KHÔNG ghi "❌ lỗi": đếm nó là lỗi thì bộ theo dõi tự bơm phồng chính mình —
     # acc nghỉ sinh ra thêm "lỗi", thêm lỗi lại kéo dài nghỉ.
-    ok_chay, vi_sao = db.acc_duoc_chay(item["ten_acc"], hd)
+    ok_chay, vi_sao = db.acc_duoc_chay(item["ten_acc"], hd, c_user=_cu(item))
     if not ok_chay:
         # Acc dính spam: slot đăng/comment có thể chuyển thành phiên NUÔI NICK —
         # nhưng CHỈ KHI acc có tick Nuôi VÀ đã tới nhịp `nuoi_interval` của nó.
@@ -482,8 +500,8 @@ def _run_one(item: dict):
         #   - acc CÓ tick thì bị nuôi liên tục mỗi slot, thay vì giữ nhịp 150
         #     phút như lúc chạy bình thường
         # Không tới lượt nuôi thì slot nghỉ hẳn, đúng như trước.
-        if db.acc_dang_spam_nghi(item["ten_acc"]) and hd in ("dang_bai", "comment"):
-            if db.den_gio_nuoi(item["ten_acc"]):
+        if db.acc_dang_spam_nghi(item["ten_acc"], c_user=_cu(item)) and hd in ("dang_bai", "comment"):
+            if db.den_gio_nuoi(item["ten_acc"], c_user=_cu(item)):
                 logger.info(f"🌱 STT {item.get('stt', item['id'])} — acc "
                             f"'{item['ten_acc']}' dính spam, đổi sang nuôi nick")
                 _run_warming(item, ghi_chu="thay cho phiên bị spam")
@@ -525,14 +543,14 @@ def _run_one(item: dict):
             done   = datetime.now().strftime("%H:%M")
             _update_status(sid, f"✅ {done}{suffix}")
             logger.info(f"✅ STT {stt} hoàn thành{suffix}")
-            db.ghi_nhan_phien_dang(acc_name, True)
+            db.ghi_nhan_phien_dang(acc_name, True, c_user=_cu(item))
             return
 
         except CookieDeadError:
             ts2 = datetime.now().strftime("%H:%M")
             _update_status(sid, f"❌ {ts2} Cookie hết hạn")
             logger.error(f"❌ STT {stt}: Cookie hết hạn — acc '{acc_name}' cần đăng nhập lại")
-            _mark_cookie_dead(acc_name)
+            _mark_cookie_dead(acc_name, _cu(item))
             # Cookie chết đã có trạng thái riêng và cách xử lý riêng (đăng nhập
             # lại), đừng tính vào sức khoẻ — nó không phải dấu hiệu bị FB chặn.
             return
@@ -561,7 +579,7 @@ def _run_one(item: dict):
             ts2 = datetime.now().strftime("%H:%M")
             _update_status(sid, f"🚫 {ts2} Chặn Composer")
             n, moc = db.danh_dau_spam(acc_name, "Chặn Composer — hộp thoại đăng bài rỗng",
-                                      ly_do="Lỗi Composer")
+                                      ly_do="Lỗi Composer", c_user=_cu(item))
             logger.error(f"🚫 STT {stt}: acc '{acc_name}' BỊ CHẶN COMPOSER — "
                          f"{n} slot còn lại chuyển sang nuôi nick, "
                          f"nhử lại lúc {moc:%H:%M}")
@@ -610,7 +628,8 @@ def _run_one(item: dict):
             # và báo cáo Telegram, để nhìn là biết hỏng ở bước nào — thay vì
             # chỉ đếm được "5 lỗi liên tiếp" rồi phải đi đào file log.
             _bao_suc_khoe(stt, acc_name,
-                          *db.ghi_nhan_phien_dang(acc_name, False, ly_do_loi=label))
+                          *db.ghi_nhan_phien_dang(acc_name, False, ly_do_loi=label,
+                                                   c_user=_cu(item)))
             return
 
 
@@ -671,7 +690,7 @@ def main():
         try:
             _run_one(item)
         finally:
-            _don_cache_sau_phien(item.get("ten_acc", ""))
+            _don_cache_sau_phien(item.get("ten_acc", ""), _cu(item))
             with lock:
                 running.discard(key)
 

@@ -351,7 +351,7 @@ async def _khoi_dong(page, ctx, page_uid: str = "") -> bool:
         return False
 
 
-async def _ket_phien(page, acc_name: str = "") -> None:
+async def _ket_phien(page, acc_name: str = "", c_user: str = "") -> None:
     """
     Kết phiên y hệt bước [7/7] của luồng đăng bài: lướt newsfeed rồi like 1 bài
     trước khi đóng trình duyệt.
@@ -374,7 +374,7 @@ async def _ket_phien(page, acc_name: str = "") -> None:
         # comment đầu tiên lên (xem vòng lặp trong `_chay_phien`). Đánh ở đây là
         # muộn: cảnh báo vòng canh bắt được giữa phiên sẽ nằm TRƯỚC mốc và bị
         # loại khỏi đường dự phòng của `kiem_vi_pham`.
-        await kiem_vi_pham(page, acc_name, "phiên comment")
+        await kiem_vi_pham(page, acc_name, "phiên comment", c_user=c_user)
     except Exception as e:
         logger.warning(f"    ⚠️  Kết phiên không trọn vẹn: {e}")
 
@@ -662,7 +662,7 @@ async def _chay_phien(acc_name: str, c_user: str, loai: str,
             # Chỉ kết phiên tử tế khi đã comment được ít nhất một bài. Đang bị
             # chặn mà còn nán lại lướt + like là làm acc bị soi thêm.
             if ok_n:
-                await _ket_phien(page, acc_name)
+                await _ket_phien(page, acc_name, c_user)
         finally:
             try:
                 await ctx.close()

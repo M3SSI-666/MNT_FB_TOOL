@@ -306,7 +306,7 @@ function openAddJoinSchedule() {
                 <div class="field-group">
                     <label>Tài khoản</label>
                     <select id="js-acc">
-                        ${accs.map(a=>`<option value="${a.ten_acc}">${a.ten_acc}</option>`).join("")}
+                        ${_oAcc(accs)}
                     </select>
                 </div>
                 <div class="field-group">
@@ -328,11 +328,27 @@ function openAddJoinSchedule() {
     });
 }
 
+// Ô chọn tài khoản: giá trị = c_user (khoá thật), tên chỉ để hiện. Hai nick
+// trùng tên (gặp thật: hai 'Tuấn Ngọc') thì nhãn kèm đuôi c_user để phân biệt.
+function _oAcc(ds){
+    const dem = {};
+    ds.forEach(a=>{ dem[a.ten_acc]=(dem[a.ten_acc]||0)+1; });
+    return ds.map(a=>{
+        const cu=(a.c_user||"").trim();
+        const nhan=_escapeHtml(a.ten_acc)+(dem[a.ten_acc]>1&&cu?` · …${cu.slice(-6)}`:"");
+        return `<option value="${_escapeHtml(cu)}" data-ten="${_escapeHtml(a.ten_acc)}">${nhan}</option>`;
+    }).join("");
+}
+function _chonAcc(id){
+    const o=document.getElementById(id)?.selectedOptions?.[0];
+    return o ? {ten_acc:o.dataset.ten||"", c_user:o.value||""} : {ten_acc:"", c_user:""};
+}
+
 async function saveJoinSchedule() {
     const dNew  = parseInt(document.getElementById("js-delay-new")?.value  || String(JOIN_NGHI_MOI_MAC_DINH));
     await API.saveSettings({join_delay_new: String(dNew)}).catch(()=>{});
     const data = {
-        ten_acc:  document.getElementById("js-acc")?.value||"",
+        ..._chonAcc("js-acc"),
         ten_page: document.getElementById("js-page")?.value||"",
         gio_chay: document.getElementById("js-gio")?.value||"",
     };
@@ -1287,7 +1303,7 @@ async function startAccEdit(td){
         ve(nv);
         if(nv===val) return;
         td.classList.add("saving");
-        try{ const r=await API.updateAccField(parseInt(id),field,nv); td.classList.remove("saving"); if(r.ok){td.classList.add("saved");setTimeout(()=>td.classList.remove("saved"),1200);} else { Toast.error(r.error); ve(val); } }
+        try{ const r=await API.updateAccField(parseInt(id),field,nv); td.classList.remove("saving"); if(r.ok){td.classList.add("saved");setTimeout(()=>td.classList.remove("saved"),1200);if(r.dang_thu)_baoDangThuXs();} else { Toast.error(r.error); ve(val); } }
         catch(e){ td.classList.remove("saving"); Toast.error(e.message); ve(val); }
     }
     inp.addEventListener("blur",commit);
@@ -1373,7 +1389,7 @@ async function saveAccForm(){
         ghi_chu:   get("af_ghi_chu"),
     };
     if(!data.id) delete data.id;
-    try{ const r=await API.saveAccount(data); if(r.ok){Toast.success("Đã lưu");closeModal();loadAccounts();}else Toast.error(r.error); }
+    try{ const r=await API.saveAccount(data); if(r.ok){Toast.success("Đã lưu");if(r.dang_thu)_baoDangThuXs();closeModal();loadAccounts();}else Toast.error(r.error); }
     catch(e){ Toast.error(e.message); }
 }
 
@@ -1393,6 +1409,7 @@ async function thuCookieAcc(id){
         if(r.song){
             Toast.success(r.da_bat_lai
                 ? `✅ ${r.mo_ta} — đã bật lại trạng thái Active`
+                  + (r.tra_slot ? `, trả ${r.tra_slot} slot hôm nay về Chờ` : "")
                 : `✅ ${r.mo_ta}`);
             if(r.da_bat_lai) loadAccounts();
         } else {
@@ -2033,6 +2050,14 @@ async function _imgsFile(e){
 }
 function _dropImgs(e){ e.preventDefault(); const files=[...e.dataTransfer.files].filter(f=>f.type.startsWith("image/")); Promise.all(files.map(f=>_uploadImg(f))).then(urls=>{window._ceImgUrls.push(...urls);_reRenderImgThumbs();}).catch(err=>Toast.error(err.message)); }
 
+// Dán xs mới cho nick "Cookie hết hạn": server tự thử ở nền (~20 giây), kết quả
+// về qua kênh cảnh báo (loadCanhBaoAcc) — được thì nick tự về Active.
+function _baoDangThuXs(){
+    Toast.show("🍪 Đang tự thử xs mới — khoảng 20 giây nữa sẽ báo kết quả", "info", 6000);
+    // Không vẽ lại bảng khi đang sửa dở một ô — vẽ lại là mất chữ đang gõ.
+    setTimeout(()=>{ loadCanhBaoAcc(); if(!document.querySelector(".editing")) loadAccounts(); }, 25000);
+}
+
 async function saveContentEdit(){
     const btn=document.getElementById("cedit-save-btn");
     btn.disabled=true; btn.innerHTML='<span class="spin">↻</span>';
@@ -2310,8 +2335,7 @@ async function jmThem(){
     openModal("Thêm lịch tham gia nhóm Market",`
         <div class="field-group"><label>Tài khoản</label>
             <select class="input" id="jm-acc">${
-                ds.map(a=>`<option>${_escapeHtml(a.ten_acc)}</option>`).join("")
-                || `<option value="">(không có nick Active)</option>`}</select></div>
+                _oAcc(ds) || `<option value="">(không có nick Active)</option>`}</select></div>
         <div class="field-group"><label>Giờ chạy (để trống = chỉ chạy tay)</label>
             <input class="input" id="jm-gio" placeholder="09:00"></div>
         <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px">
@@ -2321,10 +2345,10 @@ async function jmThem(){
 }
 
 async function jmLuu(){
-    const acc=document.getElementById("jm-acc")?.value||"";
-    if(!acc){ Toast.error("Chưa chọn tài khoản"); return; }
+    const acc=_chonAcc("jm-acc");
+    if(!acc.ten_acc){ Toast.error("Chưa chọn tài khoản"); return; }
     try{
-        const r=await API.joinAdd({ten_acc:acc, ten_page:"", nguon:"MARKET",
+        const r=await API.joinAdd({...acc, ten_page:"", nguon:"MARKET",
                                    gio_chay:document.getElementById("jm-gio")?.value||""});
         if(r.ok){ Toast.success("Đã thêm"); closeModal(); loadJoinMarket(); }
         else Toast.error(r.error);
@@ -3359,6 +3383,7 @@ async function runGen(){
             if(!firstGroup){ Toast.error("Chưa nhập 'Nhóm đầu' để mở composer"); btn.disabled=false; btn.innerHTML="▶ Tạo lịch"; return; }
             const accSettings=_genAccData.map((acc,i)=>({
                 ten:       acc.ten,
+                c_user:    acc.c_user||"",      // khoá thật của nick — tên có thể trùng
                 page:      acc.page,
                 nghi:      acc.nghi,
                 luc_dang:  acc.luc_dang,

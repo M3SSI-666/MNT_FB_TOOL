@@ -1567,7 +1567,7 @@ check("đánh mốc ngay sau khi chuyển sang Page",
 check("dò ít nhất 3 chặng trong phiên đăng",
       _src_pvp3.count("await dung_neu_dinh_spam(") >= 3)
 check("có dò ngay trước khi bấm Đăng",
-      'dung_neu_dinh_spam(page, acc_name, "ngay trước khi bấm Đăng")' in _src_pvp3)
+      'dung_neu_dinh_spam(page, acc_name, "ngay trước khi bấm Đăng"' in _src_pvp3)
 _i_do_cuoi = _src_pvp3.index('"ngay trước khi bấm Đăng"')
 _i_bam     = _src_pvp3.index('# Click "Đăng"')
 check("dò ĐỨNG TRƯỚC cú bấm Đăng", _i_do_cuoi < _i_bam)
@@ -1648,7 +1648,7 @@ check("Hybrid lướt feed đúng bằng cửa sổ dò spam",
       "random.randint(*CHO_SAU_DANG_GIAY)" in _src_pvp2)
 # Lướt feed phải ĐỨNG TRƯỚC dò spam, nếu không thì cửa sổ bằng 0.
 _i_luot = _src_pvp2.index("random.randint(*CHO_SAU_DANG_GIAY)")
-_i_dospam = _src_pvp2.index('kiem_vi_pham(page, acc_name, "phiên đăng Hybrid")')
+_i_dospam = _src_pvp2.index('kiem_vi_pham(page, acc_name, "phiên đăng Hybrid"')
 check("lướt feed trước, dò spam sau", _i_luot < _i_dospam)
 # Con số sống ở MỘT nơi, cạnh chính hàm phụ thuộc vào nó.
 check("không ghi cứng lại con số ở poster",
@@ -3412,9 +3412,9 @@ check("đồng hồ vặn lùi → vẫn cho nuôi, không kẹt",
 # Phiên nuôi phải ĐÁNH MỐC, cho cả hai đường: slot nuôi vốn có và slot thay cho
 # phiên bị chặn. Không thì hai đường đếm nhịp riêng và acc bị nuôi dày gấp đôi.
 check("chạy xong phiên nuôi thì đánh mốc",
-      "db.ghi_nhan_nuoi(acc_name)" in Path("scheduler.py").read_text(encoding="utf-8"))
+      "db.ghi_nhan_nuoi(acc_name" in Path("scheduler.py").read_text(encoding="utf-8"))
 check("scheduler hỏi nhịp trước khi đổi sang nuôi",
-      "db.den_gio_nuoi(item[\"ten_acc\"])" in Path("scheduler.py").read_text(encoding="utf-8"))
+      "db.den_gio_nuoi(item[\"ten_acc\"]" in Path("scheduler.py").read_text(encoding="utf-8"))
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Chặn Composer: hộp thoại đăng bài mở ra nhưng rỗng
@@ -3708,7 +3708,7 @@ _src_db = Path("db.py").read_text(encoding="utf-8")
 check("db.py báo ở đúng 3 chỗ (cửa chung + danh_dau_spam + het_spam)",
       _src_db.count("bao_doi_trang_thai(") == 3)
 check("cửa chung update_account_field có đọc trạng thái cũ trước khi ghi",
-      "SELECT ten_acc, trang_thai FROM accounts WHERE id=?" in _src_db)
+      "SELECT ten_acc, trang_thai, c_user FROM accounts WHERE id=?" in _src_db)
 check("join_groups_runner.py tự báo (nó ghi thẳng bằng SQL)",
       Path("join_groups_runner.py").read_text(encoding="utf-8")
           .count("bao_doi_trang_thai(") == 1)
@@ -4123,7 +4123,12 @@ _loc = _src_kp[_src_kp.rindex("cho = ["):_src_kp.rindex("][:MOI_LUOT]")]
 check("bộ lọc chỉ ĐỌC, không ghi dấu",
       "_con_nghi(" in _loc and "_danh_dau_da_thu" not in _loc)
 check("ghi dấu ngay trước khi thử thật",
-      _src_kp.index("_danh_dau_da_thu(a[") < _src_kp.index("cuu_mot_acc(a)"))
+      _src_kp.index("_danh_dau_da_thu(_khoa(a))") < _src_kp.index("cuu_mot_acc(a)"))
+# Bộ đếm "đã thử" theo c_user, không theo tên — hai nick trùng tên không được
+# chặn lượt cứu của nhau.
+check("đếm 'đã thử' theo c_user",
+      _kp._khoa({"ten_acc": "Tuấn Ngọc", "c_user": "111"}) == "111"
+      and _kp._khoa({"ten_acc": "Tuấn Ngọc", "c_user": ""}) == "Tuấn Ngọc")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Lịch của máy — sáng tự chạy, khuya tự nghỉ
@@ -4629,11 +4634,35 @@ _a2 = db.upsert_account({"ten_acc": "TrungB", "c_user": "666", "xs": "x2",
                          "trang_thai": "Active"})
 check("c_user khác nhau -> không báo trùng", db.acc_trung_c_user(_a1) == [])
 
-db.update_account_field(_a2, "c_user", "555")          # dán nhầm cookie của A
+# Từ 14/10 c_user là KHOÁ xác định nick, nên nhập trùng bị CHẶN ngay ở cửa ghi
+# (kể cả thừa khoảng trắng). Cảnh báo trùng vẫn giữ cho dữ liệu cũ đã lỡ trùng
+# từ trước — dựng thẳng bằng SQL để giả lập.
+for _gt in ("555", " 555 "):
+    try:
+        db.update_account_field(_a2, "c_user", _gt)
+        _chan_tr = False
+    except ValueError as _e_tr:
+        _chan_tr = "TrungA" in str(_e_tr)
+    check(f"nhập c_user đã thuộc nick khác bị CHẶN ({_gt!r})", _chan_tr)
+check("bị chặn thì c_user cũ giữ nguyên",
+      db.get_account_by_id(_a2)["c_user"] == "666")
+try:
+    db.upsert_account({"ten_acc": "TrungC", "c_user": "555", "trang_thai": "Active"})
+    _chan_form_tr = False
+except ValueError:
+    _chan_form_tr = True
+check("form Thêm với c_user đã có bị CHẶN", _chan_form_tr)
+db.upsert_account({"id": _a1, "ten_acc": "TrungA", "c_user": "555"})
+check("form Sửa giữ nguyên c_user của chính nó thì KHÔNG bị chặn",
+      db.get_account_by_id(_a1)["c_user"] == "555")
+
+with db._conn() as _c_tr:                               # dữ liệu cũ đã lỡ trùng
+    _c_tr.execute("UPDATE accounts SET c_user='555' WHERE id=?", (_a2,))
 check("trùng -> A thấy B",  db.acc_trung_c_user(_a1) == ["TrungB"])
 check("trùng -> B thấy A",  db.acc_trung_c_user(_a2) == ["TrungA"])
 
-db.update_account_field(_a2, "c_user", " 555 ")        # thừa khoảng trắng vẫn là trùng
+with db._conn() as _c_tr:                               # thừa khoảng trắng vẫn là trùng
+    _c_tr.execute("UPDATE accounts SET c_user=' 555 ' WHERE id=?", (_a2,))
 check("bỏ qua khoảng trắng thừa", db.acc_trung_c_user(_a1) == ["TrungB"])
 
 db.update_account_field(_a1, "c_user", "")
@@ -4646,7 +4675,7 @@ check("acc không tồn tại -> báo lỗi", _r.get("ok") is False
 
 # Thử ĐƯỢC thì phải tự bật lại Active: dán xs KHÔNG tự làm việc này, nên acc đã
 # từng "Cookie hết hạn" sẽ bị Gen lịch bỏ qua mãi dù cookie đã sống lại.
-_id_ck = db.upsert_account({"ten_acc": "AccThuCookie", "c_user": "111",
+_id_ck = db.upsert_account({"ten_acc": "AccThuCookie", "c_user": "11101",
                             "xs": "xs1", "trang_thai": "Cookie hết hạn"})
 _that_thu = _ce.thu_cookie
 try:
@@ -5664,6 +5693,222 @@ for _f in sorted(Path(".").glob("*.py")):
     check(f"{_f.name}: không nhúng bí mật Google vào mã",
           "client_secret" not in _ma_khong_chu_thich(_f))
 
+
+# ── Hai nick TRÙNG TÊN, khác c_user: mọi thứ phải phân biệt bằng c_user ─────
+# Gặp thật 14/10: hai nick 'Tuấn Ngọc'. Tra theo tên chọn bừa một trong hai —
+# phiên comment 12:42 chạy nhầm sang nick kia, "Cookie hết hạn" đánh nhầm nick,
+# hai nick thay nhau báo hết cookie; `UPDATE ... WHERE ten_acc=?` ghi đè cả hai.
+_TT = "Trùng Tên"
+with db._conn() as _c_tt:
+    _c_tt.execute("DELETE FROM accounts WHERE ten_acc=?", (_TT,))
+    _c_tt.execute("DELETE FROM schedules WHERE ten_acc=?", (_TT,))
+    _c_tt.execute("DELETE FROM join_schedules WHERE ten_acc=?", (_TT,))
+_tt1 = db.upsert_account({"ten_acc": _TT, "c_user": "900001", "xs": "x1",
+                          "trang_thai": "Active"})                      # id nhỏ hơn, không Page
+_tt2 = db.upsert_account({"ten_acc": _TT, "c_user": "900002", "xs": "x2",
+                          "trang_thai": "Active", "ten_page": "P_TT2",
+                          "loai_dang": "Thuê"})
+_tt = lambda i: db.get_account_by_id(i)
+
+check("tra theo c_user ra ĐÚNG nick, dù tên trùng",
+      db.get_account_by_name(_TT, c_user="900002")["id"] == _tt2
+      and db.get_account_by_name(_TT, c_user="900001")["id"] == _tt1)
+
+# Trạng thái chỉ đổi đúng nick được chỉ định — nick kia giữ nguyên.
+db.danh_dau_spam(_TT, "thử", c_user="900002")
+check("gắn cờ Spam chỉ trúng nick được chỉ định",
+      _tt(_tt2)["trang_thai"] == db.TRANG_THAI_SPAM and _tt(_tt1)["trang_thai"] == "Active")
+check("nick kia vẫn được chạy bình thường",
+      db.acc_duoc_chay(_TT, "dang_bai", c_user="900001") == (True, "")
+      and db.acc_duoc_chay(_TT, "dang_bai", c_user="900002")[0] is False)
+check("đang nghỉ spam: chỉ nick bị gắn cờ",
+      db.acc_dang_spam_nghi(_TT, c_user="900002") and not db.acc_dang_spam_nghi(_TT, c_user="900001"))
+db.het_spam(_TT, c_user="900002")
+check("thả spam đúng nick", _tt(_tt2)["trang_thai"] == "Active" and not _tt(_tt2)["nghi_den"])
+for _ in range(3):
+    db.ghi_nhan_phien_dang(_TT, False, ly_do_loi="lỗi thử", c_user="900001")
+check("lịch sử phiên ghi đúng nick",
+      "x" in (_tt(_tt1)["lich_su_phien"] or "") and not (_tt(_tt2)["lich_su_phien"] or ""))
+db.ghi_nhan_nuoi(_TT, c_user="900002")
+check("mốc nuôi ghi đúng nick",
+      _tt(_tt2)["nuoi_lan_cuoi"] and not _tt(_tt1)["nuoi_lan_cuoi"])
+_vp = db.ghi_nhan_vi_pham(_TT, 3, True, da_dang=True, c_user="900002")
+check("ghi vi phạm đúng nick", _vp[0] is True and _tt(_tt2)["so_vi_pham"] == 3
+      and _tt(_tt1)["so_vi_pham"] != 3)
+
+# Suy c_user cho dòng lịch: tên trùng → thu hẹp theo Page, rồi theo Loại đăng.
+with db._conn() as _c_tt:
+    check("suy c_user theo Page khi tên trùng", db.tim_c_user(_c_tt, _TT, "P_TT2") == "900002")
+    check("suy c_user theo nick có Loại đăng", db.tim_c_user(_c_tt, _TT, "") == "900002")
+    _c_tt.execute("INSERT INTO accounts(ten_acc,c_user,trang_thai) VALUES('Tên Riêng TT','900099','Active')")
+    check("tên duy nhất → nick đó", db.tim_c_user(_c_tt, "Tên Riêng TT", "") == "900099")
+    _c_tt.execute("DELETE FROM accounts WHERE ten_acc='Tên Riêng TT'")
+
+# Dòng lịch mang c_user; đánh X chỉ dòng của đúng nick.
+db.replace_schedules("tt_thu", [
+    {"loai": "tt_thu", "stt": 1, "ma_content": "c", "ten_acc": _TT, "ten_page": "",
+     "gio_dang": "23:58", "ma_nhom": "", "tu_khoa": "", "mode": "Hybrid",
+     "trang_thai": "Chờ", "c_user": "900001"},
+    {"loai": "tt_thu", "stt": 2, "ma_content": "c", "ten_acc": _TT, "ten_page": "P_TT2",
+     "gio_dang": "23:59", "ma_nhom": "", "tu_khoa": "", "mode": "Hybrid",
+     "trang_thai": "Chờ"},                                   # thiếu c_user → suy theo Page
+])
+with db._conn() as _c_tt:
+    _dong = {r["stt"]: dict(r) for r in _c_tt.execute(
+        "SELECT * FROM schedules WHERE loai='tt_thu'")}
+check("dòng lịch giữ c_user được truyền", _dong[1]["c_user"] == "900001")
+check("dòng lịch thiếu c_user được suy đúng nick", _dong[2]["c_user"] == "900002")
+_n_x = db.danh_dau_x_con_lai_hom_nay(_TT, loai="tt_thu", c_user="900002")
+with db._conn() as _c_tt:
+    _dong = {r["stt"]: dict(r) for r in _c_tt.execute(
+        "SELECT * FROM schedules WHERE loai='tt_thu'")}
+check("đánh X chỉ dòng của đúng nick",
+      _n_x == 1 and _dong[2]["trang_thai"] == db.TT_LICH_X_TU_DONG and _dong[1]["trang_thai"] == "Chờ")
+
+# Sửa c_user: dòng lịch đi theo.
+db.update_account_field(_tt1, "c_user", "900011")
+with db._conn() as _c_tt:
+    check("sửa c_user → dòng lịch trỏ c_user mới",
+          _c_tt.execute("SELECT c_user FROM schedules WHERE loai='tt_thu' AND stt=1")
+          .fetchone()[0] == "900011")
+
+# Nâng cấp dữ liệu cũ: dòng chưa có c_user được gắn khi khởi động.
+with db._conn() as _c_tt:
+    _c_tt.execute("UPDATE schedules SET c_user='' WHERE loai='tt_thu' AND stt=2")
+db.init_db()
+with db._conn() as _c_tt:
+    check("khởi động gắn c_user cho dòng lịch cũ",
+          _c_tt.execute("SELECT c_user FROM schedules WHERE loai='tt_thu' AND stt=2")
+          .fetchone()[0] == "900002")
+
+# Scheduler: dòng lịch → đúng nick theo c_user, không theo tên.
+check("scheduler tra nick của dòng lịch theo c_user",
+      scheduler._tk({"ten_acc": _TT, "c_user": "900002", "ten_page": ""})["id"] == _tt2
+      and scheduler._tk({"ten_acc": _TT, "c_user": "900011", "ten_page": ""})["id"] == _tt1)
+check("scheduler mở profile / dựng cookie bằng c_user của dòng",
+      scheduler._c_user_cua({"c_user": "900002"}, {"c_user": "900011"}) == "900002")
+_src_sc_tt = Path("scheduler.py").read_text(encoding="utf-8")
+check("scheduler không còn gọi hàm trạng thái theo tên trần",
+      not _re_ls.search(r"db\.(acc_duoc_chay|acc_dang_spam_nghi|den_gio_nuoi|acc_can_tham_do)"
+                        r"\(item\[\"ten_acc\"\](, hd)?\)", _src_sc_tt)
+      and "_mark_cookie_dead(acc_name)" not in _src_sc_tt)
+
+# Gen lịch: hai nick trùng tên đều được xếp slot, mỗi dòng mang c_user riêng.
+_r_gen = _client.post("/api/schedule/thue/gen", json={
+    "start": "08:00", "end": "11:00", "keyword_pool": ["kw"],
+    "acc_settings": [
+        {"ten": _TT, "c_user": "900011", "page": "P_TT1", "nghi": 30, "luc_dang": 2,
+         "c_offset": 0, "first_group_url": "123", "mode": "Hybrid", "contents": ["C1"]},
+        {"ten": _TT, "c_user": "900002", "page": "P_TT2", "nghi": 30, "luc_dang": 2,
+         "c_offset": 0, "first_group_url": "123", "mode": "Hybrid", "contents": ["C1"]},
+    ]}).get_json()
+with db._conn() as _c_tt:
+    _cu_gen = [r[0] for r in _c_tt.execute(
+        "SELECT c_user FROM schedules WHERE loai='thue' AND ten_acc=?", (_TT,))]
+check("Gen: hai nick trùng tên KHÔNG bị gộp — cả hai có slot",
+      _r_gen.get("ok") and {"900011", "900002"} <= set(_cu_gen))
+check("Gen: dòng lịch vẫn hiện tên thật", all(c in ("900011", "900002") for c in _cu_gen))
+
+# Tham gia nhóm: tạo lịch nhanh Market tạo cho CẢ hai nick trùng tên.
+with db._conn() as _c_tt:
+    _c_tt.execute("DELETE FROM join_schedules WHERE ten_acc=?", (_TT,))
+_client.post("/api/join/gen-quick-market", json={})
+with db._conn() as _c_tt:
+    _cu_join = sorted(r[0] for r in _c_tt.execute(
+        "SELECT c_user FROM join_schedules WHERE ten_acc=? AND nguon='MARKET'", (_TT,)))
+check("tạo lịch Market: nick thứ hai trùng tên KHÔNG bị bỏ sót",
+      _cu_join == ["900002", "900011"])
+import join_groups_runner as _jr_tt
+_jr_tt._CU = "900002"
+check("runner tham gia nhóm dùng c_user của dòng lịch, không tra theo tên",
+      _jr_tt._c_user_cua(_TT) == "900002")
+_jr_tt._CU = ""
+check("dò spam / đồng bộ xs nhận c_user",
+      'c_user: str = ""' in Path("fb_common.py").read_text(encoding="utf-8")
+      and "_khoa_acc(acc_name, c_user)" in Path("cookie_exporter.py").read_text(encoding="utf-8"))
+
+with db._conn() as _c_tt:
+    _c_tt.execute("DELETE FROM accounts WHERE ten_acc=?", (_TT,))
+    _c_tt.execute("DELETE FROM schedules WHERE ten_acc=? OR loai='tt_thu'", (_TT,))
+    _c_tt.execute("DELETE FROM join_schedules WHERE ten_acc=?", (_TT,))
+
+# ── Nick sống lại (về Active) → slot X😴 còn lại hôm nay tự về 'Chờ' ─────────
+# Trước đây sửa xong cookie, nick về Active mà lịch vẫn nằm X😴 tới hết ngày.
+_TS = "Song Lai"
+with db._conn() as _c_ts:
+    _c_ts.execute("DELETE FROM accounts WHERE ten_acc=?", (_TS,))
+    _c_ts.execute("DELETE FROM schedules WHERE loai='ts_thu'")
+_ts1 = db.upsert_account({"ten_acc": _TS, "c_user": "900201", "xs": "x",
+                          "trang_thai": "Cookie hết hạn"})
+_ts2 = db.upsert_account({"ten_acc": _TS, "c_user": "900202", "xs": "x",
+                          "trang_thai": "Cookie hết hạn"})       # trùng tên, nick khác
+_dong_ts = lambda stt, gio, tt, cu: {
+    "loai": "ts_thu", "stt": stt, "ma_content": "c", "ten_acc": _TS, "ten_page": "",
+    "gio_dang": gio, "ma_nhom": "", "tu_khoa": "", "mode": "Hybrid",
+    "trang_thai": tt, "c_user": cu}
+db.replace_schedules("ts_thu", [
+    _dong_ts(1, "23:58", db.TT_LICH_X_TU_DONG, "900201"),   # tương lai, tự đánh → về Chờ
+    _dong_ts(2, "23:59", db.TT_LICH_X_TU_DONG, "900201"),   # tương lai, tự đánh → về Chờ
+    _dong_ts(3, "00:00", db.TT_LICH_X_TU_DONG, "900201"),   # đã qua giờ → giữ nguyên
+    _dong_ts(4, "23:57", "X",                   "900201"),   # người dùng tắt tay → giữ
+    _dong_ts(5, "23:56", db.TT_LICH_X_TU_DONG, "900202"),   # nick kia → giữ
+])
+_n_ts = db.update_account_field(_ts1, "trang_thai", "Active")
+with db._conn() as _c_ts:
+    _tt_ts = {r["stt"]: r["trang_thai"] for r in _c_ts.execute(
+        "SELECT stt, trang_thai FROM schedules WHERE loai='ts_thu'")}
+check("về Active: slot X😴 tương lai của đúng nick về Chờ",
+      _n_ts == 2 and _tt_ts[1] == "Chờ" and _tt_ts[2] == "Chờ")
+check("slot đã qua giờ KHÔNG chạy bù", _tt_ts[3] == db.TT_LICH_X_TU_DONG)
+check("slot người dùng tắt tay (X) giữ nguyên", _tt_ts[4] == "X")
+check("nick trùng tên khác KHÔNG bị đụng", _tt_ts[5] == db.TT_LICH_X_TU_DONG)
+check("Active → Active không trả gì thêm",
+      db.update_account_field(_ts1, "trang_thai", "Active") == 0)
+
+# Dán xs mới cho nick "Cookie hết hạn" → server tự thử ở nền.
+import time as _time_ts
+import cookie_exporter as _ce_ts
+_thu_that = _ce_ts.thu_cookie
+def _cho_ts(dk, giay=5):
+    for _ in range(int(giay / 0.1)):
+        if dk():
+            return True
+        _time_ts.sleep(0.1)
+    return False
+try:
+    _ce_ts.thu_cookie = lambda *a, **k: (True, "Cookie còn dùng được")
+    _r_ts = _client.post(f"/api/accounts/{_ts2}/field",
+                         json={"field": "xs", "value": "xs_moi"}).get_json()
+    check("dán xs cho nick hết cookie → tự thử ở nền", _r_ts.get("dang_thu") is True)
+    check("thử được → nick tự về Active",
+          _cho_ts(lambda: db.get_account_by_id(_ts2)["trang_thai"] == "Active"))
+    with db._conn() as _c_ts:
+        check("… kéo theo slot X😴 tương lai của nick đó về Chờ",
+              _cho_ts(lambda: _c_ts.execute("SELECT trang_thai FROM schedules "
+                                            "WHERE loai='ts_thu' AND stt=5").fetchone()[0] == "Chờ"))
+    check("… và báo kết quả qua kênh cảnh báo",
+          _cho_ts(lambda: "dùng được" in (db.get_account_by_id(_ts2)["canh_bao_moi"] or "")))
+
+    db.update_account_field(_ts2, "trang_thai", "Cookie hết hạn")
+    _ce_ts.thu_cookie = lambda *a, **k: (False, "Facebook không nhận cookie — cần lấy xs mới")
+    _client.post(f"/api/accounts/{_ts2}/field", json={"field": "xs", "value": "xs_hong"})
+    check("thử hỏng → báo lý do",
+          _cho_ts(lambda: "chưa dùng được" in (db.get_account_by_id(_ts2)["canh_bao_moi"] or "")))
+    check("thử hỏng → giữ nguyên Cookie hết hạn",
+          db.get_account_by_id(_ts2)["trang_thai"] == "Cookie hết hạn")
+
+    _r_ts = _client.post(f"/api/accounts/{_ts1}/field",
+                         json={"field": "xs", "value": "xs_khac"}).get_json()
+    check("nick đang Active thì dán xs KHÔNG tự thử", _r_ts.get("dang_thu") is False)
+    _r_ts = _client.post(f"/api/accounts/{_ts2}/field",
+                         json={"field": "ghi_chu", "value": "abc"}).get_json()
+    check("sửa ô khác xs KHÔNG tự thử", _r_ts.get("dang_thu") is False)
+finally:
+    _ce_ts.thu_cookie = _thu_that
+_cho_ts(lambda: not server._DANG_THU_XS)
+with db._conn() as _c_ts:
+    _c_ts.execute("DELETE FROM accounts WHERE ten_acc=?", (_TS,))
+    _c_ts.execute("DELETE FROM schedules WHERE loai='ts_thu'")
 
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):

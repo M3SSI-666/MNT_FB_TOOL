@@ -51,8 +51,19 @@ async def _human_delay(min_ms=600, max_ms=1800):
     await asyncio.sleep(random.randint(min_ms, max_ms) / 1000)
 
 
+# c_user của phiên đang chạy, đọc từ CHÍNH dòng lịch tham gia nhóm. Tên acc có
+# thể trùng (gặp thật: hai nick 'Tuấn Ngọc') — tra theo tên là ra nick có id
+# nhỏ hơn, mở nhầm profile, tiêm nhầm cookie, đánh dấu nhầm "Cookie hết hạn".
+_CU = ""
+
+
 def _c_user_cua(acc_name: str) -> str:
-    """c_user của acc — cần để tìm ĐÚNG profile và dựng cookie mới nhất từ DB."""
+    """c_user của acc — cần để tìm ĐÚNG profile và dựng cookie mới nhất từ DB.
+
+    Ưu tiên c_user của dòng lịch (`_CU`); chỉ dòng cũ chưa gắn mới tra theo tên.
+    """
+    if _CU:
+        return _CU
     with _conn() as con:
         r = con.execute("SELECT c_user FROM accounts WHERE ten_acc=? LIMIT 1",
                         (acc_name,)).fetchone()
@@ -721,14 +732,17 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
                 with _conn() as con:
                     # Đọc trạng thái cũ trước khi ghi đè: chỉ báo khi acc đang
                     # CHẠY mà hết cookie, không báo lại khi nó vốn đã hết rồi.
+                    # Đúng nick theo c_user, không theo tên (xem `_CU`).
+                    from db import _khoa_acc
+                    k, kp = _khoa_acc(acc_name, _c_user_cua(acc_name))
                     _r = con.execute("SELECT trang_thai FROM accounts "
-                                     "WHERE ten_acc=? LIMIT 1", (acc_name,)).fetchone()
+                                     f"WHERE {k} LIMIT 1", kp).fetchone()
                     tt_cu = (_r["trang_thai"] or "") if _r else ""
                     con.execute(
                         "UPDATE accounts SET trang_thai='Cookie hết hạn', "
-                        "canh_bao_moi=? WHERE ten_acc=?",
+                        f"canh_bao_moi=? WHERE {k}",
                         (f"'{acc_name}' hết cookie khi đi tham gia nhóm — "
-                         f"lấy lại cookie rồi đổi Trạng thái về Active", acc_name))
+                         f"lấy lại cookie rồi đổi Trạng thái về Active", *kp))
             except Exception as e:
                 _log("warning", f"⚠️  Không đánh dấu được acc hết cookie: {e}")
             try:
@@ -877,6 +891,15 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
 
 def run_join_schedule(schedule_id: int, acc_name: str, page_uid: str, nguon: str = ""):
     """Sync wrapper — gọi từ scheduler."""
-    global _ACC
+    global _ACC, _CU
     _ACC = acc_name          # mọi dòng log của phiên này gắn kèm tên acc
+    # Nick của phiên = c_user ghi trên dòng lịch (dòng cũ chưa gắn thì rỗng →
+    # tra theo tên như trước).
+    try:
+        with _conn() as con:
+            r = con.execute("SELECT c_user FROM join_schedules WHERE id=?",
+                            (schedule_id,)).fetchone()
+        _CU = ((r[0] if r else "") or "").strip()
+    except Exception:
+        _CU = ""
     asyncio.run(_run_join(schedule_id, acc_name, page_uid, nguon))

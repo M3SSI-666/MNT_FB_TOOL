@@ -474,7 +474,7 @@ async def _run_crosspost(
 
         # Facebook gỡ bài rồi mới đổ thông báo về — cooldown ở trên vừa hay là
         # quãng chờ cần thiết, nên dò ngay sau đó.
-        await kiem_vi_pham(page, acc_name, "phiên đăng VIA")
+        await kiem_vi_pham(page, acc_name, "phiên đăng VIA", c_user=c_user)
 
         logger.info(f"  ✅ Đóng Chrome")
         await ctx.close()

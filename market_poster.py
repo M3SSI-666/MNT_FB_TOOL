@@ -494,7 +494,7 @@ async def _run_marketplace(acc_name: str, message: str, local_photos: list,
             await dong_dialog_canh_bao(page)
             await browse_and_like(page, duration_sec=random.randint(*KET_GIAY),
                                   max_likes=KET_LIKE)
-            await kiem_vi_pham(page, acc_name, "phiên Marketplace")
+            await kiem_vi_pham(page, acc_name, "phiên Marketplace", c_user=c_user)
         except Exception as e:
             logger.warning(f"    ⚠️  Kết phiên không trọn vẹn: {str(e)[:60]}")
 

@@ -174,6 +174,12 @@ def cuu_mot_acc(acc: dict) -> tuple[bool, str]:
         return False, str(e)[:90]
 
 
+def _khoa(a: dict) -> str:
+    """Khoá đếm "đã thử": c_user, không phải tên — hai nick trùng tên (gặp thật:
+    hai 'Tuấn Ngọc') thì cứu nick này khiến nick kia bị coi là đã thử."""
+    return (a.get("c_user") or "").strip() or a["ten_acc"]
+
+
 def quet() -> int:
     """
     Quét mọi acc đang 'Cookie hết hạn' và thử cứu. Trả số acc cứu được.
@@ -183,7 +189,7 @@ def quet() -> int:
     try:
         from db import get_accounts
         cho = [a for a in get_accounts(trang_thai="Cookie hết hạn")
-               if not _con_nghi(a["ten_acc"])][:MOI_LUOT]
+               if not _con_nghi(_khoa(a))][:MOI_LUOT]
         if not cho:
             return 0
 
@@ -191,7 +197,7 @@ def quet() -> int:
         for a in cho:
             # Ghi dấu ngay trước khi thử, không ghi lúc lọc: acc bị `[:MOI_LUOT]`
             # cắt ra ngoài phải được thử ở lượt sau chứ không bị khoá oan.
-            _danh_dau_da_thu(a["ten_acc"])
+            _danh_dau_da_thu(_khoa(a))
             ok, vi_sao = cuu_mot_acc(a)
             if ok:
                 duoc += 1
