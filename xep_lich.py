@@ -279,3 +279,44 @@ def thong_ke(ra: list) -> dict:
         "gap_tb":  round(tb, 2),
         "lech_chuan": round((sum((g - tb) ** 2 for g in gaps) / len(gaps)) ** 0.5, 2),
     }
+
+
+def rai_tu_khoa(rows: list, pool: list, khoa: str = "ten_acc", can=None) -> None:
+    """Gán từ khoá cho các dòng lịch, XEN KẼ theo thứ tự thời gian của cả bảng.
+
+    Hai luật, theo thứ tự ưu tiên:
+      1. Hai dòng LIỀN NHAU không trùng từ khoá — quay vòng A → B → C → D → A…
+      2. Mỗi nick cũng quay ĐỀU đủ các từ khoá: ưu tiên từ khoá nick đó dùng ít
+         nhất, và không lặp lại từ khoá nó vừa dùng ở phiên trước.
+
+    Bản cũ chia theo nick: nick thứ i bắt đầu ở từ khoá `i × n_kw ÷ n_nick`
+    rồi tự tiến một bước mỗi phiên của nó. 11 nick, 4 từ khoá → điểm bắt đầu
+    0,0,0,1,1,1,2,2,2,3,3 — ba nick đứng liền nhau dùng chung một từ khoá, bảng
+    lịch thành từng cụm 3 dòng trùng nhau (người dùng thấy 13/10).
+
+    Chỉ quay vòng chung thì không đủ: số nick chia hết cho số từ khoá (8 nick,
+    4 từ khoá) là mỗi nick dính CỐ ĐỊNH một từ khoá cả ngày — luật 2 chặn việc đó.
+
+    `rows` phải xếp theo thời gian. `can(row)` → dòng có cần từ khoá không;
+    dòng không cần thì để trống và không làm lệch vòng.
+    """
+    pool = [k.strip() for k in (pool or []) if k and k.strip()]
+    n = len(pool)
+    if not n:
+        return
+    g, truoc = 0, None
+    cuoi_acc, dem_acc = {}, {}
+    for r in rows:
+        if can is not None and not can(r):
+            r["tu_khoa"] = ""
+            continue
+        acc = r.get(khoa, "")
+        dem = dem_acc.setdefault(acc, [0] * n)
+        vong = [(g + j) % n for j in range(n)]
+        ung = ([i for i in vong if i != truoc and i != cuoi_acc.get(acc)]
+               or [i for i in vong if i != truoc] or vong)
+        i = min(ung, key=lambda x: (dem[x], vong.index(x)))
+        r["tu_khoa"] = pool[i]
+        dem[i] += 1
+        cuoi_acc[acc] = truoc = i
+        g = (i + 1) % n

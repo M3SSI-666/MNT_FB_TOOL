@@ -5910,6 +5910,38 @@ with db._conn() as _c_ts:
     _c_ts.execute("DELETE FROM accounts WHERE ten_acc=?", (_TS,))
     _c_ts.execute("DELETE FROM schedules WHERE loai='ts_thu'")
 
+# ── Từ khoá XEN KẼ theo thời gian, mỗi nick quay đều ─────────────────────────
+# Bản cũ chia theo nick: 11 nick, 4 từ khoá → ba nick liền nhau chung một từ
+# khoá, bảng lịch thành cụm 3 dòng trùng nhau (người dùng thấy 13/10).
+from xep_lich import rai_tu_khoa as _rtk, phan_bo_lich as _pbl
+_KW = ["Chợ cư dân", "Cộng", "Làng", "times city & park hill"]
+for _so in (11, 8, 4):          # 8 nick / 4 từ khoá: ca dễ dính cố định một từ khoá
+    _moc = _pbl([{"ten": f"N{i}", "nghi": 12} for i in range(_so)], 5 * 60, 25 * 60)
+    _dong = [{"ten_acc": t} for _, t in _moc]
+    _rtk(_dong, _KW)
+    check(f"{_so} nick: hai dòng liền nhau KHÔNG trùng từ khoá",
+          all(a["tu_khoa"] != b["tu_khoa"] for a, b in zip(_dong, _dong[1:])))
+    _theo = {}
+    for r in _dong:
+        _theo.setdefault(r["ten_acc"], []).append(r["tu_khoa"])
+    check(f"{_so} nick: mỗi nick quay ĐỀU đủ các từ khoá (lệch ≤ 1)",
+          all(max(v.count(k) for k in _KW) - min(v.count(k) for k in _KW) <= 1
+              for v in _theo.values()))
+    check(f"{_so} nick: tổng mỗi từ khoá đều nhau (lệch ≤ 1)",
+          max(sum(r["tu_khoa"] == k for r in _dong) for k in _KW)
+          - min(sum(r["tu_khoa"] == k for r in _dong) for k in _KW) <= 1)
+_dong = [{"ten_acc": "A", "mode": "Hybrid"}, {"ten_acc": "B", "mode": "PAGE"},
+         {"ten_acc": "C", "mode": "Hybrid"}]
+_rtk(_dong, _KW, can=lambda r: r["mode"] in ("Via", "Hybrid"))
+check("dòng không cần từ khoá để trống, không làm lệch vòng",
+      _dong[1]["tu_khoa"] == "" and _dong[0]["tu_khoa"] == "Chợ cư dân"
+      and _dong[2]["tu_khoa"] == "Cộng")
+_d1 = [{"ten_acc": "A"}]; _rtk(_d1, [])
+check("không có từ khoá → không gán gì", "tu_khoa" not in _d1[0])
+check("Gen lịch dùng cách chia mới, bỏ con trỏ theo nick",
+      "rai_tu_khoa(schedule, keyword_pool" in Path("server.py").read_text(encoding="utf-8")
+      and "keyword_cursor" not in Path("server.py").read_text(encoding="utf-8"))
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:

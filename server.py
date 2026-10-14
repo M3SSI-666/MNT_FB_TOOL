@@ -1875,8 +1875,6 @@ def api_schedule_gen(loai):
         return jsonify({"ok": False,
                         "error": "Thiếu 'Nhóm đầu' cho acc: " + ", ".join(thieu)})
 
-    n_kw   = len(keyword_pool) if keyword_pool else 1
-    n_accs = len(acc_settings)
 
     contents = acc_settings[0].get("contents", []) if acc_settings else []
     if not contents:
@@ -1888,7 +1886,6 @@ def api_schedule_gen(loai):
 
     n_contents     = len(contents)
     content_cursor = {a["ten"]: a.get("c_offset", 0) for a in acc_settings}
-    keyword_cursor = {a["ten"]: (i * n_kw // n_accs) % n_kw for i, a in enumerate(acc_settings)}
     theo_ten       = {a["ten"]: a for a in acc_settings}
 
     # Phân bổ thời điểm — phiên comment tính ngang phiên đăng bài, cùng một
@@ -1905,12 +1902,6 @@ def api_schedule_gen(loai):
         content_cursor[ten] = (cur_c + 1) % n_contents
 
         mode_acc = acc.get("mode", "Hybrid")
-        cur_kw   = keyword_cursor[ten]
-        if keyword_pool and mode_acc in ("Via", "Hybrid"):
-            tu_khoa = keyword_pool[cur_kw % n_kw]
-            keyword_cursor[ten] = (cur_kw + 1) % n_kw
-        else:
-            tu_khoa = ""
 
         # ma_nhom = URL/UID nhóm đầu để mở composer (đã validate là luôn có).
         ma_nhom_val = acc.get("first_group_url", "").strip()
@@ -1923,13 +1914,20 @@ def api_schedule_gen(loai):
             "ten_page":   acc["page"],
             "gio_dang":   min_to_time(t_min),
             "ma_nhom":    ma_nhom_val,
-            "tu_khoa":    tu_khoa,
+            "tu_khoa":    "",      # gán ở dưới, xen kẽ theo thời gian
             "mode":       mode_acc,
             "trang_thai": "Chờ",
         })
 
     if not schedule:
         return jsonify({"ok": False, "error": "Không tạo được lịch"})
+
+    # Từ khoá: XEN KẼ theo thứ tự thời gian của cả bảng, và mỗi nick quay đều
+    # đủ các từ khoá (xem xep_lich.rai_tu_khoa). Bản cũ chia theo nick nên ba
+    # nick liền nhau dùng chung một từ khoá — bảng thành cụm 3 dòng trùng nhau.
+    from xep_lich import rai_tu_khoa
+    rai_tu_khoa(schedule, keyword_pool,
+                can=lambda r: r.get("mode") in ("Via", "Hybrid"))
 
     # ── Nuôi nick: chuyển một số slot của acc bật nuôi thành phiên nuôi ──
     # Nick càng non → chuyển càng nhiều (đăng ít, nuôi nhiều). Đọc thẳng từ DB
