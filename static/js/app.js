@@ -2203,10 +2203,10 @@ async function jcTrangThai(nguon, napLai=true){
 // hàm. Tách làm hai bản là tạo chỗ cho chúng lệch nhau.
 const _UIDG = {
     "":       {dan:"uid-dan",  acc:"uid-acc",  nutQuet:"uid-nut-quet",  tt:"uid-quet-tt",
-               quetHet:"uid-quet-het",  hienChrome:"uid-hien-chrome",
+               quetHet:"uid-quet-het",
                nap:()=>loadUidGroups(), ten:"UID Nhóm"},
     "MARKET": {dan:"uidm-dan", acc:"uidm-acc", nutQuet:"uidm-nut-quet", tt:"uidm-quet-tt",
-               quetHet:"uidm-quet-het", hienChrome:"uidm-hien-chrome",
+               quetHet:"uidm-quet-het",
                nap:()=>loadUidMarket(), ten:"UID Marketplace"},
 };
 const _uidHen = {};
@@ -2241,8 +2241,7 @@ async function uidQuet(ma){
     try{
         const r=await API.uidQuet({
             acc, ma_nhom: ma,
-            quet_het:    document.getElementById(c.quetHet)?.checked||false,
-            hien_chrome: document.getElementById(c.hienChrome)?.checked||false});
+            quet_het:    document.getElementById(c.quetHet)?.checked||false});
         if(!r.ok){ Toast.error(r.error); return; }
         Toast.success(`Đang quét ${c.ten} bằng nick ${acc}`);
         if(!_uidHen[ma]) _uidHen[ma]=setInterval(()=>_uidQuetTT(ma), 2000);

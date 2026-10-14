@@ -5398,10 +5398,11 @@ check("server chặn chạy chồng hai lượt quét",
       "_quet_dang_chay(" in _src_srv_q)
 check("có nút quét và ô chọn nick",
       'id="uidm-nut-quet"' in _html_mkt and 'id="uidm-acc"' in _html_mkt)
-# Mặc định chạy ẩn cho khỏi vướng, nhưng phải có đường xem tận mắt — lần đầu
-# dùng mà không nhìn được nó làm gì thì không ai dám tin.
-check("có ô tích hiện Chrome", 'id="uidm-hien-chrome"' in _html_mkt
-      and "hien_chrome:" in _ajs_mkt)
+# Quét UID luôn chạy ẩn — đã BỎ ô tích "hiện Chrome" theo yêu cầu (không ai cần
+# nhìn tận mắt nó mở từng nhóm). Giữ phép kiểm ở dạng đảo để không ai thêm lại.
+check("đã bỏ ô tích hiện Chrome khỏi quét UID",
+      'uidm-hien-chrome' not in _html_mkt and 'uid-hien-chrome' not in _html_mkt
+      and "hien_chrome:" not in _ajs_mkt)
 # Sắp xếp theo số thành viên, ba trạng thái. Giữ cả "thứ tự nhập" vì đó là thứ
 # tự Duong tự duyệt từng nhóm, không phải danh sách ngẫu nhiên.
 check("cột Thành viên bấm được để sắp xếp",

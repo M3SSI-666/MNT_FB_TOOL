@@ -168,14 +168,14 @@
             <!-- ══ UID Nhóm ════════════════════════════════ -->
             <div class="page" id="page-uid-groups" style="display:none">
                 <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;max-width:680px">
-                    Dán link nhóm vào đây, mỗi dòng một nhóm — thêm <code>| Tên nhóm</code> phía
-                    sau nếu muốn ghi sẵn tên. Tên và số thành viên để trống thì bấm
-                    <b>Lấy tên &amp; số thành viên</b> cho nó tự đọc về.
+                    <b>1.</b> Dán link nhóm vào ô dưới (mỗi dòng một nhóm) rồi bấm <b>+ Thêm</b>.
+                    <b>2.</b> Bấm <b>Lấy tên &amp; số thành viên</b> để tự quét tên nhóm và số
+                    thành viên về.
                 </p>
                 <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-start">
                     <textarea class="input" id="uid-dan" rows="3" style="flex:1;min-width:320px;
                               font-family:var(--font-mono);font-size:11px"
-                              placeholder="https://www.facebook.com/groups/311375961636397/&#10;https://www.facebook.com/groups/homestaytimescity/ | Homestay Times City"></textarea>
+                              placeholder="https://www.facebook.com/groups/311375961636397/&#10;https://www.facebook.com/groups/homestaytimescity/"></textarea>
                     <button class="btn btn-primary" onclick="uidThem('')">+ Thêm</button>
                     <button class="btn btn-ghost" onclick="loadUidGroups()" title="Refresh">🔄</button>
                 </div>
@@ -185,9 +185,6 @@
                     <select class="input" id="uid-acc" style="width:170px;font-size:12px"></select>
                     <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:5px">
                         <input type="checkbox" id="uid-quet-het"> quét lại cả dòng đã có tên
-                    </label>
-                    <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:5px">
-                        <input type="checkbox" id="uid-hien-chrome"> hiện Chrome
                     </label>
                     <span id="uid-quet-tt" style="font-size:12px;color:var(--text-muted)"></span>
                     <button class="btn btn-ghost" onclick="exportUidGroupsExcel('')">📤 Xuất Excel</button>
@@ -217,13 +214,14 @@
                  nên hai danh sách không lẫn nhau. -->
             <div class="page" id="page-uid-market" style="display:none">
                 <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;max-width:680px">
-                    Nhóm đã được duyệt cho Marketplace. Dán link vào đây, mỗi dòng một nhóm —
-                    thêm <code>| Tên nhóm</code> phía sau nếu muốn ghi sẵn tên.
+                    Nhóm đã được duyệt cho Marketplace.
+                    <b>1.</b> Dán link nhóm vào ô dưới (mỗi dòng một nhóm) rồi bấm <b>+ Thêm</b>.
+                    <b>2.</b> Bấm <b>Lấy tên &amp; số thành viên</b> để tự quét về.
                 </p>
                 <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-start">
                     <textarea class="input" id="uidm-dan" rows="3" style="flex:1;min-width:320px;
                               font-family:var(--font-mono);font-size:11px"
-                              placeholder="https://www.facebook.com/groups/311375961636397/&#10;https://www.facebook.com/groups/homestaytimescity/ | Homestay Times City"></textarea>
+                              placeholder="https://www.facebook.com/groups/311375961636397/&#10;https://www.facebook.com/groups/homestaytimescity/"></textarea>
                     <button class="btn btn-primary" onclick="uidThem('MARKET')">+ Thêm</button>
                     <button class="btn btn-ghost" onclick="loadUidMarket()" title="Refresh">🔄</button>
                 </div>
@@ -233,10 +231,6 @@
                     <select class="input" id="uidm-acc" style="width:180px;font-size:12px"></select>
                     <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:5px">
                         <input type="checkbox" id="uidm-quet-het"> quét lại cả dòng đã có tên
-                    </label>
-                    <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:5px"
-                           title="Mặc định Chrome chạy ẩn. Bật để nhìn tận mắt nó mở từng nhóm.">
-                        <input type="checkbox" id="uidm-hien-chrome"> hiện Chrome
                     </label>
                     <span id="uidm-quet-tt" style="font-size:12px;color:var(--text-muted)"></span>
                     <button class="btn btn-ghost" onclick="exportUidGroupsExcel('MARKET')">📤 Xuất Excel</button>

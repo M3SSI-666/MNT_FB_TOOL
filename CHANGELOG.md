@@ -10,6 +10,18 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.49.0 — 14/10/2026
+
+**Gọn lại tab UID Nhóm và UID Marketplace**
+
+- **Hướng dẫn rõ hơn:** chỉ còn 2 bước — (1) dán link nhóm rồi bấm Thêm, (2) bấm
+  Lấy tên & số thành viên để tự quét về.
+- **Ô dán link gọn:** chỉ cần dán link nhóm, không phải gõ thêm tên nhóm phía
+  sau nữa — tên nhóm tự quét về khi bấm Lấy tên & số thành viên.
+- **Bỏ ô tích "hiện Chrome":** quét luôn chạy ẩn cho gọn.
+
+---
+
 ## v2.48.0 — 14/10/2026
 
 **Sửa lỗi nghiêm trọng: hai nick trùng tên bị lẫn vào nhau**
