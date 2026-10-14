@@ -10,7 +10,37 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
-## v2.47.2 — 14/10/2026
+## v2.48.0 — 14/10/2026
+
+**Sửa lỗi nghiêm trọng: hai nick trùng tên bị lẫn vào nhau**
+
+Phát hiện ngày 14/10: hai nick cùng tên (ví dụ hai "Tuan Ngoc" khác tài khoản)
+làm phần mềm **nhầm nick này sang nick kia** — một phiên comment chạy nhầm sang
+nick khác, "Cookie hết hạn" đánh nhầm nick, và cập nhật trạng thái ghi đè lên
+**cả hai** nick cùng lúc.
+
+Nay phần mềm **phân biệt nick bằng c_user** (mã tài khoản thật), tên chỉ để
+hiển thị. Hai nick trùng tên không còn bị gộp hay làm nhầm sang nhau — mọi thao
+tác (đăng, comment, dò spam, đánh dấu nghỉ/hết cookie, nuôi) chỉ tác động đúng
+một nick.
+
+> Nếu bạn có nhiều nick trùng tên, **bản này bắt buộc** để tránh chạy nhầm nick.
+
+Thêm hai cải tiến đi kèm:
+
+- **Nick sống lại tự chạy tiếp:** nick vừa bật về Active (thử cookie OK / tự cứu
+  phiên / sửa tay) thì các slot còn lại trong ngày tự về "Chờ" và chạy tiếp,
+  thay vì ngồi im tới hết ngày như trước.
+- **Tự thử lại cookie:** dán xs mới cho nick "Cookie hết hạn" thì phần mềm tự
+  thử ở nền; được thì tự về Active, hỏng thì giữ nguyên và báo lý do.
+
+**Gen lịch: từ khóa rải đều hơn**
+
+Trước đây chia từ khóa theo nick nên vài nick liền nhau trong lịch dùng chung
+một từ khóa, thành cụm trùng. Nay rải từ khóa theo thời gian của cả bảng: hai
+dòng liền nhau không trùng từ khóa, và mỗi nick quay đều qua các từ khóa (không
+bị kẹt một từ khóa cả ngày). Đo trên 4 từ khóa thật với 11 / 8 / 4 nick: không
+dòng liền nhau nào trùng, mỗi nick lệch tối đa 1 lần.
 
 **Sửa tiếp: xuất Excel UID Nhóm báo HTTP 400**
 

@@ -27,6 +27,10 @@ db.init_db()
 # Scheduler cần env var này lúc import, nếu không sẽ sys.exit(1)
 os.environ.setdefault("SCHEDULER_LOAI", "homestay")
 
+# Báo chế độ test: route xuất Excel sẽ ghi vào thư mục tạm chứ KHÔNG đổ file
+# rác vào Downloads thật, và KHÔNG bật cửa sổ Explorer mỗi lần chạy bài kiểm.
+os.environ["MNT_TEST"] = "1"
+
 _passed = _failed = 0
 
 

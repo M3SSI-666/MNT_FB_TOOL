@@ -8,6 +8,7 @@ import sys
 import json
 import time
 import subprocess
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from flask import Flask, jsonify, render_template, request, send_from_directory
@@ -840,14 +841,23 @@ EXPORT_TEXT_COLUMNS = {"password", "c_user", "xs", "twofa",
 
 
 def _export_dir() -> Path:
-    """Thư mục lưu file xuất — Downloads của người dùng, không có thì cạnh app."""
+    """Thư mục lưu file xuất — Downloads của người dùng, không có thì cạnh app.
+
+    Lúc chạy bài kiểm (MNT_TEST=1) thì ghi vào thư mục tạm, KHÔNG đổ file .xlsx
+    rác vào Downloads thật — bài kiểm có gọi route xuất để kiểm HTTP 200.
+    """
+    if os.environ.get("MNT_TEST") == "1":
+        d = Path(tempfile.gettempdir()) / "mnt_test_export"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
     d = Path.home() / "Downloads"
     return d if d.is_dir() else BASE_DIR
 
 
 def _reveal_in_explorer(path: Path):
     """Mở Explorer và chọn sẵn file vừa lưu (chỉ Windows, lỗi thì bỏ qua)."""
-    if sys.platform != "win32":
+    # Bài kiểm gọi route xuất để kiểm HTTP 200 — đừng bật Explorer mỗi lần chạy.
+    if sys.platform != "win32" or os.environ.get("MNT_TEST") == "1":
         return
     try:
         # explorer trả exit code 1 kể cả khi thành công → không dùng check=True
