@@ -631,8 +631,13 @@ async function tgXemTruoc(){
 }
 
 // ── Lịch của máy ─────────────────────────────────────────────────
-const LM_RUNNER = [["homestay","🏠 Homestay"],["thue","🏡 Thuê"],["ban","💰 Bán"],
-                   ["page","📄 Đăng Page"],["nuoi","🌱 Nuôi nick"]];
+// Runner tick được = các mảng content ĐANG CÓ (tên theo tab Content) + page +
+// nuôi. Trước đây ghi cứng "Homestay/Thuê/Bán": đổi tên mảng không theo, mảng
+// mới thêm không tick được, mảng đã xoá vẫn hiện.
+function _lmRunner(){
+    return _loaiBat().map(d=>[d.key, `${_LICH_ICON[d.key]||"📦"} ${d.nhan||d.key}`])
+        .concat([["page","📄 Đăng Page"],["nuoi","🌱 Nuôi nick"]]);
+}
 
 function lmGap(hien){
     const bang = document.getElementById("lm-bang");
@@ -723,7 +728,7 @@ async function lmNap(){
         const bat = String(s.lm_bat || "0") === "1";
         const chon = (s.lm_runner || "").split(",").filter(Boolean);
 
-        el("lm-runner").innerHTML = LM_RUNNER.map(([k,ten]) =>
+        el("lm-runner").innerHTML = _lmRunner().map(([k,ten]) =>
             `<label style="display:flex;align-items:center;gap:5px;cursor:pointer">
                 <input type="checkbox" value="${k}" ${chon.includes(k)?"checked":""}
                        onchange="lmLuu()"> ${ten}
@@ -1705,83 +1710,113 @@ async function importPagesExcel(e){
 }
 
 // ── Dialog (thay prompt/confirm của trình duyệt bằng modal in-app) ──
+// Hộp `prompt()`/`confirm()` của trình duyệt ghi "localhost:8080 says", lệch hẳn
+// giao diện, không báo lỗi khi gõ. Hộp này theo đúng màu của app (main.css,
+// lớp .app-dlg*), kiểm tra ngay khi gõ, Enter = đồng ý, Esc = huỷ.
+//
+// Gọi kiểu cũ vẫn được: Dialog.prompt(tiêu đề, giá trị, lời nhắn) /
+// Dialog.confirm(tiêu đề, lời nhắn, {danger, okText}). Kiểu mới truyền object:
+//   {title, message, icon, html, label, value, placeholder, maxLength,
+//    validate(v) → "" hoặc câu báo lỗi, okText, cancelText, danger}
+// `html` chỉ nhận chuỗi do code tự dựng (đã _escapeHtml phần dữ liệu).
 const Dialog = {
     _ensure(){
-        if(document.getElementById("app-dialog-overlay")) return;
+        if(document.getElementById("app-dlg")) return;
         const ov = document.createElement("div");
-        ov.id = "app-dialog-overlay";
-        ov.style.cssText = "display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:600";
-        const panel = document.createElement("div");
-        panel.id = "app-dialog-panel";
-        panel.style.cssText = "display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);"
-            + "width:400px;max-width:92vw;background:var(--bg-secondary);border:1px solid var(--border);"
-            + "border-radius:var(--radius);z-index:601;box-shadow:var(--shadow-md);overflow:hidden";
-        panel.innerHTML = `
-            <div style="padding:18px 20px 4px">
-                <div id="app-dialog-title" style="font-size:15px;font-weight:700;margin-bottom:6px"></div>
-                <div id="app-dialog-msg" style="font-size:13px;color:var(--text-secondary);line-height:1.5"></div>
+        ov.id = "app-dlg-ov"; ov.className = "app-dlg-ov";
+        const d = document.createElement("div");
+        d.id = "app-dlg"; d.className = "app-dlg";
+        d.setAttribute("role", "dialog"); d.setAttribute("aria-modal", "true");
+        d.innerHTML = `
+            <div class="app-dlg__head">
+                <div class="app-dlg__icon" id="app-dlg-icon"></div>
+                <div style="min-width:0;flex:1">
+                    <div class="app-dlg__title" id="app-dlg-title"></div>
+                    <div class="app-dlg__sub" id="app-dlg-sub"></div>
+                </div>
             </div>
-            <div id="app-dialog-input-wrap" style="padding:8px 20px 0;display:none">
-                <input id="app-dialog-input" style="width:100%;background:var(--bg-input);border:1px solid var(--border);
-                    border-radius:var(--radius-sm);padding:9px 11px;color:var(--text-primary);font-size:13px;outline:none">
+            <div class="app-dlg__body" id="app-dlg-body"></div>
+            <div class="app-dlg__field" id="app-dlg-field">
+                <label class="app-dlg__label" id="app-dlg-label" for="app-dlg-input"></label>
+                <input class="app-dlg__input" id="app-dlg-input" autocomplete="off" spellcheck="false">
+                <div class="app-dlg__meta">
+                    <span class="app-dlg__err" id="app-dlg-err"></span><span id="app-dlg-dem"></span>
+                </div>
             </div>
-            <div style="display:flex;gap:8px;justify-content:flex-end;padding:18px 20px">
-                <button id="app-dialog-cancel" class="btn btn-ghost">Huỷ</button>
-                <button id="app-dialog-ok" class="btn btn-primary">OK</button>
+            <div class="app-dlg__foot">
+                <button class="btn btn-ghost" id="app-dlg-huy">Huỷ</button>
+                <button class="btn btn-primary" id="app-dlg-ok">OK</button>
             </div>`;
-        document.body.appendChild(ov);
-        document.body.appendChild(panel);
+        document.body.append(ov, d);
     },
-    _open(opts){
+    _open(o){
         this._ensure();
-        const ov    = document.getElementById("app-dialog-overlay");
-        const panel = document.getElementById("app-dialog-panel");
-        const inpWrap = document.getElementById("app-dialog-input-wrap");
-        const inp   = document.getElementById("app-dialog-input");
-        const okBtn = document.getElementById("app-dialog-ok");
-        const cancelBtn = document.getElementById("app-dialog-cancel");
+        const $ = id => document.getElementById(id);
+        const ov = $("app-dlg-ov"), d = $("app-dlg"), inp = $("app-dlg-input");
+        const ok = $("app-dlg-ok"), huy = $("app-dlg-huy");
+        const coInput = !!o.withInput;
 
-        document.getElementById("app-dialog-title").textContent = opts.title || "";
-        document.getElementById("app-dialog-msg").textContent    = opts.message || "";
-        okBtn.textContent = opts.okText || "OK";
-        okBtn.className   = "btn " + (opts.danger ? "btn-danger" : "btn-primary");
+        $("app-dlg-icon").textContent = o.icon || (o.danger ? "!" : "✎");
+        $("app-dlg-icon").className = "app-dlg__icon" + (o.danger ? " app-dlg__icon--danger" : "");
+        $("app-dlg-title").textContent = o.title || "";
+        $("app-dlg-sub").textContent = o.message || "";
+        $("app-dlg-sub").style.display = o.message ? "" : "none";
+        $("app-dlg-body").innerHTML = o.html || "";
+        $("app-dlg-body").style.display = o.html ? "" : "none";
+        $("app-dlg-field").style.display = coInput ? "" : "none";
+        $("app-dlg-label").textContent = o.label || "";
+        $("app-dlg-label").style.display = o.label ? "" : "none";
+        inp.value = o.value || "";
+        inp.placeholder = o.placeholder || "";
+        if(o.maxLength) inp.maxLength = o.maxLength; else inp.removeAttribute("maxlength");
+        ok.textContent = o.okText || "OK";
+        huy.textContent = o.cancelText || "Huỷ";
+        ok.className = "btn " + (o.danger ? "btn-danger" : "btn-primary");
 
-        const withInput = !!opts.withInput;
-        inpWrap.style.display = withInput ? "block" : "none";
-        if(withInput) inp.value = opts.value || "";
+        // Kiểm tra mỗi lần gõ: báo lỗi ngay dưới ô và khoá nút đồng ý.
+        const kiem = () => {
+            if(!coInput){ ok.disabled = false; return true; }
+            const v = inp.value.trim();
+            const loi = o.validate ? (o.validate(v) || "") : (v ? "" : " ");
+            $("app-dlg-err").textContent = loi.trim();
+            $("app-dlg-dem").textContent = o.maxLength ? `${inp.value.length}/${o.maxLength}` : "";
+            inp.classList.toggle("is-loi", !!loi.trim() && inp.value !== "");
+            ok.disabled = !!loi;
+            return !loi;
+        };
+        inp.oninput = kiem; kiem();
 
-        ov.style.display = "block";
-        panel.style.display = "block";
-        if(withInput){ setTimeout(()=>{ inp.focus(); inp.select(); }, 30); }
-        else setTimeout(()=>okBtn.focus(), 30);
+        ov.classList.add("mo"); d.classList.add("mo");
+        setTimeout(() => { if(coInput){ inp.focus(); inp.select(); } else ok.focus(); }, 30);
 
-        return new Promise(resolve=>{
-            const cleanup = (val)=>{
-                ov.style.display = "none";
-                panel.style.display = "none";
-                okBtn.onclick = cancelBtn.onclick = ov.onclick = null;
-                document.removeEventListener("keydown", onKey);
-                resolve(val);
+        return new Promise(resolve => {
+            const dong = v => {
+                ov.classList.remove("mo"); d.classList.remove("mo");
+                ok.onclick = huy.onclick = ov.onclick = inp.oninput = null;
+                document.removeEventListener("keydown", phim);
+                resolve(v);
             };
-            const confirm = ()=> cleanup(withInput ? inp.value : true);
-            const cancel  = ()=> cleanup(withInput ? null : false);
-            const onKey = (e)=>{
-                if(e.key === "Escape"){ e.preventDefault(); cancel(); }
-                else if(e.key === "Enter" && (!withInput || document.activeElement === inp)){ e.preventDefault(); confirm(); }
+            const dongY = () => { if(kiem()) dong(coInput ? inp.value.trim() : true); };
+            const thoi  = () => dong(coInput ? null : false);
+            const phim  = e => {
+                if(e.key === "Escape"){ e.preventDefault(); thoi(); }
+                else if(e.key === "Enter" && (!coInput || document.activeElement === inp)){
+                    e.preventDefault(); dongY();
+                }
             };
-            okBtn.onclick = confirm;
-            cancelBtn.onclick = cancel;
-            ov.onclick = cancel;
-            document.addEventListener("keydown", onKey);
+            ok.onclick = dongY; huy.onclick = thoi; ov.onclick = thoi;
+            document.addEventListener("keydown", phim);
         });
     },
-    // Trả về chuỗi đã nhập, hoặc null nếu huỷ.
-    prompt(title, value="", message=""){
-        return this._open({title, message, value, withInput:true, okText:"OK"});
+    // Trả về chuỗi đã nhập (đã cắt khoảng trắng), hoặc null nếu huỷ.
+    prompt(a, value="", message=""){
+        const o = (a && typeof a === "object") ? a : {title:a, value, message};
+        return this._open({...o, withInput:true});
     },
     // Trả về true/false.
-    confirm(title, message="", {danger=false, okText="OK"}={}){
-        return this._open({title, message, withInput:false, danger, okText});
+    confirm(a, message="", {danger=false, okText="OK"}={}){
+        const o = (a && typeof a === "object") ? a : {title:a, message, danger, okText};
+        return this._open({...o, withInput:false});
     },
 };
 
@@ -1803,8 +1838,17 @@ const _LICH_ICON = {homestay:"🏠", thue:"🏡", ban:"💰", loai4:"📦", loai
 function _loaiBat(){ return _loaiDS.filter(d=>d.bat); }
 function _loaiNhan(key){ const d=_loaiDS.find(x=>x.key===key); return d?(d.nhan||key):key; }
 
+// Thống kê từng slot {key: {so_content, so_acc}} — để hộp thoại xoá/thêm mảng
+// báo trước hậu quả. Giới hạn tên lấy từ server (một nguồn duy nhất).
+let _loaiTK = {}, _TEN_MANG_TOI_DA = 30;
+
 async function napLoaiContent(){
-    try{ const r=await API.get("/api/loai-content"); if(r.ok && r.ds) _loaiDS=r.ds; }
+    try{
+        const r=await API.get("/api/loai-content");
+        if(r.ok && r.ds) _loaiDS=r.ds;
+        if(r.tk) _loaiTK=r.tk;
+        if(r.ten_toi_da) _TEN_MANG_TOI_DA=r.ten_toi_da;
+    }
     catch(e){ /* mất mạng — dùng mặc định */ }
     apDungLoai();
 }
@@ -1831,6 +1875,7 @@ function apDungLoai(){
         PAGE_TITLES[`lich-${d.key}`] = `Lịch ${d.nhan||d.key}`;
     });
     if(document.getElementById("content-tabs")) renderContentTabs();
+    renderLogMang();
 }
 let _currentContentLoai = "homestay";
 let _ceditData = null;
@@ -1841,61 +1886,125 @@ function _escapeHtml(s){
         .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
 
+const _ICON_SUA = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
+const _ICON_XOA = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>`;
+
 function renderContentTabs(){
     const box = document.getElementById("content-tabs"); if(!box) return;
+    // Mảng nào cũng sửa tên / xoá được, trừ khi chỉ còn MỘT mảng — mảng cuối
+    // cùng không có nút xoá (server cũng chặn).
+    const conMot = CONTENT_CATEGORIES.length <= 1;
     let html = CONTENT_CATEGORIES.map(c=>{
         const active = c.key === _currentContentLoai;
-        // ✏️ đổi tên; 3 mảng gốc không có nút tắt, mảng mới có ✕ để tắt.
-        const goc = ["homestay","thue","ban"].includes(c.key);
         return `<div class="content-tab ${active?"active":""}" data-loai="${c.key}"
-                    onclick="switchContent('${c.key}')">${_escapeHtml(c.title)}
-                    <span onclick="event.stopPropagation();doiTenLoai('${c.key}')"
-                          title="Đổi tên mảng" style="margin-left:6px;opacity:.6;cursor:pointer">✏️</span>
-                    ${goc?"":`<span onclick="event.stopPropagation();tatLoai('${c.key}')"
-                          title="Tắt mảng này" style="margin-left:4px;opacity:.6;cursor:pointer">✕</span>`}
+                    onclick="switchContent('${c.key}')">
+                    <span>${_escapeHtml(c.title)}</span>
+                    <span class="content-tab__act" title="Đổi tên mảng"
+                          onclick="event.stopPropagation();doiTenLoai('${c.key}')">${_ICON_SUA}</span>
+                    ${conMot?"":`<span class="content-tab__act content-tab__act--xoa" title="Xoá mảng"
+                          onclick="event.stopPropagation();xoaLoai('${c.key}')">${_ICON_XOA}</span>`}
                 </div>`;
     }).join("");
-    // Nút + nếu còn slot tắt (tối đa 5).
     if(_loaiBat().length < 5)
-        html += `<div class="content-tab" onclick="themLoai()"
-                     title="Thêm mảng content mới" style="font-weight:700">+ Thêm mảng</div>`;
+        html += `<div class="content-tab content-tab--them" onclick="themLoai()"
+                     title="Thêm mảng content mới (tối đa 5)">＋ Thêm mảng</div>`;
     box.innerHTML = html;
 }
 
-// Thêm mảng = bật slot tắt đầu tiên + đặt tên.
+// Lấy số content / số nick MỚI NHẤT của từng mảng ngay trước khi mở hộp xoá /
+// thêm — số nạp lúc mở trang có thể đã cũ (vừa thêm/xoá content).
+async function _napTkLoai(){
+    try{ const r = await API.get("/api/loai-content"); if(r.ok && r.tk) _loaiTK = r.tk; }
+    catch(e){ /* giữ số cũ */ }
+}
+
+// Tên mảng: không trống, không quá dài, không trùng mảng đang có (không phân
+// biệt hoa thường) — server kiểm lại y hệt.
+function _kiemTenLoai(v, boQuaKey){
+    if(!v) return "Nhập tên mảng";
+    if(v.length > _TEN_MANG_TOI_DA) return `Tối đa ${_TEN_MANG_TOI_DA} ký tự`;
+    const trung = _loaiBat().find(d => d.key !== boQuaKey
+        && (d.nhan||"").toLocaleLowerCase() === v.toLocaleLowerCase());
+    return trung ? `Đã có mảng tên "${trung.nhan}"` : "";
+}
+
+// Thêm mảng = bật một slot đang trống. Ưu tiên slot KHÔNG còn content cũ; hết
+// slot sạch mới dùng lại slot của mảng đã xoá — và nói trước content cũ sẽ hiện lại.
 async function themLoai(){
-    const slot = _loaiDS.find(d=>!d.bat);
-    if(!slot){ Toast.error("Đã đủ 5 mảng, không thêm được nữa"); return; }
-    const ten = (prompt("Tên mảng mới:", "") || "").trim();
+    const tat = _loaiDS.filter(d=>!d.bat);
+    if(!tat.length){ Toast.error("Đã đủ 5 mảng, không thêm được nữa"); return; }
+    await _napTkLoai();
+    const slot = tat.find(d => !(_loaiTK[d.key]||{}).so_content) || tat[0];
+    const cu = (_loaiTK[slot.key]||{}).so_content || 0;
+    const ten = await Dialog.prompt({
+        icon: "＋", title: "Thêm mảng content",
+        message: "Mỗi mảng có kho content, tab Lịch và runner riêng. Gán nick vào mảng ở cột Loại đăng (tab Tài khoản).",
+        html: cu ? `<div class="app-dlg__note">♻️ Mảng mới sẽ dùng lại chỗ của mảng`
+                 + `${slot.nhan?` "<b>${_escapeHtml(slot.nhan)}</b>"`:""} đã xoá trước đây — `
+                 + `<b>${cu} content</b> cũ của nó sẽ hiện lại.</div>` : "",
+        label: "Tên mảng", placeholder: "VD: Smart City", maxLength: _TEN_MANG_TOI_DA,
+        validate: v => _kiemTenLoai(v, null), okText: "Thêm mảng",
+    });
     if(!ten) return;
-    await _luuLoai([{key:slot.key, nhan:ten, bat:1}], `Đã thêm mảng "${ten}"`);
-    switchContent(slot.key);
+    if(await _luuLoai([{key:slot.key, nhan:ten, bat:1}], `Đã thêm mảng "${ten}"`))
+        switchContent(slot.key);
 }
 
 async function doiTenLoai(key){
-    const ten = (prompt("Tên mới cho mảng:", _loaiNhan(key)) || "").trim();
-    if(!ten || ten === _loaiNhan(key)) return;
+    const cu = _loaiNhan(key);
+    const ten = await Dialog.prompt({
+        icon: "✎", title: "Đổi tên mảng",
+        message: "Tên mới hiện ở tab Content, menu Lịch, ô Run và cột Loại đăng. Content, lịch và nick đã gán giữ nguyên.",
+        label: "Tên mảng", value: cu, maxLength: _TEN_MANG_TOI_DA,
+        validate: v => _kiemTenLoai(v, key), okText: "Lưu",
+    });
+    if(!ten || ten === cu) return;
     await _luuLoai([{key, nhan:ten, bat:1}], `Đã đổi tên thành "${ten}"`);
 }
 
-async function tatLoai(key){
-    if(!confirm(`Tắt mảng "${_loaiNhan(key)}"?\n\nLịch và content của mảng này sẽ `
-               +`ngừng chạy (dữ liệu vẫn còn, bật lại là có).`)) return;
-    await _luuLoai([{key, nhan:_loaiNhan(key), bat:0}], "Đã tắt mảng");
-    if(_currentContentLoai === key) _currentContentLoai = "homestay";
+// Xoá mảng — kể cả 3 mảng gốc — miễn còn lại ít nhất 1. "Xoá" = tắt slot:
+// content vẫn nằm trong máy, thêm lại mảng vào slot đó là có lại.
+async function xoaLoai(key){
+    const con = _loaiBat().length;
+    if(con <= 1){ Toast.error("Phải giữ lại ít nhất 1 mảng"); return; }
+    const ten = _loaiNhan(key);
+    await _napTkLoai();
+    const tk = _loaiTK[key] || {};
+    const dong = [
+        `<li>📦<span><b>${tk.so_content||0} content</b> của mảng được giữ lại trong máy — thêm lại mảng là có lại.</span></li>`,
+    ];
+    if(tk.so_acc)
+        dong.push(`<li>👥<span><b>${tk.so_acc} tài khoản</b> đang gán mảng này sẽ <b>không được xếp lịch</b> cho tới khi gán sang mảng khác ở tab Tài khoản.</span></li>`);
+    dong.push(`<li>⏹<span>Tab Lịch và ô Run của mảng biến mất; runner của mảng nếu đang chạy sẽ <b>dừng ngay</b>.</span></li>`);
+    const ok = await Dialog.confirm({
+        icon: "🗑", danger: true, title: `Xoá mảng "${ten}"?`,
+        message: `Sau khi xoá còn ${con-1} mảng.`,
+        html: `<ul class="app-dlg__list">${dong.join("")}</ul>`,
+        okText: "Xoá mảng",
+    });
+    if(!ok) return;
+    await _luuLoai([{key, nhan:ten, bat:0}], `Đã xoá mảng "${ten}"`);
 }
 
+// Gửi cả registry hiện tại + thay đổi để server có đủ 5 slot. Trả true nếu lưu
+// được. Dùng fetch trực tiếp để đọc được câu báo lỗi của server (API._fetch chỉ
+// ném "HTTP 400").
 async function _luuLoai(thayDoi, msgOk){
-    // Gửi cả registry hiện tại + thay đổi để server có đủ 5 slot.
     const theo = {}; _loaiDS.forEach(d=>theo[d.key]={...d});
     thayDoi.forEach(t=>theo[t.key]={...theo[t.key], ...t});
     try{
-        const r = await API.post("/api/loai-content/luu", {ds:Object.values(theo)});
-        if(!r.ok){ Toast.error(r.error||"Lưu hỏng"); return; }
-        _loaiDS = r.ds; apDungLoai();
+        const res = await fetch("/api/loai-content/luu", {method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({ds:Object.values(theo)})});
+        const r = await res.json();
+        if(!r.ok){ Toast.error(r.error||"Lưu hỏng"); return false; }
+        _loaiDS = r.ds; if(r.tk) _loaiTK = r.tk;
+        apDungLoai();
         if(document.getElementById("content-tabs")) loadContent(_currentContentLoai);
-        Toast.success(msgOk);
-    }catch(e){ Toast.error(e.message); }
+        Toast.success(msgOk + ((r.da_dung_runner||[]).length ? " — đã dừng runner của mảng" : ""));
+        if(typeof loadRunnerStatus === "function") loadRunnerStatus();
+        return true;
+    }catch(e){ Toast.error(e.message); return false; }
 }
 
 // Dọn ảnh không content nào dùng tới — đếm trước, hỏi rồi mới xóa.
@@ -3501,9 +3610,25 @@ async function runGen(){
 
 // ── Logs ──────────────────────────────────────────────────────
 let _logAutoInterval=null;
+// Ô log cho từng mảng content đang bật. Mảng đã xoá không còn ô; đổi tên thì
+// nhãn đổi theo. Page / Nuôi / Tham gia nhóm là ô cố định trong index.html.
+function renderLogMang(){
+    const box=document.getElementById("log-mang"); if(!box) return;
+    const ds=_loaiBat();
+    // Giữ nguyên ô (và chữ log đang hiện) nếu danh sách mảng không đổi.
+    const dauVet=ds.map(d=>d.key+"|"+(d.nhan||"")).join("/");
+    if(box.dataset.dauVet===dauVet) return;
+    box.dataset.dauVet=dauVet;
+    box.innerHTML=ds.map(d=>`
+                    <div class="card" style="display:flex;flex-direction:column;min-height:220px">
+                        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:${_RUNNER_MAU[d.key]||"var(--text-secondary)"};flex-shrink:0">${_LICH_ICON[d.key]||"📦"} ${_escapeHtml(d.nhan||d.key)}</div>
+                        <div class="log-box" id="log-${d.key}" style="flex:1;border:none;border-radius:0;margin:0"></div>
+                    </div>`).join("");
+}
 async function loadLogs(){
     const n=parseInt(document.getElementById("log-lines")?.value||"80");
-    const runners=["homestay","thue","ban","page","nuoi"];
+    renderLogMang();
+    const runners=[..._loaiBat().map(d=>d.key),"page","nuoi"];
     await Promise.all(runners.map(async loai=>{
         const box=document.getElementById(`log-${loai}`); if(!box) return;
         try{

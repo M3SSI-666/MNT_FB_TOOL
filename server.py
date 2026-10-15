@@ -45,6 +45,7 @@ from db import (
     # loại đăng
     MODE_OPTIONS, acc_dang_spam,
     loai_content_ds, loai_content_bat, loai_dang_options, luu_loai_content, nhan_loai,
+    thong_ke_loai_content, TEN_MANG_TOI_DA,
     acc_co_comment, acc_co_marketplace, acc_comment_pct, acc_marketplace_pct,
     JOIN_NGHI_MOI_MAC_DINH, JOIN_NGHI_BO_QUA_MAC_DINH,
     accounts_theo_lich,
@@ -678,9 +679,10 @@ def run_status():
 def run_start(loai):
     if loai not in RUNNER_CFG:
         return jsonify({"ok": False, "error": "Loại không hợp lệ"})
-    # Mảng content phải đang BẬT mới chạy được (page/nuoi luôn chạy).
-    if loai in ("loai4", "loai5") and loai not in loai_content_bat():
-        return jsonify({"ok": False, "error": "Mảng này đang tắt — bật ở tab Content trước"})
+    # Mảng content phải đang BẬT mới chạy được (page/nuoi luôn chạy). Áp cho CẢ
+    # 5 slot: từ 15/10 mảng gốc cũng xoá được.
+    if loai not in ("page", "nuoi") and loai not in loai_content_bat():
+        return jsonify({"ok": False, "error": "Mảng này đã bị xoá — thêm lại ở tab Content trước"})
     if _runner_running(loai):
         return jsonify({"ok": False, "msg": f"Runner {loai} đang chạy rồi"})
     cfg      = RUNNER_CFG[loai]
@@ -2254,17 +2256,12 @@ def _read_log(filename, n=150):
 @app.route("/api/logs/<loai>")
 def api_logs(loai):
     n = int(request.args.get("n", 150))
-    log_map = {
-        "homestay": str(LOG_DIR / "autopost_homestay.log"),
-        "thue":     str(LOG_DIR / "autopost_thue.log"),
-        "ban":      str(LOG_DIR / "autopost_ban.log"),
-        "page":     str(LOG_DIR / "autopost_page.log"),
-        "nuoi":     str(LOG_DIR / "autopost_nuoi.log"),
-    }
-    fname = log_map.get(loai)
-    if not fname:
+    # Lấy từ RUNNER_CFG (đủ 7 runner) — trước đây ghi cứng 5 loại nên
+    # mảng loai4/loai5 không xem được log.
+    cfg = RUNNER_CFG.get(loai)
+    if not cfg:
         return jsonify({"ok": False, "error": "Loại không hợp lệ"})
-    return jsonify({"ok": True, "text": _read_log(fname, n)})
+    return jsonify({"ok": True, "text": _read_log(cfg["log"], n)})
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -2344,9 +2341,11 @@ def api_loai_content():
     """Danh sách 5 slot mảng content cho giao diện dựng tab/nav/dropdown.
 
     Trả cả `bat` để trang Content hiện nút thêm/đổi tên; nơi nào chỉ cần mảng
-    đang bật thì tự lọc `bat=1`.
+    đang bật thì tự lọc `bat=1`. `tk` = số content / số acc của từng slot, để
+    hộp thoại xoá/thêm mảng báo trước hậu quả.
     """
-    return jsonify({"ok": True, "ds": loai_content_ds()})
+    return jsonify({"ok": True, "ds": loai_content_ds(), "tk": thong_ke_loai_content(),
+                    "ten_toi_da": TEN_MANG_TOI_DA})
 
 
 @app.route("/api/loai-content/luu", methods=["POST"])
@@ -2356,11 +2355,23 @@ def api_loai_content_luu():
     """
     body = request.get_json(silent=True) or {}
     ds = body.get("ds") or []
+    truoc = set(loai_content_bat())
     try:
         moi = luu_loai_content(ds)
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
-    return jsonify({"ok": True, "ds": moi})
+    # Mảng vừa bị xoá: DỪNG runner của nó. Không dừng thì runner đang chạy cứ
+    # thế đăng tiếp lịch của một mảng đã xoá (tắt mảng chỉ chặn KHỞI ĐỘNG).
+    da_dung = []
+    for k in truoc - {d["key"] for d in moi if d["bat"]}:
+        if _runner_running(k):
+            try:
+                run_stop(k)
+                da_dung.append(k)
+            except Exception as e:
+                logger.warning(f"⚠️  Xoá mảng '{k}': không dừng được runner — {e}")
+    return jsonify({"ok": True, "ds": moi, "tk": thong_ke_loai_content(),
+                    "da_dung_runner": da_dung})
 
 
 # ── Marketplace ───────────────────────────────────────────────────

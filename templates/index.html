@@ -711,18 +711,9 @@
                     <button class="btn btn-ghost" onclick="loadLogs()">🔄</button>
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto;gap:10px;height:calc(100vh - 170px);overflow-y:auto">
-                    <div class="card" style="display:flex;flex-direction:column;min-height:220px">
-                        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#34d399;flex-shrink:0">🏠 Homestay</div>
-                        <div class="log-box" id="log-homestay" style="flex:1;border:none;border-radius:0;margin:0"></div>
-                    </div>
-                    <div class="card" style="display:flex;flex-direction:column;min-height:220px">
-                        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#60a5fa;flex-shrink:0">🏡 Thuê</div>
-                        <div class="log-box" id="log-thue" style="flex:1;border:none;border-radius:0;margin:0"></div>
-                    </div>
-                    <div class="card" style="display:flex;flex-direction:column;min-height:220px">
-                        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#fbbf24;flex-shrink:0">💰 Bán</div>
-                        <div class="log-box" id="log-ban" style="flex:1;border:none;border-radius:0;margin:0"></div>
-                    </div>
+                    <!-- Log các mảng content ĐANG BẬT — app.js (renderLogMang) dựng theo
+                         registry: xoá mảng là ô log của nó biến mất, đổi tên là nhãn đổi theo. -->
+                    <div id="log-mang" style="display:contents"></div>
                     <div class="card" style="display:flex;flex-direction:column;min-height:220px">
                         <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#c084fc;flex-shrink:0">📄 Đăng Page</div>
                         <div class="log-box" id="log-page" style="flex:1;border:none;border-radius:0;margin:0"></div>

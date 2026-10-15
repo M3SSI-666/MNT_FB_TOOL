@@ -40,8 +40,9 @@ BUSY_TIMEOUT_SEC = 15
 # `loai_dang` của acc lưu KHOÁ, không lưu nhãn — đổi tên mảng không làm acc rơi
 # khỏi lịch. Registry lưu trong settings (JSON), không đổi schema.
 #
-# 3 mảng gốc LUÔN BẬT (có content/acc đang dùng, chỉ cho đổi tên). 2 mảng mới
-# mặc định TẮT — bật thì vận hành hiện tại không đổi gì.
+# 3 mảng gốc mặc định BẬT, 2 mảng mới mặc định TẮT. Từ 15/10 mảng nào cũng XOÁ
+# được (kể cả 3 mảng gốc) nhưng LUÔN CÒN ÍT NHẤT 1 MẢNG. "Xoá" = tắt slot đó:
+# content vẫn nằm trong máy, thêm lại mảng vào đúng slot đó là có lại.
 LOAI_TOI_DA = 5
 _LOAI_MAC_DINH = [
     {"key": "homestay", "nhan": "Homestay", "bat": 1},
@@ -50,7 +51,8 @@ _LOAI_MAC_DINH = [
     {"key": "loai4",    "nhan": "",         "bat": 0},
     {"key": "loai5",    "nhan": "",         "bat": 0},
 ]
-_LOAI_GOC = ("homestay", "thue", "ban")   # luôn bật, chỉ đổi tên
+_LOAI_GOC = ("homestay", "thue", "ban")   # có tên mặc định; xoá được như mảng khác
+TEN_MANG_TOI_DA = 30                       # ký tự — tên hiện ở tab, menu Lịch, ô Run
 
 # Cách đăng nhóm của acc — lưu theo từng acc (cột `mode`), không còn chọn lúc
 # Gen. Chỉ hai lựa chọn; Marketplace KHÔNG nằm ở đây mà là cột cờ riêng.
@@ -73,9 +75,12 @@ def loai_content_ds() -> list[dict]:
         d = theo_key.get(md["key"], {})
         nhan = (str(d.get("nhan", md["nhan"]) or "")).strip() or md["nhan"]
         bat = 1 if int(d.get("bat", md["bat"]) or 0) == 1 else 0
-        if md["key"] in _LOAI_GOC:        # 3 mảng gốc luôn bật
-            bat = 1
         ra.append({"key": md["key"], "nhan": nhan, "bat": bat})
+    # Lưới an toàn: registry hỏng / bị sửa tay thành tắt hết thì vẫn phải còn
+    # một mảng chạy được — bật lại mảng đầu tiên.
+    if not any(d["bat"] for d in ra):
+        ra[0]["bat"] = 1
+        ra[0]["nhan"] = ra[0]["nhan"] or _LOAI_MAC_DINH[0]["nhan"]
     return ra
 
 
@@ -98,21 +103,48 @@ def loai_dang_options() -> tuple:
 
 
 def luu_loai_content(ds: list[dict]) -> list[dict]:
-    """Ghi registry. Chỉ nhận khoá cố định; mảng gốc luôn bật; mảng bật phải có
-    tên. Trả về registry sau khi ghi."""
+    """Ghi registry. Chỉ nhận khoá cố định. Luật:
+      - phải còn ÍT NHẤT 1 mảng bật (xoá được mọi mảng, kể cả 3 mảng gốc)
+      - mảng bật phải có tên, tối đa TEN_MANG_TOI_DA ký tự
+      - hai mảng đang bật không được trùng tên (không phân biệt hoa thường) —
+        trùng tên thì ở tab Lịch, ô Run, cột Loại đăng không phân biệt nổi.
+    Trả về registry sau khi ghi."""
     theo_key = {d.get("key"): d for d in (ds or []) if isinstance(d, dict)}
     ra = []
     for md in _LOAI_MAC_DINH:
         d = theo_key.get(md["key"], {})
-        nhan = (str(d.get("nhan", md["nhan"]) or "")).strip()
+        nhan = " ".join(str(d.get("nhan", md["nhan"]) or "").split())
         bat = 1 if int(d.get("bat", md["bat"]) or 0) == 1 else 0
         if md["key"] in _LOAI_GOC:
-            bat = 1
             nhan = nhan or md["nhan"]
         if bat and not nhan:
             raise ValueError(f"Mảng '{md['key']}' bật thì phải đặt tên")
+        if bat and len(nhan) > TEN_MANG_TOI_DA:
+            raise ValueError(f"Tên mảng tối đa {TEN_MANG_TOI_DA} ký tự")
         ra.append({"key": md["key"], "nhan": nhan, "bat": bat})
+    bat_ds = [d for d in ra if d["bat"]]
+    if not bat_ds:
+        raise ValueError("Phải giữ lại ít nhất 1 mảng")
+    ten = [d["nhan"].casefold() for d in bat_ds]
+    trung = {d["nhan"] for d in bat_ds if ten.count(d["nhan"].casefold()) > 1}
+    if trung:
+        raise ValueError(f"Hai mảng không được trùng tên: {', '.join(sorted(trung))}")
     set_setting("loai_content_ds", json.dumps(ra, ensure_ascii=False))
+    return ra
+
+
+def thong_ke_loai_content() -> dict:
+    """{khoá: {so_content, so_acc}} — để giao diện báo trước khi xoá/thêm mảng:
+    xoá thì bao nhiêu content được giữ lại, bao nhiêu acc mất lịch; thêm vào một
+    slot cũ thì có content cũ hiện lại không."""
+    ra = {md["key"]: {"so_content": 0, "so_acc": 0} for md in _LOAI_MAC_DINH}
+    with _conn() as con:
+        for r in con.execute("SELECT loai, COUNT(*) n FROM content GROUP BY loai"):
+            if r["loai"] in ra:
+                ra[r["loai"]]["so_content"] = r["n"]
+        for r in con.execute("SELECT loai_dang, COUNT(*) n FROM accounts GROUP BY loai_dang"):
+            if r["loai_dang"] in ra:
+                ra[r["loai_dang"]]["so_acc"] = r["n"]
     return ra
 
 # Tỉ lệ comment MẶC ĐỊNH khi di trú acc X_* cũ (vốn chạy comment ở mức này).

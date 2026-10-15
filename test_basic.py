@@ -5950,6 +5950,87 @@ check("Gen lịch dùng cách chia mới, bỏ con trỏ theo nick",
       "rai_tu_khoa(schedule, keyword_pool" in Path("server.py").read_text(encoding="utf-8")
       and "keyword_cursor" not in Path("server.py").read_text(encoding="utf-8"))
 
+# ── Xoá mảng content: mảng nào cũng xoá được, LUÔN CÒN ÍT NHẤT 1 ─────────────
+_reg_cu = db.get_setting("loai_content_ds", "")
+_ds0 = db.loai_content_ds()
+_bat = lambda ds: [d["key"] for d in ds if d["bat"]]
+_moi = [dict(d, bat=0) if d["key"] == "homestay" else dict(d) for d in _ds0]
+check("xoá được mảng gốc (Homestay)", "homestay" not in _bat(db.luu_loai_content(_moi)))
+check("mảng đã xoá không còn là Loại đăng hợp lệ", "homestay" not in db.loai_dang_options())
+_tat_het = [dict(d, bat=0) for d in _ds0]
+try:
+    db.luu_loai_content(_tat_het); _chan_het = False
+except ValueError as _e_m:
+    _chan_het = "ít nhất 1" in str(_e_m)
+check("xoá hết mọi mảng bị CHẶN", _chan_het)
+_mot = [dict(d, bat=1 if d["key"] == "ban" else 0) for d in _ds0]
+check("còn đúng 1 mảng vẫn lưu được", _bat(db.luu_loai_content(_mot)) == ["ban"])
+db.set_setting("loai_content_ds", '[{"key":"homestay","bat":0},{"key":"thue","bat":0},{"key":"ban","bat":0}]')
+check("registry hỏng (tắt hết) vẫn còn 1 mảng chạy được", len(db.loai_content_bat()) == 1)
+for _ds_loi, _chu in (
+        ([dict(d, nhan="Times City", bat=1) if d["key"] in ("thue", "ban") else dict(d) for d in _ds0], "trùng tên"),
+        ([dict(d, nhan="x" * 31) if d["key"] == "thue" else dict(d) for d in _ds0], "tối đa"),
+        ([dict(d, nhan="", bat=1) if d["key"] == "loai4" else dict(d) for d in _ds0], "phải đặt tên")):
+    try:
+        db.luu_loai_content(_ds_loi); _chan_ten = False
+    except ValueError as _e_m:
+        _chan_ten = _chu in str(_e_m)
+    check(f"tên mảng không hợp lệ bị chặn ({_chu})", _chan_ten)
+_trung_hoa = [dict(d, nhan="BÁN") if d["key"] == "thue" else dict(d) for d in _ds0]
+try:
+    db.luu_loai_content(_trung_hoa); _chan_hoa = False
+except ValueError:
+    _chan_hoa = True
+check("trùng tên không phân biệt hoa thường cũng bị chặn", _chan_hoa)
+
+db.luu_loai_content(_ds0)
+_tk_m = db.thong_ke_loai_content()
+check("thống kê mảng có đủ 5 slot, đếm content + nick",
+      set(_tk_m) == {"homestay", "thue", "ban", "loai4", "loai5"}
+      and all({"so_content", "so_acc"} <= set(v) for v in _tk_m.values()))
+_r_m = _client.get("/api/loai-content").get_json()
+check("API mảng trả kèm thống kê + giới hạn tên", "tk" in _r_m and _r_m.get("ten_toi_da") == 30)
+_r_m = _client.post("/api/loai-content/luu", json={"ds": _tat_het})
+check("API chặn xoá mảng cuối cùng, báo rõ lý do",
+      _r_m.status_code == 400 and "ít nhất 1" in (_r_m.get_json() or {}).get("error", ""))
+_client.post("/api/loai-content/luu", json={"ds": _moi})          # xoá Homestay
+_r_m = _client.post("/api/run/homestay/start", json={}).get_json()
+check("không khởi động được runner của mảng gốc đã xoá",
+      _r_m.get("ok") is False and "đã bị xoá" in (_r_m.get("error") or ""))
+_src_srv_m = Path("server.py").read_text(encoding="utf-8")
+check("xoá mảng thì dừng runner đang chạy của nó",
+      "run_stop(k)" in _src_srv_m and "truoc - {d[\"key\"] for d in moi if d[\"bat\"]}" in _src_srv_m)
+import lich_may as _lm_m
+check("Lịch máy dừng/bật được runner của cả 5 mảng",
+      {"homestay", "thue", "ban", "loai4", "loai5", "page", "nuoi"} <= set(_lm_m.RUNNER))
+_ajs_m = Path("static/js/app.js").read_text(encoding="utf-8")
+_khoi_mang = _ajs_m[_ajs_m.index("function renderContentTabs"):_ajs_m.index("async function _luuLoai")]
+check("quản lý mảng dùng hộp thoại của app, KHÔNG dùng prompt/confirm trình duyệt",
+      "Dialog.prompt(" in _khoi_mang and "Dialog.confirm(" in _khoi_mang
+      and not _re_ls.search(r"(?<![.\w])(prompt|confirm)\(", _khoi_mang))
+check("mảng nào cũng có nút xoá, trừ khi chỉ còn 1",
+      "xoaLoai(" in _khoi_mang and "conMot" in _khoi_mang
+      and '["homestay","thue","ban"].includes' not in _khoi_mang)
+check("ô tick runner của Lịch máy dựng theo các mảng đang có",
+      "function _lmRunner()" in _ajs_m and "LM_RUNNER" not in _ajs_m)
+# Tab Log: ô log của mảng dựng theo registry — xoá mảng là mất ô, đổi tên là đổi nhãn.
+_html_m = Path("templates/index.html").read_text(encoding="utf-8")
+_trang_log = _html_m[_html_m.index('id="page-logs"'):]
+check("tab Log không ghi cứng ô log của mảng content",
+      'id="log-mang"' in _trang_log
+      and not any(f'id="log-{k}"' in _trang_log for k in ("homestay", "thue", "ban", "loai4", "loai5"))
+      and all(f'id="log-{k}"' in _trang_log for k in ("page", "nuoi", "join")))
+_khoi_log = _ajs_m[_ajs_m.index("function renderLogMang"):_ajs_m.index("// Join log")]
+check("ô log + danh sách đọc log theo các mảng đang bật",
+      "_loaiBat()" in _khoi_log and '"homestay","thue","ban"' not in _khoi_log
+      and "renderLogMang();" in _ajs_m[_ajs_m.index("function apDungLoai"):_ajs_m.index("let _currentContentLoai")])
+for _k_log in ("loai4", "loai5", "page"):
+    check(f"API log đọc được runner {_k_log}",
+          _client.get(f"/api/logs/{_k_log}?n=5").get_json().get("ok") is True)
+check("API log vẫn từ chối loại lạ",
+      _client.get("/api/logs/khong-co?n=5").get_json().get("ok") is False)
+db.set_setting("loai_content_ds", _reg_cu)
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:
