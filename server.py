@@ -43,7 +43,8 @@ from db import (
     get_comment_posts, them_comment_posts, update_comment_post_field,
     delete_comment_post, xoa_het_comment_posts,
     # loại đăng
-    LOAI_DANG_OPTIONS, MODE_OPTIONS, LOAI_LICH_MAP, acc_dang_spam,
+    MODE_OPTIONS, acc_dang_spam,
+    loai_content_ds, loai_content_bat, loai_dang_options, luu_loai_content, nhan_loai,
     acc_co_comment, acc_co_marketplace, acc_comment_pct, acc_marketplace_pct,
     JOIN_NGHI_MOI_MAC_DINH, JOIN_NGHI_BO_QUA_MAC_DINH,
     accounts_theo_lich,
@@ -315,26 +316,17 @@ def serve_media_alt(filename):
 
 
 # ── Runner management ─────────────────────────────────────────
+# Runner theo KHOÁ cố định — gồm CẢ 5 slot mảng content (dù bật hay chưa) + page
+# + nuoi. Giữ đủ 5 slot content để vòng "gom/diệt runner" bắt được cả runner mồ
+# côi của mảng vừa bị tắt. Việc KHỞI ĐỘNG mới chặn theo `loai_content_bat()`.
+# pid_file / log suy ra từ khoá — thêm mảng không phải khai báo tay.
+_RUNNER_KEYS = ("homestay", "thue", "ban", "loai4", "loai5", "page", "nuoi")
 RUNNER_CFG = {
-    "homestay": {"sheet": "Chéo Homestay", "pid_file": ".runner_homestay.pid",
-                 "log": str(LOG_DIR / "autopost_homestay.log")},
-    "thue":     {"sheet": "Chéo Thuê",     "pid_file": ".runner_thue.pid",
-                 "log": str(LOG_DIR / "autopost_thue.log")},
-    "ban":      {"sheet": "Chéo Bán",      "pid_file": ".runner_ban.pid",
-                 "log": str(LOG_DIR / "autopost_ban.log")},
-    "page":     {"sheet": "Đăng bài Page", "pid_file": ".runner_page.pid",
-                 "log": str(LOG_DIR / "autopost_page.log")},
-    "nuoi":     {"sheet": "Nuôi nick",     "pid_file": ".runner_nuoi.pid",
-                 "log": str(LOG_DIR / "autopost_nuoi.log")},
+    k: {"pid_file": f".runner_{k}.pid", "log": str(LOG_DIR / f"autopost_{k}.log")}
+    for k in _RUNNER_KEYS
 }
-RUNNER_LOAI_MAP = {
-    "homestay": "homestay",
-    "thue":     "thue",
-    "ban":      "ban",
-    "page":     "page",
-    "nuoi":     "nuoi",
-}
-STAGGER = {"homestay": 0, "thue": 8, "ban": 16, "page": 24, "nuoi": 32}
+# Giãn cách khởi động để năm trình duyệt không mở cùng một giây.
+STAGGER = {k: i * 8 for i, k in enumerate(_RUNNER_KEYS)}
 
 
 def _khoa_runner():
@@ -686,6 +678,9 @@ def run_status():
 def run_start(loai):
     if loai not in RUNNER_CFG:
         return jsonify({"ok": False, "error": "Loại không hợp lệ"})
+    # Mảng content phải đang BẬT mới chạy được (page/nuoi luôn chạy).
+    if loai in ("loai4", "loai5") and loai not in loai_content_bat():
+        return jsonify({"ok": False, "error": "Mảng này đang tắt — bật ở tab Content trước"})
     if _runner_running(loai):
         return jsonify({"ok": False, "msg": f"Runner {loai} đang chạy rồi"})
     cfg      = RUNNER_CFG[loai]
@@ -1989,7 +1984,7 @@ def api_schedule_gen(loai):
         #      (chuyen_slot_so_luong) nên marketplace cũng là % của tổng, không
         #      phải của phần còn lại sau comment. Đăng thuần = phần dôi ra.
         #      Chỉ 3 loại có danh sách bài + thư viện câu.
-        if loai in LOAI_LICH_MAP:
+        if loai in loai_content_bat():
             from xep_lich import chuyen_slot_so_luong
 
             def _so(a, pct_fn):
@@ -2195,7 +2190,7 @@ def api_schedule_gen_data(loai):
     # spam vẫn cần slot trong lịch — slot của nó sẽ được quét thành
     # hoat_dong='comment' ở bước 3 khi gen, vì comment là việc duy nhất nó còn
     # làm được.
-    accs_db = (accounts_theo_lich(loai) if loai in LOAI_LICH_MAP
+    accs_db = (accounts_theo_lich(loai) if loai in loai_content_bat()
                else get_accounts(loai=loai.capitalize(), trang_thai="Active"))
 
     accs = []
@@ -2341,6 +2336,31 @@ def api_settings_save():
     for k, v in body.items():
         set_setting(k, str(v))
     return jsonify({"ok": True})
+
+
+# ── Mảng content (tối đa 5, thêm/đổi tên) ──────────────────────────
+@app.route("/api/loai-content")
+def api_loai_content():
+    """Danh sách 5 slot mảng content cho giao diện dựng tab/nav/dropdown.
+
+    Trả cả `bat` để trang Content hiện nút thêm/đổi tên; nơi nào chỉ cần mảng
+    đang bật thì tự lọc `bat=1`.
+    """
+    return jsonify({"ok": True, "ds": loai_content_ds()})
+
+
+@app.route("/api/loai-content/luu", methods=["POST"])
+def api_loai_content_luu():
+    """Đổi tên / bật thêm / tắt mảng. Nhận [{key, nhan, bat}] (một phần cũng được
+    — helper trộn với mặc định). Tắt mảng đang có acc thì cảnh báo chứ vẫn cho.
+    """
+    body = request.get_json(silent=True) or {}
+    ds = body.get("ds") or []
+    try:
+        moi = luu_loai_content(ds)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, "ds": moi})
 
 
 # ── Marketplace ───────────────────────────────────────────────────

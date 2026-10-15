@@ -5,6 +5,7 @@ Thay thế hoàn toàn Google Sheets, không cần internet để đọc/ghi dat
 
 import sqlite3
 import os
+import json
 import random
 import re
 import unicodedata
@@ -29,35 +30,90 @@ BUSY_TIMEOUT_SEC = 15
 
 
 # ═══════════════════════════════════════════════════════════════
-# Loại đăng của tài khoản
+# Mảng content — tối đa 5, thêm/đổi tên được
 # ═══════════════════════════════════════════════════════════════
-# `loai_dang` chỉ còn quyết định MỘT việc: acc dùng mảng content nào và vào lịch
-# nào. Việc "có comment" / "có Marketplace" tách sang hai cột cờ riêng
-# (`co_comment` / `co_marketplace`) — mỗi cột một việc độc lập.
+# Mỗi mảng là một "vertical": kho content + tab Lịch + runner + acc gán vào qua
+# cột `loai_dang`. Trước đây CỐ ĐỊNH 3 mảng; nay tối đa 5.
 #
-#   Homestay / Thuê / Bán  → mảng content + lịch tương ứng
-#   (để trống)             → không vào lịch đăng nào
+# KHOÁ NỘI BỘ CỐ ĐỊNH, NHÃN SỬA ĐƯỢC. Khoá (`homestay`/`loai4`…) không bao giờ
+# đổi nên content/lịch/cài đặt đã gắn theo khoá vẫn nguyên khi đổi tên hiển thị.
+# `loai_dang` của acc lưu KHOÁ, không lưu nhãn — đổi tên mảng không làm acc rơi
+# khỏi lịch. Registry lưu trong settings (JSON), không đổi schema.
 #
-# Trước đây gộp cả "có comment" vào chính cột này bằng tiền tố "X_"
-# (X_Home/X_Thuê/X_Bán = vừa đăng vừa comment). Đã tách ra vì Duong cần bật
-# comment và Marketplace ĐỘC LẬP với loại content. Di trú tự động trong
-# `init_db`: X_* → loại sạch + `co_comment=1`.
-#
-# Lưu ý vì sao tách lần này KHÁC lỗi `comment_bai` cũ: lỗi đó là HAI cột cùng nói
-# một việc (có comment hay không) → hai nguồn sự thật. Còn đây ba cột nói ba việc
-# khác nhau (loại content / có comment / có Marketplace), không chồng lấn.
-LOAI_DANG_OPTIONS = ("", "Homestay", "Thuê", "Bán")
+# 3 mảng gốc LUÔN BẬT (có content/acc đang dùng, chỉ cho đổi tên). 2 mảng mới
+# mặc định TẮT — bật thì vận hành hiện tại không đổi gì.
+LOAI_TOI_DA = 5
+_LOAI_MAC_DINH = [
+    {"key": "homestay", "nhan": "Homestay", "bat": 1},
+    {"key": "thue",     "nhan": "Thuê",     "bat": 1},
+    {"key": "ban",      "nhan": "Bán",      "bat": 1},
+    {"key": "loai4",    "nhan": "",         "bat": 0},
+    {"key": "loai5",    "nhan": "",         "bat": 0},
+]
+_LOAI_GOC = ("homestay", "thue", "ban")   # luôn bật, chỉ đổi tên
 
 # Cách đăng nhóm của acc — lưu theo từng acc (cột `mode`), không còn chọn lúc
 # Gen. Chỉ hai lựa chọn; Marketplace KHÔNG nằm ở đây mà là cột cờ riêng.
 MODE_OPTIONS = ("Hybrid", "Via")
 
-# loại lịch → giá trị loai_dang tương ứng
-LOAI_LICH_MAP = {
-    "homestay": ("Homestay",),
-    "thue":     ("Thuê",),
-    "ban":      ("Bán",),
-}
+
+def loai_content_ds() -> list[dict]:
+    """5 slot mảng content, trộn mặc định. [{key, nhan, bat}] theo thứ tự cố định.
+
+    Giá trị lưu trong settings chỉ ghi đè nhãn/bật; khoá và thứ tự luôn theo
+    `_LOAI_MAC_DINH` để không ai thêm khoá lạ hay đổi thứ tự.
+    """
+    try:
+        luu = json.loads(get_setting("loai_content_ds", "") or "[]")
+    except Exception:
+        luu = []
+    theo_key = {d.get("key"): d for d in luu if isinstance(d, dict)}
+    ra = []
+    for md in _LOAI_MAC_DINH:
+        d = theo_key.get(md["key"], {})
+        nhan = (str(d.get("nhan", md["nhan"]) or "")).strip() or md["nhan"]
+        bat = 1 if int(d.get("bat", md["bat"]) or 0) == 1 else 0
+        if md["key"] in _LOAI_GOC:        # 3 mảng gốc luôn bật
+            bat = 1
+        ra.append({"key": md["key"], "nhan": nhan, "bat": bat})
+    return ra
+
+
+def loai_content_bat() -> list[str]:
+    """Khoá các mảng đang bật, theo thứ tự. Đây là tập loai_dang hợp lệ."""
+    return [d["key"] for d in loai_content_ds() if d["bat"]]
+
+
+def nhan_loai(key: str) -> str:
+    """Nhãn hiển thị của một mảng. Không có thì trả chính khoá."""
+    for d in loai_content_ds():
+        if d["key"] == key:
+            return d["nhan"] or key
+    return key
+
+
+def loai_dang_options() -> tuple:
+    """Giá trị loai_dang hợp lệ: '' + các mảng đang bật (khoá)."""
+    return ("",) + tuple(loai_content_bat())
+
+
+def luu_loai_content(ds: list[dict]) -> list[dict]:
+    """Ghi registry. Chỉ nhận khoá cố định; mảng gốc luôn bật; mảng bật phải có
+    tên. Trả về registry sau khi ghi."""
+    theo_key = {d.get("key"): d for d in (ds or []) if isinstance(d, dict)}
+    ra = []
+    for md in _LOAI_MAC_DINH:
+        d = theo_key.get(md["key"], {})
+        nhan = (str(d.get("nhan", md["nhan"]) or "")).strip()
+        bat = 1 if int(d.get("bat", md["bat"]) or 0) == 1 else 0
+        if md["key"] in _LOAI_GOC:
+            bat = 1
+            nhan = nhan or md["nhan"]
+        if bat and not nhan:
+            raise ValueError(f"Mảng '{md['key']}' bật thì phải đặt tên")
+        ra.append({"key": md["key"], "nhan": nhan, "bat": bat})
+    set_setting("loai_content_ds", json.dumps(ra, ensure_ascii=False))
+    return ra
 
 # Tỉ lệ comment MẶC ĐỊNH khi di trú acc X_* cũ (vốn chạy comment ở mức này).
 # Nay tỉ lệ đặt RIÊNG cho từng acc ở cột comment_pct, không còn một con số chung
@@ -157,10 +213,10 @@ def acc_co_marketplace(acc: dict) -> bool:
 
 
 def khop_loai_lich(loai_dang: str, loai_lich: str) -> bool:
-    """Acc thuộc lịch nào. So khớp CHÍNH XÁC theo loai_dang (nay đã sạch, không
-    còn tiền tố X_)."""
+    """Acc thuộc lịch nào. loai_dang nay LƯU KHOÁ mảng (homestay/loai4…), nên
+    khớp lịch = trùng khoá VÀ mảng đó đang bật."""
     v = (loai_dang or "").strip()
-    return v in LOAI_LICH_MAP.get(loai_lich, ())
+    return v == loai_lich and v in loai_content_bat()
 
 
 def accounts_theo_lich(loai_lich: str, trang_thai: str = None) -> list[dict]:
@@ -521,6 +577,15 @@ def init_db():
             con.execute("UPDATE accounts SET loai_dang=?, comment_pct=? "
                         "WHERE loai_dang=?", (_sach, TI_LE_COMMENT_MAC_DINH, _cu))
 
+        # ── Migration: loai_dang NHÃN → KHOÁ ────────────────────────────
+        # loai_dang nay lưu KHOÁ mảng (homestay/thue/ban) chứ không lưu nhãn
+        # (Homestay/Thuê/Bán), để đổi tên mảng không làm acc rơi khỏi lịch.
+        # Chạy SAU hai migration trên (chúng cho ra nhãn). Ánh xạ 1:1, idempotent.
+        for _nhan, _key in (("Homestay", "homestay"), ("Thuê", "thue"),
+                            ("Bán", "ban")):
+            con.execute("UPDATE accounts SET loai_dang=? WHERE loai_dang=?",
+                        (_key, _nhan))
+
         # ── Migration: bỏ trạng thái "Hỏng", đổi "Tạm dừng" → "Dừng" ────
         # Phải ĐỔI dữ liệu chứ không chỉ bỏ khỏi TRANG_THAI_OPTIONS: acc còn
         # mang giá trị cũ sẽ không khớp lựa chọn nào, giao diện hiện ô trắng, và
@@ -840,9 +905,10 @@ def update_account_field(acc_id: int, field: str, value: str):
     # khó lần ra nhất. Chặn ngay tại cửa ghi.
     if field == "loai_dang":
         value = (value or "").strip()
-        if value not in LOAI_DANG_OPTIONS:
+        hop_le = loai_dang_options()        # '' + các mảng đang bật (khoá)
+        if value not in hop_le:
             raise ValueError(f"Loại đăng không hợp lệ: '{value}' "
-                             f"(chỉ nhận: {', '.join(x or '(trống)' for x in LOAI_DANG_OPTIONS)})")
+                             f"(chỉ nhận: {', '.join(x or '(trống)' for x in hop_le)})")
     c_user_cu = None
     if field == "c_user":
         _chan_c_user_la_page(value)
@@ -2387,19 +2453,10 @@ def doc_cai_dat_mkt() -> dict:
 
 
 def loai_content_cua_acc(loai_dang: str) -> str:
-    """Acc này lấy content của loại nào: 'homestay' / 'thue' / 'ban' / ''.
-
-    Cột `loai_dang` bên Tài khoản đã nói acc phụ trách loại nào rồi (nay chỉ còn
-    3 giá trị sạch, không tiền tố).
-
-    Đây là chiều ngược của `khop_loai_lich`, và cùng đọc `LOAI_LICH_MAP` để hai
-    chiều không bao giờ lệch nhau.
-    """
+    """Acc này lấy content của mảng nào. loai_dang nay CHÍNH LÀ khoá mảng, nên
+    trả về chính nó nếu mảng đang bật, ngược lại ''."""
     v = (loai_dang or "").strip()
-    for loai_lich, nhan in LOAI_LICH_MAP.items():
-        if v in nhan:
-            return loai_lich
-    return ""
+    return v if v in loai_content_bat() else ""
 
 
 GIA_TOI_DA = 1000          # giá sinh ra luôn NHỎ HƠN mốc này

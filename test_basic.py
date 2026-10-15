@@ -1411,8 +1411,8 @@ with _tf3.TemporaryDirectory() as _d6:
 # năm lượt đọc đĩa trùng nhau, lại giẫm chân nhau lúc xoá.
 _src_sch_pf = Path("scheduler.py").read_text(encoding="utf-8")
 check("scheduler có gọi dọn profile", "don_profile_rac(get_accounts())" in _src_sch_pf)
-check("chỉ MỘT runner quét, không phải cả năm",
-      'if LOAI == "homestay":' in _src_sch_pf)
+check("chỉ MỘT runner quét (mảng bật đầu tiên), không phải cả năm",
+      "if LOAI == _runner_don:" in _src_sch_pf)
 # Và KHÔNG đưa lên giao diện.
 check("không có bảng dọn profile trong giao diện",
       "api/profiles" not in Path("server.py").read_text(encoding="utf-8")
@@ -1969,9 +1969,9 @@ check("gen 2 lần ra kết quả giống nhau", _xl.phan_bo_lich(_mix, _S, _E) 
 # loai_dang nay chỉ quyết định mảng content. "% comment" / "% Marketplace" tách
 # sang hai cột số comment_pct / marketplace_pct — mỗi acc một tỉ lệ trên tổng
 # phiên của chính nó, độc lập với loại content.
-check("có đúng 4 lựa chọn",           len(db.LOAI_DANG_OPTIONS) == 4)
+check("có đúng 4 lựa chọn",           len(db.loai_dang_options()) == 4)
 check("không còn lựa chọn C_ / X_ nào",
-      not any(str(v).startswith(("C_", "X_")) for v in db.LOAI_DANG_OPTIONS))
+      not any(str(v).startswith(("C_", "X_")) for v in db.loai_dang_options()))
 
 # % đọc từ cột số; >0 nghĩa là có chạy tính năng đó.
 check("comment_pct 25 -> acc_comment_pct 25", db.acc_comment_pct({"comment_pct": 25}) == 25)
@@ -1992,31 +1992,31 @@ check("acc Spam -> chỉ comment",      db.acc_dang_spam({"trang_thai": db.TRANG
 check("acc Active -> KHÔNG chỉ comment", not db.acc_dang_spam({"trang_thai": "Active"}))
 check("acc thiếu trạng thái -> không", not db.acc_dang_spam({}))
 
-# Khớp lịch theo loai_dang sạch (không còn tiền tố X_).
-check("Homestay -> lịch homestay",    db.khop_loai_lich("Homestay", "homestay"))
-check("Bán -> đúng lịch bán",         db.khop_loai_lich("Bán", "ban"))
-check("Thuê KHÔNG lọt vào lịch homestay", not db.khop_loai_lich("Thuê", "homestay"))
+# Khớp lịch theo KHOÁ mảng (loai_dang nay lưu khoá, không lưu nhãn).
+check("khoá homestay -> lịch homestay", db.khop_loai_lich("homestay", "homestay"))
+check("khoá ban -> đúng lịch bán",      db.khop_loai_lich("ban", "ban"))
+check("khoá thue KHÔNG lọt lịch homestay", not db.khop_loai_lich("thue", "homestay"))
 check("để trống -> không vào lịch nào",
       not any(db.khop_loai_lich("", l) for l in ("homestay", "thue", "ban")))
-# X_ và C_ cũ nay là giá trị KHÔNG hợp lệ, không được khớp lịch nào.
+# Nhãn (Homestay) KHÔNG còn là loai_dang hợp lệ — đã chuyển sang khoá.
+check("nhãn 'Homestay' không khớp lịch", not db.khop_loai_lich("Homestay", "homestay"))
 check("X_Home cũ không còn khớp lịch",
       not any(db.khop_loai_lich("X_Home", l) for l in ("homestay", "thue", "ban")))
-check("C_Home cũ không còn khớp lịch",
-      not any(db.khop_loai_lich("C_Home", l) for l in ("homestay", "thue", "ban")))
 
-for _v in db.LOAI_DANG_OPTIONS:
+for _v in db.loai_dang_options():
     db.update_account_field(_acc_id, "loai_dang", _v)
-check("lưu được cả 4 giá trị hợp lệ",
-      db.get_account_by_id(_acc_id)["loai_dang"] == db.LOAI_DANG_OPTIONS[-1])
-for _xau in ("C_Home", "C_home", "homestay", "Comment", "C_Nha", "Homestay,Thuê"):
+check("lưu được cả giá trị hợp lệ (khoá)",
+      db.get_account_by_id(_acc_id)["loai_dang"] == db.loai_dang_options()[-1])
+# Nhãn và giá trị lạ đều bị chặn — chỉ nhận khoá đang bật hoặc ''.
+for _xau in ("Homestay", "Bán", "C_Home", "Comment", "loai4", "homestay,thue"):
     try:
         db.update_account_field(_acc_id, "loai_dang", _xau)
         check(f"chặn loại đăng sai '{_xau}'", False)
     except ValueError:
         check(f"chặn loại đăng sai '{_xau}'", True)
-db.update_account_field(_acc_id, "loai_dang", "  Homestay  ")
+db.update_account_field(_acc_id, "loai_dang", "  homestay  ")
 check("khoảng trắng thừa được cắt bỏ",
-      db.get_account_by_id(_acc_id)["loai_dang"] == "Homestay")
+      db.get_account_by_id(_acc_id)["loai_dang"] == "homestay")
 
 # ── Mode: tập đóng Hybrid/Via ──────────────────────────────────────────────
 check("Mode có đúng 2 lựa chọn",      db.MODE_OPTIONS == ("Hybrid", "Via"))
@@ -2030,19 +2030,21 @@ for _m in ("Marketplace", "hybrid", "VIA", "Linh tinh"):
         check(f"chặn Mode sai '{_m}'", True)
 db.update_account_field(_acc_id, "mode", "Hybrid")
 
-# ── Di trú X_* → loại sạch + comment_pct=25 ────────────────────────────────
-# Acc cũ mang X_Thuê phải tự thành Thuê + comment_pct = tỉ lệ mặc định, giữ y
-# nguyên hành vi comment. Mô phỏng câu lệnh di trú trong init_db trên acc thô.
+# ── Di trú X_Thuê → thue (khoá) + comment_pct=25 ───────────────────────────
+# Acc cũ mang X_Thuê đi qua HAI bước di trú trong init_db: X_Thuê → "Thuê"
+# (nhãn) → "thue" (khoá). Comment giữ y hành vi. Mô phỏng cả hai bước.
 with db._conn() as _c:
     _c.execute("INSERT INTO accounts (ten_acc, loai_dang, comment_pct) "
                "VALUES ('MIGR_X', 'X_Thuê', 0)")
     for _x, _sach in (("X_Home", "Homestay"), ("X_Thuê", "Thuê"), ("X_Bán", "Bán")):
         _c.execute("UPDATE accounts SET loai_dang=?, comment_pct=? WHERE loai_dang=?",
                    (_sach, db.TI_LE_COMMENT_MAC_DINH, _x))
+    for _nhan, _key in (("Homestay", "homestay"), ("Thuê", "thue"), ("Bán", "ban")):
+        _c.execute("UPDATE accounts SET loai_dang=? WHERE loai_dang=?", (_key, _nhan))
     _migr = _c.execute("SELECT loai_dang, comment_pct FROM accounts "
                        "WHERE ten_acc='MIGR_X'").fetchone()
     _c.execute("DELETE FROM accounts WHERE ten_acc='MIGR_X'")
-check("di trú X_Thuê -> loai_dang='Thuê'", _migr["loai_dang"] == "Thuê")
+check("di trú X_Thuê -> loai_dang='thue' (khoá)", _migr["loai_dang"] == "thue")
 check("di trú X_Thuê -> comment_pct=25",   _migr["comment_pct"] == db.TI_LE_COMMENT_MAC_DINH)
 
 # Cột % lưu và đọc lại được; chặn tổng comment+mkt > 100.
@@ -2514,7 +2516,7 @@ check("hỏng liên tục mãi vẫn không bị tắt", _hd in ("", "nghi"))
 
 # ── Sức khoẻ acc: tầng DB ──────────────────────────────────────────────────
 _aid = db.upsert_account({"ten_acc": "SK Test", "trang_thai": "Active",
-                          "loai_dang": "Homestay"})
+                          "loai_dang": "homestay"})
 check("acc mới được chạy",              db.acc_duoc_chay("SK Test")[0] is True)
 for _ in range(4):
     db.ghi_nhan_phien_dang("SK Test", False)
@@ -2784,7 +2786,7 @@ check("truyền 'hom_nay' xuống tận db", 'vp.get("hom_nay", 0)' in _src_fb)
 
 # ── Spam: tầng DB ──────────────────────────────────────────────────────────
 _sid = db.upsert_account({"ten_acc": "SPAM Test", "trang_thai": "Active",
-                          "loai_dang": "Homestay", "ten_page": "P"})
+                          "loai_dang": "homestay", "ten_page": "P"})
 # Mốc giờ CỐ ĐỊNH, không lấy từ đồng hồ thật: bản đầu dùng "giờ hiện tại + 1"
 # nên chạy test lúc 23 giờ là hỏng — min(23, 24) ra 23:00, không còn ở tương lai.
 from datetime import datetime as _dt, timedelta as _td
@@ -3033,7 +3035,7 @@ check("bật lại -> đăng bài được",       db.acc_duoc_chay("SPAM Test",
 # bỏ: lọc cứng 'Active' thì acc vừa bị đánh spam biến mất khỏi Gen — không còn
 # slot nào, kể cả slot comment — trong khi comment là việc duy nhất nó còn làm
 # được. Bước 3 của Gen sẽ quét mọi slot còn lại của nó thành comment.
-db.update_account_field(_sid, "loai_dang", "Homestay")
+db.update_account_field(_sid, "loai_dang", "homestay")
 with db._conn() as _c:
     _c.execute("UPDATE accounts SET trang_thai=? WHERE id=?", (db.TRANG_THAI_SPAM, _sid))
 _ds = [a["ten_acc"] for a in db.accounts_theo_lich("homestay")]
@@ -3356,7 +3358,7 @@ check("_exe_dang_chay trỏ vào file có thật",
 # Không có lý do thì mọi kiểu nghỉ nhìn giống hệt nhau ("Nghỉ tới 23:57"), mà
 # "Lỗi Composer" và "lỗi liên tiếp" cần xử lý khác hẳn nhau.
 _aid_ld = db.upsert_account({"ten_acc": "LYDO Test", "trang_thai": "Active",
-                             "loai_dang": "Homestay"})
+                             "loai_dang": "homestay"})
 db.danh_dau_spam("LYDO Test", "hộp thoại đăng bài rỗng", ly_do="Lỗi Composer")
 _r_ld = next(a for a in db.get_accounts() if a["ten_acc"] == "LYDO Test")
 check("đánh dấu spam lưu được lý do", _r_ld.get("ly_do_nghi") == "Lỗi Composer")
@@ -3387,9 +3389,9 @@ check("giao diện hiện lý do rồi xuống dòng giờ nghỉ",
 #   - acc CÓ tick thì bị nuôi mỗi slot: acc 110 slot thành 110 phiên nuôi/ngày,
 #     trong khi nhịp cài đặt 150 phút chỉ ra ~10 phiên
 _aid_kt = db.upsert_account({"ten_acc": "NUOI KhongTick", "trang_thai": "Active",
-                             "loai_dang": "Homestay", "nuoi_nick": 0, "nuoi_interval": 150})
+                             "loai_dang": "homestay", "nuoi_nick": 0, "nuoi_interval": 150})
 _aid_ct = db.upsert_account({"ten_acc": "NUOI CoTick", "trang_thai": "Active",
-                             "loai_dang": "Homestay", "nuoi_nick": 1, "nuoi_interval": 150})
+                             "loai_dang": "homestay", "nuoi_nick": 1, "nuoi_interval": 150})
 
 # Trường hợp 1: không tick Nuôi → KHÔNG nuôi, slot nghỉ hẳn.
 check("không tick Nuôi → không có phiên nuôi nào",
@@ -4733,20 +4735,21 @@ db.set_setting("mkt_tinh_trang", "")
 check("Tình trạng cố định là Mới", db.MKT_TINH_TRANG == "Mới")
 check("luôn tick tối đa 20 nhóm",  db.MKT_SO_NHOM == 20)
 
-# Marketplace KHÔNG có bảng phân công riêng: cột `loai_dang` bên Tài khoản đã
-# nói acc phụ trách loại content nào (nay chỉ còn 3 giá trị sạch).
-check("Homestay -> content homestay", db.loai_content_cua_acc("Homestay") == "homestay")
-check("Thuê     -> content thue",     db.loai_content_cua_acc("Thuê")     == "thue")
-check("Bán      -> content ban",      db.loai_content_cua_acc("Bán")      == "ban")
+# loai_dang nay CHÍNH LÀ khoá mảng, nên loai_content_cua_acc trả về chính nó khi
+# mảng đang bật, ngược lại ''.
+check("khoá homestay -> content homestay", db.loai_content_cua_acc("homestay") == "homestay")
+check("khoá thue -> content thue",    db.loai_content_cua_acc("thue")     == "thue")
+check("khoá ban -> content ban",      db.loai_content_cua_acc("ban")      == "ban")
 check("acc chưa phân công -> rỗng",   db.loai_content_cua_acc("")         == "")
-check("X_ cũ -> rỗng, không đoán bừa", db.loai_content_cua_acc("X_Home")  == "")
+check("nhãn 'Homestay' -> rỗng (không phải khoá)", db.loai_content_cua_acc("Homestay") == "")
+check("mảng đang tắt (loai4) -> rỗng", db.loai_content_cua_acc("loai4")   == "")
 check("giá trị lạ -> rỗng, không đoán bừa",
       db.loai_content_cua_acc("C_Home") == "")
 # Hai chiều phải khớp nhau tuyệt đối, nếu không sẽ có acc Gen được lịch mà
 # Marketplace lại không biết lấy content ở đâu (hoặc ngược lại).
 check("khớp hai chiều với khop_loai_lich",
       all(db.khop_loai_lich(v, db.loai_content_cua_acc(v))
-          for v in db.LOAI_DANG_OPTIONS if v))
+          for v in db.loai_dang_options() if v))
 
 # Giá bài Marketplace nay SINH ngẫu nhiên chứ không bốc từ danh sách cố định:
 # trùng giá với bài cũ còn sống là thêm một điểm giống nhau, mà Facebook so bài

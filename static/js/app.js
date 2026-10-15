@@ -380,12 +380,18 @@ async function deleteJoin(id) {
 }
 
 // ── Runner ────────────────────────────────────────────────────
-const RUNNER_LABELS = {
+// Mảng content (homestay/thue/ban/loai4/loai5) dựng ĐỘNG theo registry trong
+// apDungLoai() — bật mảng nào mới có ô Run đó. page + nuoi cố định, luôn có.
+const _RUNNER_MAU = {homestay:"#34d399", thue:"#60a5fa", ban:"#fbbf24", loai4:"#f472b6", loai5:"#c084fc"};
+const RUNNER_LABELS_CODINH = {
+    page: {title:"Đăng Page",icon:"📄",color:"#c084fc"},
+    nuoi: {title:"Nuôi nick",icon:"🌱",color:"#6ee7b7"},
+};
+let RUNNER_LABELS = {
     homestay:{title:"Homestay",icon:"🏠",color:"#34d399"},
     thue:    {title:"Thuê",    icon:"🏡",color:"#60a5fa"},
     ban:     {title:"Bán",     icon:"💰",color:"#fbbf24"},
-    page:    {title:"Đăng Page",icon:"📄",color:"#c084fc"},
-    nuoi:    {title:"Nuôi nick",icon:"🌱",color:"#6ee7b7"},
+    ...RUNNER_LABELS_CODINH,
 };
 let _runnerStatus={};
 let _tgDaNap=false;
@@ -1099,13 +1105,13 @@ async function loadAccounts(){
         const box=document.getElementById("acc-summary");
         if(box){
             const total=res.data.length, active=res.data.filter(r=>r.trang_thai==="Active").length;
-            // So khớp CHÍNH XÁC: "X_Thuê" chứa chuỗi con "Thuê" và "X_Bán" chứa
-            // "Bán", dùng includes() sẽ đếm nhầm acc hỗn hợp vào nhóm chỉ đăng.
-            const dem=v=>res.data.filter(r=>(r.loai_dang||"").trim()===v).length;
-            const ban=dem("Bán"), thue=dem("Thuê"), hs=dem("Homestay");
+            // loai_dang nay luu KHOA (homestay/thue/ban/loai4/loai5), khong con
+            // la nhan. Dem chinh xac theo khoa, hien nhan dong theo registry.
+            const dem=k=>res.data.filter(r=>(r.loai_dang||"").trim()===k).length;
             const dung=res.data.filter(r=>r.trang_thai===TRANG_THAI_DUNG).length;
             const nghi=res.data.filter(r=>_dangNghi(r)).length;
-            const o=[{l:"Tổng",v:total},{l:"Active",v:active},{l:"Bán",v:ban},{l:"Thuê",v:thue},{l:"Homestay",v:hs}];
+            const o=[{l:"Tổng",v:total},{l:"Active",v:active}];
+            _loaiBat().forEach(d=>o.push({l:d.nhan||d.key,v:dem(d.key)}));
             // Chỉ chiếm chỗ khi thực sự có acc hỏng/nghỉ — bình thường thanh này
             // giữ nguyên như cũ, không đẻ thêm hai ô số 0 nhìn như báo động giả.
             if(nghi) o.push({l:"Nghỉ tạm",v:nghi,c:"var(--warning)"});
@@ -1138,7 +1144,8 @@ function renderAccTable(data){
             const center=CENTER_KEYS.includes(f.key)?"text-align:center;":"";
             const style=`${center}font-size:${f.mono?"11px":"12px"};color:var(--text-secondary);${f.mono?"font-family:var(--font-mono);":""}max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
             if(f.key==="loai_dang"){
-                return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}" style="${center}color:${mauLoaiDang(val)};font-weight:600;font-size:12px" onclick="startAccEdit(this)">${val||"-"}</td>`;
+                // Lưu KHOÁ (data-val) nhưng hiện NHÃN.
+                return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}" style="${center}color:${mauLoaiDang(val)};font-weight:600;font-size:12px" onclick="startAccEdit(this)">${val?_escapeHtml(_loaiNhan(val)):"-"}</td>`;
             }
             if(f.key==="link_profile")
                 return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}" style="${center}" onclick="startAccEdit(this)">${val?`<a href="${val}" target="_blank" style="color:var(--accent);font-size:12px" onclick="event.stopPropagation()">🔗</a>`:"-"}</td>`;
@@ -1245,15 +1252,20 @@ async function startAccEdit(td){
     // Trạng thái cũng dùng dropdown như Loại đăng: đây là ô để bật lại acc bị
     // máy tắt, gõ tay lệch một ký tự thì acc nằm ngoài mọi bộ lọc 'Active' mà
     // nhìn vẫn như đã bật.
-    const CHON_SAN={mode:MODE_OPTIONS, loai_dang:LOAI_DANG_OPTIONS, trang_thai:TRANG_THAI_OPTIONS};
+    // loai_dang: value=KHOÁ, text=NHÃN (mảng đang bật). Các ô khác: value=text.
+    const CHON_SAN={
+        mode: MODE_OPTIONS.map(v=>({value:v,label:v})),
+        loai_dang: [{value:"",label:"-"}].concat(_loaiBat().map(d=>({value:d.key,label:d.nhan}))),
+        trang_thai: TRANG_THAI_OPTIONS.map(v=>({value:v,label:v||"-"})),
+    };
     if(CHON_SAN[field]){
         const sel=document.createElement("select");
         sel.style.cssText="width:100%;font-size:12px";
         const cur=val==="-"?"":val;
         CHON_SAN[field].forEach(o=>{
             const op=document.createElement("option");
-            op.value=o; op.textContent=o||"-";
-            if(o===cur) op.selected=true;
+            op.value=o.value; op.textContent=o.label;
+            if(o.value===cur) op.selected=true;
             sel.appendChild(op);
         });
         td.innerHTML=""; td.appendChild(sel); sel.focus();
@@ -1262,8 +1274,8 @@ async function startAccEdit(td){
             if(xong) return; xong=true;
             const nv=sel.value; td.classList.remove("editing");
             td.dataset.val=nv;
-            if(field==="loai_dang"){ td.style.color=mauLoaiDang(nv); }
-            td.textContent=nv||"-";
+            if(field==="loai_dang"){ td.style.color=mauLoaiDang(nv); td.textContent=nv?_loaiNhan(nv):"-"; }
+            else td.textContent=nv||"-";
             if(nv===cur) return;
             td.classList.add("saving");
             try{
@@ -1310,11 +1322,6 @@ async function startAccEdit(td){
     inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault();inp.blur();} if(e.key==="Escape"){inp.value=val;inp.blur();} });
 }
 
-// Loại đăng — chỉ còn 3 mảng content. Việc "có comment" / "có Marketplace" nay
-// là hai cột cờ riêng (co_comment / co_marketplace).
-// Danh sách phải khớp LOAI_DANG_OPTIONS trong db.py.
-const LOAI_DANG_OPTIONS = ["","Homestay","Thuê","Bán"];
-
 // Cách đăng nhóm — khớp MODE_OPTIONS trong db.py. Marketplace KHÔNG ở đây.
 const MODE_OPTIONS = ["Hybrid","Via"];
 
@@ -1340,21 +1347,23 @@ const LOAI_PAGE_TRONG   = "—";        // chữ hiện ra cho ô trống
 //   · trong số các bộ cùng đạt ΔE 41.4, chọn cách gán đưa mỗi biến thể về gần
 //     sắc màu của mảng gốc nhất, để vẫn liếc ra được "đây là nhóm homestay".
 // Đổi màu thì nên chạy lại phép đo đó trước.
+// Màu theo KHOÁ mảng (loai_dang nay lưu khoá). 2 mảng mới có màu riêng.
 function mauLoaiDang(v){
-    if(v==="Homestay") return "#34d399";   // xanh ngọc
-    if(v==="Thuê")     return "#60a5fa";   // xanh dương
-    if(v==="Bán")      return "#fbbf24";   // vàng hổ phách
-    return "var(--text-secondary)";
+    return ({homestay:"#34d399", thue:"#60a5fa", ban:"#fbbf24",
+             loai4:"#f472b6", loai5:"#c084fc"})[v] || "var(--text-secondary)";
 }
 
 function openAccForm(data={}){
     const f=(k,label,type="text")=>`<div class="field-group"><label>${label}</label><input type="${type}" id="af_${k}" value="${(data[k]||"").toString().replace(/"/g,"&quot;")}"></div>`;
     const fsel=(k,label,opts)=>`<div class="field-group"><label>${label}</label><select id="af_${k}">${opts.map(o=>`<option value="${o}" ${data[k]===o?"selected":""}>${o||"-"}</option>`).join("")}</select></div>`;
+    // Như fsel nhưng value≠text (dùng cho Loại đăng: value=khoá, text=nhãn).
+    const fsel2=(k,label,opts)=>`<div class="field-group"><label>${label}</label><select id="af_${k}">${opts.map(o=>`<option value="${o.value}" ${data[k]===o.value?"selected":""}>${o.label}</option>`).join("")}</select></div>`;
+    const _loaiOpts=[{value:"",label:"—"}].concat(_loaiBat().map(d=>({value:d.key,label:d.nhan})));
     const fchk=(k,label)=>`<div class="field-group"><label>${label}</label><input type="checkbox" id="af_${k}" ${String(data[k])==="1"?"checked":""} style="width:18px;height:18px;cursor:pointer"></div>`;
     openModal(data.id?"Sửa tài khoản":"Thêm tài khoản",`
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             ${f("ten_acc","Tên acc")} ${fsel("mode","Mode",MODE_OPTIONS)}
-            ${fsel("loai_dang","Loại đăng",LOAI_DANG_OPTIONS)} ${f("thoi_gian_nghi","Nghỉ (phút)")}
+            ${fsel2("loai_dang","Loại đăng",_loaiOpts)} ${f("thoi_gian_nghi","Nghỉ (phút)")}
             ${f("comment_pct","Comment %","number")} ${f("marketplace_pct","Marketplace %","number")}
             ${f("ten_page","Tên Page")}
             ${f("link_profile","Link profile")} ${f("email_sdt","Email/SDT")}
@@ -1779,11 +1788,50 @@ const Dialog = {
 // ── Content ───────────────────────────────────────────────────
 // Content cố định 3 loại — khớp với phần Lịch (homestay/thue/ban).
 // Không thêm/xóa/sửa tab để giữ logic đơn giản, đồng bộ với scheduler.
-const CONTENT_CATEGORIES = [
-    {key:"homestay", title:"Homestay"},
-    {key:"thue",     title:"Thuê"},
-    {key:"ban",      title:"Bán"},
+// Mảng content — tối đa 5, lấy động từ server (GET /api/loai-content). Khoá cố
+// định, nhãn sửa được. CONTENT_CATEGORIES = các mảng ĐANG BẬT.
+let _loaiDS = [
+    {key:"homestay", nhan:"Homestay", bat:1},
+    {key:"thue",     nhan:"Thuê",     bat:1},
+    {key:"ban",      nhan:"Bán",      bat:1},
+    {key:"loai4",    nhan:"",         bat:0},
+    {key:"loai5",    nhan:"",         bat:0},
 ];
+let CONTENT_CATEGORIES = _loaiDS.filter(d=>d.bat).map(d=>({key:d.key, title:d.nhan}));
+const _LICH_ICON = {homestay:"🏠", thue:"🏡", ban:"💰", loai4:"📦", loai5:"📦"};
+
+function _loaiBat(){ return _loaiDS.filter(d=>d.bat); }
+function _loaiNhan(key){ const d=_loaiDS.find(x=>x.key===key); return d?(d.nhan||key):key; }
+
+async function napLoaiContent(){
+    try{ const r=await API.get("/api/loai-content"); if(r.ok && r.ds) _loaiDS=r.ds; }
+    catch(e){ /* mất mạng — dùng mặc định */ }
+    apDungLoai();
+}
+// Áp registry vào giao diện: tab Content, nav Lịch, (dropdown đọc _loaiDS live).
+function apDungLoai(){
+    CONTENT_CATEGORIES = _loaiBat().map(d=>({key:d.key, title:d.nhan}));
+    if(!CONTENT_CATEGORIES.some(c=>c.key===_currentContentLoai))
+        _currentContentLoai = CONTENT_CATEGORIES[0]?.key || "homestay";
+    // Ô Run cho từng runner: mảng content ĐANG BẬT (nhãn/màu theo registry) rồi
+    // tới page + nuoi cố định. Tắt mảng nào thì ô Run của nó biến mất.
+    RUNNER_LABELS = {};
+    _loaiBat().forEach(d=>{
+        RUNNER_LABELS[d.key] = {title:d.nhan||d.key, icon:_LICH_ICON[d.key]||"📦",
+                                color:_RUNNER_MAU[d.key]||"var(--text-secondary)"};
+    });
+    Object.assign(RUNNER_LABELS, RUNNER_LABELS_CODINH);
+    // Nav Lịch: hiện mảng bật, ẩn mảng tắt, đặt nhãn theo registry.
+    _loaiDS.forEach(d=>{
+        const nav=document.querySelector(`.nav-item[data-page="lich-${d.key}"]`);
+        if(nav){
+            nav.style.display = d.bat ? "" : "none";
+            nav.innerHTML = `<span class="nav-icon">${_LICH_ICON[d.key]||"📦"}</span> Lịch ${_escapeHtml(d.nhan||d.key)}`;
+        }
+        PAGE_TITLES[`lich-${d.key}`] = `Lịch ${d.nhan||d.key}`;
+    });
+    if(document.getElementById("content-tabs")) renderContentTabs();
+}
 let _currentContentLoai = "homestay";
 let _ceditData = null;
 
@@ -1795,11 +1843,59 @@ function _escapeHtml(s){
 
 function renderContentTabs(){
     const box = document.getElementById("content-tabs"); if(!box) return;
-    box.innerHTML = CONTENT_CATEGORIES.map(c=>{
+    let html = CONTENT_CATEGORIES.map(c=>{
         const active = c.key === _currentContentLoai;
+        // ✏️ đổi tên; 3 mảng gốc không có nút tắt, mảng mới có ✕ để tắt.
+        const goc = ["homestay","thue","ban"].includes(c.key);
         return `<div class="content-tab ${active?"active":""}" data-loai="${c.key}"
-                    onclick="switchContent('${c.key}')">${_escapeHtml(c.title)}</div>`;
+                    onclick="switchContent('${c.key}')">${_escapeHtml(c.title)}
+                    <span onclick="event.stopPropagation();doiTenLoai('${c.key}')"
+                          title="Đổi tên mảng" style="margin-left:6px;opacity:.6;cursor:pointer">✏️</span>
+                    ${goc?"":`<span onclick="event.stopPropagation();tatLoai('${c.key}')"
+                          title="Tắt mảng này" style="margin-left:4px;opacity:.6;cursor:pointer">✕</span>`}
+                </div>`;
     }).join("");
+    // Nút + nếu còn slot tắt (tối đa 5).
+    if(_loaiBat().length < 5)
+        html += `<div class="content-tab" onclick="themLoai()"
+                     title="Thêm mảng content mới" style="font-weight:700">+ Thêm mảng</div>`;
+    box.innerHTML = html;
+}
+
+// Thêm mảng = bật slot tắt đầu tiên + đặt tên.
+async function themLoai(){
+    const slot = _loaiDS.find(d=>!d.bat);
+    if(!slot){ Toast.error("Đã đủ 5 mảng, không thêm được nữa"); return; }
+    const ten = (prompt("Tên mảng mới:", "") || "").trim();
+    if(!ten) return;
+    await _luuLoai([{key:slot.key, nhan:ten, bat:1}], `Đã thêm mảng "${ten}"`);
+    switchContent(slot.key);
+}
+
+async function doiTenLoai(key){
+    const ten = (prompt("Tên mới cho mảng:", _loaiNhan(key)) || "").trim();
+    if(!ten || ten === _loaiNhan(key)) return;
+    await _luuLoai([{key, nhan:ten, bat:1}], `Đã đổi tên thành "${ten}"`);
+}
+
+async function tatLoai(key){
+    if(!confirm(`Tắt mảng "${_loaiNhan(key)}"?\n\nLịch và content của mảng này sẽ `
+               +`ngừng chạy (dữ liệu vẫn còn, bật lại là có).`)) return;
+    await _luuLoai([{key, nhan:_loaiNhan(key), bat:0}], "Đã tắt mảng");
+    if(_currentContentLoai === key) _currentContentLoai = "homestay";
+}
+
+async function _luuLoai(thayDoi, msgOk){
+    // Gửi cả registry hiện tại + thay đổi để server có đủ 5 slot.
+    const theo = {}; _loaiDS.forEach(d=>theo[d.key]={...d});
+    thayDoi.forEach(t=>theo[t.key]={...theo[t.key], ...t});
+    try{
+        const r = await API.post("/api/loai-content/luu", {ds:Object.values(theo)});
+        if(!r.ok){ Toast.error(r.error||"Lưu hỏng"); return; }
+        _loaiDS = r.ds; apDungLoai();
+        if(document.getElementById("content-tabs")) loadContent(_currentContentLoai);
+        Toast.success(msgOk);
+    }catch(e){ Toast.error(e.message); }
 }
 
 // Dọn ảnh không content nào dùng tới — đếm trước, hỏi rồi mới xóa.
@@ -3616,8 +3712,9 @@ async function _heartbeat(){
 }
 
 // ── Init ──────────────────────────────────────────────────────
-document.addEventListener("DOMContentLoaded", ()=>{
+document.addEventListener("DOMContentLoaded", async ()=>{
     document.querySelectorAll(".nav-item").forEach(el=>el.addEventListener("click",()=>navigate(el.dataset.page)));
+    await napLoaiContent();   // nạp mảng content trước khi dựng nav/dropdown
     navigate("accounts");
     loadRunnerStatus();
     setInterval(loadRunnerStatus,10000);

@@ -10,6 +10,25 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.50.0 — 15/10/2026
+
+**Mở rộng mảng content: tối đa 5, thêm & đổi tên được**
+
+Trước đây chỉ có đúng 3 mảng gắn cứng (Homestay / Thuê / Bán). Giờ bạn tự chủ:
+
+- **Đổi tên mảng:** bấm ✏️ cạnh tên mảng ở tab Content để đặt tên theo khu của
+  bạn (ví dụ Times City / Smart City / Ocean Park). Tên mới áp vào luôn cả tab
+  Lịch, ô Run và cột Loại đăng ở tab Tài khoản.
+- **Thêm mảng mới:** bấm **+ Thêm mảng** ở tab Content để bật thêm mảng thứ 4,
+  thứ 5 và đặt tên. Mỗi mảng là một dây chuyền trọn gói: kho content riêng, tab
+  Lịch riêng, runner riêng, gán acc riêng qua cột Loại đăng.
+- **Tắt mảng:** bấm ✕ để tắt mảng mới (dữ liệu vẫn còn, bật lại là có).
+- **An toàn dữ liệu:** 2 mảng mới mặc định TẮT — mọi thứ đang chạy giữ nguyên
+  cho tới khi bạn chủ động bật. Đổi tên mảng KHÔNG làm acc rơi khỏi lịch (phần
+  mềm gắn acc theo mã mảng cố định bên trong, không theo tên hiển thị).
+
+---
+
 ## v2.49.0 — 14/10/2026
 
 **Gọn lại tab UID Nhóm và UID Marketplace**

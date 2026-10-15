@@ -731,9 +731,16 @@ def main():
                 # Lớp đáng tin nhất là "nằm yên 14 ngày": nó không dựa vào phân
                 # loại nào cả, nên cứu được cả khi ba lớp kia sai.
                 #
-                # CHỈ runner 'homestay' làm việc này. Năm runner cùng quét là
-                # năm lượt đọc đĩa trùng nhau, lại còn giẫm chân nhau lúc xoá.
-                if LOAI == "homestay":
+                # CHỈ MỘT runner làm việc này — runner của mảng content bật đầu
+                # tiên. Nhiều runner cùng quét là đọc đĩa trùng, lại giẫm chân
+                # nhau lúc xoá. Lấy theo registry thay vì cứng 'homestay' để khi
+                # mảng đầu đổi/tắt vẫn có đúng một runner dọn.
+                try:
+                    from db import loai_content_bat
+                    _runner_don = (loai_content_bat() or ["homestay"])[0]
+                except Exception:
+                    _runner_don = "homestay"
+                if LOAI == _runner_don:
                     try:
                         from fb_common import don_profile_rac
                         from db import get_accounts
