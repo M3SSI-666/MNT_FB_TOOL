@@ -1891,9 +1891,7 @@ def api_schedule_gen(loai):
     if not contents:
         return jsonify({"ok": False, "error": f"Không có content '{loai}' nào (Sử dụng=Có)"})
 
-    n_contents     = len(contents)
-    content_cursor = {a["ten"]: a.get("c_offset", 0) for a in acc_settings}
-    theo_ten       = {a["ten"]: a for a in acc_settings}
+    theo_ten = {a["ten"]: a for a in acc_settings}
 
     # Phân bổ thời điểm — phiên comment tính ngang phiên đăng bài, cùng một
     # vòng xoay, cùng góp vào tổng lực. Xem xep_lich.py để hiểu vì sao phải ép
@@ -1905,9 +1903,6 @@ def api_schedule_gen(loai):
     for t_min, ten in moc:
         acc = theo_ten[ten]
 
-        cur_c = content_cursor[ten]
-        content_cursor[ten] = (cur_c + 1) % n_contents
-
         mode_acc = acc.get("mode", "Hybrid")
 
         # ma_nhom = URL/UID nhóm đầu để mở composer (đã validate là luôn có).
@@ -1916,7 +1911,7 @@ def api_schedule_gen(loai):
         schedule.append({
             "loai":       loai,
             "stt":        len(schedule) + 1,
-            "ma_content": contents[cur_c % n_contents],
+            "ma_content": "",      # gán ở dưới, sau khi chuyển slot nuôi/comment/MKT
             "ten_acc":    ten,
             "ten_page":   acc["page"],
             "gio_dang":   min_to_time(t_min),
@@ -2005,6 +2000,13 @@ def api_schedule_gen(loai):
 
     except Exception as e:
         logger.warning(f"Chuyển slot nuôi/comment/marketplace: bỏ qua ({e})")
+
+    # Content: TRẢI ĐỀU cho từng nick và XEN KẼ trên bảng (xem xep_lich.rai_content).
+    # Gán SAU khi chuyển slot vì chỉ dòng đăng bài / Marketplace hiện mã content —
+    # dòng comment/nuôi nằm giữa không được làm lệch vòng. Bản cũ mỗi nick một
+    # con trỏ riêng → các nick liền nhau trùng content thành cụm 5–9 dòng.
+    from xep_lich import rai_content
+    rai_content(schedule, contents)
 
     # Trả khoá nội bộ về tên hiển thị, và ghi c_user vào từng dòng.
     for r in schedule:

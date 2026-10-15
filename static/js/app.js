@@ -3506,6 +3506,7 @@ async function openGenSchedule(loai){
             </div>
             <div class="field-group"><label>Từ khóa (cách nhau dấu phẩy)</label><input id="gen-kw" value="${vKw}"></div>
             ${_renderNhip(res.nhip, res.accs)}
+            <div style="font-size:12px;color:var(--text-muted)">Content (${res.contents.length} cái đang Sử dụng) tự rải <b>xen kẽ</b>: mỗi acc quay đều đủ các content, hai dòng đăng liền nhau tránh trùng nhau.${res.contents.length<4?` <span style="color:var(--warning)">Ít hơn 4 content thì không tránh hết trùng được — bật thêm content ở tab Content.</span>`:""}</div>
             <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Cài đặt từng tài khoản</div>
             <div id="gen-accs">${_renderGenAccs(res.accs, res.contents)}</div>`;
     }catch(e){
@@ -3533,13 +3534,10 @@ function _renderNhip(nhip, accs){
 
 function _renderGenAccs(accs, contents){
     if(!accs.length) return `<div class="empty">Không có acc Active nào cho loại này</div>`;
-    const n = accs.length;
-    const nc = contents.length;
+    // Không còn ô "Content đầu" cho từng acc: content được rải XEN KẼ cho cả
+    // bảng lúc Gen (xep_lich.rai_content). Con trỏ riêng từng acc cũ làm các
+    // acc liền nhau trùng content thành cụm.
     return accs.map((acc,i)=>{
-        // Trải đều content: acc[0]=H1, acc[1]=H5, acc[2]=H9, acc[3]=H13 (với 17 content, 4 acc)
-        const defC = contents[Math.floor(i * nc / n) % nc] || "";
-        // Acc chỉ comment không dùng content lẫn mode — vẫn render <select> ẩn
-        // để runGen đọc theo chỉ số i không bị lệch, nhưng không bày ra cho rối.
         const oCmt = acc.chi_comment;          // đang dính spam — ẩn ô Content
         const oMix = acc.hon_hop;              // tick Comment — vừa đăng vừa comment
         const oMkt = acc.co_marketplace;       // tick Marketplace
@@ -3547,20 +3545,12 @@ function _renderGenAccs(accs, contents){
         // chỉ hiện để biết, lấy từ giá trị đã lưu của acc.
         return `
         <div style="background:var(--bg-hover);border:1px solid ${oCmt?"#c084fc55":"var(--border)"};border-radius:var(--radius-sm);padding:12px;margin-bottom:8px">
-            <div style="font-weight:600;font-size:13px;margin-bottom:${oCmt?0:10}px">${acc.ten}
+            <div style="font-weight:600;font-size:13px">${acc.ten}
                 <span class="badge" style="background:#1e3a5f;color:#7dd3fc;margin-left:6px">${acc.mode||"Hybrid"}</span>
                 ${oCmt?`<span class="badge" style="background:#3b1f5e;color:#c084fc;margin-left:6px">💬 chỉ comment</span>`:""}
                 ${oMix?`<span class="badge" style="background:#4c1d3d;color:#f472b6;margin-left:6px">📝💬 đăng + comment</span>`:""}
                 ${oMkt?`<span class="badge" style="background:#143d2e;color:#6ee7b7;margin-left:6px">🛒 Marketplace</span>`:""}
                 <span style="font-size:11px;font-weight:400;color:var(--text-muted)"> — nghỉ ${acc.nghi}p · lực ${acc.luc_dang} phiên/h</span>
-            </div>
-            <div style="display:${oCmt?"none":"block"};margin-bottom:8px">
-                <div class="field-group">
-                    <label>Content đầu <span style="color:var(--text-muted);font-weight:400">(bắt đầu từ)</span></label>
-                    <select id="acc-c-${i}">
-                        ${contents.map(c=>`<option value="${c}" ${c===defC?"selected":""}>${c}</option>`).join("")}
-                    </select>
-                </div>
             </div>
         </div>`;
     }).join("");
@@ -3596,7 +3586,6 @@ async function runGen(){
                 page:      acc.page,
                 nghi:      acc.nghi,
                 luc_dang:  acc.luc_dang,
-                c_offset:  _genContents.indexOf(document.getElementById(`acc-c-${i}`)?.value||"")||0,
                 first_group_url: firstGroup,
                 mode:      acc.mode||"Hybrid",
                 contents:  _genContents,

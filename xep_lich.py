@@ -320,3 +320,68 @@ def rai_tu_khoa(rows: list, pool: list, khoa: str = "ten_acc", can=None) -> None
         dem[i] += 1
         cuoi_acc[acc] = truoc = i
         g = (i + 1) % n
+
+
+
+def _hien_content(r: dict) -> bool:
+    """Dòng có hiện mã content trên bảng lịch (đăng bài / Marketplace)."""
+    return (r.get("hoat_dong") or "dang_bai") in ("dang_bai", "marketplace")
+
+
+def rai_content(rows: list, contents: list, khoa: str = "ten_acc", hien=None) -> None:
+    """Gán content cho các dòng lịch: TRẢI ĐỀU cho từng nick, XEN KẼ trên bảng.
+
+    Chọn cho từng dòng theo thứ tự thời gian, nới dần từng bậc tới khi có ứng viên:
+      1. Content nick đó dùng ÍT NHẤT (đi hết một vòng mới lặp lại), khác dòng
+         đăng ngay trước trên bảng, khác content nick vừa đăng.
+      2. Nới: content nick đó dùng nhiều hơn tối đa 1 lần — vẫn khác dòng trước
+         và khác content vừa đăng.
+      3. Nới tiếp: cho nick lặp content vừa đăng (không quá 2 lần liên tiếp) để
+         hai dòng liền nhau trên bảng vẫn khác nhau.
+      4. Bất đắc dĩ: trùng dòng trước.
+    Hoà thì chọn content cả bảng dùng ít nhất, rồi theo vòng quay.
+
+    Bản cũ cho mỗi nick một con trỏ riêng bắt đầu ở ô "Content đầu" — các nick
+    đứng liền nhau không biết nhau nên bảng ra cụm 5–9 dòng cùng content
+    (lịch Bán thật: 79% cặp dòng liền nhau trùng). Ưu tiên tuyệt đối "liền nhau
+    khác nhau" cũng sai: chỉ 2 content mà số nick chẵn là có nick đăng MỘT
+    content cả ngày — tệ hơn nhiều. Với 2 content không cách nào đạt cả hai
+    (lịch Bán thật còn ~14% trùng); từ 4 content trở lên thì gần như 0%.
+
+    Chạy SAU khi đã chuyển slot nuôi/comment/Marketplace, vì chỉ dòng `hien(row)`
+    (mặc định: đăng bài + Marketplace) mới hiện mã content. Dòng comment / nuôi
+    vẫn được gán content (slot comment có thể thành phiên nhử đăng bài) nhưng
+    không làm lệch vòng.
+    """
+    pool = list(dict.fromkeys(str(c).strip() for c in (contents or []) if c and str(c).strip()))
+    n = len(pool)
+    if not n:
+        return
+    hien = hien or _hien_content
+    tong = [0] * n
+    dem_acc, da_dang = {}, {}
+    g, truoc = 0, None
+    for r in rows:
+        acc = r.get(khoa, "")
+        dem = dem_acc.setdefault(acc, [0] * n)
+        ls = da_dang.setdefault(acc, [])
+        cuoi = ls[-1] if ls else None
+        vong = [(g + j) % n for j in range(n)]
+        m = min(dem)
+        it_nhat = [i for i in vong if dem[i] == m]
+        if not hien(r):
+            ung = [i for i in it_nhat if i != cuoi] or it_nhat
+            r["ma_content"] = pool[ung[0]]
+            continue
+        lap3 = lambda i: len(ls) >= 2 and ls[-1] == ls[-2] == i
+        ung = ([i for i in it_nhat if i != truoc and i != cuoi]
+               or [i for i in vong if dem[i] <= m + 1 and i != truoc and i != cuoi]
+               or [i for i in vong if dem[i] <= m + 1 and i != truoc and not lap3(i)]
+               or [i for i in it_nhat if i != truoc] or it_nhat)
+        i = min(ung, key=lambda x: (dem[x], tong[x], vong.index(x)))
+        r["ma_content"] = pool[i]
+        dem[i] += 1
+        tong[i] += 1
+        ls.append(i)
+        truoc = i
+        g = (i + 1) % n

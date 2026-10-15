@@ -5950,6 +5950,81 @@ check("Gen lịch dùng cách chia mới, bỏ con trỏ theo nick",
       "rai_tu_khoa(schedule, keyword_pool" in Path("server.py").read_text(encoding="utf-8")
       and "keyword_cursor" not in Path("server.py").read_text(encoding="utf-8"))
 
+# ── Content TRẢI ĐỀU + XEN KẼ (xep_lich.rai_content) ──────────────────────────
+# Bản cũ mỗi nick một con trỏ riêng từ ô "Content đầu": lịch Bán thật (11 nick,
+# 2 content) có 79% cặp dòng liền nhau trùng content, cụm dài tới 9 dòng.
+import itertools as _it_ct
+from xep_lich import rai_content as _rct, _hien_content as _hct, chuyen_slot_so_luong as _csl
+def _lich_ct(so_nick, n_ct, seed=0):
+    _m = _pbl([{"ten": f"N{i}", "nghi": (10, 12, 15)[(i + seed) % 3]} for i in range(so_nick)],
+              5 * 60, 25 * 60)
+    _ds = [{"ten_acc": t} for _, t in _m]
+    _tg = {}
+    for r in _ds: _tg[r["ten_acc"]] = _tg.get(r["ten_acc"], 0) + 1
+    _csl(_ds, {k: round(v * .25) for k, v in _tg.items()}, "comment")   # chen dòng comment
+    _CT = [f"C{i}" for i in range(n_ct)]
+    _rct(_ds, _CT)
+    _vis = [r for r in _ds if _hct(r)]
+    _theo = {}
+    for r in _vis: _theo.setdefault(r["ten_acc"], []).append(r["ma_content"])
+    return _ds, _vis, _theo, _CT
+for _so, _nct in ((11, 4), (8, 4), (5, 6), (3, 17), (11, 5)):
+    _ds, _vis, _theo, _CT = _lich_ct(_so, _nct)
+    check(f"{_so} nick / {_nct} content: hai dòng đăng liền nhau gần như không trùng (≤ 0,5%)",
+          sum(a["ma_content"] == b["ma_content"] for a, b in zip(_vis, _vis[1:]))
+          <= len(_vis) * .005)
+    check(f"{_so} nick / {_nct} content: nick không đăng lại content vừa đăng",
+          all(a != b for v in _theo.values() for a, b in zip(v, v[1:])))
+    check(f"{_so} nick / {_nct} content: mỗi nick quay đều đủ content (lệch ≤ 2)",
+          all(max(v.count(c) for c in _CT) - min(v.count(c) for c in _CT) <= 2
+              for v in _theo.values()))
+    check(f"{_so} nick / {_nct} content: cả bảng mỗi content đăng ngang nhau (lệch ≤ 3)",
+          max(sum(r["ma_content"] == c for r in _vis) for c in _CT)
+          - min(sum(r["ma_content"] == c for r in _vis) for c in _CT) <= 3)
+# 2–3 content: không thể vừa xen kẽ hoàn hảo vừa để mỗi nick đổi content —
+# nhưng KHÔNG nick nào được đăng một content cả ngày (lỗi của cách ưu tiên
+# tuyệt đối "liền nhau khác nhau": 8 nick / 2 content → có nick lệch 76 lần).
+for _so, _nct in ((11, 2), (8, 2), (5, 2), (3, 2), (8, 3), (3, 3)):
+    _ds, _vis, _theo, _CT = _lich_ct(_so, _nct)
+    _cum = max(len(list(g)) for _, g in _it_ct.groupby(r["ma_content"] for r in _vis))
+    _tr = sum(a["ma_content"] == b["ma_content"] for a, b in zip(_vis, _vis[1:])) / len(_vis)
+    check(f"{_so} nick / {_nct} content: mỗi nick vẫn đều content (lệch ≤ 2), "
+          f"không lặp quá 3 lần liền",
+          all(max(v.count(c) for c in _CT) - min(v.count(c) for c in _CT) <= 2
+              and max(len(list(g)) for _, g in _it_ct.groupby(v)) <= 3
+              for v in _theo.values()))
+    check(f"{_so} nick / {_nct} content: trùng liền nhau ít (<{30 if _nct == 2 else 5}%), "
+          f"cụm ≤ {5 if _nct == 2 else 3} dòng (bản cũ: 79%, cụm 9)",
+          _tr < (.30 if _nct == 2 else .05) and _cum <= (5 if _nct == 2 else 3))
+_ds = [{"ten_acc": "A"}, {"ten_acc": "B", "hoat_dong": "comment"},
+       {"ten_acc": "B", "hoat_dong": "nuoi_nick"}, {"ten_acc": "C"}]
+_rct(_ds, ["X", "Y"])
+check("dòng comment/nuôi nằm giữa KHÔNG làm lệch vòng — hai dòng đăng hai bên vẫn khác nhau",
+      _ds[0]["ma_content"] != _ds[3]["ma_content"])
+check("dòng comment vẫn có content (để còn thành phiên nhử đăng bài)",
+      _ds[1]["ma_content"] in ("X", "Y"))
+_ds = [{"ten_acc": "A"}]; _rct(_ds, [])
+check("không có content → không gán gì", "ma_content" not in _ds[0])
+_src_gen_ct = Path("server.py").read_text(encoding="utf-8")
+check("Gen lịch rải content SAU khi chuyển slot, bỏ con trỏ theo nick",
+      "rai_content(schedule, contents)" in _src_gen_ct and "content_cursor" not in _src_gen_ct
+      and _src_gen_ct.index("rai_content(schedule, contents)")
+          > _src_gen_ct.index('chuyen_slot_so_luong(schedule, han_mkt, "marketplace")'))
+check("form Gen bỏ ô \"Content đầu\" của từng acc",
+      "acc-c-" not in Path("static/js/app.js").read_text(encoding="utf-8"))
+_r_gct = _client.post("/api/schedule/homestay/gen", json={
+    "start": "08:00", "end": "14:00", "keyword_pool": ["kw"],
+    "acc_settings": [
+        {"ten": f"GenCT{i}", "c_user": f"77700{i}", "page": "", "nghi": 15, "luc_dang": 4,
+         "first_group_url": "123", "mode": "Hybrid", "contents": ["H1", "H2", "H3", "H4"]}
+        for i in range(3)]}).get_json()
+with db._conn() as _c_gct:
+    _ma_gct = [r[0] for r in _c_gct.execute(
+        "SELECT ma_content FROM schedules WHERE loai='homestay' ORDER BY stt")]
+check("Gen (API): content xen kẽ — hai dòng liền nhau không trùng, đủ 4 content",
+      _r_gct.get("ok") and len(_ma_gct) > 8 and set(_ma_gct) == {"H1", "H2", "H3", "H4"}
+      and all(a != b for a, b in zip(_ma_gct, _ma_gct[1:])))
+
 # ── Xoá mảng content: mảng nào cũng xoá được, LUÔN CÒN ÍT NHẤT 1 ─────────────
 _reg_cu = db.get_setting("loai_content_ds", "")
 _ds0 = db.loai_content_ds()
