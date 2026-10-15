@@ -164,7 +164,10 @@ def cai_dat() -> dict:
             st[k] = type(dv)(v) if str(v).strip() != "" else dv
         except (TypeError, ValueError):
             st[k] = dv
-    for loai in ("homestay", "thue", "ban"):
+    # Đủ 5 slot mảng — trước đây ghi cứng 3 mảng gốc nên mảng thêm mới (loai4,
+    # loai5) có nhập câu cũng không đọc được, phiên comment tự bỏ qua.
+    for d in db.loai_content_ds():
+        loai = d["key"]
         st[f"pool_{loai}"] = db.get_setting(f"comment_pool_{loai}", "")
     return st
 

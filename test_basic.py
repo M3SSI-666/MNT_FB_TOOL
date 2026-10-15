@@ -6029,6 +6029,23 @@ for _k_log in ("loai4", "loai5", "page"):
           _client.get(f"/api/logs/{_k_log}?n=5").get_json().get("ok") is True)
 check("API log vẫn từ chối loại lạ",
       _client.get("/api/logs/khong-co?n=5").get_json().get("ok") is False)
+# Tab Link comment: tab + thư viện câu theo mảng đang bật, không ghi cứng 3 mảng gốc.
+_khoi_cmt = _ajs_m[_ajs_m.index("// ── Link comment"):_ajs_m.index("// ── Biến thể ảnh chống dedupe")]
+check("tab Link comment dựng tab theo các mảng đang bật",
+      "function _cmtLoaiDS()" in _khoi_cmt and "_loaiBat()" in _khoi_cmt
+      and "CMT_LOAI" not in _ajs_m and '["homestay","🏠 Homestay"]' not in _khoi_cmt
+      and 'pool("homestay"' not in _khoi_cmt)
+check("mảng đang chọn ở tab Link comment bị xoá thì tự về mảng đầu tiên",
+      "if(!ds.some(([k])=>k===_cmtLoai)) _cmtLoai" in _khoi_cmt)
+check("đổi tên tab \"Bài đi Comment\" thành \"Link comment\"",
+      "Link comment</div>" in _html_m and "Bài đi Comment" not in _html_m
+      and '"comment-posts":"Link comment"' in _ajs_m and "Bài đi Comment" not in _ajs_m)
+import comment_bai as _cb_m
+db.set_setting("loai_content_ds", '[{"key":"loai4","nhan":"Đất","bat":1}]')
+db.set_setting("comment_pool_loai4", "Còn lô nào không ạ")
+check("phiên comment đọc được thư viện câu của mảng thêm mới (loai4)",
+      _cb_m.cai_dat().get("pool_loai4") == "Còn lô nào không ạ")
+db.set_setting("comment_pool_loai4", "")
 db.set_setting("loai_content_ds", _reg_cu)
 
 # ── dọn dẹp ────────────────────────────────────────────────────────────────

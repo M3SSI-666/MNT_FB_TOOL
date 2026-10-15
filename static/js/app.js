@@ -120,7 +120,7 @@ const PAGE_TITLES = {
     "uid-groups":"UID Nhóm", "uid-market":"UID Marketplace",
     "lich-homestay":"Lịch Homestay", "lich-thue":"Lịch Thuê",
     "lich-ban":"Lịch Bán", "lich-page":"Lịch Đăng Page", "lich-nuoi":"Lịch Nuôi nick",
-    "comment-posts":"Bài đi Comment",
+    "comment-posts":"Link comment",
     "tham-gia-nhom":"Tham gia nhóm Page",
     "tham-gia-nhom-market":"Tham gia nhóm Market",
     marketplace:"Marketplace",
@@ -2743,9 +2743,14 @@ function renderSchedulePage(loai){
         </table></div></div>`;
 }
 
-// ── Bài đi Comment ────────────────────────────────────────────
+// ── Link comment ──────────────────────────────────────────────
 // Acc bị dỡ bài vẫn comment được; comment vào bài cũ làm bài nổi lên đầu nhóm.
-const CMT_LOAI = [["homestay","🏠 Homestay"],["thue","🏡 Thuê"],["ban","💰 Bán"]];
+// Tab + thư viện câu đi theo các mảng content ĐANG BẬT: xoá mảng ở tab Content
+// là tab của nó ở đây biến mất, đổi tên là nhãn đổi theo. Link cũ vẫn nằm trong
+// máy — thêm lại mảng vào đúng slot đó là có lại.
+function _cmtLoaiDS(){
+    return _loaiBat().map(d=>[d.key, `${_LICH_ICON[d.key]||"📦"} ${_escapeHtml(d.nhan||d.key)}`]);
+}
 let _cmtLoai = "homestay";
 // Hạn mức link mỗi hạng mục. Chỉ là giá trị tạm cho lần vẽ ĐẦU TIÊN — ngay khi
 // API trả về thì lấy số thật từ `db.GIOI_HAN_LINK`. Nguồn duy nhất là Python.
@@ -2781,13 +2786,15 @@ function renderCommentPostsPage(){
             </tr></thead>
             <tbody id="cmt-table"><tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr></tbody>
         </table></div></div>`;
+    const ds=_cmtLoaiDS();
+    if(!ds.some(([k])=>k===_cmtLoai)) _cmtLoai = ds[0]?.[0] || "homestay";
     renderCmtTabs();
     loadCommentPosts(_cmtLoai);
 }
 
 function renderCmtTabs(){
     const box=document.getElementById("cmt-tabs"); if(!box) return;
-    box.innerHTML=CMT_LOAI.map(([k,ten])=>
+    box.innerHTML=_cmtLoaiDS().map(([k,ten])=>
         `<button class="btn ${_cmtLoai===k?"btn-primary":"btn-ghost"}" style="font-size:12px"
                  onclick="switchCmtLoai('${k}')">${ten}</button>`).join("");
 }
@@ -2867,7 +2874,7 @@ function startCmtFieldEdit(td){
 }
 
 function openAddCommentPosts(){
-    const ten=(CMT_LOAI.find(([k])=>k===_cmtLoai)||[])[1]||_cmtLoai;
+    const ten=(_cmtLoaiDS().find(([k])=>k===_cmtLoai)||[])[1]||_cmtLoai;
     openModal(`+ Dán danh sách link — ${ten}`, `
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
             Mỗi dòng một link bài viết. Link đã có trong danh sách sẽ tự bỏ qua.
@@ -2896,7 +2903,7 @@ async function delCommentPost(id){
 }
 
 async function clearCommentPosts(){
-    const ten=(CMT_LOAI.find(([k])=>k===_cmtLoai)||[])[1]||_cmtLoai;
+    const ten=(_cmtLoaiDS().find(([k])=>k===_cmtLoai)||[])[1]||_cmtLoai;
     if(!confirm(`Xoá TOÀN BỘ link của ${ten}?`)) return;
     try{
         const r=await API.commentPostsClear(_cmtLoai);
@@ -2960,22 +2967,20 @@ async function openCommentSettings(){
             <span style="font-size:12px;font-weight:700;color:var(--accent)">THƯ VIỆN CÂU THEO LOẠI</span>
             <span style="margin-left:auto;display:flex;gap:6px">
                 <button type="button" class="btn btn-ghost" style="padding:3px 8px;font-size:11px"
-                        title="Thêm câu mẫu còn thiếu vào cả 3 loại, giữ nguyên câu bạn đã tự viết"
+                        title="Thêm câu mẫu còn thiếu vào các mảng có sẵn câu mẫu, giữ nguyên câu bạn đã tự viết"
                         onclick="napCauMauComment(true)">➕ Thêm câu mẫu</button>
                 <button type="button" class="btn btn-ghost" style="padding:3px 8px;font-size:11px"
-                        title="XOÁ hết câu đang có rồi thay bằng bộ mẫu 30 câu/loại"
+                        title="XOÁ hết câu đang có rồi thay bằng bộ mẫu 30 câu/mảng (mảng có sẵn câu mẫu)"
                         onclick="napCauMauComment(false)">📥 Nạp lại từ đầu</button>
             </span>
         </div>
-        ${pool("homestay","🏠 Homestay")}
-        ${pool("thue","🏡 Thuê")}
-        ${pool("ban","💰 Bán")}
+        ${_cmtLoaiDS().map(([k,ten])=>pool(k,ten)).join("")}
       </div>
       <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px">
         <button onclick="closeModal()" class="btn btn-ghost">Huỷ</button>
         <button onclick="saveCommentSettings()" class="btn btn-primary">💾 Lưu</button>
       </div>`);
-    CMT_LOAI.forEach(([k])=>_demCmtPool(k));
+    _cmtLoaiDS().forEach(([k])=>_demCmtPool(k));
 }
 
 /**
@@ -2984,14 +2989,14 @@ async function openCommentSettings(){
  * `them=false` → thay sạch, có hỏi lại vì đây là thao tác xoá dữ liệu.
  */
 async function napCauMauComment(them){
-    if(!them && !confirm("Xoá hết câu đang có ở cả 3 loại rồi thay bằng bộ mẫu 30 câu/loại?\n\n"
+    if(!them && !confirm("Xoá hết câu đang có ở các mảng có sẵn câu mẫu rồi thay bằng bộ mẫu 30 câu/mảng?\n\n"
                        + "Câu bạn tự viết sẽ mất. Muốn giữ lại thì bấm Huỷ rồi chọn “Thêm câu mẫu”."))
         return;
     try{
         const r=await API.commentCauMau();
         if(!r.ok){ Toast.error(r.error); return; }
         const bao=[];
-        CMT_LOAI.forEach(([k,ten])=>{
+        _cmtLoaiDS().forEach(([k,ten])=>{
             const ta=document.getElementById(`cs_comment_pool_${k}`);
             const mau=(r.data?.[k]||"").split("\n").map(s=>s.trim()).filter(Boolean);
             if(!ta || !mau.length) return;
@@ -3029,7 +3034,7 @@ async function saveCommentSettings(){
         comment_nghi_max: gi("comment_nghi_max",7),
         comment_cau_chinh_chu: gi("comment_cau_chinh_chu",2),
     };
-    CMT_LOAI.forEach(([k])=>{ data["comment_pool_"+k]=g("comment_pool_"+k)?.value||""; });
+    _cmtLoaiDS().forEach(([k])=>{ data["comment_pool_"+k]=g("comment_pool_"+k)?.value||""; });
     if(data.comment_nghi_min > data.comment_nghi_max){
         Toast.error("Nghỉ giữa 2 bài: giá trị đầu phải nhỏ hơn giá trị sau"); return;
     }
@@ -3042,7 +3047,7 @@ async function saveCommentSettings(){
     }
     // Bật comment mà thư viện rỗng thì phiên sẽ tự bỏ qua — báo trước cho khỏi
     // ngồi soi log tưởng hỏng cookie.
-    const rong=CMT_LOAI.filter(([k])=>!(data["comment_pool_"+k]||"").trim()).map(([,t])=>t);
+    const rong=_cmtLoaiDS().filter(([k])=>!(data["comment_pool_"+k]||"").trim()).map(([,t])=>t);
     try{
         const r=await API.saveSettings(data);
         if(r.ok){
@@ -3339,7 +3344,7 @@ function renderScheduleTable(loai,data){
         // khi việc cần làm chỉ là dán thêm link.
         else if(st.includes("bỏ qua"))
             stBadge=`<span class="badge" style="background:#422006;color:#fbbf24"
-                       title="Không phải lỗi — chưa có link trong tab Bài đi Comment cho loại này.">⏸ ${st.replace(/^💬\s*/,"")}</span>`;
+                       title="Không phải lỗi — chưa có link trong tab Link comment cho loại này.">⏸ ${st.replace(/^💬\s*/,"")}</span>`;
         else if(st.startsWith("💬")) stBadge=`<span class="badge" style="background:#1e3a5f;color:#93c5fd">${st}</span>`;
         else if(st==="X😴") stBadge=`<span class="badge" style="background:#422006;color:#fbbf24" title="Máy tự tắt vì acc nghỉ/chết/cookie hết hạn — sẽ tự về Chờ ngày mai">😴 Nghỉ</span>`;
         else if(st==="X") stBadge=`<span class="badge badge-muted">X</span>`;

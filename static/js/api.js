@@ -79,7 +79,7 @@ const API = {
     joinDelete:     (id)                            => API.del(`/api/join/${id}`),
     logsJoin:       (n=200)                         => API.get(`/api/logs/join?n=${n}`),
 
-    // Bài đi comment
+    // Link comment
     commentPosts:       (loai)       => API.get(`/api/comment-posts/${loai}`),
     commentPostsAdd:    (loai, urls) => API.post(`/api/comment-posts/${loai}/add`, {urls}),
     commentPostField:   (id, f, v)   => API.post(`/api/comment-posts/${id}/field`, {field:f, value:v}),

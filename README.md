@@ -197,7 +197,7 @@ nhóm, bài có comment mới sẽ nổi lên đầu — vậy thay vì cố đ�
 dỡ, cho acc comment vào các bài cũ còn sống để đẩy chúng lên.
 
 **Cách bật:**
-1. Tab **💬 Bài đi Comment** → chọn loại → **+ Dán danh sách link** (mỗi dòng
+1. Tab **💬 Link comment** → chọn loại → **+ Dán danh sách link** (mỗi dòng
    một link bài viết, link trùng tự bỏ).
 2. **⚙️ Cài đặt comment** → nhập **thư viện câu** cho từng loại. Không có câu
    thì phiên tự bỏ qua.
