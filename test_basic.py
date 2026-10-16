@@ -3274,6 +3274,11 @@ check("tab Page không còn cột loai_page / acc_quan_ly", "loai_page" not in _
 # Ô 'Tên Page' ở bảng Tài khoản nay nối theo page_uid (dropdown), không gõ tay tên.
 check("cột Tên Page ở Tài khoản dùng page_uid", '{key:"page_uid",label:"Tên Page"}' in _ajs)
 check("có dropdown chọn Page theo UID (CHON_SAN.page_uid)", "page_uid:" in _ajs and "_pagesDS" in _ajs)
+# Cột Loại đăng: nới rộng + không xuống dòng để tên mảng gói trong 1 dòng.
+_ô_loai = _ajs[_ajs.index('if(f.key==="loai_dang"){'):]
+_ô_loai = _ô_loai[:_ô_loai.index('if(f.key==="page_uid"){')]
+check("ô Loại đăng không xuống dòng (white-space:nowrap + min-width)",
+      "white-space:nowrap" in _ô_loai and "min-width:96px" in _ô_loai)
 # Server: cột xuất Excel của Page cũng bỏ 2 cột đó.
 _srv = Path("server.py").read_text(encoding="utf-8")
 check("EXPORT_PAGE_COLUMNS bỏ acc_quan_ly + loai_page",
@@ -5042,13 +5047,14 @@ _html_ls = Path("templates/index.html").read_text(encoding="utf-8")
 _bang_page = _html_ls[_html_ls.index('id="page-tham-gia-nhom"'):_html_ls.index('id="join-table"')]
 check("bảng Page có cột Làm sạch và Đã rời",
       ">Làm sạch</th>" in _bang_page and ">Đã rời</th>" in _bang_page)
-check("bảng Page vẫn giữ cột Giờ chạy", ">Giờ chạy</th>" in _bang_page)
+check("bỏ cột Giờ chạy ở bảng Page (chạy lần lượt nên giờ chạy vô nghĩa)",
+      ">Giờ chạy</th>" not in _bang_page)
 _ajs_ls = Path("static/js/app.js").read_text(encoding="utf-8")
 check("ô Làm sạch ở bảng Page gọi đúng nguồn Page",
       "jmLamSach(${r.id}, this.checked, '')" in _ajs_ls)
-check("số cột hàng trống khớp bảng Page (11 cột)",
-      len(_re_ls.findall(r"<th[\s>]", _bang_page)) == 11
-      and 'colspan="11" class="empty">Chưa có lịch tham gia nhóm nào' in _ajs_ls)
+check("số cột hàng trống khớp bảng Page (10 cột)",
+      len(_re_ls.findall(r"<th[\s>]", _bang_page)) == 10
+      and 'colspan="10" class="empty">Chưa có lịch tham gia nhóm nào' in _ajs_ls)
 # Làm sạch chạy SAU phần tham gia, và chỉ khi đã vào được ít nhất một nhóm mục
 # tiêu. Bản cũ làm sạch TRƯỚC: ngày 02/10 bước tham gia báo lỗi 15/15 nhóm (đọc
 # sai, xem dưới) — nick nào có nhóm cũ mà chạy tiếp là rời sạch nhóm cũ, không

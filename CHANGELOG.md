@@ -10,6 +10,18 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.51.2 — 17/10/2026
+
+**Chỉnh giao diện nhỏ**
+
+- **Tài khoản:** cột **Loại đăng** nới rộng hơn và **không xuống dòng** — tên
+  mảng dài ("Times City", "Ocean Park"…) gói gọn trong một dòng, không bị cắt
+  thành hai dòng nữa.
+- **Tham gia nhóm Page:** bỏ cột **Giờ chạy** — bảng này chạy bằng nút *Chạy lần
+  lượt* nên giờ chạy từng dòng không còn ý nghĩa (tab Market đã bỏ từ trước).
+
+---
+
 ## v2.51.1 — 16/10/2026
 
 **Ô "Sử dụng" ở tab Content: chọn Có / Không, không gõ tay**

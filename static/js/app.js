@@ -199,7 +199,7 @@ async function loadJoinSchedules() {
         else if(!anyRunning) jcTrangThai("", false);
 
         if(!res.data.length) {
-            tbody.innerHTML = `<tr><td colspan="11" class="empty">Chưa có lịch tham gia nhóm nào</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" class="empty">Chưa có lịch tham gia nhóm nào</td></tr>`;
             return;
         }
         tbody.innerHTML = res.data.map(r => {
@@ -216,7 +216,6 @@ async function loadJoinSchedules() {
             return `<tr${isRunning?' style="background:rgba(251,191,36,.07)"':""}>
                 <td style="text-align:center;font-weight:600">${r.ten_acc}</td>
                 <td style="text-align:center;color:var(--text-secondary)">${r.ten_page}</td>
-                <td style="text-align:center;font-weight:600">${r.gio_chay||"-"}</td>
                 <td style="text-align:center">
                     <input type="checkbox" ${r.lam_sach?"checked":""} ${isRunning?"disabled":""}
                            onchange="jmLamSach(${r.id}, this.checked, '')"
@@ -1159,8 +1158,9 @@ function renderAccTable(data){
             const center=CENTER_KEYS.includes(f.key)?"text-align:center;":"";
             const style=`${center}font-size:${f.mono?"11px":"12px"};color:var(--text-secondary);${f.mono?"font-family:var(--font-mono);":""}max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
             if(f.key==="loai_dang"){
-                // Lưu KHOÁ (data-val) nhưng hiện NHÃN.
-                return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}" style="${center}color:${mauLoaiDang(val)};font-weight:600;font-size:12px" onclick="startAccEdit(this)">${val?_escapeHtml(_loaiNhan(val)):"-"}</td>`;
+                // Lưu KHOÁ (data-val) nhưng hiện NHÃN. Nới rộng + không xuống
+                // dòng để tên mảng ("Times City", "Ocean Park"…) gói trong 1 dòng.
+                return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}" style="${center}color:${mauLoaiDang(val)};font-weight:600;font-size:12px;white-space:nowrap;min-width:96px" onclick="startAccEdit(this)">${val?_escapeHtml(_loaiNhan(val)):"-"}</td>`;
             }
             if(f.key==="page_uid"){
                 // Nối acc→page theo UID: data-val lưu page_uid, hiện TÊN Page.
