@@ -40,7 +40,6 @@ LOAI_SHEET_MAP = {
     "homestay": "Chéo Homestay",
     "thue":     "Chéo Thuê",
     "ban":      "Chéo Bán",
-    "page":     "Đăng bài Page",
     "nuoi":     "Nuôi nick",
 }
 
@@ -154,26 +153,9 @@ def _attempt_post(item: dict) -> str:
 
     logger.info(f"📝 Content ({len(content)}c): {content[:60]}...")
 
-    # ── ĐĂNG BÀI PAGE (wall) — Playwright ────────────────────
-    if LOAI == "page":
-        from page_via_poster import post_page_wall
-        acc_data = _tk(item)
-        if not acc_data:
-            raise Exception(f"Không tìm thấy acc '{acc_name}'")
-        page_info = get_page_by_name(page_name)
-        page_uid  = page_info.get("page_uid", "") if page_info else ""
-        if not page_uid:
-            raise Exception(f"Không có Page UID cho '{page_name}'")
-        ok = post_page_wall(
-            acc_name=acc_name,
-            page_uid=page_uid,
-            message=content,
-            image_url=link_anh,
-            c_user=_c_user_cua(item, acc_data),
-        )
-        if not ok:
-            raise Exception("Đăng tường Page về kết quả rỗng mà không báo lỗi bước nào")
-        return ""
+    # Đăng tường Page nay KHÔNG còn là một runner LOAI riêng: nó là phiên
+    # 'dang_page' lồng trong lịch của mảng (xem _run_page_slot). _attempt_post
+    # chỉ còn lo đăng chéo nhóm (Hybrid/Via).
 
     # ── MODE HYBRID / PAGEVIA ─────────────────────────────────
     if mode in ("HYBRID", "PAGEVIA"):
@@ -463,6 +445,66 @@ def _run_marketplace_slot(item: dict):
         db.ghi_nhan_phien_dang(acc_name, False, c_user=_cu(item))
 
 
+def _run_page_slot(item: dict):
+    """Slot đã bị chuyển thành phiên ĐĂNG TƯỜNG PAGE.
+
+    Acc quản lý page tự đăng lên tường page của mình (page gắn theo `page_uid`
+    của acc), lồng vào ngày hoạt động của chính nó — thay cho runner Page riêng
+    trước đây. Content lấy từ kho của mảng acc đang thuộc (ma_content của dòng).
+    Một lần, KHÔNG retry (giống Marketplace: đăng lại cùng nội dung dễ bị từ
+    chối), nhưng vẫn tính vào sức khoẻ acc vì đây là phiên ĐĂNG.
+    """
+    sid      = item["id"]
+    stt      = item.get("stt", sid)
+    acc_name = item["ten_acc"]
+    ts       = datetime.now().strftime("%H:%M")
+
+    ct = get_content_by_code(item["ma_content"], LOAI)
+    if not ct:
+        _update_status(sid, f"❌ {ts} Không có content '{item['ma_content']}'")
+        logger.error(f"❌ STT {stt} Đăng page: thiếu content '{item['ma_content']}'")
+        return
+    content  = (ct.get("noi_dung") or "").strip()
+    link_anh = (ct.get("link_anh") or "").strip()
+
+    # Page đích = page gắn với acc (theo page_uid). Thiếu là lỗi DỮ LIỆU (acc
+    # chưa chọn Page), không phải lỗi nick: báo rồi bỏ qua, KHÔNG tính sức khoẻ.
+    acc_data = _tk(item)
+    page_uid = (acc_data.get("page_uid") or "").strip() if acc_data else ""
+    if not page_uid:
+        _update_status(sid, f"❌ {ts} Acc chưa chọn Page để đăng")
+        logger.error(f"❌ STT {stt} Đăng page: acc '{acc_name}' chưa gắn Page (page_uid rỗng)")
+        return
+
+    logger.info(f"\n{'='*55}")
+    logger.info(f"📄 [{LOAI}] STT {stt} | {acc_name} | ĐĂNG PAGE | {item['ma_content']} | {item['gio_dang']}")
+    logger.info(f"{'='*55}")
+    _update_status(sid, f"📄 Đang đăng tường Page {ts}")
+
+    try:
+        from page_via_poster import post_page_wall
+        c_user_v = _c_user_cua(item, acc_data)
+        ok = post_page_wall(acc_name=acc_name, page_uid=page_uid,
+                            message=content, image_url=link_anh, c_user=c_user_v)
+        if not ok:
+            raise Exception("Đăng tường Page về kết quả rỗng mà không báo lỗi bước nào")
+        done = datetime.now().strftime("%H:%M")
+        _update_status(sid, f"✅ {done} 📄")
+        logger.info(f"✅ STT {stt} Đăng page xong")
+        db.ghi_nhan_phien_dang(acc_name, True, c_user=_cu(item))
+    except CookieDeadError:
+        ts2 = datetime.now().strftime("%H:%M")
+        _update_status(sid, f"❌ {ts2} Cookie hết hạn")
+        logger.error(f"❌ STT {stt}: Cookie hết hạn khi đăng tường Page — acc '{acc_name}'")
+        _mark_cookie_dead(acc_name, _cu(item))
+    except Exception as e:
+        ts2 = datetime.now().strftime("%H:%M")
+        cat, label = classify_error(e)
+        _update_status(sid, f"❌ {ts2} Đăng page lỗi: {label}")
+        logger.error(f"❌ STT {stt} Đăng page lỗi [{cat}]: {e}")
+        db.ghi_nhan_phien_dang(acc_name, False, c_user=_cu(item))
+
+
 def _bao_suc_khoe(stt, acc_name: str, hanh_dong: str, ly_do: str):
     """In ra log quyết định của bộ theo dõi sức khoẻ acc."""
     if hanh_dong == "nghi":
@@ -523,6 +565,9 @@ def _run_one(item: dict):
         return
     if hd == "marketplace":
         _run_marketplace_slot(item)
+        return
+    if hd == "dang_page":
+        _run_page_slot(item)
         return
 
     sid      = item["id"]

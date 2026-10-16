@@ -29,7 +29,7 @@ from db import (
     get_accounts, get_account_by_name, upsert_account, delete_account, update_account_field,
     reorder_accounts, insert_account_at, import_accounts,
     # pages
-    get_pages, get_page_by_name, upsert_page, delete_page, reorder_pages, import_pages,
+    get_pages, get_page_by_name, get_page_by_uid, upsert_page, delete_page, reorder_pages, import_pages,
     # content
     get_content, get_content_by_code, upsert_content, delete_content, reorder_content,
     import_content,
@@ -317,11 +317,13 @@ def serve_media_alt(filename):
 
 
 # ── Runner management ─────────────────────────────────────────
-# Runner theo KHOÁ cố định — gồm CẢ 5 slot mảng content (dù bật hay chưa) + page
-# + nuoi. Giữ đủ 5 slot content để vòng "gom/diệt runner" bắt được cả runner mồ
-# côi của mảng vừa bị tắt. Việc KHỞI ĐỘNG mới chặn theo `loai_content_bat()`.
+# Runner theo KHOÁ cố định — gồm CẢ 5 slot mảng content (dù bật hay chưa) + nuoi.
+# Giữ đủ 5 slot content để vòng "gom/diệt runner" bắt được cả runner mồ côi của
+# mảng vừa bị tắt. Việc KHỞI ĐỘNG mới chặn theo `loai_content_bat()`.
 # pid_file / log suy ra từ khoá — thêm mảng không phải khai báo tay.
-_RUNNER_KEYS = ("homestay", "thue", "ban", "loai4", "loai5", "page", "nuoi")
+# KHÔNG còn runner 'page' riêng: đăng tường page nay là phiên 'dang_page' lồng
+# trong lịch của từng mảng (xem _run_page_slot bên scheduler).
+_RUNNER_KEYS = ("homestay", "thue", "ban", "loai4", "loai5", "nuoi")
 RUNNER_CFG = {
     k: {"pid_file": f".runner_{k}.pid", "log": str(LOG_DIR / f"autopost_{k}.log")}
     for k in _RUNNER_KEYS
@@ -679,9 +681,9 @@ def run_status():
 def run_start(loai):
     if loai not in RUNNER_CFG:
         return jsonify({"ok": False, "error": "Loại không hợp lệ"})
-    # Mảng content phải đang BẬT mới chạy được (page/nuoi luôn chạy). Áp cho CẢ
+    # Mảng content phải đang BẬT mới chạy được (nuoi luôn chạy). Áp cho CẢ
     # 5 slot: từ 15/10 mảng gốc cũng xoá được.
-    if loai not in ("page", "nuoi") and loai not in loai_content_bat():
+    if loai != "nuoi" and loai not in loai_content_bat():
         return jsonify({"ok": False, "error": "Mảng này đã bị xoá — thêm lại ở tab Content trước"})
     if _runner_running(loai):
         return jsonify({"ok": False, "msg": f"Runner {loai} đang chạy rồi"})
@@ -1229,11 +1231,12 @@ def api_pages_delete(page_id):
 
 # Cột xuất/nhập Excel cho Page. Thứ tự này cũng là thứ tự cột trong file.
 # Cột đầu là key DB, cột sau là header người đọc.
+# Cột 'Acc quản lý' + 'Loại đăng' đã bỏ (15/10): acc nào đăng page là acc nối
+# tới page đó (tab Tài khoản), và content lấy theo Loại đăng của acc — không còn
+# đặt ở Page nữa.
 EXPORT_PAGE_COLUMNS = [
     ("ten_page",        "Tên Page"),
-    ("acc_quan_ly",     "Acc quản lý"),
     ("page_uid",        "Page UID"),
-    ("loai_page",       "Loại đăng"),
     ("bai_dang_toi_da", "Bài tối đa"),
     ("link_page",       "Link Page"),
     ("ghi_chu",         "Ghi chú"),
@@ -1959,7 +1962,7 @@ def api_schedule_gen(loai):
     #
     # `da_dat` gom mốc giờ của MỌI phiên đã chuyển và được truyền tiếp sang lượt
     # comment bên dưới, để phiên nuôi và phiên comment không rơi sát nhau.
-    n_warm, n_cmt, n_mkt = 0, 0, 0
+    n_warm, n_cmt, n_mkt, n_page = 0, 0, 0, 0
     da_dat = []
     try:
         from nuoi_nick import plan_warming_conversion
@@ -2006,6 +2009,25 @@ def api_schedule_gen(loai):
         if loai in loai_content_bat():
             from xep_lich import chuyen_slot_so_luong
 
+            # 0. Đăng tường Page — acc quản lý page tự đăng, lồng vào ngày của nó.
+            #    GIỮ NGUYÊN phiên nuôi: chỉ đổi slot ĐĂNG BÀI (đăng nhóm) sang
+            #    'dang_page', random & rải đều — đúng cơ chế comment/marketplace
+            #    (chuyen_slot_so_luong vốn chỉ đụng slot dang_bai). Mỗi acc gắn
+            #    page đổi ĐÚNG `bai_dang_toi_da` slot. Chạy TRƯỚC comment/market
+            #    để chỉ tiêu page (số cứng) chắc chắn đủ; comment/market (%) lấy
+            #    phần dôi.
+            han_page = {}
+            for a in accs_db:
+                pu = (a.get("page_uid") or "").strip()
+                if not pu:
+                    continue
+                pg = get_page_by_uid(pu)
+                n = int(float(pg.get("bai_dang_toi_da") or 0)) if pg else 0
+                if n > 0:
+                    han_page[a["ten_acc"]] = n
+            if han_page:
+                n_page += chuyen_slot_so_luong(schedule, han_page, "dang_page")
+
             def _so(a, pct_fn):
                 t = tong_phien.get(a["ten_acc"], 0)
                 return int(round(pct_fn(a) / 100 * t))
@@ -2021,7 +2043,7 @@ def api_schedule_gen(loai):
                 n_mkt += chuyen_slot_so_luong(schedule, han_mkt, "marketplace")
 
     except Exception as e:
-        logger.warning(f"Chuyển slot nuôi/comment/marketplace: bỏ qua ({e})")
+        logger.warning(f"Chuyển slot nuôi/page/comment/marketplace: bỏ qua ({e})")
 
     # Content: TRẢI ĐỀU cho từng nick và XEN KẼ trên bảng (xem xep_lich.rai_content).
     # Gán SAU khi chuyển slot vì chỉ dòng đăng bài / Marketplace hiện mã content —
@@ -2050,6 +2072,7 @@ def api_schedule_gen(loai):
                     "nuoi": n_warm,
                     "comment": n_cmt,
                     "marketplace": n_mkt,
+                    "page": n_page,
                     "from": schedule[0]["gio_dang"],
                     "to":   schedule[-1]["gio_dang"]})
 
@@ -2130,83 +2153,6 @@ def api_schedule_nuoi_gen():
     set_setting("gen_prefs_nuoi", json.dumps({"start": start, "end": end}, ensure_ascii=False))
     return jsonify({"ok": True, "total": len(rows), "accs": len(accs),
                     "from": rows[0]["gio_dang"], "to": rows[-1]["gio_dang"]})
-
-
-@app.route("/api/schedule/page/gen", methods=["POST"])
-def api_schedule_page_gen():
-    """Gen lịch Đăng bài Page từ bảng pages + content local."""
-    import random as _random
-    body    = request.json or {}
-    acc     = body.get("acc", "")
-    start_h = int(body.get("start_hour", 7))
-    end_h   = int(body.get("end_hour", 23))
-
-    CONTENT_LOAI_MAP = {"Homestay": "homestay", "Thuê": "thue", "Bán": "ban"}
-
-    # Ép int khi ĐỌC, không so sánh thẳng: dữ liệu cũ (hoặc nhập từ Excel) có
-    # thể còn lưu dạng chuỗi, '' > 0 sẽ ném TypeError -> HTTP 500.
-    def _so_bai(p):
-        return ep_kieu_so("bai_dang_toi_da", p.get("bai_dang_toi_da", 0))
-
-    pages = [p for p in get_pages() if _so_bai(p) > 0]
-    if not pages:
-        return jsonify({"ok": False, "error": "Không có Page nào có 'Bài đăng tối đa' > 0"})
-
-    page_items = []
-    for p in pages:
-        ct_loai = CONTENT_LOAI_MAP.get(p.get("loai_page", ""), "")
-        if not ct_loai:
-            continue
-        codes = [r["ma_content"] for r in get_content(ct_loai, su_dung="Có")]
-        if not codes:
-            continue
-        n      = min(_so_bai(p), len(codes))
-        picked = _random.sample(codes, n)
-        page_items.append({"ten_page": p["ten_page"], "picked": picked})
-
-    if not page_items:
-        return jsonify({"ok": False, "error": "Không có content nào"})
-
-    def interleave(lists):
-        res = []; iters = [list(l) for l in lists]
-        while any(iters):
-            for l in iters:
-                if l: res.append(l.pop(0))
-        return res
-
-    mixed    = interleave([[(p["ten_page"], c) for c in p["picked"]] for p in page_items])
-    total    = len(mixed)
-    total_min = (end_h - start_h) * 60
-    interval  = total_min / (total - 1) if total > 1 else 0
-
-    schedule = []
-    for i, (ten_page, ma_content) in enumerate(mixed):
-        t = start_h * 60 + round(i * interval)
-        schedule.append({
-            "loai":       "page",
-            "stt":        i + 1,
-            "ma_content": ma_content,
-            "ten_acc":    acc,
-            "ten_page":   ten_page,
-            "gio_dang":   f"{(t//60)%24:02d}:{t%60:02d}",
-            "ma_nhom":    "",
-            "tu_khoa":    "",
-            "mode":       "PAGE",
-            "trang_thai": "Chờ",
-        })
-
-    replace_schedules("page", schedule)
-
-    # Lưu thiết lập gen Page gần nhất để lần sau prefill.
-    set_setting("gen_prefs_page", json.dumps({
-        "acc":        acc,
-        "start_hour": start_h,
-        "end_hour":   end_h,
-    }, ensure_ascii=False))
-
-    return jsonify({"ok": True, "total": len(schedule),
-                    "from": schedule[0]["gio_dang"],
-                    "to":   schedule[-1]["gio_dang"]})
 
 
 @app.route("/api/schedule/<loai>/gen-data")

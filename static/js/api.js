@@ -55,7 +55,6 @@ const API = {
     scheduleCell:    (loai, id, f, v) => API.post(`/api/schedule/${loai}/cell`, {id, field:f, value:v}),
     scheduleGen:     (loai, data) => API.post(`/api/schedule/${loai}/gen`, data),
     scheduleGenData: (loai)       => API.get(`/api/schedule/${loai}/gen-data`),
-    schedulePageGen: (data)       => API.post("/api/schedule/page/gen", data),
     scheduleNuoiGen: (data)       => API.post("/api/schedule/nuoi/gen", data),
     nuoiMsgMau:      ()           => API.get("/api/nuoi/msg-mau"),
 

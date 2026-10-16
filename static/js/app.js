@@ -119,7 +119,7 @@ const PAGE_TITLES = {
     accounts:"Tài khoản", pages:"Page", content:"Content",
     "uid-groups":"UID Nhóm", "uid-market":"UID Marketplace",
     "lich-homestay":"Lịch Homestay", "lich-thue":"Lịch Thuê",
-    "lich-ban":"Lịch Bán", "lich-page":"Lịch Đăng Page", "lich-nuoi":"Lịch Nuôi nick",
+    "lich-ban":"Lịch Bán", "lich-nuoi":"Lịch Nuôi nick",
     "comment-posts":"Link comment",
     "tham-gia-nhom":"Tham gia nhóm Page",
     "tham-gia-nhom-market":"Tham gia nhóm Market",
@@ -381,10 +381,10 @@ async function deleteJoin(id) {
 
 // ── Runner ────────────────────────────────────────────────────
 // Mảng content (homestay/thue/ban/loai4/loai5) dựng ĐỘNG theo registry trong
-// apDungLoai() — bật mảng nào mới có ô Run đó. page + nuoi cố định, luôn có.
+// apDungLoai() — bật mảng nào mới có ô Run đó. Chỉ còn nuoi cố định (runner
+// 'page' riêng đã bỏ — đăng tường page nay lồng trong lịch mảng).
 const _RUNNER_MAU = {homestay:"#34d399", thue:"#60a5fa", ban:"#fbbf24", loai4:"#f472b6", loai5:"#c084fc"};
 const RUNNER_LABELS_CODINH = {
-    page: {title:"Đăng Page",icon:"📄",color:"#c084fc"},
     nuoi: {title:"Nuôi nick",icon:"🌱",color:"#6ee7b7"},
 };
 let RUNNER_LABELS = {
@@ -631,12 +631,12 @@ async function tgXemTruoc(){
 }
 
 // ── Lịch của máy ─────────────────────────────────────────────────
-// Runner tick được = các mảng content ĐANG CÓ (tên theo tab Content) + page +
-// nuôi. Trước đây ghi cứng "Homestay/Thuê/Bán": đổi tên mảng không theo, mảng
-// mới thêm không tick được, mảng đã xoá vẫn hiện.
+// Runner tick được = các mảng content ĐANG CÓ (tên theo tab Content) + nuôi.
+// Trước đây ghi cứng "Homestay/Thuê/Bán": đổi tên mảng không theo, mảng mới
+// thêm không tick được, mảng đã xoá vẫn hiện. (Runner 'page' riêng đã bỏ.)
 function _lmRunner(){
     return _loaiBat().map(d=>[d.key, `${_LICH_ICON[d.key]||"📦"} ${d.nhan||d.key}`])
-        .concat([["page","📄 Đăng Page"],["nuoi","🌱 Nuôi nick"]]);
+        .concat([["nuoi","🌱 Nuôi nick"]]);
 }
 
 function lmGap(hien){
@@ -956,7 +956,7 @@ const ACC_FIELDS = [
     {key:"link_profile",label:"Link profile"},
     {key:"email_sdt",label:"Email/SDT"},
     {key:"password",label:"Password",mono:true},
-    {key:"ten_page",label:"Tên Page"},
+    {key:"page_uid",label:"Tên Page"},
     {key:"c_user",label:"c_user",mono:true},
     {key:"xs",label:"xs",mono:true},
     {key:"refresh",label:"Refresh"},
@@ -967,6 +967,15 @@ const ACC_FIELDS = [
     {key:"ghi_chu",label:"Ghi chú"},
 ];
 let _accData=[];
+// Danh sách Page để dựng dropdown "Tên Page" ở bảng Tài khoản — nối acc→page
+// theo page_uid (không theo tên: hai page tên gần trùng sẽ lẫn). Nạp cùng acc.
+let _pagesDS=[];
+function _pageNhan(uid){
+    const u=(uid||"").toString().trim();
+    if(!u) return "";
+    const p=_pagesDS.find(x=>(x.page_uid||"").toString().trim()===u);
+    return p?(p.ten_page||u):u;   // chưa nạp kịp danh sách thì tạm hiện uid
+}
 
 // ── Sức khoẻ acc (xem suc_khoe_acc.py) ────────────────────────────────
 const TRANG_THAI_DUNG="Dừng";
@@ -1102,8 +1111,9 @@ async function loadAccounts(){
     const thead=document.getElementById("acc-thead");
     tbody.innerHTML=`<tr><td colspan="22" class="loading"><span class="spin">↻</span></td></tr>`;
     try{
-        const res=await API.accounts();
+        const [res, pr]=await Promise.all([API.accounts(), API.pages().catch(()=>({data:[]}))]);
         _accData=res.data;
+        _pagesDS=pr.data||[];   // cho dropdown "Tên Page" (chọn page theo UID)
         // Thead
         if(thead) thead.innerHTML=`<tr><th style="width:40px;text-align:center">#</th>${ACC_FIELDS.map(f=>`<th style="text-align:center">${f.label}</th>`).join("")}<th style="width:60px;text-align:center">Xóa</th></tr>`;
         // Summary
@@ -1151,6 +1161,10 @@ function renderAccTable(data){
             if(f.key==="loai_dang"){
                 // Lưu KHOÁ (data-val) nhưng hiện NHÃN.
                 return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}" style="${center}color:${mauLoaiDang(val)};font-weight:600;font-size:12px" onclick="startAccEdit(this)">${val?_escapeHtml(_loaiNhan(val)):"-"}</td>`;
+            }
+            if(f.key==="page_uid"){
+                // Nối acc→page theo UID: data-val lưu page_uid, hiện TÊN Page.
+                return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}" style="font-size:12px;color:var(--text-secondary);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_escapeHtml(_pageNhan(val))}" onclick="startAccEdit(this)">${val?_escapeHtml(_pageNhan(val)):"-"}</td>`;
             }
             if(f.key==="link_profile")
                 return `<td class="editable" data-id="${r.id}" data-field="${f.key}" data-val="${esc}" style="${center}" onclick="startAccEdit(this)">${val?`<a href="${val}" target="_blank" style="color:var(--accent);font-size:12px" onclick="event.stopPropagation()">🔗</a>`:"-"}</td>`;
@@ -1262,6 +1276,11 @@ async function startAccEdit(td){
         mode: MODE_OPTIONS.map(v=>({value:v,label:v})),
         loai_dang: [{value:"",label:"-"}].concat(_loaiBat().map(d=>({value:d.key,label:d.nhan}))),
         trang_thai: TRANG_THAI_OPTIONS.map(v=>({value:v,label:v||"-"})),
+        // Tên Page: chọn theo UID. value=page_uid (lưu xuống), label=tên page.
+        // Chỉ liệt kê page CÓ uid; chọn page nào thì server tự đồng bộ cột ten_page.
+        page_uid: [{value:"",label:"— (không gắn page)"}].concat(
+            _pagesDS.filter(p=>(p.page_uid||"").toString().trim())
+                    .map(p=>({value:(p.page_uid||"").toString().trim(), label:p.ten_page||p.page_uid}))),
     };
     if(CHON_SAN[field]){
         const sel=document.createElement("select");
@@ -1280,6 +1299,7 @@ async function startAccEdit(td){
             const nv=sel.value; td.classList.remove("editing");
             td.dataset.val=nv;
             if(field==="loai_dang"){ td.style.color=mauLoaiDang(nv); td.textContent=nv?_loaiNhan(nv):"-"; }
+            else if(field==="page_uid") td.textContent=nv?_pageNhan(nv):"-";
             else td.textContent=nv||"-";
             if(nv===cur) return;
             td.classList.add("saving");
@@ -1288,6 +1308,12 @@ async function startAccEdit(td){
                 td.classList.remove("saving");
                 if(r.ok){
                     td.classList.add("saved"); setTimeout(()=>td.classList.remove("saved"),1200);
+                    // page_uid: server tự đồng bộ ten_page — cập nhật bản nhớ để
+                    // các chỗ đọc ten_page (Gen, lịch) khớp ngay, khỏi nạp lại.
+                    if(field==="page_uid"){
+                        const row=_accData.find(x=>x.id===parseInt(id));
+                        if(row){ row.page_uid=nv; row.ten_page=_pageNhan(nv); }
+                    }
                     // Bật về Active thì server xoá luôn lịch sử phiên và mốc
                     // nghỉ — nạp lại để bảng khớp với DB thay vì hiện giá trị cũ.
                     if(field==="trang_thai") loadAccounts();
@@ -1298,7 +1324,9 @@ async function startAccEdit(td){
         sel.addEventListener("change",luu);
         sel.addEventListener("blur",luu);
         sel.addEventListener("keydown",e=>{
-            if(e.key==="Escape"){ xong=true; td.classList.remove("editing"); td.textContent=cur||"-"; }
+            if(e.key==="Escape"){ xong=true; td.classList.remove("editing");
+                td.textContent=(field==="page_uid"?(cur?_pageNhan(cur):"-")
+                               :field==="loai_dang"?(cur?_loaiNhan(cur):"-"):(cur||"-")); }
         });
         return;
     }
@@ -1338,8 +1366,6 @@ const MODE_OPTIONS = ["Hybrid","Via"];
 // Phải KHỚP db.JOIN_NGHI_MOI_MAC_DINH — có assertion canh hai bên không lệch.
 const JOIN_NGHI_MOI_MAC_DINH = 15;
 
-const LOAI_PAGE_OPTIONS = ["","Homestay","Thuê","Bán"];
-const LOAI_PAGE_TRONG   = "—";        // chữ hiện ra cho ô trống
 // Mỗi loại đăng MỘT màu riêng. Bản trước gom cả 3 loại "X_" vào một màu hồng và
 // cả 3 loại "C_" vào một màu tím, nên nhìn bảng không tách được X_Home với
 // X_Thuê — mà đó mới là thứ cần phân biệt khi soi acc nào đang chạy mảng nào.
@@ -1364,13 +1390,17 @@ function openAccForm(data={}){
     // Như fsel nhưng value≠text (dùng cho Loại đăng: value=khoá, text=nhãn).
     const fsel2=(k,label,opts)=>`<div class="field-group"><label>${label}</label><select id="af_${k}">${opts.map(o=>`<option value="${o.value}" ${data[k]===o.value?"selected":""}>${o.label}</option>`).join("")}</select></div>`;
     const _loaiOpts=[{value:"",label:"—"}].concat(_loaiBat().map(d=>({value:d.key,label:d.nhan})));
+    // Tên Page: chọn page theo UID (value=page_uid). Server tự đồng bộ ten_page.
+    const _pageOpts=[{value:"",label:"— (không gắn page)"}].concat(
+        _pagesDS.filter(p=>(p.page_uid||"").toString().trim())
+                .map(p=>({value:(p.page_uid||"").toString().trim(), label:p.ten_page||p.page_uid})));
     const fchk=(k,label)=>`<div class="field-group"><label>${label}</label><input type="checkbox" id="af_${k}" ${String(data[k])==="1"?"checked":""} style="width:18px;height:18px;cursor:pointer"></div>`;
     openModal(data.id?"Sửa tài khoản":"Thêm tài khoản",`
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             ${f("ten_acc","Tên acc")} ${fsel("mode","Mode",MODE_OPTIONS)}
             ${fsel2("loai_dang","Loại đăng",_loaiOpts)} ${f("thoi_gian_nghi","Nghỉ (phút)")}
             ${f("comment_pct","Comment %","number")} ${f("marketplace_pct","Marketplace %","number")}
-            ${f("ten_page","Tên Page")}
+            ${fsel2("page_uid","Tên Page",_pageOpts)}
             ${f("link_profile","Link profile")} ${f("email_sdt","Email/SDT")}
             ${f("password","Password")} ${f("c_user","c_user")}
             <div class="field-group" style="grid-column:1/-1"><label>xs</label><input id="af_xs" value="${(data.xs||"").toString().replace(/"/g,"&quot;")}"></div>
@@ -1395,7 +1425,8 @@ async function saveAccForm(){
         comment_pct: parseInt(get("af_comment_pct"))||0,
         marketplace_pct: parseInt(get("af_marketplace_pct"))||0,
         thoi_gian_nghi: parseInt(get("af_thoi_gian_nghi"))||30,
-        ten_page:  get("af_ten_page"), link_profile: get("af_link_profile"),
+        page_uid:  get("af_page_uid"), ten_page: _pageNhan(get("af_page_uid")),
+        link_profile: get("af_link_profile"),
         email_sdt: get("af_email_sdt"), password: get("af_password"),
         c_user:    get("af_c_user"),    xs:        get("af_xs"),
         trang_thai:get("af_trang_thai"),email_khoiphuc: get("af_email_khoiphuc"),
@@ -1533,7 +1564,7 @@ async function insertAccRow(refId, position) {
 // ── Pages ─────────────────────────────────────────────────────
 async function loadPages(){
     const tbody=document.getElementById("pages-table"); if(!tbody) return;
-    tbody.innerHTML=`<tr><td colspan="9" class="loading"><span class="spin">↻</span></td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="7" class="loading"><span class="spin">↻</span></td></tr>`;
     try{
         const res=await API.pages();
 
@@ -1555,7 +1586,7 @@ async function loadPages(){
             <div class="metric-value" style="font-size:20px${s.c?";color:"+s.c:""}">${s.v}</div>
         </div>`).join("");
 
-        if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="9" class="empty">Chưa có Page nào</td></tr>`; return; }
+        if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="7" class="empty">Chưa có Page nào</td></tr>`; return; }
 
         const ep=(p,field,style,mono)=>{
             const val=(p[field]||"").toString(); const esc=val.replace(/"/g,"&quot;");
@@ -1573,12 +1604,7 @@ async function loadPages(){
                 style="cursor:default">
             <td class="stt" title="Kéo để đổi thứ tự">${i+1}</td>
             ${ep(p,"ten_page","font-weight:600;min-width:140px")}
-            ${ep(p,"acc_quan_ly","min-width:110px;text-align:center")}
             ${ep(p,"page_uid","min-width:120px;text-align:center",true)}
-            <td class="editable" data-id="${p.id}" data-field="loai_page" data-val="${(p.loai_page||"").replace(/"/g,"&quot;")}"
-                onclick="startPageEdit(this)" style="font-size:12px;text-align:center">
-                ${pageLoaiCell(p.loai_page)}
-            </td>
             ${ep(p,"bai_dang_toi_da","text-align:center;font-weight:600")}
             <td class="editable" data-id="${p.id}" data-field="link_page" data-val="${(p.link_page||"").replace(/"/g,"&quot;")}"
                 onclick="startPageEdit(this)" style="text-align:center">
@@ -1590,50 +1616,19 @@ async function loadPages(){
                     style="background:var(--danger-light);color:var(--danger);border:none;border-radius:5px;width:28px;height:28px;cursor:pointer;font-size:13px">🗑️</button>
             </td>
         </tr>`).join("");
-    }catch(e){ tbody.innerHTML=`<tr><td colspan="9" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
-}
-
-function pageLoaiCell(loai){
-    if(!loai) return `<span style="color:var(--text-muted)">-</span>`;
-    if(loai.includes("Homestay")) return `<span style="color:#34d399;font-weight:600">Homestay</span>`;
-    if(loai.includes("Thuê"))     return `<span style="color:#60a5fa;font-weight:600">Thuê</span>`;
-    if(loai.includes("Bán"))      return `<span style="color:#fbbf24;font-weight:600">Bán</span>`;
-    return `<span style="color:var(--text-secondary)">${loai}</span>`;
+    }catch(e){ tbody.innerHTML=`<tr><td colspan="7" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
 }
 
 function startPageEdit(td){
     if(td.classList.contains("editing")) return;
     td.classList.add("editing");
     const id=td.dataset.id, field=td.dataset.field, val=td.dataset.val||"";
-    let inp;
-    if(field==="loai_page"){
-        // Bốn lựa chọn: — (không đăng) / Homestay / Thuê / Bán.
-        // Ô trống LUÔN có mặt, không chỉ khi giá trị đang sai như bản trước —
-        // không thì chọn một loại rồi là không bao giờ bỏ chọn lại được.
-        inp=document.createElement("select");
-        inp.style.cssText="background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-weight:600;cursor:pointer";
-        const mkOpt=(v,t)=>{ const op=document.createElement("option"); op.value=v; op.textContent=t; op.style.cssText="background:var(--bg-card);color:var(--text-primary)"; return op; };
-        const hienTai=(val==="-"?"":val);   // bảng hiện ô trống bằng dấu "-"
-        LOAI_PAGE_OPTIONS.forEach(o=>{
-            const op=mkOpt(o, o||LOAI_PAGE_TRONG);
-            if(o===hienTai) op.selected=true;
-            inp.appendChild(op);
-        });
-        // Giá trị lạ còn sót từ dữ liệu cũ thì giữ lại trong danh sách, để mở
-        // ô ra rồi đóng lại không âm thầm xoá mất nó.
-        if(hienTai && !LOAI_PAGE_OPTIONS.includes(hienTai)){
-            const op=mkOpt(hienTai,hienTai); op.selected=true; inp.appendChild(op);
-        }
-    } else {
-        inp=document.createElement("input"); inp.type="text"; inp.value=val==="-"?"":val;
-    }
+    let inp=document.createElement("input"); inp.type="text"; inp.value=val==="-"?"":val;
     td.innerHTML=""; td.appendChild(inp); inp.focus();
     if(inp.select) try{ inp.select(); }catch(e){}
-    if(field==="loai_page") inp.addEventListener("change",()=>inp.blur());
     async function commit(){
         const nv=inp.value; td.classList.remove("editing"); td.dataset.val=nv;
-        if(field==="loai_page") td.innerHTML=pageLoaiCell(nv);
-        else if(field==="link_page") td.innerHTML=nv?`<a href="${nv}" target="_blank" style="color:var(--accent);font-size:12px" onclick="event.stopPropagation()">🔗</a>`:"-";
+        if(field==="link_page") td.innerHTML=nv?`<a href="${nv}" target="_blank" style="color:var(--accent);font-size:12px" onclick="event.stopPropagation()">🔗</a>`:"-";
         else td.textContent=nv||"-";
         if(nv===val) return;
         td.classList.add("saving");
@@ -1652,11 +1647,7 @@ function openPageForm(data={}){
     const f=(k,l)=>`<div class="field-group"><label>${l}</label><input id="pf_${k}" value="${(data[k]||"").toString().replace(/"/g,"&quot;")}"></div>`;
     openModal(data.id?"Sửa Page":"Thêm Page",`
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            ${f("ten_page","Tên Page")} ${f("acc_quan_ly","Acc quản lý")}
-            ${f("page_uid","Page UID")}
-            <div class="field-group"><label>Loại đăng</label><select id="pf_loai_page">
-                ${LOAI_PAGE_OPTIONS.map(o=>`<option value="${o}" ${(data.loai_page||"")===o?"selected":""}>${o||LOAI_PAGE_TRONG+" (không đăng)"}</option>`).join("")}
-            </select></div>
+            ${f("ten_page","Tên Page")} ${f("page_uid","Page UID")}
             ${f("bai_dang_toi_da","Bài đăng tối đa")}
             <div class="field-group" style="grid-column:1/-1">${f("link_page","Link Page")}</div>
             <div class="field-group" style="grid-column:1/-1">${f("ghi_chu","Ghi chú")}</div>
@@ -1672,8 +1663,7 @@ async function savePageForm(){
     const g=id=>document.getElementById(id)?.value||"";
     const data={
         id: parseInt(g("pf_id"))||undefined,
-        ten_page: g("pf_ten_page"), acc_quan_ly: g("pf_acc_quan_ly"), page_uid: g("pf_page_uid"),
-        loai_page: g("pf_loai_page"),
+        ten_page: g("pf_ten_page"), page_uid: g("pf_page_uid"),
         bai_dang_toi_da: parseInt(g("pf_bai_dang_toi_da"))||0,
         link_page: g("pf_link_page"), ghi_chu: g("pf_ghi_chu"),
     };
@@ -2707,7 +2697,6 @@ const SCHEDULE_LABELS = {
               defaultFirstGroup:"https://www.facebook.com/groups/346244929095372"},
     ban:     {title:"Bán",      kw:"Chợ cư dân,Cộng,Làng,times city & park hill",
               defaultFirstGroup:"https://www.facebook.com/groups/346244929095372"},
-    page:    {title:"Đăng Page", kw:"", defaultFirstGroup:""},
     // Lịch cho acc CHỈ NUÔI: tick Nuôi + để trống cột Loại đăng
     nuoi:    {title:"Nuôi nick", kw:"", defaultFirstGroup:""},
 };
@@ -3360,6 +3349,8 @@ function renderScheduleTable(loai,data){
             ? `<td style="text-align:center"><span class="badge" style="background:#1e3a5f;color:#93c5fd">💬 Comment</span></td>`
             : hd==="marketplace"
             ? `<td style="text-align:center"><span class="badge" style="background:#143d2e;color:#6ee7b7">🛒 Market${r.ma_content?" · "+(r.ma_content||"").replace(/</g,"&lt;"):""}</span></td>`
+            : hd==="dang_page"
+            ? `<td style="text-align:center"><span class="badge" style="background:#3b2d5e;color:#c4b5fd">📄 Đăng page${r.ma_content?" · "+(r.ma_content||"").replace(/</g,"&lt;"):""}</span></td>`
             : sc(r,"ma_content","text-align:center");
         return `<tr>
             ${sc(r,"gio_dang","font-weight:600;white-space:nowrap")}
@@ -3440,25 +3431,6 @@ async function openGenSchedule(loai){
     document.getElementById("gen-panel-title").textContent=`▶ Gen lịch ${cfg.title}`;
     document.getElementById("gen-overlay").style.display="block";
     document.getElementById("gen-panel").style.display="flex";
-
-    if(loai==="page"){
-        // Ưu tiên thiết lập gen Page gần nhất đã lưu; chưa có thì dùng mặc định.
-        let pp = {};
-        try{ const s=await API.settings(); pp=JSON.parse(s.data?.gen_prefs_page||"{}"); }catch(e){ pp={}; }
-        const vAcc   = _escapeHtml(pp.acc || "Nguyễn Hương");
-        const vStart = _escapeHtml(String(pp.start_hour ?? 7));
-        const vEnd   = _escapeHtml(String(pp.end_hour ?? 23));
-        document.getElementById("gen-panel-body").innerHTML=`
-            <div class="field-group"><label>Tài khoản đăng</label><input id="gen-page-acc" value="${vAcc}"></div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                <div class="field-group"><label>Giờ bắt đầu</label><input id="gen-page-start" type="number" value="${vStart}"></div>
-                <div class="field-group"><label>Giờ kết thúc</label><input id="gen-page-end" type="number" value="${vEnd}"></div>
-            </div>
-            <div style="font-size:12px;color:var(--text-muted);background:var(--bg-hover);padding:10px;border-radius:var(--radius-sm)">
-                Lấy Page từ bảng Pages (Bài đăng tối đa > 0), pick content ngẫu nhiên, trải đều khung giờ.
-            </div>`;
-        return;
-    }
 
     if(loai==="nuoi"){
         // Acc CHỈ NUÔI: tick Nuôi + để trống Loại đăng. Chu kỳ lấy từ cột
@@ -3571,12 +3543,6 @@ async function runGen(){
                 start: document.getElementById("gen-nuoi-start")?.value||"07:00",
                 end:   document.getElementById("gen-nuoi-end")?.value||"23:00",
             });
-        } else if(_genLoai==="page"){
-            res=await API.schedulePageGen({
-                acc: document.getElementById("gen-page-acc")?.value||"",
-                start_hour: parseInt(document.getElementById("gen-page-start")?.value||"7"),
-                end_hour:   parseInt(document.getElementById("gen-page-end")?.value||"23"),
-            });
         } else {
             const kwPool=(document.getElementById("gen-kw")?.value||"").split(",").map(s=>s.trim()).filter(Boolean);
             const firstGroup=(document.getElementById("gen-first-group")?.value||"").trim();
@@ -3597,7 +3563,7 @@ async function runGen(){
                 keyword_pool:kwPool, acc_settings:accSettings,
             });
         }
-        if(res.ok){ Toast.success(`✅ Đã tạo ${res.total} dòng${res.nuoi?` · 🌱 ${res.nuoi} nuôi`:""}${res.comment?` · 💬 ${res.comment} comment`:""}${res.marketplace?` · 🛒 ${res.marketplace} MKT`:""} (${res.from}→${res.to})`); closeGen(); loadSchedule(_genLoai); }
+        if(res.ok){ Toast.success(`✅ Đã tạo ${res.total} dòng${res.nuoi?` · 🌱 ${res.nuoi} nuôi`:""}${res.page?` · 📄 ${res.page} page`:""}${res.comment?` · 💬 ${res.comment} comment`:""}${res.marketplace?` · 🛒 ${res.marketplace} MKT`:""} (${res.from}→${res.to})`); closeGen(); loadSchedule(_genLoai); }
         else Toast.error(res.error);
     }catch(e){ Toast.error(e.message); }
     btn.disabled=false; btn.innerHTML="▶ Tạo lịch";
@@ -3623,7 +3589,7 @@ function renderLogMang(){
 async function loadLogs(){
     const n=parseInt(document.getElementById("log-lines")?.value||"80");
     renderLogMang();
-    const runners=[..._loaiBat().map(d=>d.key),"page","nuoi"];
+    const runners=[..._loaiBat().map(d=>d.key),"nuoi"];
     await Promise.all(runners.map(async loai=>{
         const box=document.getElementById(`log-${loai}`); if(!box) return;
         try{

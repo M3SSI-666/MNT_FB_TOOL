@@ -455,6 +455,12 @@ def init_db():
         # spam 12 lần trong ngày 22/09 vì đúng chuyện đó.
         _add_col("accounts",  "vi_pham_ngay",  "vi_pham_ngay TEXT DEFAULT ''")
         _add_col("schedules", "hoat_dong",     "hoat_dong TEXT DEFAULT 'dang_bai'")
+        # Đăng tường Page nay là MỘT LOẠI PHIÊN RIÊNG (hoat_dong='dang_page'),
+        # tạo bằng cách CHUYỂN slot nuôi/đăng bài — không cần cột riêng, dùng
+        # luôn ma_content như mọi dòng đăng. Acc nối tới Page của nó theo UID
+        # (không theo tên — hai page tên gần trùng 'Homestay Times City' sẽ lẫn);
+        # ten_page giữ làm nhãn hiển thị.
+        _add_col("accounts",  "page_uid",         "page_uid TEXT DEFAULT ''")
 
         # ── Migration: tách loại đăng + cột % comment / Marketplace ─────────
         # loai_dang gộp "có comment" qua tiền tố X_. Tách ra: cột `mode`
@@ -617,6 +623,28 @@ def init_db():
                             ("Bán", "ban")):
             con.execute("UPDATE accounts SET loai_dang=? WHERE loai_dang=?",
                         (_key, _nhan))
+
+        # ── Migration: acc nối Page theo UID ────────────────────────────
+        # Trước đây acc chỉ có ten_page (nhãn); nay nối theo page_uid. Dò pages
+        # theo tên cho acc chưa có page_uid: KHỚP DUY NHẤT thì điền, còn trùng
+        # tên (vd hai 'Homestay Times City') hoặc không thấy thì để trống cho
+        # Duong chọn lại ở ô Tên Page — không đoán bừa rồi đăng nhầm page.
+        # Idempotent: chỉ đụng dòng page_uid còn rỗng.
+        if "page_uid" in [r["name"] for r in
+                          con.execute("PRAGMA table_info(accounts)").fetchall()]:
+            for _a in con.execute(
+                    "SELECT id, ten_page FROM accounts "
+                    "WHERE COALESCE(page_uid,'')='' AND COALESCE(ten_page,'')<>''"
+                    ).fetchall():
+                _kq = con.execute(
+                    "SELECT page_uid FROM pages WHERE ten_page=? "
+                    "AND COALESCE(page_uid,'')<>''", (_a["ten_page"],)).fetchall()
+                if len(_kq) == 1:
+                    con.execute("UPDATE accounts SET page_uid=? WHERE id=?",
+                                (_kq[0]["page_uid"], _a["id"]))
+                elif len(_kq) > 1:
+                    print(f"  ⚠️  Acc #{_a['id']} có Tên Page '{_a['ten_page']}' trùng "
+                          f"{len(_kq)} page — để trống page_uid, chọn lại tay")
 
         # ── Migration: bỏ trạng thái "Hỏng", đổi "Tạm dừng" → "Dừng" ────
         # Phải ĐỔI dữ liệu chứ không chỉ bỏ khỏi TRANG_THAI_OPTIONS: acc còn
@@ -906,7 +934,7 @@ def update_account_field(acc_id: int, field: str, value: str):
     safe = {
         "ten_acc","mode","loai_dang","comment_pct","marketplace_pct",
         "thoi_gian_nghi","link_profile","email_sdt",
-        "password","ten_page","c_user","xs","refresh","trang_thai",
+        "password","ten_page","page_uid","c_user","xs","refresh","trang_thai",
         "email_khoiphuc","pass_khoiphuc","twofa","ghi_chu",
         "nuoi_nick","nuoi_interval"
     }
@@ -961,6 +989,13 @@ def update_account_field(acc_id: int, field: str, value: str):
                 cu_acc = (r["c_user"] or "").strip()
 
         con.execute(f"UPDATE accounts SET {field}=? WHERE id=?", (value, acc_id))
+        # Ô Tên Page nay là dropdown gửi page_uid — đồng bộ ten_page (nhãn hiển
+        # thị) theo page được chọn. Rỗng = gỡ liên kết page của acc.
+        if field == "page_uid":
+            _p = con.execute("SELECT ten_page FROM pages WHERE TRIM(page_uid)=? LIMIT 1",
+                             ((value or "").strip(),)).fetchone()
+            con.execute("UPDATE accounts SET ten_page=? WHERE id=?",
+                        ((_p["ten_page"] if _p else ""), acc_id))
         # Người dùng bật acc về Active = "tôi đã xử lý xong". Phải xoá cả lịch sử
         # phiên, không thì cửa sổ trượt vẫn còn đầy "x" cũ và acc bị tắt lại ngay
         # sau phiên hỏng kế tiếp, trông như nút bật không ăn.
@@ -1543,6 +1578,18 @@ def get_page_by_name(ten_page: str) -> dict | None:
     with _conn() as con:
         r = con.execute(
             "SELECT * FROM pages WHERE ten_page = ? LIMIT 1", (ten_page,)
+        ).fetchone()
+        return dict(r) if r else None
+
+
+def get_page_by_uid(page_uid: str) -> dict | None:
+    """Page theo UID — khoá nối acc→page chắc chắn, không lẫn khi trùng tên."""
+    cu = (page_uid or "").strip()
+    if not cu:
+        return None
+    with _conn() as con:
+        r = con.execute(
+            "SELECT * FROM pages WHERE TRIM(page_uid) = ? LIMIT 1", (cu,)
         ).fetchone()
         return dict(r) if r else None
 

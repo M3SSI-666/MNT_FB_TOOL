@@ -53,7 +53,6 @@
             <div class="nav-item" data-page="lich-ban"><span class="nav-icon">💰</span> Lịch Bán</div>
             <div class="nav-item" data-page="lich-loai4" style="display:none"><span class="nav-icon">📦</span> Lịch</div>
             <div class="nav-item" data-page="lich-loai5" style="display:none"><span class="nav-icon">📦</span> Lịch</div>
-            <div class="nav-item" data-page="lich-page"><span class="nav-icon">📄</span> Lịch Đăng Page</div>
             <div class="nav-item" data-page="lich-nuoi"><span class="nav-icon">🌱</span> Lịch Nuôi nick</div>
             <div class="nav-item" data-page="comment-posts"><span class="nav-icon">💬</span> Link comment</div>
 
@@ -122,12 +121,11 @@
                         <table>
                             <thead><tr>
                                 <th style="width:40px;text-align:center">#</th>
-                                <th>Tên Page</th><th style="text-align:center">Acc quản lý</th><th style="text-align:center">Page UID</th>
-                                <th style="text-align:center">Loại đăng</th>
+                                <th>Tên Page</th><th style="text-align:center">Page UID</th>
                                 <th style="text-align:center">Bài tối đa</th><th style="text-align:center">Link</th><th>Ghi chú</th>
                                 <th style="width:44px"></th>
                             </tr></thead>
-                            <tbody id="pages-table"><tr><td colspan="9" class="loading"><span class="spin">↻</span></td></tr></tbody>
+                            <tbody id="pages-table"><tr><td colspan="7" class="loading"><span class="spin">↻</span></td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -264,7 +262,6 @@
             <div class="page" id="page-lich-ban"      style="display:none" data-loai="ban"></div>
             <div class="page" id="page-lich-loai4"    style="display:none" data-loai="loai4"></div>
             <div class="page" id="page-lich-loai5"    style="display:none" data-loai="loai5"></div>
-            <div class="page" id="page-lich-page"     style="display:none" data-loai="page"></div>
             <div class="page" id="page-lich-nuoi"     style="display:none" data-loai="nuoi"></div>
 
             <!-- ══ Link comment ════════════════════════════ -->
@@ -714,10 +711,6 @@
                     <!-- Log các mảng content ĐANG BẬT — app.js (renderLogMang) dựng theo
                          registry: xoá mảng là ô log của nó biến mất, đổi tên là nhãn đổi theo. -->
                     <div id="log-mang" style="display:contents"></div>
-                    <div class="card" style="display:flex;flex-direction:column;min-height:220px">
-                        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#c084fc;flex-shrink:0">📄 Đăng Page</div>
-                        <div class="log-box" id="log-page" style="flex:1;border:none;border-radius:0;margin:0"></div>
-                    </div>
                     <div class="card" style="display:flex;flex-direction:column;min-height:220px">
                         <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:#6ee7b7;flex-shrink:0">🌱 Nuôi nick</div>
                         <div class="log-box" id="log-nuoi" style="flex:1;border:none;border-radius:0;margin:0"></div>

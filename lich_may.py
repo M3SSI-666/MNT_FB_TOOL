@@ -39,10 +39,11 @@ from datetime import datetime
 
 from utils import logger
 
-# Đủ 5 slot mảng content + page + nuoi. Danh sách cũ chỉ có 3 mảng gốc nên lúc
-# 01:00 runner của mảng mới (loai4/loai5) không bao giờ bị dừng, và không tick
-# bật được. Bật runner của mảng đã xoá thì API tự từ chối — không cần lọc ở đây.
-RUNNER = ("homestay", "thue", "ban", "loai4", "loai5", "page", "nuoi")
+# Đủ 5 slot mảng content + nuoi. Danh sách cũ chỉ có 3 mảng gốc nên lúc 01:00
+# runner của mảng mới (loai4/loai5) không bao giờ bị dừng, và không tick bật
+# được. Bật runner của mảng đã xoá thì API tự từ chối — không cần lọc ở đây.
+# Runner 'page' riêng đã bỏ (15/10): đăng tường page lồng trong lịch mảng.
+RUNNER = ("homestay", "thue", "ban", "loai4", "loai5", "nuoi")
 
 HANH_DONG = {
     # Ngủ đông: lưu tất cả xuống ổ cứng rồi ngắt điện. Windows đánh thức được.

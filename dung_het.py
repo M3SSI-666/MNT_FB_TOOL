@@ -36,9 +36,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Toàn bộ phần xử lý tiến trình dùng chung với server — xem `tien_trinh.py`.
 import tien_trinh
 
-# Đủ 7 runner — PHẢI khớp `server._RUNNER_KEYS` (test_basic kiểm). Bản cũ chỉ
-# có 5 loại nên RESTART/UPDATE bỏ sót runner của mảng content thứ 4, thứ 5.
-RUNNER = ("homestay", "thue", "ban", "loai4", "loai5", "page", "nuoi")
+# Đủ 6 runner — PHẢI khớp `server._RUNNER_KEYS` (test_basic kiểm). Bản cũ có
+# runner 'page' riêng; nay đăng tường page lồng trong lịch mảng nên bỏ 'page'.
+RUNNER = ("homestay", "thue", "ban", "loai4", "loai5", "nuoi")
 
 
 def pid_giu_khoa() -> list:

@@ -10,6 +10,29 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.51.0 — 16/10/2026
+
+**Đăng tường Page không còn cần một acc riêng**
+
+Trước đây đăng bài lên tường Page do **một runner riêng** phụ trách, tốn hẳn một
+acc chỉ để làm việc đó. Giờ **acc nào quản lý Page thì chính acc đó tự đăng**,
+lồng vào ngày hoạt động bình thường của nó:
+
+- **Gắn Page cho acc theo UID:** cột **Tên Page** ở tab Tài khoản nay là ô
+  **chọn Page** (hiện tên, nối theo Page UID bên dưới) — không còn gõ tay, nên
+  hai Page tên gần giống nhau (vd "Homestay Times City") không bao giờ bị lẫn.
+- **Đăng Page lồng vào lịch mảng:** khi Gen lịch, phần mềm đổi đúng **"Bài tối
+  đa"** của Page thành các **phiên đăng tường Page**, lấy từ **phiên đăng bài
+  lên nhóm** và **rải đều** trong ngày. **Phiên nuôi nick giữ nguyên.** Nội dung
+  bài Page lấy từ kho content theo **Loại đăng của chính acc**. Dòng lịch hiện
+  nhãn tím **📄 Đăng page**.
+- **Tab Page gọn lại:** bỏ hai cột **Loại đăng** và **Acc quản lý** (không cần
+  nữa) — giữ Tên Page, Page UID, Bài tối đa, Link, Ghi chú.
+- **Bỏ tab "Lịch Đăng Page" + runner Page riêng.** *Tham gia nhóm Page* giữ
+  nguyên. Dữ liệu Page của bạn không bị đụng tới.
+
+---
+
 ## v2.50.1 — 16/10/2026
 
 **Hoàn thiện mảng content + sửa lỗi dừng/khởi động runner**

@@ -324,8 +324,8 @@ def rai_tu_khoa(rows: list, pool: list, khoa: str = "ten_acc", can=None) -> None
 
 
 def _hien_content(r: dict) -> bool:
-    """Dòng có hiện mã content trên bảng lịch (đăng bài / Marketplace)."""
-    return (r.get("hoat_dong") or "dang_bai") in ("dang_bai", "marketplace")
+    """Dòng có hiện mã content trên bảng lịch (đăng bài / Marketplace / đăng page)."""
+    return (r.get("hoat_dong") or "dang_bai") in ("dang_bai", "marketplace", "dang_page")
 
 
 def rai_content(rows: list, contents: list, khoa: str = "ten_acc", hien=None) -> None:

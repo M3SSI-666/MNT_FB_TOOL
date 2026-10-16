@@ -3261,27 +3261,27 @@ check("app.js đổ version vào ô đó",
       'app-version' in Path("static/js/app.js").read_text(encoding="utf-8"))
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Loại đăng của Page: phải có lựa chọn TRỐNG
+# Đăng tường Page tích hợp phiên: acc nối Page theo UID, tab Page bỏ 2 cột
 # ───────────────────────────────────────────────────────────────────────────
-# Page để trống loại đăng thì gen lịch BỎ QUA nó — dùng khi tạm không muốn đăng
-# lên Page đó mà chưa muốn xoá khỏi danh sách. Trước đây ô trống chỉ hiện ra
-# khi giá trị đang sai, nên chọn một loại rồi là không bao giờ bỏ chọn lại được.
+# Runner Page riêng + cột 'Loại đăng' / 'Acc quản lý' của Page đã bỏ (15/10):
+# acc nào quản page thì chính nó đăng (ô Tên Page = chọn page THEO UID ở tab Tài
+# khoản), content lấy theo Loại đăng của acc. Đăng page thành phiên 'dang_page'
+# lồng trong lịch mảng.
 _ajs = Path("static/js/app.js").read_text(encoding="utf-8")
-check("có danh sách loại đăng riêng cho Page", "LOAI_PAGE_OPTIONS" in _ajs)
-_m_lp = _re_v.search(r'const LOAI_PAGE_OPTIONS\s*=\s*\[([^\]]*)\]', _ajs)
-check("danh sách loại đăng Page đọc được", bool(_m_lp))
-if _m_lp:
-    _lp = [x.strip().strip('"').strip("'") for x in _m_lp.group(1).split(",")]
-    check("lựa chọn TRỐNG nằm đầu danh sách", _lp and _lp[0] == "")
-    check("đủ 4 lựa chọn: trống + 3 loại", len(_lp) == 4)
-    check("có đủ Homestay / Thuê / Bán",
-          {"Homestay", "Thuê", "Bán"}.issubset(set(_lp)))
-# Hai chỗ (bảng và form Thêm/Sửa) phải dùng CHUNG một danh sách. Trước đây chép
-# cứng ở cả hai, sửa một chỗ là lệch ngay.
-check("không còn chỗ nào chép cứng 3 loại của Page",
-      '["Homestay","Thuê","Bán"]' not in _ajs)
-check("form Thêm/Sửa Page dùng danh sách chung",
-      _ajs.count("LOAI_PAGE_OPTIONS") >= 3)   # khai báo + bảng + form
+check("đã bỏ danh sách loại đăng riêng của Page", "LOAI_PAGE_OPTIONS" not in _ajs)
+check("đã bỏ ô vẽ 'Loại đăng' ở tab Page (pageLoaiCell)", "pageLoaiCell" not in _ajs)
+check("tab Page không còn cột loai_page / acc_quan_ly", "loai_page" not in _ajs and "acc_quan_ly" not in _ajs)
+# Ô 'Tên Page' ở bảng Tài khoản nay nối theo page_uid (dropdown), không gõ tay tên.
+check("cột Tên Page ở Tài khoản dùng page_uid", '{key:"page_uid",label:"Tên Page"}' in _ajs)
+check("có dropdown chọn Page theo UID (CHON_SAN.page_uid)", "page_uid:" in _ajs and "_pagesDS" in _ajs)
+# Server: cột xuất Excel của Page cũng bỏ 2 cột đó.
+_srv = Path("server.py").read_text(encoding="utf-8")
+check("EXPORT_PAGE_COLUMNS bỏ acc_quan_ly + loai_page",
+      "acc_quan_ly" not in _srv.split("EXPORT_PAGE_COLUMNS")[1].split("]")[0]
+      and "loai_page" not in _srv.split("EXPORT_PAGE_COLUMNS")[1].split("]")[0])
+# db: có cột page_uid cho acc + helper tra page theo UID.
+check("accounts có cột page_uid (nối acc→page)", 'page_uid TEXT' in Path("db.py").read_text(encoding="utf-8"))
+check("db có get_page_by_uid", "def get_page_by_uid" in Path("db.py").read_text(encoding="utf-8"))
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Ghi chú phát hành
@@ -6010,6 +6010,52 @@ check("Gen lịch rải content SAU khi chuyển slot, bỏ con trỏ theo nick"
       "rai_content(schedule, contents)" in _src_gen_ct and "content_cursor" not in _src_gen_ct
       and _src_gen_ct.index("rai_content(schedule, contents)")
           > _src_gen_ct.index('chuyen_slot_so_luong(schedule, han_mkt, "marketplace")'))
+
+# ── Đăng tường Page = phiên 'dang_page' lồng trong lịch mảng ──────────────────
+# GIỮ NGUYÊN phiên nuôi; chỉ đổi slot ĐĂNG BÀI sang 'dang_page' (random, rải
+# đều — dùng lại chuyen_slot_so_luong như comment/marketplace). Runner Page
+# riêng đã bỏ; content của bài page lấy theo Loại đăng của chính acc.
+from collections import Counter as _Cnt_dp
+check("_hien_content tính 'dang_page' là dòng CÓ content (được gán ma_content)",
+      _hct({"hoat_dong": "dang_page"}) is True)
+_dp = ([{"ten_acc": "A", "hoat_dong": "nuoi_nick"} for _ in range(4)]
+       + [{"ten_acc": "A", "hoat_dong": "dang_bai"} for _ in range(8)])
+_n_dp = _csl(_dp, {"A": 3}, "dang_page")
+_cc_dp = _Cnt_dp(r["hoat_dong"] for r in _dp)
+check("Gen page: đổi đúng N slot đăng bài sang dang_page", _n_dp == 3 and _cc_dp["dang_page"] == 3)
+check("Gen page: GIỮ NGUYÊN mọi phiên nuôi", _cc_dp["nuoi_nick"] == 4)
+check("Gen page: chỉ lấy từ slot đăng bài (8 − 3 = 5 còn lại)", _cc_dp["dang_bai"] == 5)
+_dp2 = ([{"ten_acc": "B", "hoat_dong": "nuoi_nick"} for _ in range(3)]
+        + [{"ten_acc": "B", "hoat_dong": "dang_bai"} for _ in range(2)])
+check("Gen page: thiếu slot đăng bài thì tự cắt, nuôi vẫn nguyên",
+      _csl(_dp2, {"B": 5}, "dang_page") == 2
+      and _Cnt_dp(r["hoat_dong"] for r in _dp2)["nuoi_nick"] == 3)
+check("Gen gọi chuyển slot dang_page TRƯỚC comment/marketplace (chỉ tiêu page là số cứng)",
+      'chuyen_slot_so_luong(schedule, han_page, "dang_page")' in _src_gen_ct
+      and _src_gen_ct.index('han_page, "dang_page"')
+          < _src_gen_ct.index('han_cmt, "comment"'))
+# scheduler: dispatcher route 'dang_page' → _run_page_slot (post_page_wall + page_uid của acc).
+_src_sc_dp = Path("scheduler.py").read_text(encoding="utf-8")
+_than_dp = _src_sc_dp.split("def _run_page_slot")[1].split("\ndef ")[0] if "def _run_page_slot" in _src_sc_dp else ""
+check("scheduler route 'dang_page' sang _run_page_slot",
+      'if hd == "dang_page":' in _src_sc_dp and "_run_page_slot(item)" in _src_sc_dp)
+check("_run_page_slot đăng tường bằng post_page_wall + page_uid của acc",
+      "post_page_wall(" in _than_dp and 'acc_data.get("page_uid")' in _than_dp)
+check("bỏ nhánh runner Page riêng (LOAI=='page') trong scheduler",
+      'if LOAI == "page":' not in _src_sc_dp)
+# acc nối page theo UID: chọn page_uid thì ten_page tự đồng bộ (server lo).
+_pid_dp = db.upsert_page({"ten_page": "Page Z UID", "page_uid": "PZUID9", "bai_dang_toi_da": 2})
+_aid_dp = db.upsert_account({"ten_acc": "AccPageUidTest", "loai_dang": "homestay"})
+db.update_account_field(_aid_dp, "page_uid", "PZUID9")
+_arow = [a for a in db.get_accounts() if a["id"] == _aid_dp][0]
+check("chọn page_uid thì ten_page đồng bộ theo page",
+      _arow["page_uid"] == "PZUID9" and _arow["ten_page"] == "Page Z UID")
+db.update_account_field(_aid_dp, "page_uid", "")
+_arow = [a for a in db.get_accounts() if a["id"] == _aid_dp][0]
+check("bỏ page_uid thì ten_page về rỗng",
+      (_arow["page_uid"] or "") == "" and (_arow["ten_page"] or "") == "")
+check("get_page_by_uid trả đúng page theo UID",
+      (db.get_page_by_uid("PZUID9") or {}).get("ten_page") == "Page Z UID")
 check("form Gen bỏ ô \"Content đầu\" của từng acc",
       "acc-c-" not in Path("static/js/app.js").read_text(encoding="utf-8"))
 _r_gct = _client.post("/api/schedule/homestay/gen", json={
@@ -6076,8 +6122,9 @@ _src_srv_m = Path("server.py").read_text(encoding="utf-8")
 check("xoá mảng thì dừng runner đang chạy của nó",
       "run_stop(k)" in _src_srv_m and "truoc - {d[\"key\"] for d in moi if d[\"bat\"]}" in _src_srv_m)
 import lich_may as _lm_m
-check("Lịch máy dừng/bật được runner của cả 5 mảng",
-      {"homestay", "thue", "ban", "loai4", "loai5", "page", "nuoi"} <= set(_lm_m.RUNNER))
+check("Lịch máy dừng/bật được runner của cả 5 mảng + nuôi (không còn page)",
+      {"homestay", "thue", "ban", "loai4", "loai5", "nuoi"} <= set(_lm_m.RUNNER)
+      and "page" not in _lm_m.RUNNER)
 _ajs_m = Path("static/js/app.js").read_text(encoding="utf-8")
 _khoi_mang = _ajs_m[_ajs_m.index("function renderContentTabs"):_ajs_m.index("async function _luuLoai")]
 check("quản lý mảng dùng hộp thoại của app, KHÔNG dùng prompt/confirm trình duyệt",
@@ -6094,14 +6141,18 @@ _trang_log = _html_m[_html_m.index('id="page-logs"'):]
 check("tab Log không ghi cứng ô log của mảng content",
       'id="log-mang"' in _trang_log
       and not any(f'id="log-{k}"' in _trang_log for k in ("homestay", "thue", "ban", "loai4", "loai5"))
-      and all(f'id="log-{k}"' in _trang_log for k in ("page", "nuoi", "join")))
+      and 'id="log-page"' not in _trang_log   # runner Page riêng đã bỏ (15/10)
+      and all(f'id="log-{k}"' in _trang_log for k in ("nuoi", "join")))
 _khoi_log = _ajs_m[_ajs_m.index("function renderLogMang"):_ajs_m.index("// Join log")]
 check("ô log + danh sách đọc log theo các mảng đang bật",
       "_loaiBat()" in _khoi_log and '"homestay","thue","ban"' not in _khoi_log
       and "renderLogMang();" in _ajs_m[_ajs_m.index("function apDungLoai"):_ajs_m.index("let _currentContentLoai")])
-for _k_log in ("loai4", "loai5", "page"):
+for _k_log in ("loai4", "loai5", "nuoi"):
     check(f"API log đọc được runner {_k_log}",
           _client.get(f"/api/logs/{_k_log}?n=5").get_json().get("ok") is True)
+# Runner 'page' riêng đã bỏ → /api/logs/page bị từ chối như loại lạ.
+check("API log KHÔNG còn runner page",
+      _client.get("/api/logs/page?n=5").get_json().get("ok") is False)
 check("API log vẫn từ chối loại lạ",
       _client.get("/api/logs/khong-co?n=5").get_json().get("ok") is False)
 # Tab Link comment: tab + thư viện câu theo mảng đang bật, không ghi cứng 3 mảng gốc.
@@ -6206,10 +6257,9 @@ check("runner vừa giành khoá thì dọn dòng kẹt từ lần bị diệt t
           < _src_sch_st.index("db.don_dong_dang_chay(LOAI)")
           < _src_sch_st.index("while True:", _src_sch_st.index("def main(")))
 import dung_het as _dh_st
-check("RESTART/UPDATE dừng đủ 7 runner — khớp server và Lịch máy",
+check("RESTART/UPDATE dừng đủ 6 runner — khớp server và Lịch máy",
       set(_dh_st.RUNNER) == set(server._RUNNER_KEYS) == set(_lm_m.RUNNER)
-      and '("homestay", "thue", "ban", "page", "nuoi")'
-          not in Path("dung_het.py").read_text(encoding="utf-8"))
+      and "page" not in _dh_st.RUNNER)   # runner Page riêng đã bỏ (15/10)
 
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
