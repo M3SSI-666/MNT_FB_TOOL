@@ -702,6 +702,10 @@ def run_start(loai):
     return jsonify({"ok": True, "pid": proc.pid})
 
 
+# Sau khi diệt runner, chờ Windows nhả khoá tối đa bấy nhiêu giây (xem run_stop).
+_CHO_NHA_KHOA_GIAY = 5
+
+
 @app.route("/api/run/<loai>/stop", methods=["POST"])
 def run_stop(loai):
     if loai not in RUNNER_CFG:
@@ -741,16 +745,34 @@ def run_stop(loai):
 
     killed = _kill_pids(ung)
 
+    # Windows nhả khoá CHẬM hơn lúc tiến trình chết một nhịp ("thời gian mở khoá
+    # tuỳ tài nguyên hệ thống" — tài liệu LockFileEx). Hỏi ngay thì khoá vẫn
+    # còn dù runner đã chết: ngày 16/10 cả 3 lần Dừng (01:00, 09:42, 10:01) đều
+    # báo "KHÔNG thành công — PID None vẫn chạy" trong khi log runner tắt ngay
+    # đúng lúc đó. Diệt được ai thì chờ khoá nhả tối đa vài giây rồi mới kết luận.
+    if killed:
+        han = time.time() + _CHO_NHA_KHOA_GIAY
+        while kr.dang_giu(loai) and time.time() < han:
+            time.sleep(0.2)
+
     # Nói thật kết quả. Khoá còn người giữ nghĩa là CHƯA dừng được — báo "ok"
     # lúc đó thì giao diện đổi nút thành "Run" trong khi runner vẫn chạy.
     if kr.dang_giu(loai):
         con = kr.pid_dang_giu(loai)
-        logger.warning(f"⚠️  Dừng runner '{loai}' KHÔNG thành công — PID {con} vẫn chạy")
+        logger.warning(f"⚠️  Dừng runner '{loai}' KHÔNG thành công — "
+                       + (f"PID {con} vẫn chạy" if con else "khoá chưa được nhả"))
         return jsonify({"ok": False, "killed": killed,
                         "error": f"Không dừng được runner {loai}"
                                  + (f" (PID {con} vẫn chạy)" if con else "")})
     logger.info(f"⏹ Đã dừng runner '{loai}'"
                 + (f" — PID {', '.join(map(str, killed))}" if killed else ""))
+    # Phiên bị diệt giữa chừng → dòng của nó đừng kẹt "Đang chạy" cả ngày.
+    try:
+        n_do = db.don_dong_dang_chay(loai)
+        if n_do:
+            logger.info(f"⏹ {n_do} dòng '{loai}' đang chạy dở → '{db.DUNG_GIUA_CHUNG}'")
+    except Exception as e:
+        logger.warning(f"⚠️  Không dọn được dòng đang chạy dở của '{loai}': {e}")
     return jsonify({"ok": True, "killed": killed})
 
 

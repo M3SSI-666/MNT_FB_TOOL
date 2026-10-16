@@ -3348,6 +3348,7 @@ function renderScheduleTable(loai,data){
         else if(st.startsWith("💬")) stBadge=`<span class="badge" style="background:#1e3a5f;color:#93c5fd">${st}</span>`;
         else if(st==="X😴") stBadge=`<span class="badge" style="background:#422006;color:#fbbf24" title="Máy tự tắt vì acc nghỉ/chết/cookie hết hạn — sẽ tự về Chờ ngày mai">😴 Nghỉ</span>`;
         else if(st==="X") stBadge=`<span class="badge badge-muted">X</span>`;
+        else if(st.startsWith("⏹")) stBadge=`<span class="badge badge-muted" title="Runner bị dừng giữa phiên này (bấm Dừng / Lịch máy / khởi động lại). Không tự chạy lại để khỏi đăng trùng — muốn chạy lại thì đổi về Chờ.">${_escapeHtml(st)}</span>`;
         else if(st==="Chờ") stBadge=`<span class="badge badge-warning">Chờ</span>`;
         else stBadge=`<span class="badge badge-muted">${st||"-"}</span>`;
         // Slot đã bị chuyển thành phiên nuôi / comment — hiển thị khác để dễ phân biệt.

@@ -6123,6 +6123,94 @@ check("phiên comment đọc được thư viện câu của mảng thêm mới 
 db.set_setting("comment_pool_loai4", "")
 db.set_setting("loai_content_ds", _reg_cu)
 
+# ── Dừng runner: báo đúng kết quả + dọn dòng kẹt "đang chạy" ─────────────────
+# 16/10: cả 3 lần Dừng (01:00, 09:42, 10:01) đều báo "KHÔNG thành công — PID None
+# vẫn chạy" dù runner đã chết — Windows nhả khoá chậm hơn lúc tiến trình chết một
+# nhịp. Và lịch Bán kẹt 4 dòng "🔄 Đang chạy" + 2 dòng "🌱 Đang nuôi" cả ngày.
+_TT_KET = {
+    "🔄 Đang chạy 09:58":            "⏹ Dừng giữa chừng 09:58",
+    "🔄 Thử lại 2/3 sau 30s":        "⏹ Dừng giữa chừng",
+    "🌱 Đang nuôi 09:41 (spam)":     "⏹ Dừng giữa chừng 09:41",
+    "💬 Đang comment 10:05":         "⏹ Dừng giữa chừng 10:05",
+    "💬 3/9 · 10:12":                "⏹ Dừng giữa chừng 10:12",
+    "🛒 Đang đăng Marketplace 10:20": "⏹ Dừng giữa chừng 10:20",
+    # Trạng thái đã XONG — không được đụng vào
+    "✅ 10:30 (9 nhóm)":             None,
+    "💬 10:40 · 9/9 bài":            None,
+    "💬 10:41 bỏ qua: danh sách trống": None,
+    "🌱 10:23 (đã nuôi)":            None,
+    "❌ 10:50 Cookie hết hạn":        None,
+    "Chờ":                           None,
+    "X😴":                           None,
+}
+db.replace_schedules("loai5", [
+    {"loai": "loai5", "stt": i + 1, "ma_content": "C1", "ten_acc": "KetA", "ten_page": "",
+     "gio_dang": "10:00", "ma_nhom": "1", "tu_khoa": "", "mode": "Hybrid", "trang_thai": tt,
+     "c_user": "880001"} for i, tt in enumerate(_TT_KET)])
+def _tt_loai5():
+    with db._conn() as _c:
+        return [r[0] for r in _c.execute(
+            "SELECT trang_thai FROM schedules WHERE loai='loai5' ORDER BY stt")]
+_n_ket = db.don_dong_dang_chay("loai5")
+_sau_ket = _tt_loai5()
+check("dọn đúng mọi trạng thái đang làm dở → '⏹ Dừng giữa chừng HH:MM'",
+      _n_ket == 6 and all(_sau_ket[i] == (moi or cu)
+                          for i, (cu, moi) in enumerate(_TT_KET.items())))
+check("dòng đã xong (✅/❌/💬 xong/🌱 đã nuôi/Chờ/X😴) giữ nguyên",
+      all(_sau_ket[i] == cu for i, (cu, moi) in enumerate(_TT_KET.items()) if moi is None))
+check("reset đầu ngày đưa '⏹ Dừng giữa chừng' về Chờ như mọi dòng khác",
+      db.reset_schedules_to_wait("loai5") > 0
+      and all(t in ("Chờ", "X") or t == "X😴" for t in _tt_loai5()) and
+      _tt_loai5()[0] == "Chờ")
+
+import khoa_runner as _kr_st
+_goc_st = (_kr_st.dang_giu, _kr_st.pid_dang_giu, server._kill_pids,
+           server._runner_pid, server._CHO_NHA_KHOA_GIAY)
+_dem_hoi = {"n": 0}
+def _khoa_nha_cham(loai):                 # khoá còn "giữ" 3 lần hỏi đầu rồi mới nhả
+    _dem_hoi["n"] += 1
+    return _dem_hoi["n"] <= 3
+try:
+    db.replace_schedules("loai5", [
+        {"loai": "loai5", "stt": 1, "ma_content": "C1", "ten_acc": "KetA", "ten_page": "",
+         "gio_dang": "10:00", "ma_nhom": "1", "tu_khoa": "", "mode": "Hybrid",
+         "trang_thai": "🔄 Đang chạy 10:00", "c_user": "880001"}])
+    _kr_st.dang_giu = _khoa_nha_cham
+    _kr_st.pid_dang_giu = lambda loai: 4321 if _dem_hoi["n"] < 1 else None
+    server._kill_pids = lambda pids, *a, **k: list(pids)
+    server._runner_pid = lambda loai: None
+    server._CHO_NHA_KHOA_GIAY = 3
+    _r_st = _client.post("/api/run/loai5/stop").get_json()
+    check("Dừng: khoá nhả chậm vài nhịp vẫn báo THÀNH CÔNG (không còn báo sai)",
+          _r_st.get("ok") is True and _dem_hoi["n"] > 3)
+    check("Dừng thành công thì dòng đang chạy dở thành '⏹ Dừng giữa chừng'",
+          _tt_loai5() == ["⏹ Dừng giữa chừng 10:00"])
+    _kr_st.dang_giu = lambda loai: True            # khoá KHÔNG bao giờ nhả
+    _kr_st.pid_dang_giu = lambda loai: 4321
+    server._CHO_NHA_KHOA_GIAY = 0.3
+    db.update_schedule_status(db._conn().execute(
+        "SELECT id FROM schedules WHERE loai='loai5'").fetchone()[0], "🔄 Đang chạy 10:00")
+    _r_st = _client.post("/api/run/loai5/stop").get_json()
+    check("Dừng: runner thật sự còn sống thì vẫn báo KHÔNG dừng được",
+          _r_st.get("ok") is False and "4321" in (_r_st.get("error") or ""))
+    check("Dừng hỏng thì KHÔNG đụng vào dòng đang chạy (runner còn đang làm nó)",
+          _tt_loai5() == ["🔄 Đang chạy 10:00"])
+finally:
+    (_kr_st.dang_giu, _kr_st.pid_dang_giu, server._kill_pids,
+     server._runner_pid, server._CHO_NHA_KHOA_GIAY) = _goc_st
+db.replace_schedules("loai5", [])
+_src_sch_st = Path("scheduler.py").read_text(encoding="utf-8")
+check("runner vừa giành khoá thì dọn dòng kẹt từ lần bị diệt trước (RESTART/tắt máy)",
+      "db.don_dong_dang_chay(LOAI)" in _src_sch_st
+      and _src_sch_st.index("khoa_runner.giu_khoa(LOAI)")
+          < _src_sch_st.index("db.don_dong_dang_chay(LOAI)")
+          < _src_sch_st.index("while True:", _src_sch_st.index("def main(")))
+import dung_het as _dh_st
+check("RESTART/UPDATE dừng đủ 7 runner — khớp server và Lịch máy",
+      set(_dh_st.RUNNER) == set(server._RUNNER_KEYS) == set(_lm_m.RUNNER)
+      and '("homestay", "thue", "ban", "page", "nuoi")'
+          not in Path("dung_het.py").read_text(encoding="utf-8"))
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:

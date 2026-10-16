@@ -679,6 +679,17 @@ def main():
                        f"{f' (PID {cu})' if cu else ''} — thoát, không chạy trùng.")
         return
 
+    # Đã giữ khoá ⇒ chắc chắn không còn runner nào khác của loại này. Dòng còn
+    # kẹt "đang chạy" là phiên bị diệt giữa chừng lần trước (RESTART, tắt máy…
+    # — những đường không đi qua nút Dừng). Xem db.don_dong_dang_chay.
+    try:
+        n_do = db.don_dong_dang_chay(LOAI)
+        if n_do:
+            logger.info(f"⏹ {n_do} dòng bị dừng giữa chừng lần trước → "
+                        f"'{db.DUNG_GIUA_CHUNG}' (không chạy lại để khỏi đăng trùng)")
+    except Exception as e:
+        logger.warning(f"⚠️  Không dọn được dòng đang chạy dở: {e}")
+
     running    = set()
     lock       = threading.Lock()
     active_threads = []

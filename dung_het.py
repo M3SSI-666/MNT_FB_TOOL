@@ -36,6 +36,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Toàn bộ phần xử lý tiến trình dùng chung với server — xem `tien_trinh.py`.
 import tien_trinh
 
+# Đủ 7 runner — PHẢI khớp `server._RUNNER_KEYS` (test_basic kiểm). Bản cũ chỉ
+# có 5 loại nên RESTART/UPDATE bỏ sót runner của mảng content thứ 4, thứ 5.
+RUNNER = ("homestay", "thue", "ban", "loai4", "loai5", "page", "nuoi")
+
 
 def pid_giu_khoa() -> list:
     """PID của runner đang giữ khoá. Không import được thì bỏ qua, đừng chết."""
@@ -44,7 +48,7 @@ def pid_giu_khoa() -> list:
     except Exception:
         return []
     ra = []
-    for loai in ("homestay", "thue", "ban", "page", "nuoi"):
+    for loai in RUNNER:
         try:
             if kr.dang_giu(loai):
                 p = kr.pid_dang_giu(loai)
@@ -57,7 +61,7 @@ def pid_giu_khoa() -> list:
 
 def pid_tu_file() -> list:
     ra = []
-    for loai in ("homestay", "thue", "ban", "page", "nuoi"):
+    for loai in RUNNER:
         f = f".runner_{loai}.pid"
         if os.path.exists(f):
             try:

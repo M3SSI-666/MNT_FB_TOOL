@@ -1902,6 +1902,45 @@ def update_schedule_status(schedule_id: int, status: str):
         )
 
 
+# Trạng thái runner ghi lúc BẮT ĐẦU một phiên (xem scheduler.py). Runner bị diệt
+# giữa phiên — bấm Dừng, Lịch máy 01:00, RESTART, tắt máy — thì dòng kẹt nguyên
+# trạng thái đó tới hết ngày: không chạy lại (runner chỉ bốc dòng 'Chờ') mà
+# nhìn bảng thì tưởng còn đang chạy. Gặp thật 16/10: lịch Bán kẹt 4 dòng
+# "🔄 Đang chạy" + 2 dòng "🌱 Đang nuôi" sau khi bấm Dừng lúc 10:01.
+_DANG_LAM_DO = ("🔄 Đang chạy", "🔄 Thử lại", "🌱 Đang nuôi",
+                "💬 Đang comment", "🛒 Đang đăng Marketplace")
+_RE_CMT_DANG_DO = re.compile(r"^💬 \d+/\d+ · ")       # "💬 3/9 · 10:12" — đang comment
+DUNG_GIUA_CHUNG = "⏹ Dừng giữa chừng"
+
+
+def don_dong_dang_chay(loai: str) -> int:
+    """Đổi các dòng còn kẹt trạng thái đang làm dở của `loai` thành
+    "⏹ Dừng giữa chừng HH:MM" (giữ giờ bắt đầu phiên). Trả về số dòng đã đổi.
+
+    KHÔNG đưa về 'Chờ': phiên có thể đã đăng xong vài nhóm trước khi bị diệt,
+    chạy lại là đăng trùng. Muốn chạy lại thì người dùng tự đổi về Chờ; sang
+    ngày mới thì reset đầu ngày cũng đưa về Chờ như mọi dòng khác.
+
+    Chỉ gọi khi CHẮC CHẮN không còn runner nào của `loai`: sau khi Dừng thành
+    công, hoặc lúc runner vừa giành được khoá.
+    """
+    with _conn() as con:
+        rows = con.execute(
+            "SELECT id, trang_thai FROM schedules WHERE loai=? AND ("
+            "trang_thai LIKE '🔄%' OR trang_thai LIKE '🌱 Đang nuôi%' OR "
+            "trang_thai LIKE '💬%' OR trang_thai LIKE '🛒 Đang%')", (loai,)).fetchall()
+        n = 0
+        for r in rows:
+            tt = r["trang_thai"] or ""
+            if not (tt.startswith(_DANG_LAM_DO) or _RE_CMT_DANG_DO.match(tt)):
+                continue
+            gio = re.search(r"\b\d{1,2}:\d{2}\b", tt)
+            con.execute("UPDATE schedules SET trang_thai=? WHERE id=?",
+                        (DUNG_GIUA_CHUNG + (f" {gio.group()}" if gio else ""), r["id"]))
+            n += 1
+        return n
+
+
 def reset_schedules_to_wait(loai: str, keep: tuple = ("X",)) -> int:
     """
     Đưa MỌI dòng lịch của `loai` về 'Chờ' (reset đầu ngày).
