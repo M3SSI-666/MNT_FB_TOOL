@@ -1377,6 +1377,12 @@ def api_content_field(content_id):
     safe  = {"ma_content","noi_dung","link_anh","su_dung","tieu_de_mkt","ghi_chu"}
     if field not in safe:
         return jsonify({"ok": False, "error": f"Field không hợp lệ: {field}"})
+    # Sử dụng là tập ĐÓNG: chỉ "Có"/"Không". Giá trị lạ (gõ tay, nhập Excel) làm
+    # content âm thầm rơi khỏi Gen (chỉ lấy su_dung="Có") — chặn tại cửa ghi.
+    if field == "su_dung":
+        value = (value or "").strip()
+        if value not in ("Có", "Không"):
+            return jsonify({"ok": False, "error": "Sử dụng chỉ nhận 'Có' hoặc 'Không'"})
     try:
         from db import _conn
         with _conn() as con:

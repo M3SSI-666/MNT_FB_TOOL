@@ -2156,6 +2156,44 @@ function startContentFieldEdit(td){
     if(td.classList.contains("editing")) return;
     td.classList.add("editing");
     const id=td.dataset.id, field=td.dataset.field, val=td.dataset.val||"";
+
+    // Sử dụng: chỉ 2 lựa chọn Có / Không — dropdown, KHÔNG gõ tay. Giá trị lạ
+    // gõ tay (vd "co", "x") làm content rơi khỏi Gen mà không báo gì.
+    if(field==="su_dung"){
+        const sel=document.createElement("select");
+        sel.style.cssText="width:100%;font-size:12px";
+        const cur=(val==="Không")?"Không":"Có";   // mặc định Có
+        ["Có","Không"].forEach(v=>{
+            const op=document.createElement("option");
+            op.value=v; op.textContent=v; if(v===cur) op.selected=true;
+            sel.appendChild(op);
+        });
+        td.innerHTML=""; td.appendChild(sel); sel.focus();
+        let xong=false;
+        const luu=async()=>{
+            if(xong) return; xong=true;
+            const nv=sel.value; td.classList.remove("editing"); td.dataset.val=nv;
+            td.style.color=(nv==="Có")?"var(--success)":"var(--text-muted)";
+            td.textContent=nv;
+            if(nv===val) return;
+            td.classList.add("saving");
+            try{
+                const r=await API.updateContentField(parseInt(id),field,nv);
+                td.classList.remove("saving");
+                if(r.ok){ td.classList.add("saved"); setTimeout(()=>td.classList.remove("saved"),1200);
+                          loadContent(_currentContentLoai); }   // cập nhật ô "Đang dùng"
+                else Toast.error(r.error);
+            }catch(e){ td.classList.remove("saving"); Toast.error(e.message); }
+        };
+        sel.addEventListener("change",luu);
+        sel.addEventListener("blur",luu);
+        sel.addEventListener("keydown",e=>{ if(e.key==="Escape"){ xong=true;
+            td.classList.remove("editing");
+            td.style.color=(val==="Có")?"var(--success)":"var(--text-muted)";
+            td.textContent=val||"-"; } });
+        return;
+    }
+
     const inp=document.createElement("input"); inp.type="text"; inp.value=val==="-"?"":val;
     td.innerHTML=""; td.appendChild(inp); inp.focus(); inp.select();
     async function commit(){

@@ -4853,6 +4853,19 @@ check("API sửa ô nhận cột tieu_de_mkt", _r_tdm.get("ok") is True)
 check("tiêu đề lưu vào content",
       any(r["id"] == _cid_tdm and r["tieu_de_mkt"] == "Căn hộ Times City"
           for r in db.get_content("homestay")))
+# Cột 'Sử dụng' là tập ĐÓNG (Có/Không): dropdown ở giao diện + validate ở server.
+# Giá trị lạ làm content âm thầm rơi khỏi Gen (chỉ lấy su_dung="Có").
+check("API từ chối Sử dụng giá trị lạ",
+      _client.post(f"/api/content/{_cid_tdm}/field",
+                   json={"field": "su_dung", "value": "co"}).get_json().get("ok") is False)
+check("API nhận Sử dụng = Không",
+      _client.post(f"/api/content/{_cid_tdm}/field",
+                   json={"field": "su_dung", "value": "Không"}).get_json().get("ok") is True)
+_khoi_su = _ajs_mkt[_ajs_mkt.index("function startContentFieldEdit"):
+                    _ajs_mkt.index("function switchContent")]
+check("ô Sử dụng ở bảng Content dùng dropdown Có/Không, không gõ tay",
+      'field==="su_dung"' in _khoi_su and 'createElement("select")' in _khoi_su
+      and '["Có","Không"]' in _khoi_su)
 _cot_xuat = [k for k, _ in server.EXPORT_CONTENT_COLUMNS]
 check("xuất Excel content có cột tiêu đề, giữa Sử dụng và Ghi chú",
       _cot_xuat.index("su_dung") + 1 == _cot_xuat.index("tieu_de_mkt")

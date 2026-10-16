@@ -10,6 +10,18 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.51.1 — 16/10/2026
+
+**Ô "Sử dụng" ở tab Content: chọn Có / Không, không gõ tay**
+
+- Ô **Sử dụng** nay là **dropdown** chỉ hai lựa chọn **Có / Không** — bấm vào
+  chọn một, khỏi gõ tay. Gõ sai (vd "co", "x") trước đây làm content âm thầm
+  rơi khỏi Gen lịch (Gen chỉ lấy content "Có") mà không báo gì.
+- Phần mềm cũng **chặn ở máy chủ**: giá trị Sử dụng lạ bị từ chối, nên nhập từ
+  Excel hay chỗ khác cũng không lọt giá trị rác.
+
+---
+
 ## v2.51.0 — 16/10/2026
 
 **Đăng tường Page không còn cần một acc riêng**
