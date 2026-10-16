@@ -10,6 +10,29 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.50.1 — 16/10/2026
+
+**Hoàn thiện mảng content + sửa lỗi dừng/khởi động runner**
+
+Gói nhiều cải tiến quanh tính năng mảng content (từ v2.50.0) và một lỗi runner:
+
+- **Xóa được cả mảng gốc:** trước chỉ xóa được mảng mới thêm, nay xóa được cả
+  Homestay / Thuê / Bán — phần mềm chỉ giữ tối thiểu 1 mảng để không bao giờ
+  trống. Hộp thoại thêm/đổi tên/xóa làm lại cho rõ ràng hơn.
+- **Tab Log theo mảng:** ô Log ở trang Logs dựng động theo mảng đang bật — xóa
+  mảng thì ô log của nó biến mất, đổi tên thì nhãn đổi theo.
+- **"Link comment":** mục *Bài đi Comment* đổi tên thành **Link comment**, và
+  tách tab theo từng mảng đang bật cho dễ quản lý.
+- **Gen lịch trải đều:** khi Gen, content được chia đều cho từng nick và xen kẽ
+  trên bảng, không dồn cục một nick một loại.
+- **Sửa lỗi Dừng runner:** bấm Dừng không còn báo lỗi sai, tự dọn dòng kẹt
+  "Đang chạy", và nút RESTART khởi động lại đủ cả 7 runner.
+- **Content xuống nhóm Lịch đăng:** mục **Content** ở thanh bên chuyển từ nhóm
+  *Quản lý* xuống **đầu nhóm Lịch đăng** — đúng mạch: soạn content trước rồi mới
+  tới lịch từng mảng. Chỉ đổi vị trí hiển thị, không đụng dữ liệu.
+
+---
+
 ## v2.50.0 — 15/10/2026
 
 **Mở rộng mảng content: tối đa 5, thêm & đổi tên được**
