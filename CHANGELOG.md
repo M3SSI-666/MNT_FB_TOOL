@@ -10,6 +10,19 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.53.2 — 19/10/2026
+
+**Vá thiếu thư viện mã hoá + thêm kiểm thử tự động (CI)**
+
+- **Vá:** thêm `cryptography` vào `requirements.txt`. Trước đây nó thiếu, nên
+  máy **cài từ bộ cài .exe** không có thư viện này → **sao lưu tự động (lớp gửi
+  lên Telegram) hỏng** vì không mã hoá được. Máy cài mới từ nay sao lưu đủ hai
+  lớp. *(Máy đang chạy từ mã nguồn thường đã có sẵn nên không ảnh hưởng.)*
+- **Nội bộ:** thêm CI (GitHub Actions) chạy toàn bộ `test_basic.py` mỗi lần đẩy
+  code — chặn bản gãy lọt lên nhánh chính.
+
+---
+
 ## v2.53.1 — 19/10/2026
 
 **Dọn dự án**

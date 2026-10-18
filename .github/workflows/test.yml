@@ -1,0 +1,32 @@
+name: test
+
+# Chạy bộ test (test_basic.py) mỗi lần push / mở PR vào main. Chặn code gãy
+# lọt lên main — nhất là khi đẩy từ nhiều máy. test_basic.py tự dựng DB tạm,
+# không đụng dữ liệu thật.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    # Windows: code dùng API Windows (ctypes.wintypes ở tien_trinh.py, schtasks
+    # ở lich_may.py) nên không import được trên Linux. Khớp luôn môi trường thật.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cài Python 3.14 (khớp bản đóng gói cho khách)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Cài thư viện (giống máy khách — kiểm luôn requirements.txt cài được)
+        run: pip install -r requirements.txt
+
+      - name: Chạy test_basic.py
+        env:
+          PYTHONUTF8: '1'
+        run: python -X utf8 test_basic.py
