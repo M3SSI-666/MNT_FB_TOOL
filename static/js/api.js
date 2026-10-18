@@ -120,7 +120,4 @@ const API = {
     // Sao lưu
     slTrangThai:     ()           => API.get("/api/sao-luu/trang-thai"),
     slNgay:          ()           => API.post("/api/sao-luu/ngay", {}),
-
-    // App
-    appShutdown:     ()           => API.post("/api/app/shutdown", {}),
 };

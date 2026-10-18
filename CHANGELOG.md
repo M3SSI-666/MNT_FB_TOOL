@@ -10,6 +10,25 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.53.0 — 19/10/2026
+
+**Bỏ "chạy ẩn" — tắt là tắt, chỉ còn một nút X**
+
+Trước đây phần mềm có thể chạy **ẩn** (không cửa sổ) và **tự chạy khi mở máy**,
+nên nhiều khi tưởng đã tắt mà nó vẫn chạy nền. Nay làm gọn lại:
+
+- **Chỉ một lối chạy:** mở bằng **`RUN_APP`** (cửa sổ app).
+- **Chỉ một lối tắt:** nút **X** ở góc trên cửa sổ — X đã dừng sạch server + mọi
+  runner. **Bỏ nút "Tắt phần mềm"** trong giao diện (thừa).
+- **Bỏ chạy ẩn:** xoá `START_BACKGROUND.bat` và tính năng tự-chạy-khi-mở-máy
+  (`INSTALL/UNINSTALL_AUTOSTART.bat`). Bản cập nhật **tự gỡ tác vụ tự-chạy cũ**
+  nếu máy đã lỡ cài.
+
+> *Lịch máy (ngủ/thức máy theo giờ) vẫn giữ nguyên* — cứ để cửa sổ app mở thì
+> ngủ đông/thức dậy app vẫn chạy tiếp, không cần chạy ẩn.
+
+---
+
 ## v2.52.0 — 18/10/2026
 
 **Đổi tên Mode "Hybrid" → "Page" + VIA cũng thu link**

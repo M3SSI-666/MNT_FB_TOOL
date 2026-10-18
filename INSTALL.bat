@@ -57,7 +57,7 @@ echo ============================================================
 echo  Cai dat hoan tat!
 echo.
 echo  BUOC CUOI:
-echo   1. Chay RUN_APP.bat de khoi dong phan mem.
-echo   (Tuy chon) Chay INSTALL_AUTOSTART.bat de app tu chay khi mo may.
+echo   Chay RUN_APP.bat de khoi dong phan mem (mo cua so app).
+echo   Tat phan mem: bam nut X o goc tren cua so.
 echo ============================================================
 pause

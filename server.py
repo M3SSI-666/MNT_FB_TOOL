@@ -649,23 +649,9 @@ def _mat_quyen(ly_do: str):
         logger.error(f"❌ Không dừng được runner khi mất quyền: {e}")
 
 
-@app.route("/api/app/shutdown", methods=["POST"])
-def api_app_shutdown():
-    """Tắt sạch phần mềm: dừng runner + join worker rồi thoát hẳn server.
-    Dùng khi muốn giải phóng tài nguyên (bật lại: khởi động máy / RUN_APP)."""
-    import threading as _th
-    def _bye():
-        time.sleep(0.6)          # để response kịp trả về client
-        # Dọn dẹp trong luồng RIÊNG rồi chờ có hạn. Trước đây gọi thẳng
-        # `_shutdown_all()`, và khi nó treo thì `os._exit(0)` không bao giờ chạy:
-        # runner chết hết nhưng SERVER VẪN SỐNG — bấm "Tắt phần mềm" xong app
-        # vẫn còn đó. Đo được: 21 phút sau vẫn phục vụ bình thường.
-        don = _th.Thread(target=_shutdown_all, daemon=True)
-        don.start()
-        don.join(timeout=25)
-        os._exit(0)              # thoát dù dọn xong hay chưa
-    _th.Thread(target=_bye, daemon=True).start()
-    return jsonify({"ok": True})
+# Endpoint "/api/app/shutdown" + nút "Tắt phần mềm" đã bỏ (19/10): chỉ còn MỘT
+# lối tắt = nút X ở góc cửa sổ app, gọi thẳng `_shutdown_all` (xem `_dong_cua_so`
+# ở cuối file). Không còn chạy ẩn nên không cần nút tắt trong giao diện.
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -3048,57 +3034,61 @@ if __name__ == "__main__":
 
     _don_server_cu()
 
+    # Bỏ "chạy ẩn" (19/10): gỡ tác vụ TỰ-CHẠY-KHI-MỞ-MÁY cũ nếu máy đã lỡ cài
+    # (INSTALL_AUTOSTART cũ tạo tác vụ "MNT_AutoPost" chạy nền ẩn). Best-effort,
+    # chạy mỗi lần mở app để bản cập nhật tự dọn. KHÔNG đụng "MNT_DanhThucMay"
+    # (Lịch máy đánh thức — tính năng khác, vẫn giữ).
+    if sys.platform == "win32":
+        try:
+            subprocess.run(["schtasks", "/Delete", "/TN", "MNT_AutoPost", "/F"],
+                           capture_output=True, timeout=10,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        except Exception:
+            pass
+
     # Mở app thì chỉ DỌN runner lạ, không diệt runner đang chạy lành lặn —
-    # xem chú thích ở `_don_runner_la`. Nút "Tắt phần mềm" và nút X vẫn diệt
-    # sạch bằng `_kill_all_runners`, vì lúc đó là thật sự muốn dừng hết.
+    # xem chú thích ở `_don_runner_la`. Nút X diệt sạch bằng `_shutdown_all`.
     _don_runner_la()
 
-    # --browser  : mở bằng trình duyệt mặc định (chế độ web cũ, để debug)
-    # --no-browser: chỉ chạy server, không mở gì (server chạy ẩn)
-    # (mặc định)  : mở CỬA SỔ APP riêng bằng pywebview — tách biệt với Chrome
-    if "--browser" in sys.argv:
+    # Mở CỬA SỔ APP riêng bằng pywebview — tách biệt với Chrome. ĐÃ BỎ (19/10)
+    # chế độ chạy ẩn (--no-browser) và mở bằng trình duyệt (--browser): phần mềm
+    # chỉ còn MỘT lối chạy (cửa sổ) và MỘT lối tắt (nút X). Không chạy ẩn.
+    try:
+        import webview
+    except ImportError:
+        # Chưa cài pywebview → fallback mở trình duyệt mặc định.
         import webbrowser
         webbrowser.open(f"http://localhost:{PORT}")
         _serve()
-    elif "--no-browser" in sys.argv:
-        _serve()
     else:
-        try:
-            import webview
-        except ImportError:
-            # Chưa cài pywebview → fallback mở trình duyệt như cũ
-            import webbrowser
-            webbrowser.open(f"http://localhost:{PORT}")
-            _serve()
-        else:
-            # Icon riêng (chữ MNT xanh) — tách khỏi icon pythonw mặc định
-            _icon = str(BASE_DIR / "static" / "mnt.ico")
-            if sys.platform == "win32":
-                try:
-                    import ctypes
-                    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MNT.AutoPost")
-                except Exception:
-                    pass
-
-            # Flask chạy nền, cửa sổ app giữ thread chính
-            threading.Thread(target=_serve, daemon=True).start()
-            _wait_server_ready(PORT)
-            win = webview.create_window(
-                "MNT AutoPost",
-                f"http://localhost:{PORT}",
-                width=1440, height=920,
-                min_size=(1024, 700),
-            )
-            # Nhấn X = tắt sạch: dừng luôn runner đăng nền + join worker.
-            # Chờ CÓ HẠN như nút "Tắt phần mềm": gọi thẳng `_shutdown_all` mà nó
-            # treo thì cửa sổ không đóng được, bấm X mấy lần cũng không nhúc nhích.
-            def _dong_cua_so():
-                don = threading.Thread(target=_shutdown_all, daemon=True)
-                don.start()
-                don.join(timeout=25)
-            win.events.closing += _dong_cua_so
-            # block đến khi đóng cửa sổ → tiến trình kết thúc
+        # Icon riêng (chữ MNT xanh) — tách khỏi icon pythonw mặc định
+        _icon = str(BASE_DIR / "static" / "mnt.ico")
+        if sys.platform == "win32":
             try:
-                webview.start(icon=_icon)
-            except TypeError:
-                webview.start()   # pywebview cũ không hỗ trợ tham số icon
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MNT.AutoPost")
+            except Exception:
+                pass
+
+        # Flask chạy nền, cửa sổ app giữ thread chính
+        threading.Thread(target=_serve, daemon=True).start()
+        _wait_server_ready(PORT)
+        win = webview.create_window(
+            "MNT AutoPost",
+            f"http://localhost:{PORT}",
+            width=1440, height=920,
+            min_size=(1024, 700),
+        )
+        # Nhấn X = tắt sạch: dừng luôn runner đăng nền + join worker. Chờ CÓ HẠN
+        # (gọi thẳng _shutdown_all mà nó treo thì cửa sổ không đóng được, bấm X
+        # mấy lần cũng không nhúc nhích).
+        def _dong_cua_so():
+            don = threading.Thread(target=_shutdown_all, daemon=True)
+            don.start()
+            don.join(timeout=25)
+        win.events.closing += _dong_cua_so
+        # block đến khi đóng cửa sổ → tiến trình kết thúc
+        try:
+            webview.start(icon=_icon)
+        except TypeError:
+            webview.start()   # pywebview cũ không hỗ trợ tham số icon

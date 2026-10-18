@@ -931,16 +931,7 @@ async function runnerStop(loai){
     }
     catch(e){ Toast.error(e.message); }
 }
-async function shutdownApp(){
-    if(!confirm("Tắt toàn bộ phần mềm (server + runner đăng nền)?\n\nMuốn bật lại: khởi động lại máy công ty (app tự chạy) hoặc chạy RUN_APP.")) return;
-    try{
-        await API.appShutdown();
-        Toast.success("🔴 Đang tắt phần mềm...");
-        setTimeout(()=>{
-            document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;font-size:16px;color:#94a3b8;padding:20px">Phần mềm đã tắt.<br>Khởi động lại máy hoặc chạy RUN_APP để bật lại.</div>';
-        }, 800);
-    }catch(e){ Toast.error(e.message); }
-}
+// Nút "Tắt phần mềm" đã bỏ (19/10): chỉ còn MỘT lối tắt = nút X ở góc cửa sổ app.
 
 // ── Accounts ──────────────────────────────────────────────────
 const ACC_FIELDS = [
@@ -3816,9 +3807,9 @@ async function chayCapNhat(tag, laLui){
 }
 
 // ── Tự reload khi server restart ──────────────────────────────
-// Mỗi lần server khởi động, /api/ping trả boot id mới. Tab đang mở phát hiện
-// boot id đổi → tự location.reload() thành bản mới. Nhờ vậy RESTART không cần
-// mở tab thứ hai (server chạy kèm --no-browser), tab cũ tự làm mới chính nó.
+// Mỗi lần server khởi động, /api/ping trả boot id mới. Cửa sổ/tab đang mở phát
+// hiện boot id đổi → tự location.reload() thành bản mới, nên sau RESTART không
+// phải tải lại tay.
 let _bootId = null;
 async function _heartbeat(){
     try{

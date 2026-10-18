@@ -4542,10 +4542,17 @@ if _cay:
 
 check("tắt phần mềm: dọn dẹp chạy trong luồng riêng có hạn chờ",
       "don.join(timeout=" in _src_sv)
-_i_join = _src_sv.index("don.join(timeout=")
-_i_exit = _src_sv.index("os._exit(0)", _i_join)
-check("thoát tiến trình SAU khi hết hạn chờ, bất kể dọn xong chưa",
-      _i_join < _i_exit)
+# Bỏ "chạy ẩn" + nút/endpoint "Tắt phần mềm" (19/10): lối tắt DUY NHẤT là nút X.
+# Không cần os._exit nữa — server chạy ở DAEMON thread, nên đóng cửa sổ
+# (webview.start trả về) là tiến trình tự thoát, server không còn sống lẻ loi.
+check("server chạy ở daemon thread → đóng cửa sổ là thoát sạch",
+      "threading.Thread(target=_serve, daemon=True)" in _src_sv)
+check("đã bỏ endpoint /api/app/shutdown + nút Tắt phần mềm",
+      '@app.route("/api/app/shutdown"' not in _src_sv
+      and "shutdownApp" not in Path("static/js/app.js").read_text(encoding="utf-8"))
+check("đã bỏ chế độ chạy ẩn (--no-browser) và mở trình duyệt (--browser)",
+      '"--no-browser" in sys.argv' not in _src_sv
+      and '"--browser" in sys.argv' not in _src_sv)
 
 # Nút X cũng gọi cùng hàm dọn đó, nên cũng phải chờ có hạn — không thì bấm X
 # mấy lần cửa sổ cũng không nhúc nhích.

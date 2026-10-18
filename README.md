@@ -17,12 +17,13 @@ Xong thì chạy `RUN_APP.bat`.
 ## Chạy
 | File | Công dụng |
 |------|-----------|
-| `RUN_APP.bat` | Mở app dạng **cửa sổ** (pywebview). Nhấn **X** = tắt sạch (server + runner nền). |
-| `START_BACKGROUND.bat` | Chạy **ẩn**, không cửa sổ — chỉ có server, điều khiển qua trình duyệt. |
+| `RUN_APP.bat` | Mở app dạng **cửa sổ** (pywebview). Đây là **lối chạy DUY NHẤT**. Nhấn **X** = tắt sạch (server + mọi runner). |
 | `RESTART.bat` | Tắt hết rồi mở lại cửa sổ (dùng sau khi sửa code Python). |
-| `INSTALL_AUTOSTART.bat` | Đăng ký tự chạy nền khi mở máy. |
-| `UNINSTALL_AUTOSTART.bat` | Gỡ tự chạy. |
 | `UPDATE.bat` | Cập nhật máy vệ tinh lên bản mới nhất. Dữ liệu giữ nguyên. |
+
+> **Không còn chạy ẩn** (19/10): bỏ `START_BACKGROUND.bat` + tự-chạy-khi-mở-máy.
+> Phần mềm chỉ chạy bằng cửa sổ (`RUN_APP`) và chỉ tắt bằng nút **X**. Bản cập
+> nhật tự gỡ tác vụ tự-chạy cũ (`MNT_AutoPost`) nếu máy đã lỡ cài.
 
 Bảng điều khiển: `http://localhost:8080`
 
