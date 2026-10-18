@@ -10,6 +10,17 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.53.1 — 19/10/2026
+
+**Dọn dự án**
+
+- Xóa **`HUONG_DAN.txt`** — hướng dẫn cũ, trùng nội dung với README và đã lỗi
+  thời (còn nhắc chạy ẩn/tự chạy khi mở máy đã bỏ ở v2.53.0). Hướng dẫn cài đặt
+  & sử dụng nay chỉ còn ở `README.md`.
+- Rà soát toàn bộ: không còn file mã nguồn (.py) hay .bat nào thừa.
+
+---
+
 ## v2.53.0 — 19/10/2026
 
 **Bỏ "chạy ẩn" — tắt là tắt, chỉ còn một nút X**
