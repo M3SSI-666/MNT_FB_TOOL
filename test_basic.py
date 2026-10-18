@@ -3956,6 +3956,12 @@ check("nơi để bản sao lưu bám theo nơi dữ liệu thật, không phả
       Path(_sl.thu_muc_dich()).parent == Path(_cfg.DB_PATH).parent.parent)
 
 # Tạo thật một bản rồi MỞ LẠI đếm — không tin vào "lệnh chạy xong không báo lỗi".
+# `sao_luu.tao()` đọc THẲNG config.DB_PATH làm nguồn. Trỏ tạm sang DB tạm CHỈ
+# trong khối này (restore ở finally) — không đặt ở đầu file vì bài kiểm cấu trúc
+# "DB nằm dưới DATA_ROOT" cần config.DB_PATH ở giá trị mặc định. Không trỏ thì
+# bài kiểm đòi data/app.db THẬT — máy dev có, CI (checkout sạch) không → fail.
+_cfg_db_goc = _cfg.DB_PATH
+_cfg.DB_PATH = _tmp
 _tm_sl = Path(_tmp).parent / "kiem_sao_luu"
 try:
     _ban = _sl.tao(_tm_sl)
@@ -4083,6 +4089,7 @@ try:
 except Exception as _e_sl:
     check(f"tạo được bản sao lưu (lỗi: {_e_sl})", False)
 finally:
+    _cfg.DB_PATH = _cfg_db_goc   # trả config.DB_PATH về mặc định
     import shutil as _sh
     _sh.rmtree(_tm_sl, ignore_errors=True)
 
