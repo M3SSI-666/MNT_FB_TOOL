@@ -1356,7 +1356,7 @@ async function startAccEdit(td){
 }
 
 // Cách đăng nhóm — khớp MODE_OPTIONS trong db.py. Marketplace KHÔNG ở đây.
-const MODE_OPTIONS = ["Hybrid","Via"];
+const MODE_OPTIONS = ["Page","Via"];
 
 // Loại đăng của PAGE. Khác LOAI_DANG_OPTIONS ở trên — cái đó là của tài khoản.
 // Ô trống ở đầu là có chủ ý: Page để trống thì gen lịch BỎ QUA nó, dùng khi
@@ -1420,7 +1420,7 @@ async function saveAccForm(){
     const chk=id=>document.getElementById(id)?.checked?1:0;
     const data={
         id:        parseInt(get("af_id"))||undefined,
-        ten_acc:   get("af_ten_acc"), mode: get("af_mode")||"Hybrid",
+        ten_acc:   get("af_ten_acc"), mode: get("af_mode")||"Page",
         loai_dang: get("af_loai_dang"),
         comment_pct: parseInt(get("af_comment_pct"))||0,
         marketplace_pct: parseInt(get("af_marketplace_pct"))||0,
@@ -3557,7 +3557,7 @@ function _renderGenAccs(accs, contents){
         return `
         <div style="background:var(--bg-hover);border:1px solid ${oCmt?"#c084fc55":"var(--border)"};border-radius:var(--radius-sm);padding:12px;margin-bottom:8px">
             <div style="font-weight:600;font-size:13px">${acc.ten}
-                <span class="badge" style="background:#1e3a5f;color:#7dd3fc;margin-left:6px">${acc.mode||"Hybrid"}</span>
+                <span class="badge" style="background:#1e3a5f;color:#7dd3fc;margin-left:6px">${acc.mode||"Page"}</span>
                 ${oCmt?`<span class="badge" style="background:#3b1f5e;color:#c084fc;margin-left:6px">💬 chỉ comment</span>`:""}
                 ${oMix?`<span class="badge" style="background:#4c1d3d;color:#f472b6;margin-left:6px">📝💬 đăng + comment</span>`:""}
                 ${oMkt?`<span class="badge" style="background:#143d2e;color:#6ee7b7;margin-left:6px">🛒 Marketplace</span>`:""}
@@ -3592,7 +3592,7 @@ async function runGen(){
                 nghi:      acc.nghi,
                 luc_dang:  acc.luc_dang,
                 first_group_url: firstGroup,
-                mode:      acc.mode||"Hybrid",
+                mode:      acc.mode||"Page",
                 contents:  _genContents,
             }));
             res=await API.scheduleGen(_genLoai,{

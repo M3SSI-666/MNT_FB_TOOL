@@ -47,7 +47,7 @@ from utils import logger
 # Ngưỡng rộng tay: báo nhầm vài lần là người ta thôi đọc báo cáo, mà báo cáo
 # không ai đọc thì vô dụng hơn cả không có.
 CO_CHE = {
-    "dang_hybrid":     ("Đăng bài (Hybrid)",        6),
+    "dang_hybrid":     ("Đăng bài (Page)",          6),
     "dang_tuong_page": ("Đăng tường Page",         24),
     "dang_marketplace":("Đăng Marketplace",        24),
     "comment":         ("Đi comment",              12),

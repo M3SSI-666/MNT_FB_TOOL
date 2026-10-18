@@ -10,6 +10,24 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.52.0 — 18/10/2026
+
+**Đổi tên Mode "Hybrid" → "Page" + VIA cũng thu link**
+
+- **Mode "Hybrid" đổi tên thành "Page"** cho dễ hiểu — bài đăng chéo đứng tên
+  Page. Cột **Mode** ở tab Tài khoản nay hiện **Page / Via**. Phần mềm **tự đổi**
+  mọi acc/lịch cũ từ "Hybrid" sang "Page" khi khởi động lại; dòng lịch chưa Gen
+  lại vẫn chạy bình thường (nhận cả tên cũ). **Không mất dữ liệu.**
+- **Đăng VIA giờ cũng thu link như Page:** sau khi đăng, acc bắt link bài vừa
+  đăng (từ phản hồi mạng + trang thông báo) và **lưu vào danh sách Link comment**
+  của đúng mảng — để comment đẩy bài lên, giống hệt Mode Page. Khác một điểm:
+  VIA **KHÔNG thả tim** trong lúc chờ (đang ở trang cá nhân).
+
+> Sau khi cập nhật, nhớ **khởi động lại app** để đổi tên Mode áp dụng, rồi **Gen
+> lại lịch** cho gọn.
+
+---
+
 ## v2.51.2 — 17/10/2026
 
 **Chỉnh giao diện nhỏ**

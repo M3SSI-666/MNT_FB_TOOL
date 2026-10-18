@@ -1,8 +1,8 @@
 """
 ================================================================================
-page_via_poster.py  —  Mode "PageVia"
+page_via_poster.py  —  Mode "Page" (trước đây gọi là "Hybrid" / "PageVia")
 ================================================================================
-Kết hợp tốt nhất của Via + Page:
+Đăng chéo nhóm bằng VAI PAGE — bài đứng tên Page:
   - Acc cá nhân đăng nhập → switch sang Page actor (không bị nhận diện robot)
   - Toàn bộ thao tác qua Playwright UI (không HTTP API)
   - Tìm nhóm bằng từ khóa + tick cross-post → đăng 1 lần đến nhiều nhóm
@@ -804,7 +804,7 @@ async def _run_page_via(
         #
         # Không tin "thấy dialog = vừa dính": dialog hiện lại y nguyên nhiều
         # ngày sau đó. Phải so SỐ VỤ với lần đo trước mới biết có vụ mới.
-        await kiem_vi_pham(page, acc_name, "phiên đăng Hybrid", c_user=c_user)
+        await kiem_vi_pham(page, acc_name, "phiên đăng Page", c_user=c_user)
 
         # KHÔNG còn bước hạ nhiệt RIÊNG: bước lướt feed Page ~60s ở trên đã
         # kiêm cả ba việc một lúc — hạ nhiệt, giữ trình duyệt mở cho vòng canh
@@ -1234,13 +1234,13 @@ def post_page_via(
         # để đọc nên xếp vào 'other' — mất cả hai thứ: không thử lại (chỉ
         # 'transient' mới được thử lại), và bị cộng vào lịch sử hỏng của acc.
         # Một sự cố mạng 30 giây do đó biến thành acc bị cho nghỉ một tiếng.
-        logger.error(f"❌ [{acc_name}] Lỗi PageVia: {e}")
+        logger.error(f"❌ [{acc_name}] Lỗi đăng Page: {e}")
         raise
     finally:
         # Ghi thời lượng phiên — kể cả khi phiên HỎNG. Phiên hỏng mà mất 400
         # giây là một chuyện khác hẳn phiên hỏng sau 20 giây, và chỉ nhìn log
         # lỗi thì không phân biệt được.
-        logger.info(f"  ⏱️  Phiên Hybrid [{acc_name}]: {time.time() - _t0:.0f} giây")
+        logger.info(f"  ⏱️  Phiên Page [{acc_name}]: {time.time() - _t0:.0f} giây")
         if temp_dir:
             try:
                 cleanup_temp(temp_dir)

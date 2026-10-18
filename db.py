@@ -56,7 +56,9 @@ TEN_MANG_TOI_DA = 30                       # ký tự — tên hiện ở tab, m
 
 # Cách đăng nhóm của acc — lưu theo từng acc (cột `mode`), không còn chọn lúc
 # Gen. Chỉ hai lựa chọn; Marketplace KHÔNG nằm ở đây mà là cột cờ riêng.
-MODE_OPTIONS = ("Hybrid", "Via")
+# "Page"  = đăng chéo bằng VAI PAGE (trước đây gọi là "Hybrid" — đổi tên 18/10
+#           cho dễ hiểu: bài đứng tên Page). "Via" = đăng bằng nick cá nhân.
+MODE_OPTIONS = ("Page", "Via")
 
 
 def loai_content_ds() -> list[dict]:
@@ -289,7 +291,7 @@ def init_db():
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             order_idx       INTEGER DEFAULT 0,
             ten_acc         TEXT NOT NULL,
-            mode            TEXT DEFAULT 'Hybrid',  -- Hybrid / Via (cách đăng nhóm)
+            mode            TEXT DEFAULT 'Page',  -- Page / Via (cách đăng nhóm)
             loai_dang       TEXT DEFAULT '',        -- Bán / Thuê / Homestay
             comment_pct     INTEGER DEFAULT 0,      -- % phiên/ngày dành cho comment (0 = tắt)
             marketplace_pct INTEGER DEFAULT 0,      -- % phiên/ngày dành cho Marketplace (0 = tắt)
@@ -377,7 +379,7 @@ def init_db():
             gio_dang        TEXT DEFAULT '',
             ma_nhom         TEXT DEFAULT '',
             tu_khoa         TEXT DEFAULT '',
-            mode            TEXT DEFAULT 'Hybrid',
+            mode            TEXT DEFAULT 'Page',
             trang_thai      TEXT DEFAULT 'Chờ',     -- Chờ / ✅ HH:MM / ❌... / X
             hoat_dong       TEXT DEFAULT 'dang_bai', -- dang_bai | nuoi_nick | comment (slot bị chuyển thành phiên khác)
             updated_at      TEXT DEFAULT (datetime('now','localtime'))
@@ -470,7 +472,7 @@ def init_db():
         #
         # X_* cũ chạy comment ở tỉ lệ chung 25%, nên chuyển về loại sạch +
         # comment_pct = TI_LE_COMMENT_MAC_DINH để giữ y hành vi.
-        _add_col("accounts", "mode",            "mode TEXT DEFAULT 'Hybrid'")
+        _add_col("accounts", "mode",            "mode TEXT DEFAULT 'Page'")
         _add_col("accounts", "comment_pct",     "comment_pct INTEGER DEFAULT 0")
         _add_col("accounts", "marketplace_pct", "marketplace_pct INTEGER DEFAULT 0")
         for _x, _sach in (("X_Home", "Homestay"), ("X_Thuê", "Thuê"),
@@ -623,6 +625,15 @@ def init_db():
                             ("Bán", "ban")):
             con.execute("UPDATE accounts SET loai_dang=? WHERE loai_dang=?",
                         (_key, _nhan))
+
+        # ── Migration: mode "Hybrid" → "Page" ───────────────────────────
+        # Đổi tên cách đăng "Hybrid" thành "Page" (18/10) cho dễ hiểu — bài đứng
+        # tên Page. Đổi cho CẢ accounts lẫn schedules (dòng lịch đã Gen còn mang
+        # mode cũ). Gộp luôn alias cũ "PageVia". Idempotent. Scheduler mới vẫn
+        # nhận "HYBRID"/"PAGEVIA" để dòng lịch cũ chưa Gen lại không gãy.
+        for _bang in ("accounts", "schedules"):
+            for _cu in ("Hybrid", "PageVia"):
+                con.execute(f"UPDATE {_bang} SET mode='Page' WHERE mode=?", (_cu,))
 
         # ── Migration: acc nối Page theo UID ────────────────────────────
         # Trước đây acc chỉ có ten_page (nhãn); nay nối theo page_uid. Dò pages
@@ -943,7 +954,7 @@ def update_account_field(acc_id: int, field: str, value: str):
     # Mode cũng là tập đóng — giá trị lạ khiến scheduler rơi vào nhánh "không
     # hỗ trợ". Chặn tại cửa ghi như loai_dang.
     if field == "mode":
-        value = (value or "").strip() or "Hybrid"
+        value = (value or "").strip() or "Page"
         if value not in MODE_OPTIONS:
             raise ValueError(f"Mode không hợp lệ: '{value}' "
                              f"(chỉ nhận: {', '.join(MODE_OPTIONS)})")

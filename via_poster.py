@@ -10,7 +10,8 @@ LUỒNG:
   3. Scroll newsfeed 20-30s (không like — trang cá nhân)
   4. Chui vào nhóm đầu → mở composer → paste nội dung → upload ảnh
   5. Thêm nhóm → gõ từ khóa → tick đủ nhóm → Xong → Đăng
-  6. Scroll 15-30s → đóng Chrome (không like — trang cá nhân)
+  6. THU LINK bài vừa đăng (phản hồi mạng + trang thông báo) → lưu danh sách
+     comment; lướt feed KHÔNG like làm cửa sổ chờ + dò spam → đóng Chrome
 
 DÙNG TỪ CODE KHÁC:
   from via_poster import post_via_crosspost
@@ -34,7 +35,7 @@ from config import HEADLESS
 from utils import logger, jitter_ms, CookieDeadError, LoiBuoc
 from fb_common import (kiem_vi_pham, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, danh_dau_da_dang, browser_launch_kwargs,
-                       human_delay, jwait, clipboard_paste, browse_and_like)
+                       human_delay, jwait, clipboard_paste, browse_and_like, CHO_SAU_DANG_GIAY)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -83,6 +84,8 @@ async def _run_crosspost(
     message:         str,
     local_photos:    list,
     c_user:          str = "",
+    loai_comment:    str = "",
+    page_uid:        str = "",
 ) -> bool:
     from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 
@@ -429,6 +432,17 @@ async def _run_crosspost(
                 await ctx.close()
                 raise LoiBuoc("Không thấy nút Xong sau khi tick nhóm")
 
+        # Bắt link bài vừa đăng từ phản hồi mạng. Gắn TRƯỚC khi bấm Đăng vì phản
+        # hồi chứa ID bài về ngay sau cú bấm. Bọc try/except — tính năng phụ,
+        # hỏng ở đây không được làm hỏng việc đăng.
+        _bat = None
+        try:
+            from thu_link import BoBatLink
+            _bat = BoBatLink(page)
+            _bat.bat_dau()
+        except Exception as e:
+            logger.warning(f"    ⚠️  Không gắn được bộ bắt link: {e}")
+
         # Click "Đăng"
         await _human_delay(2000, 3000)
         posted = False
@@ -466,14 +480,73 @@ async def _run_crosspost(
             logger.warning(f"  ⚠️  Không chắc kết quả — kiểm tra thủ công trên Facebook")
 
         # ════════════════════════════════════════════════════════════════
-        # BƯỚC 6 — Scroll 15-30s rồi đóng Chrome (không like — trang cá nhân)
+        # BƯỚC 6 — Thu link bài vừa đăng + lướt feed (KHÔNG like) + dò spam
         # ════════════════════════════════════════════════════════════════
-        cooldown_sec = random.randint(8, 12)
-        logger.info(f"  [5/5] 📜 Cooldown {cooldown_sec}s...")
-        await _browse_and_like(page, duration_sec=cooldown_sec, max_likes=0)
+        # Thu link GIỐNG Hybrid: (a) link từ phản hồi mạng (nhóm mở composer),
+        # (b) link từ TRANG THÔNG BÁO (FB đẩy 1 thông báo/nhóm đăng chéo — nguồn
+        # CHÍNH). Thông báo về chậm (~60-76s) nên cần quãng chờ; ở đây là quãng
+        # lướt feed cá nhân — KHÔNG like (đúng ý: VIA đang ở trang cá nhân).
+        _link_moi = []
 
-        # Facebook gỡ bài rồi mới đổ thông báo về — cooldown ở trên vừa hay là
-        # quãng chờ cần thiết, nên dò ngay sau đó.
+        # (a) Phản hồi mạng — nhóm mở composer KHÔNG sinh thông báo đăng chéo nên
+        #     đây là nguồn bổ sung bắt buộc, không phải dự phòng.
+        try:
+            if _bat is not None:
+                _kq = _bat.ket_qua()
+                _bat.dung()
+                _link_moi = list(_kq["links"])
+                logger.info(f"  🔗 [a] Phản hồi mạng (nhóm mở composer): {len(_link_moi)} link")
+        except Exception as e:
+            logger.warning(f"  ⚠️  Thu link từ phản hồi lỗi: {e}")
+
+        # Lướt feed cá nhân — vừa hạ nhiệt, vừa là cửa sổ dò spam, vừa chờ thông
+        # báo đăng chéo về cho bước (b). KHÔNG like.
+        try:
+            await page.goto("https://www.facebook.com/",
+                            wait_until="domcontentloaded", timeout=30000)
+            await _jwait(page, 1500)
+            _luot = random.randint(*CHO_SAU_DANG_GIAY)
+            logger.info(f"  [5/5] 📜 Lướt feed {_luot}s (không like — vừa hạ nhiệt, "
+                        f"vừa chờ thông báo, vừa là cửa sổ dò spam)...")
+            await _browse_and_like(page, duration_sec=_luot, max_likes=0)
+        except Exception as e:
+            logger.warning(f"  ⚠️  Lướt feed lỗi: {e}")
+
+        # (b) Trang thông báo — nguồn CHÍNH, chạy SAU quãng lướt feed ở trên.
+        if loai_comment:
+            try:
+                from thu_link import thu_tu_thong_bao, THU_LINK_MOI_NHAT
+                _tb = await thu_tu_thong_bao(page, toi_da_phut=1440)
+                _lay = [u for u, _ in _tb[:THU_LINK_MOI_NHAT]]
+                logger.info(f"  🔗 [b] Trang thông báo: {len(_tb)} link trong 24h "
+                            f"→ lấy {len(_lay)} bài mới nhất")
+                _link_moi += [u for u in _lay if u not in _link_moi]
+            except Exception as e:
+                logger.warning(f"  ⚠️  Thu link từ trang thông báo lỗi: {e}")
+
+        logger.info(f"  🔗 TỔNG: {len(_link_moi)} link / {_groups_posted or '?'} nhóm đã tick")
+        for _u in _link_moi[:15]:
+            logger.info(f"        {_u}")
+
+        # ── Lưu vào danh sách đi comment ───────────────────────────────
+        # Bài VIA đứng tên NICK CÁ NHÂN (không có vai Page). Gắn `page` = page_uid
+        # của acc (scheduler truyền vào) để bộ lọc `la_chinh_chu` cho phép CHÍNH
+        # acc đó (qua Page của nó) vào comment đẩy bài — giống Hybrid. Thiếu
+        # loai_comment thì bỏ qua, KHÔNG đoán.
+        if _link_moi and loai_comment:
+            try:
+                import db as _db
+                _n = _db.them_comment_posts(loai_comment, _link_moi,
+                                            page=page_uid, acc=acc_name)
+                logger.info(f"  💾 Lưu vào danh sách comment '{loai_comment}': "
+                            f"+{_n} link mới (bỏ {len(_link_moi) - _n} link trùng), "
+                            f"tổng {len(_db.get_comment_posts(loai_comment))}/"
+                            f"{_db.GIOI_HAN_LINK}")
+            except Exception as e:
+                logger.warning(f"  ⚠️  Không lưu được link: {e}")
+
+        # Facebook gỡ bài rồi mới đổ thông báo về — quãng lướt feed ở trên vừa
+        # hay là cửa sổ chờ, nên dò ngay sau đó.
         await kiem_vi_pham(page, acc_name, "phiên đăng VIA", c_user=c_user)
 
         logger.info(f"  ✅ Đóng Chrome")
@@ -492,6 +565,8 @@ def post_via_crosspost(
     image_url:       str = "",
     first_group_uid: str = "",
     c_user:          str = "",
+    loai_comment:    str = "",
+    page_uid:        str = "",
 ) -> bool:
     """
     Hàm đồng bộ — gọi từ scheduler (chạy trong thread).
@@ -503,6 +578,10 @@ def post_via_crosspost(
         image_url:       Link ảnh Drive (để trống = không ảnh)
         first_group_uid: UID nhóm để mở composer
         c_user:          c_user của acc (dùng khi có nhiều acc trùng tên)
+        loai_comment:    mảng để lưu link thu được vào danh sách đi comment
+                         (để trống = không thu link)
+        page_uid:        Page của acc — gắn vào link để `la_chinh_chu` cho phép
+                         acc đó vào comment đẩy bài
 
     Returns:
         Số nhóm đã đăng nếu thành công, False nếu thất bại
@@ -531,6 +610,8 @@ def post_via_crosspost(
             message=message,
             local_photos=local_photos,
             c_user=c_user,
+            loai_comment=loai_comment,
+            page_uid=page_uid,
         ))
         return ok
     except CookieDeadError:

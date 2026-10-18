@@ -1279,7 +1279,7 @@ for _ in range(5):
 _nd.ghi("do_spam_comment")
 check("đủ cặp thì KHÔNG báo gì", _nd.soi() == [])
 check("báo cáo liệt kê số lần từng chức năng",
-      "Đăng bài (Hybrid): 5 lần" in _nd.bao_cao())
+      "Đăng bài (Page): 5 lần" in _nd.bao_cao())
 
 # Cơ chế CHƯA TỪNG chạy thì không báo: máy không bật phiên comment thì
 # "comment im lặng" là bình thường. Báo nhầm làm người đọc quen với cảnh báo
@@ -1648,11 +1648,11 @@ check("quãng chờ sau khi đăng quanh 75 giây",
 # vẫn có thể hụt (phiên A đo 02/10 mới được 7/9 ở giây 76), nhưng ít hơn hẳn.
 check("quãng chờ chạm được mốc 76 giây",
       max(_fbc2.CHO_SAU_DANG_GIAY) >= 76)
-check("Hybrid lướt feed đúng bằng cửa sổ dò spam",
+check("Page lướt feed đúng bằng cửa sổ dò spam",
       "random.randint(*CHO_SAU_DANG_GIAY)" in _src_pvp2)
 # Lướt feed phải ĐỨNG TRƯỚC dò spam, nếu không thì cửa sổ bằng 0.
 _i_luot = _src_pvp2.index("random.randint(*CHO_SAU_DANG_GIAY)")
-_i_dospam = _src_pvp2.index('kiem_vi_pham(page, acc_name, "phiên đăng Hybrid"')
+_i_dospam = _src_pvp2.index('kiem_vi_pham(page, acc_name, "phiên đăng Page"')
 check("lướt feed trước, dò spam sau", _i_luot < _i_dospam)
 # Con số sống ở MỘT nơi, cạnh chính hàm phụ thuộc vào nó.
 check("không ghi cứng lại con số ở poster",
@@ -1661,18 +1661,18 @@ check("không ghi cứng lại con số ở poster",
 # đi là mất đúng một link mỗi lần đăng.
 check("vẫn giữ nguồn bắt link từ phản hồi mạng",
       "[a] Phản hồi mạng" in _src_pvp2)
-check("Hybrid còn 5 bước", "[5/5]" in _src_pvp2 and "[6/6]" not in _src_pvp2)
+check("Page còn 5 bước", "[5/5]" in _src_pvp2 and "[6/6]" not in _src_pvp2)
 
 # ── Mỗi phiên tự ghi thời lượng ────────────────────────────────────────────
 # Trước đây muốn biết một phiên tốn bao lâu phải chạy script đo riêng, nên
 # không ai biết phiên thật tốn bao nhiêu cho tới khi đi đo. Nay tự ghi.
-check("phiên Hybrid tự ghi thời lượng",
-      "Phiên Hybrid [{acc_name}]" in _src_pvp2 and "_t0 = time.time()" in _src_pvp2)
+check("phiên Page tự ghi thời lượng",
+      "Phiên Page [{acc_name}]" in _src_pvp2 and "_t0 = time.time()" in _src_pvp2)
 # Phải nằm trong `finally`: phiên HỎNG mà mất 400 giây là chuyện khác hẳn phiên
 # hỏng sau 20 giây, mà nhìn log lỗi thì không phân biệt được.
 _i_try  = _src_pvp2.index("        ok = asyncio.run(_run_page_via(")
 _i_fin  = _src_pvp2.index("    finally:", _i_try)
-_i_ghi  = _src_pvp2.index("⏱️  Phiên Hybrid")
+_i_ghi  = _src_pvp2.index("⏱️  Phiên Page")
 check("ghi thời lượng cả khi phiên hỏng", _i_ghi > _i_fin)
 # Đo từ trước bước tải ảnh, không phải từ lúc mở Chrome — tải ảnh cũng là một
 # phần của phiên. Neo trong THÂN `post_page_via`: dòng tải ảnh có ở cả hàm đăng
@@ -2018,17 +2018,37 @@ db.update_account_field(_acc_id, "loai_dang", "  homestay  ")
 check("khoảng trắng thừa được cắt bỏ",
       db.get_account_by_id(_acc_id)["loai_dang"] == "homestay")
 
-# ── Mode: tập đóng Hybrid/Via ──────────────────────────────────────────────
-check("Mode có đúng 2 lựa chọn",      db.MODE_OPTIONS == ("Hybrid", "Via"))
+# ── Mode: tập đóng Page/Via (trước là Hybrid) ──────────────────────────────
+check("Mode có đúng 2 lựa chọn",      db.MODE_OPTIONS == ("Page", "Via"))
 db.update_account_field(_acc_id, "mode", "Via")
 check("đổi Mode sang Via được",       db.get_account_by_id(_acc_id)["mode"] == "Via")
-for _m in ("Marketplace", "hybrid", "VIA", "Linh tinh"):
+for _m in ("Marketplace", "hybrid", "Hybrid", "page", "VIA", "Linh tinh"):
     try:
         db.update_account_field(_acc_id, "mode", _m)
         check(f"chặn Mode sai '{_m}'", False)
     except ValueError:
         check(f"chặn Mode sai '{_m}'", True)
-db.update_account_field(_acc_id, "mode", "Hybrid")
+db.update_account_field(_acc_id, "mode", "Page")
+check("đổi Mode sang Page được",      db.get_account_by_id(_acc_id)["mode"] == "Page")
+
+# ── Di trú mode "Hybrid" → "Page" (18/10) ──────────────────────────────────
+# Đổi cho CẢ accounts lẫn schedules; gộp luôn alias cũ "PageVia". Idempotent.
+with db._conn() as _c:
+    _c.execute("INSERT INTO accounts (ten_acc, mode) VALUES ('HybAcc','Hybrid')")
+    _c.execute("INSERT INTO accounts (ten_acc, mode) VALUES ('PvAcc','PageVia')")
+    _c.execute("INSERT INTO schedules (loai, ten_acc, mode) VALUES ('homestay','HybAcc','Hybrid')")
+db.init_db()
+with db._conn() as _c:
+    _m_acc = {r["ten_acc"]: r["mode"] for r in
+              _c.execute("SELECT ten_acc, mode FROM accounts WHERE ten_acc IN ('HybAcc','PvAcc')")}
+    _m_sch = _c.execute("SELECT mode FROM schedules WHERE ten_acc='HybAcc'").fetchone()["mode"]
+check("di trú acc Hybrid → Page", _m_acc.get("HybAcc") == "Page")
+check("di trú alias PageVia → Page", _m_acc.get("PvAcc") == "Page")
+check("di trú dòng lịch Hybrid → Page", _m_sch == "Page")
+# Scheduler vẫn NHẬN alias cũ (HYBRID/PAGEVIA) để dòng lịch chưa gen lại không gãy.
+_src_sch_mode = Path("scheduler.py").read_text(encoding="utf-8")
+check("scheduler nhận mode Page + alias cũ",
+      'if mode in ("PAGE", "HYBRID", "PAGEVIA"):' in _src_sch_mode)
 
 # ── Di trú X_Thuê → thue (khoá) + comment_pct=25 ───────────────────────────
 # Acc cũ mang X_Thuê đi qua HAI bước di trú trong init_db: X_Thuê → "Thuê"
@@ -3557,7 +3577,7 @@ for _f in ("server.py", "join_groups_runner.py", "static/js/app.js"):
 # nhử / thả không bao giờ khởi động.
 import ast as _ast
 _LUONG = [
-    ("page_via_poster.py", "_run_page_via",   "đăng Hybrid"),
+    ("page_via_poster.py", "_run_page_via",   "đăng Page"),
     ("page_via_poster.py", "_run_page_wall",  "đăng tường Page"),
     ("via_poster.py",      "_run_crosspost",  "đăng VIA"),
     ("comment_bai.py",     "_ket_phien",      "đi comment"),
@@ -3570,6 +3590,23 @@ for _f, _ham, _mo_ta in _LUONG:
         if isinstance(_n, (_ast.FunctionDef, _ast.AsyncFunctionDef)) and _n.name == _ham:
             _than = _ast.get_source_segment(_src, _n) or ""
     check(f"luồng {_mo_ta} có dò spam", "kiem_vi_pham" in _than)
+
+# ── VIA thu link như Page (18/10), nhưng KHÔNG like trong cooldown ─────────
+# Đăng VIA xong cũng bắt link (phản hồi mạng + trang thông báo) rồi lưu danh
+# sách comment. Khác Page ở chỗ KHÔNG like (VIA ở trang cá nhân).
+_src_via = Path("via_poster.py").read_text(encoding="utf-8")
+check("VIA bắt link từ phản hồi mạng (BoBatLink)", "BoBatLink" in _src_via)
+check("VIA thu link từ trang thông báo", "thu_tu_thong_bao" in _src_via)
+check("VIA lưu link vào danh sách comment", "them_comment_posts" in _src_via)
+check("post_via_crosspost nhận loai_comment + page_uid",
+      "loai_comment:    str" in _src_via and "page_uid:        str" in _src_via)
+check("VIA dùng cửa sổ chờ thông báo như Page", "random.randint(*CHO_SAU_DANG_GIAY)" in _src_via)
+check("VIA KHÔNG like trong cooldown (max_likes=0, không có max_likes=1)",
+      "max_likes=1" not in _src_via and "max_likes=0" in _src_via)
+_i_via = _src_sch_mode.index('if mode == "VIA":')
+_than_via = _src_sch_mode[_i_via:_src_sch_mode.index("MODE không hỗ trợ", _i_via)]
+check("scheduler VIA truyền loai_comment=LOAI + page_uid của acc",
+      "loai_comment=LOAI" in _than_via and 'get("page_uid"' in _than_via)
 
 # Một bản dùng chung, không chép ra bốn chỗ — chép thì sớm muộn bốn chỗ trôi
 # khác nhau, và chỗ nào trôi sai thì im lặng bỏ sót spam.
@@ -4523,7 +4560,7 @@ def _dong_lich(loai, stt, gio="08:00", acc="AccXoa"):
     """replace_schedules đọc theo TÊN KHOÁ nên thiếu một khoá là SQLite ném lỗi."""
     return {"loai": loai, "stt": stt, "ma_content": "C1", "ten_acc": acc,
             "ten_page": "P", "gio_dang": gio, "ma_nhom": "TIME1",
-            "tu_khoa": "k", "mode": "Hybrid", "trang_thai": "Chờ"}
+            "tu_khoa": "k", "mode": "Page", "trang_thai": "Chờ"}
 
 
 db.replace_schedules("ban", [_dong_lich("ban", i) for i in range(1, 6)])
@@ -5774,10 +5811,10 @@ with db._conn() as _c_tt:
 # Dòng lịch mang c_user; đánh X chỉ dòng của đúng nick.
 db.replace_schedules("tt_thu", [
     {"loai": "tt_thu", "stt": 1, "ma_content": "c", "ten_acc": _TT, "ten_page": "",
-     "gio_dang": "23:58", "ma_nhom": "", "tu_khoa": "", "mode": "Hybrid",
+     "gio_dang": "23:58", "ma_nhom": "", "tu_khoa": "", "mode": "Page",
      "trang_thai": "Chờ", "c_user": "900001"},
     {"loai": "tt_thu", "stt": 2, "ma_content": "c", "ten_acc": _TT, "ten_page": "P_TT2",
-     "gio_dang": "23:59", "ma_nhom": "", "tu_khoa": "", "mode": "Hybrid",
+     "gio_dang": "23:59", "ma_nhom": "", "tu_khoa": "", "mode": "Page",
      "trang_thai": "Chờ"},                                   # thiếu c_user → suy theo Page
 ])
 with db._conn() as _c_tt:
@@ -5825,9 +5862,9 @@ _r_gen = _client.post("/api/schedule/thue/gen", json={
     "start": "08:00", "end": "11:00", "keyword_pool": ["kw"],
     "acc_settings": [
         {"ten": _TT, "c_user": "900011", "page": "P_TT1", "nghi": 30, "luc_dang": 2,
-         "c_offset": 0, "first_group_url": "123", "mode": "Hybrid", "contents": ["C1"]},
+         "c_offset": 0, "first_group_url": "123", "mode": "Page", "contents": ["C1"]},
         {"ten": _TT, "c_user": "900002", "page": "P_TT2", "nghi": 30, "luc_dang": 2,
-         "c_offset": 0, "first_group_url": "123", "mode": "Hybrid", "contents": ["C1"]},
+         "c_offset": 0, "first_group_url": "123", "mode": "Page", "contents": ["C1"]},
     ]}).get_json()
 with db._conn() as _c_tt:
     _cu_gen = [r[0] for r in _c_tt.execute(
@@ -5871,7 +5908,7 @@ _ts2 = db.upsert_account({"ten_acc": _TS, "c_user": "900202", "xs": "x",
                           "trang_thai": "Cookie hết hạn"})       # trùng tên, nick khác
 _dong_ts = lambda stt, gio, tt, cu: {
     "loai": "ts_thu", "stt": stt, "ma_content": "c", "ten_acc": _TS, "ten_page": "",
-    "gio_dang": gio, "ma_nhom": "", "tu_khoa": "", "mode": "Hybrid",
+    "gio_dang": gio, "ma_nhom": "", "tu_khoa": "", "mode": "Page",
     "trang_thai": tt, "c_user": cu}
 db.replace_schedules("ts_thu", [
     _dong_ts(1, "23:58", db.TT_LICH_X_TU_DONG, "900201"),   # tương lai, tự đánh → về Chờ
@@ -5957,9 +5994,9 @@ for _so in (11, 8, 4):          # 8 nick / 4 từ khoá: ca dễ dính cố đ�
     check(f"{_so} nick: tổng mỗi từ khoá đều nhau (lệch ≤ 1)",
           max(sum(r["tu_khoa"] == k for r in _dong) for k in _KW)
           - min(sum(r["tu_khoa"] == k for r in _dong) for k in _KW) <= 1)
-_dong = [{"ten_acc": "A", "mode": "Hybrid"}, {"ten_acc": "B", "mode": "PAGE"},
-         {"ten_acc": "C", "mode": "Hybrid"}]
-_rtk(_dong, _KW, can=lambda r: r["mode"] in ("Via", "Hybrid"))
+_dong = [{"ten_acc": "A", "mode": "Page"}, {"ten_acc": "B", "mode": "Khac"},
+         {"ten_acc": "C", "mode": "Page"}]
+_rtk(_dong, _KW, can=lambda r: r["mode"] in ("Via", "Page"))
 check("dòng không cần từ khoá để trống, không làm lệch vòng",
       _dong[1]["tu_khoa"] == "" and _dong[0]["tu_khoa"] == "Chợ cư dân"
       and _dong[2]["tu_khoa"] == "Cộng")
@@ -6081,7 +6118,7 @@ _r_gct = _client.post("/api/schedule/homestay/gen", json={
     "start": "08:00", "end": "14:00", "keyword_pool": ["kw"],
     "acc_settings": [
         {"ten": f"GenCT{i}", "c_user": f"77700{i}", "page": "", "nghi": 15, "luc_dang": 4,
-         "first_group_url": "123", "mode": "Hybrid", "contents": ["H1", "H2", "H3", "H4"]}
+         "first_group_url": "123", "mode": "Page", "contents": ["H1", "H2", "H3", "H4"]}
         for i in range(3)]}).get_json()
 with db._conn() as _c_gct:
     _ma_gct = [r[0] for r in _c_gct.execute(
@@ -6215,7 +6252,7 @@ _TT_KET = {
 }
 db.replace_schedules("loai5", [
     {"loai": "loai5", "stt": i + 1, "ma_content": "C1", "ten_acc": "KetA", "ten_page": "",
-     "gio_dang": "10:00", "ma_nhom": "1", "tu_khoa": "", "mode": "Hybrid", "trang_thai": tt,
+     "gio_dang": "10:00", "ma_nhom": "1", "tu_khoa": "", "mode": "Page", "trang_thai": tt,
      "c_user": "880001"} for i, tt in enumerate(_TT_KET)])
 def _tt_loai5():
     with db._conn() as _c:
@@ -6243,7 +6280,7 @@ def _khoa_nha_cham(loai):                 # khoá còn "giữ" 3 lần hỏi đ�
 try:
     db.replace_schedules("loai5", [
         {"loai": "loai5", "stt": 1, "ma_content": "C1", "ten_acc": "KetA", "ten_page": "",
-         "gio_dang": "10:00", "ma_nhom": "1", "tu_khoa": "", "mode": "Hybrid",
+         "gio_dang": "10:00", "ma_nhom": "1", "tu_khoa": "", "mode": "Page",
          "trang_thai": "🔄 Đang chạy 10:00", "c_user": "880001"}])
     _kr_st.dang_giu = _khoa_nha_cham
     _kr_st.pid_dang_giu = lambda loai: 4321 if _dem_hoi["n"] < 1 else None

@@ -1934,7 +1934,7 @@ def api_schedule_gen(loai):
     for t_min, ten in moc:
         acc = theo_ten[ten]
 
-        mode_acc = acc.get("mode", "Hybrid")
+        mode_acc = acc.get("mode", "Page")
 
         # ma_nhom = URL/UID nhóm đầu để mở composer (đã validate là luôn có).
         ma_nhom_val = acc.get("first_group_url", "").strip()
@@ -1960,7 +1960,7 @@ def api_schedule_gen(loai):
     # nick liền nhau dùng chung một từ khoá — bảng thành cụm 3 dòng trùng nhau.
     from xep_lich import rai_tu_khoa
     rai_tu_khoa(schedule, keyword_pool,
-                can=lambda r: r.get("mode") in ("Via", "Hybrid"))
+                can=lambda r: r.get("mode") in ("Via", "Page", "Hybrid"))
 
     # ── Nuôi nick: chuyển một số slot của acc bật nuôi thành phiên nuôi ──
     # Nick càng non → chuyển càng nhiều (đăng ít, nuôi nhiều). Đọc thẳng từ DB
@@ -2190,7 +2190,7 @@ def api_schedule_gen_data(loai):
             "co_marketplace": acc_co_marketplace(a),
             "comment_pct":    acc_comment_pct(a),
             "marketplace_pct": acc_marketplace_pct(a),
-            "mode":           a.get("mode", "Hybrid") or "Hybrid",
+            "mode":           a.get("mode", "Page") or "Page",
         })
 
     contents = [r["ma_content"] for r in get_content(loai, su_dung="Có")]

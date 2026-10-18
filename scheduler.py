@@ -140,7 +140,7 @@ def _attempt_post(item: dict) -> str:
     ma_ct     = item["ma_content"]
     ma_nhom   = item["ma_nhom"]
     tu_khoa   = item.get("tu_khoa", "")
-    mode      = (item.get("mode", "Hybrid") or "Hybrid").upper()
+    mode      = (item.get("mode", "Page") or "Page").upper()
 
     # PHẢI truyền loại: mã content chỉ duy nhất trong một mảng, không duy nhất
     # toàn bảng. Thiếu nó thì lịch Bán lấy content của Thuê (13 mã đang trùng),
@@ -155,13 +155,16 @@ def _attempt_post(item: dict) -> str:
 
     # Đăng tường Page nay KHÔNG còn là một runner LOAI riêng: nó là phiên
     # 'dang_page' lồng trong lịch của mảng (xem _run_page_slot). _attempt_post
-    # chỉ còn lo đăng chéo nhóm (Hybrid/Via).
+    # chỉ còn lo đăng chéo nhóm (Page/Via).
 
-    # ── MODE HYBRID / PAGEVIA ─────────────────────────────────
-    if mode in ("HYBRID", "PAGEVIA"):
+    # ── MODE PAGE (đăng chéo bằng vai Page) ───────────────────
+    # Nhận cả alias cũ HYBRID / PAGEVIA để dòng lịch đã Gen trước khi đổi tên
+    # vẫn chạy (migration đổi accounts + schedules sang "Page", nhưng lịch có
+    # thể gen lại sau).
+    if mode in ("PAGE", "HYBRID", "PAGEVIA"):
         from page_via_poster import post_page_via
         if not tu_khoa:
-            raise Exception("Mode=Hybrid nhưng thiếu Từ khóa")
+            raise Exception("Mode=Page nhưng thiếu Từ khóa")
         page_info = get_page_by_name(page_name)
         page_uid  = page_info.get("page_uid", "") if page_info else ""
         if not page_uid:
@@ -205,14 +208,20 @@ def _attempt_post(item: dict) -> str:
             message=content, image_url=link_anh,
             first_group_uid=first_uid,
             c_user=c_user_v,
+            # Thu link bài VIA vừa đăng lưu vào danh sách comment của ĐÚNG mảng
+            # đang chạy (như Hybrid). Gắn page_uid của acc để chính acc đó (qua
+            # Page của nó) vào comment đẩy bài — xem `la_chinh_chu`.
+            loai_comment=LOAI,
+            page_uid=(acc_data or {}).get("page_uid", ""),
         )
         if not count:
             raise Exception("Via thất bại")
         return f" ({count} nhóm)"
 
     # ── MODE không hỗ trợ ──────────────────────────────────────
-    # Mode "Page" (đăng qua HTTP API) đã bị loại bỏ — chỉ còn Playwright.
-    raise Exception(f"Mode '{mode}' không được hỗ trợ (chỉ còn Hybrid/Via — Playwright)")
+    # (Mode "Page" cũ đăng qua HTTP API đã bị loại bỏ từ lâu; "Page" hiện nay là
+    #  đăng chéo bằng vai Page qua Playwright, xử lý ở nhánh trên.)
+    raise Exception(f"Mode '{mode}' không được hỗ trợ (chỉ còn Page/Via — Playwright)")
 
 
 def _cu(item: dict) -> str:
@@ -573,7 +582,7 @@ def _run_one(item: dict):
     sid      = item["id"]
     stt      = item.get("stt", sid)
     acc_name = item["ten_acc"]
-    mode     = (item.get("mode", "Hybrid") or "Hybrid").upper()
+    mode     = (item.get("mode", "Page") or "Page").upper()
     ts       = datetime.now().strftime("%H:%M")
 
     logger.info(f"\n{'='*55}")
