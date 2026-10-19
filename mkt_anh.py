@@ -37,7 +37,7 @@ ANH_TINH = {".jpg", ".jpeg", ".png", ".webp"}         # .gif động → để n
 THU_MUC_ICON = Path(__file__).parent / "assets" / "icon_lienhe"
 GOC_HOP_LE   = ("tren_trai", "tren_phai", "duoi_trai", "duoi_phai")
 
-NEN_HUY_HIEU = (255, 255, 255, 118)   # viên thuốc trắng, mờ ~50% cho ảnh lộ qua
+NEN_HUY_HIEU = (255, 255, 255, 204)   # viên thuốc trắng, đậm 80% cho chữ dễ đọc
 BONG         = (0, 0, 0, 60)          # bóng đổ để nổi trên ảnh sáng
 MAU_SO       = (225, 20, 25)          # số điện thoại — ĐỎ, đậm, bắt mắt
 CO_CHU       = 0.052                  # cỡ chữ số theo bề rộng ảnh (to vừa phải)

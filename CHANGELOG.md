@@ -10,6 +10,16 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.56.1 — 20/10/2026
+
+**Huy hiệu Marketplace: nền trắng đậm hơn cho dễ đọc**
+
+Chỉnh nền trắng của huy hiệu từ mờ ~50% lên **đậm 80%** (alpha 118 → 204). Mức
+50% hơi mờ, số điện thoại chìm vào ảnh; 80% thì chữ nổi rõ mà vẫn thấy ảnh phía
+sau. Không đổi gì khác.
+
+---
+
 ## v2.56.0 — 20/10/2026
 
 **Biến thể ảnh RIÊNG cho Marketplace — dán icon liên hệ + số điện thoại**
