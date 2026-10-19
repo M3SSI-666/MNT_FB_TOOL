@@ -10,6 +10,23 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.54.2 — 19/10/2026
+
+**Tin báo Marketplace tách riêng tên bài niêm yết cho gọn**
+
+Trước đây tên bài lẫn vào nội dung tin (vd "· Test Mai Ngọc Tùng đã gửi…").
+Nay tách hẳn ra, mỗi tin một dòng:
+
+```
+📩 Máy Nhà · acc Sa Tran Anh — 1 tin Marketplace mới:
+• Tùng — bài "Test": Mai Ngọc Tùng đã gửi một tin nhắn cho bạn về bài niêm yết của bạn: Test.
+```
+
+- Biết ngay khách hỏi về **bài nào**, không phải đọc lẫn trong câu.
+- Hội thoại không có tên bài thì chỉ hiện `• Người: nội dung` như cũ.
+
+---
+
 ## v2.54.1 — 19/10/2026
 
 **Vá: quét tin Marketplace đọc nhầm cả hộp thư Messenger chung**

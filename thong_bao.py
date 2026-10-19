@@ -147,22 +147,32 @@ def _goi_api(method: str, tham_so: dict, token: str = "") -> dict | None:
         return None
 
 
+def soan_tin_mkt(ten_may: str, acc_name: str, tin_moi: list) -> str:
+    """Soạn nội dung tin báo Marketplace (HTML). Tách riêng để kiểm thử được mà
+    không phải gọi mạng. Mỗi tin một dòng: • Người — bài "Tên bài": nội dung."""
+    dong = [f"📩 <b>{ten_may}</b> · acc <b>{acc_name}</b> — "
+            f"{len(tin_moi)} tin Marketplace mới:"]
+    for t in tin_moi[:10]:
+        ng = (t.get("nguoi_gui") or "?").strip()
+        bai = (t.get("bai") or "").strip()
+        tr = (t.get("trich") or "").strip()
+        dong.append(f"• <b>{ng}</b>"
+                    + (f' — bài "{bai[:60]}"' if bai else "")
+                    + (f": {tr[:120]}" if tr else ""))
+    return "\n".join(dong)
+
+
 def bao_tin_mkt(acc_name: str, tin_moi: list) -> bool:
     """Báo acc vừa có tin nhắn Marketplace mới — vào KÊNH RIÊNG Marketplace.
 
-    `tin_moi`: list dict {"nguoi_gui","trich"}. Trả True nếu đã gửi.
+    `tin_moi`: list dict {"nguoi_gui","bai","trich"}. Trả True nếu đã gửi.
     """
     c = cau_hinh_mkt()
     if not (c["bat"] and c["token"] and c["chat_id"]) or not tin_moi:
         return False
-    dong = [f"📩 <b>{c['ten_may']}</b> · acc <b>{acc_name}</b> — "
-            f"{len(tin_moi)} tin Marketplace mới:"]
-    for t in tin_moi[:10]:
-        ng = (t.get("nguoi_gui") or "?").strip()
-        tr = (t.get("trich") or "").strip()
-        dong.append(f"• <b>{ng}</b>" + (f": {tr[:120]}" if tr else ""))
     kq = _goi_api("sendMessage",
-                  {"chat_id": c["chat_id"], "text": "\n".join(dong),
+                  {"chat_id": c["chat_id"],
+                   "text": soan_tin_mkt(c["ten_may"], acc_name, tin_moi),
                    "parse_mode": "HTML", "disable_web_page_preview": "true"},
                   token=c["token"])
     return bool(kq and kq.get("ok"))

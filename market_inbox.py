@@ -36,8 +36,9 @@ from config import HEADLESS
 INBOX_URL = "https://www.facebook.com/marketplace/inbox/"
 
 # Đọc danh sách hội thoại trong PANEL MARKETPLACE (`[role="main"]`) — KHÔNG đụng
-# Messenger thường ở ngoài. Không click gì, chỉ đọc DOM. Trả [{name, preview,
-# unread}]. Gom theo name|preview để khỏi trùng dòng.
+# Messenger thường ở ngoài. Không click gì, chỉ đọc DOM. Trả [{name, bai, preview,
+# unread}] (bai = tên bài niêm yết, tách khỏi nội dung). Gom theo name|bai|preview
+# để khỏi trùng dòng.
 _JS_DOC_LIST = r"""
 () => {
   const main = document.querySelector('[role="main"]');
@@ -67,9 +68,18 @@ _JS_DOC_LIST = r"""
     if (BO_QUA.has(name.toLowerCase())) continue;
     let body = lines.slice(1);
     while (body.length && laGio(body[body.length - 1])) body = body.slice(0, -1);
-    const preview = body.join(' ').replace(/\s+/g, ' ').trim();
-    if (!preview) continue;
-    const key = name + '|' + preview.slice(0, 40);
+    // Dòng mở đầu bằng "·"/"•" là TÊN BÀI niêm yết (FB chèn vào card) — tách ra
+    // khỏi nội dung tin cho gọn.
+    let bai = '';
+    const con = [];
+    for (const ln of body) {
+      const m = ln.match(/^[·•∙]\s*(.+)$/);
+      if (m && !bai) bai = m[1].trim();
+      else con.push(ln);
+    }
+    const preview = con.join(' ').replace(/\s+/g, ' ').trim();
+    if (!preview && !bai) continue;
+    const key = name + '|' + bai + '|' + preview.slice(0, 40);
     if (seen.has(key)) continue;
     seen.add(key);
     // Chưa đọc (gợi ý): có chữ ĐẬM dài (preview in đậm). Tên bài có thể luôn đậm
@@ -79,7 +89,7 @@ _JS_DOC_LIST = r"""
       const t = (el.innerText || '').trim();
       if (t.length >= 12 && +getComputedStyle(el).fontWeight >= 600) { unread = true; break; }
     }
-    out.push({ name, preview, unread });
+    out.push({ name, bai, preview, unread });
   }
   return out;
 }
@@ -140,6 +150,8 @@ def quet_inbox_market(acc_name: str, c_user: str = "", headless=None) -> list:
 
 def chu_ky(hoi_thoai: dict) -> str:
     """Chữ ký một hội thoại — để so 'tin mới' giữa hai lần quét. Cùng người +
-    cùng đoạn trích = coi như tin cũ, không báo lại. Khách gửi tin mới thì đoạn
-    trích đổi → chữ ký đổi → báo."""
-    return f"{(hoi_thoai.get('name') or '').strip()}|{(hoi_thoai.get('preview') or '').strip()[:60]}"
+    cùng bài + cùng đoạn trích = coi như tin cũ, không báo lại. Khách gửi tin mới
+    thì đoạn trích đổi → chữ ký đổi → báo."""
+    return (f"{(hoi_thoai.get('name') or '').strip()}"
+            f"|{(hoi_thoai.get('bai') or '').strip()}"
+            f"|{(hoi_thoai.get('preview') or '').strip()[:60]}")

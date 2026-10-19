@@ -3833,6 +3833,23 @@ try:
     check("khách nhắn tin mới (preview đổi) → chữ ký đổi",
           _mi.chu_ky({"name": "An", "preview": "còn không"}) !=
           _mi.chu_ky({"name": "An", "preview": "ship bao nhiêu"}))
+    # chu_ky phân biệt theo BÀI: cùng người + cùng câu nhưng khác bài → khác tin.
+    check("cùng người cùng câu nhưng khác bài → chữ ký khác",
+          _mi.chu_ky({"name": "An", "bai": "Ghế", "preview": "còn không"}) !=
+          _mi.chu_ky({"name": "An", "bai": "Bàn", "preview": "còn không"}))
+
+    # 3c) Soạn tin Telegram — Kiểu 1: • Người — bài "Tên bài": nội dung.
+    _tin = _tb.soan_tin_mkt("Máy Nhà", "Sa Tran Anh",
+            [{"nguoi_gui": "Tùng", "bai": "Test", "trich": "còn hàng không shop"}])
+    check("soạn tin có tên máy + acc + số tin",
+          "Máy Nhà" in _tin and "Sa Tran Anh" in _tin and "1 tin Marketplace mới" in _tin)
+    check("soạn tin tách tên bài theo Kiểu 1",
+          '• <b>Tùng</b> — bài "Test": còn hàng không shop' in _tin)
+    # Không có tên bài thì không ép ra chữ "bài" rỗng.
+    _tin2 = _tb.soan_tin_mkt("Máy Nhà", "Acc X",
+            [{"nguoi_gui": "Lan", "trich": "ib giá"}])
+    check("không có tên bài → chỉ • Người: nội dung",
+          "• <b>Lan</b>: ib giá" in _tin2 and "bài" not in _tin2)
 
     # 4) Kênh Telegram Market: tách hẳn, tắt là im; token/chat_id riêng.
     db.set_setting("tg_mkt_bat", "0")

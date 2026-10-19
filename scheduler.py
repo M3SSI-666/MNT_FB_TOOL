@@ -783,7 +783,8 @@ def main():
                 try:
                     import thong_bao
                     thong_bao.bao_tin_mkt(ten_acc,
-                        [{"nguoi_gui": h.get("name", ""), "trich": h.get("preview", "")}
+                        [{"nguoi_gui": h.get("name", ""), "bai": h.get("bai", ""),
+                          "trich": h.get("preview", "")}
                          for h in moi])
                 except Exception as e:
                     logger.warning(f"⚠️  Báo tin Market [{ten_acc}] lỗi: {e}")
