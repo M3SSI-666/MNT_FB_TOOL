@@ -22,6 +22,10 @@ logs/*.log.*
 .runner_*.lock
 debug_*.png
 *.png
+# ...TRỪ thư viện icon liên hệ của Marketplace (mkt_anh.py) — đây là asset của
+# phần mềm, phải đi theo repo và bản .exe.
+!assets/icon_lienhe/
+!assets/icon_lienhe/*.png
 
 # ── Tài liệu nội bộ (chỉ dành cho người phát hành, không đẩy lên repo) ──
 HUONG_DAN_UPDATE.md

@@ -10,6 +10,31 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.56.0 — 20/10/2026
+
+**Biến thể ảnh RIÊNG cho Marketplace — dán icon liên hệ + số điện thoại**
+
+Marketplace đánh rất mạnh vào trùng bộ ảnh, nên có bộ biến thể **riêng** cho nó
+(khác với các luồng khác vẫn đăng ảnh gốc). Bật ở **tab Marketplace → mục 5**:
+tick **Dùng biến thể ảnh** và nhập **số điện thoại**.
+
+Khi bật, mỗi ảnh trước khi đăng:
+- Bốc **ngẫu nhiên 1 icon liên hệ** trong bộ **~50 icon** (điện thoại, tin nhắn,
+  mail, định vị, chuông, "call me"…) ở `assets/icon_lienhe/`.
+- Ghép icon + **số điện thoại (màu đỏ)** thành một huy hiệu nền trắng mờ bo tròn,
+  cỡ vừa phải.
+- Dán vào **ngẫu nhiên 1 trong 4 góc** ảnh.
+
+→ Đăng 5 ảnh thì mỗi ảnh một icon + một góc khác nhau, cùng bộ ảnh ra khác hẳn,
+và khách thấy ngay số điện thoại trên ảnh.
+
+- Chỉ Marketplace dùng; ảnh gốc trong `data/media` **không bị đụng** (ghi bản sao
+  ra temp, xoá sau khi đăng). Ảnh nào xử lý hỏng thì đăng ảnh gốc ảnh đó.
+- Thêm lại thư viện **Pillow** (cần để vẽ huy hiệu). Thư viện icon là các file
+  PNG nền trong — thay/thêm bằng cách bỏ PNG vào `assets/icon_lienhe/`.
+
+---
+
 ## v2.55.0 — 20/10/2026
 
 **Gỡ bỏ hoàn toàn biến thể ảnh — đăng thuần ảnh gốc**

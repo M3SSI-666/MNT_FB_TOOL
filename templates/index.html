@@ -400,6 +400,25 @@
                             <input class="input" id="mkt-tu-khoa"
                                    style="flex:1;min-width:150px" onchange="mktLuu()">
                         </div>
+
+                        <span class="mkt-so">5</span>
+                        <label for="mkt-bien-the">Biến thể ảnh</label>
+                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                            <label style="display:flex;gap:6px;align-items:center;white-space:nowrap;cursor:pointer">
+                                <input type="checkbox" id="mkt-bien-the" onchange="mktLuu()"
+                                       style="width:16px;height:16px;cursor:pointer">
+                                <span>Dùng biến thể ảnh</span>
+                            </label>
+                            <input class="input" id="mkt-bien-the-sdt"
+                                   placeholder="Số điện thoại đính lên ảnh, vd 0333 194 822"
+                                   style="flex:1;min-width:190px" onchange="mktLuu()">
+                        </div>
+                    </div>
+
+                    <div style="font-size:11px;color:var(--text-muted);line-height:1.6;margin-top:10px">
+                        Bật thì mỗi ảnh được dán 1 <b>icon liên hệ ngẫu nhiên</b> (bộ ~50 icon) kèm
+                        <b>số điện thoại trên</b> vào 1 trong 4 góc ảnh — mỗi ảnh một kiểu, né trùng
+                        bộ ảnh của Marketplace. Để trống số điện thoại = coi như tắt.
                     </div>
 
                     <div style="display:flex;gap:8px;margin-top:16px;align-items:center">

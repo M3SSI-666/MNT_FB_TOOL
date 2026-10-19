@@ -25,6 +25,7 @@ content là ở khâu lập lịch.
 """
 
 import asyncio
+import os
 import random
 
 from cookie_exporter import load_cookie
@@ -551,6 +552,17 @@ def post_marketplace(acc_name: str, message: str, image_url: str = "",
     try:
         from storage import prepare_images_for_post as smart_download
         local_photos, temp_dir = smart_download(image_url)
+        # Biến thể ảnh RIÊNG cho Marketplace: dán icon liên hệ + số điện thoại
+        # vào góc ngẫu nhiên, mỗi ảnh một icon — né trùng bộ ảnh. Chỉ khi bật ở
+        # tab Marketplace và có nhập số điện thoại.
+        cd  = db.doc_cai_dat_mkt()
+        sdt = (cd.get("mkt_bien_the_sdt") or "").strip()
+        if local_photos and cd.get("mkt_bien_the_bat") == "1" and sdt:
+            import tempfile as _tempfile, mkt_anh
+            if temp_dir is None:
+                temp_dir = _tempfile.mkdtemp(prefix="mnt_mkt_")
+            local_photos = mkt_anh.bien_the_lien_he(
+                local_photos, os.path.join(temp_dir, "bt"), sdt)
         logger.info(f"  📥 {len(local_photos)} ảnh đã chuẩn bị")
     except Exception as e:
         logger.warning(f"  ⚠️  Chuẩn bị ảnh hỏng: {e}")

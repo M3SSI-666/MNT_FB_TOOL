@@ -2462,6 +2462,11 @@ MKT_MAC_DINH = {
     # (các nhóm Park Hill đều đã khớp "Times City" hoặc "Time City") mà lại kéo
     # về nguy cơ nhóm Park Hill ở khu khác. Cần thì tự thêm.
     "mkt_tu_khoa":    "Times, Time",
+    # [5] Biến thể ảnh RIÊNG cho Marketplace (mkt_anh.py): bật thì mỗi ảnh được
+    # dán 1 icon liên hệ ngẫu nhiên + số điện thoại dưới đây vào 1 góc ngẫu
+    # nhiên — né trùng bộ ảnh. Để trống số điện thoại = coi như tắt.
+    "mkt_bien_the_bat": "0",
+    "mkt_bien_the_sdt": "",
 }
 
 

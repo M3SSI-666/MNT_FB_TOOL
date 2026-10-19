@@ -2325,10 +2325,12 @@ check("storage.py không còn dính biến thể ảnh",
       and "seed_key" not in _src_st and "sdt" not in _src_st)
 check("prepare_images_for_post chỉ còn 1 tham số image_urls",
       "def prepare_images_for_post(image_urls: str)" in _src_st)
-# UI: nút 🎲 Biến thể ảnh và hàm JS của nó đã gỡ.
-check("bỏ nút '🎲 Biến thể ảnh' khỏi giao diện",
-      "Biến thể ảnh" not in Path("templates/index.html").read_text(encoding="utf-8")
-      and "openBienTheSettings" not in Path("static/js/app.js").read_text(encoding="utf-8"))
+# UI: nút 🎲 Biến thể ảnh CŨ (ở tab Content) + hàm JS của nó đã gỡ. (Marketplace
+# có ô "biến thể ảnh" RIÊNG của nó — xem phần test Marketplace.)
+check("bỏ nút '🎲 Biến thể ảnh' cũ ở tab Content",
+      "openBienTheSettings" not in Path("static/js/app.js").read_text(encoding="utf-8")
+      and "saveBienTheSettings" not in Path("static/js/app.js").read_text(encoding="utf-8")
+      and "🎲 Biến thể ảnh" not in Path("templates/index.html").read_text(encoding="utf-8"))
 # Cài đặt số ĐT dán ảnh của Marketplace cũng bỏ.
 check("bỏ cài đặt mkt_sdt_anh",
       "mkt_sdt_anh" not in Path("db.py").read_text(encoding="utf-8")
@@ -4948,9 +4950,9 @@ check("KHÔNG có ô nhập Ảnh / Mô tả ở trang Marketplace",
 import re as _re_mkt
 _khoi_mkt = _html_mkt[_html_mkt.index('id="page-marketplace"'):]
 _khoi_mkt = _khoi_mkt[:_khoi_mkt.index('id="page-hanh-dong"')]
-check("số thứ tự đánh liền 1..4",
+check("số thứ tự đánh liền 1..5",
       _re_mkt.findall(r'class="mkt-so">(\d+)<', _khoi_mkt)
-      == [str(i) for i in range(1, 5)])
+      == [str(i) for i in range(1, 6)])
 check("KHÔNG còn ô Tiêu đề / Giá / Tình trạng / Số nhóm",
       not any(f'id="{x}"' in _khoi_mkt
               for x in ("mkt-tieu-de", "mkt-gia-list", "mkt-tinh-trang", "mkt-so-nhom")))
@@ -5013,6 +5015,49 @@ check("bộ đăng không còn đọc tiêu đề / giá / tình trạng / số 
                                      'cd["mkt_tinh_trang"]', 'cd["mkt_so_nhom"]')))
 check("bộ đăng dùng Tình trạng và số nhóm cố định",
       '("Tình trạng", db.MKT_TINH_TRANG)' in _src_mp and "so_nhom = db.MKT_SO_NHOM" in _src_mp)
+
+# ── Biến thể ảnh RIÊNG cho Marketplace: icon liên hệ + số điện thoại ─────────
+# Marketplace đánh mạnh trùng bộ ảnh, nên mỗi ảnh dán 1 icon ngẫu nhiên + số ĐT
+# vào 1 trong 4 góc. CHỈ Marketplace, CHỈ khi bật + có nhập số.
+import mkt_anh as _mia
+check("mặc định Marketplace có mkt_bien_the_bat/sdt",
+      "mkt_bien_the_bat" in db.MKT_MAC_DINH and "mkt_bien_the_sdt" in db.MKT_MAC_DINH)
+check("biến thể ảnh Marketplace mặc định TẮT",
+      db.doc_cai_dat_mkt()["mkt_bien_the_bat"] == "0")
+check("tab Marketplace có ô tick + số điện thoại (mục 5)",
+      'id="mkt-bien-the"' in _khoi_mkt and 'id="mkt-bien-the-sdt"' in _khoi_mkt)
+check("UI nạp + lưu ô biến thể ảnh Marketplace",
+      'el("mkt-bien-the")' in _ajs_mkt and "mkt_bien_the_bat:" in _ajs_mkt
+      and "mkt_bien_the_sdt:" in _ajs_mkt)
+check("thư viện icon liên hệ có sẵn nhiều icon",
+      len(list(Path("assets/icon_lienhe").glob("*.png"))) >= 40)
+check("market_poster gọi biến thể liên hệ, khoá theo bật + có số ĐT",
+      "mkt_anh.bien_the_lien_he" in _src_mp
+      and 'cd.get("mkt_bien_the_bat") == "1"' in _src_mp)
+
+if _mia.CO_PILLOW:
+    from PIL import Image as _ImM
+    _mdm = Path(tempfile.mkdtemp(prefix="test_mkt_bt_"))
+    _g1 = _mdm / "a.jpg"; _g2 = _mdm / "b.jpg"
+    _ImM.new("RGB", (800, 600), (180, 180, 190)).save(_g1, "JPEG")
+    _ImM.new("RGB", (640, 640), (150, 170, 160)).save(_g2, "JPEG")
+    _b1 = _g1.read_bytes()
+    _out = _mia.bien_the_lien_he([str(_g1), str(_g2)], str(_mdm / "ra"),
+                                 "0333 194 822", seed=3)
+    check("biến thể ra đủ số ảnh, đúng thứ tự",
+          len(_out) == 2 and [Path(p).stem for p in _out] == ["1", "2"])
+    check("ảnh biến thể là file MỚI, KHÔNG đụng ảnh gốc",
+          all(str(_mdm / "ra") in p for p in _out) and _g1.read_bytes() == _b1)
+    check("ảnh biến thể mở được + giữ kích thước ảnh gốc",
+          _ImM.open(_out[0]).size == (800, 600))
+    check("không có số điện thoại → trả NGUYÊN ảnh gốc",
+          _mia.bien_the_lien_he([str(_g1)], str(_mdm / "x"), "  ") == [str(_g1)])
+    _xx = _mdm / "xau.jpg"; _xx.write_bytes(b"khong phai anh")
+    check("ảnh hỏng → giữ nguyên đường dẫn gốc, không ném lỗi",
+          _mia.bien_the_lien_he([str(_xx)], str(_mdm / "y"), "0909")[0] == str(_xx))
+    shutil.rmtree(_mdm, ignore_errors=True)
+else:
+    check("BỎ QUA test biến thể Marketplace (chưa cài Pillow)", True)
 # Vị trí: ô ở tab Marketplace có từ v2.30.0 mà bộ đăng chưa từng đọc tới —
 # bài mang vị trí Facebook tự điền, mỗi nick một khác. Nay chọn theo cài đặt.
 _than_dien = _src_mp[_src_mp.index("async def _dien_thong_tin"):]
