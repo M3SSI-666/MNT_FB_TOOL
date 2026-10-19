@@ -464,6 +464,14 @@ def init_db():
         # ten_page giữ làm nhãn hiển thị.
         _add_col("accounts",  "page_uid",         "page_uid TEXT DEFAULT ''")
 
+        # Quét tin nhắn Marketplace: acc có marketplace% tự ghé hộp thư
+        # Marketplace định kỳ (3–5 phút) tìm tin khách mới.
+        #   mkt_scan_lan_cuoi = mốc quét gần nhất (giữ đúng nhịp)
+        #   mkt_tin_moc       = chữ ký các hội thoại CHƯA ĐỌC thấy lần trước, để
+        #                       so ra "tin MỚI" mà không báo lại tin cũ
+        _add_col("accounts",  "mkt_scan_lan_cuoi", "mkt_scan_lan_cuoi TEXT DEFAULT ''")
+        _add_col("accounts",  "mkt_tin_moc",       "mkt_tin_moc TEXT DEFAULT ''")
+
         # ── Migration: tách loại đăng + cột % comment / Marketplace ─────────
         # loai_dang gộp "có comment" qua tiền tố X_. Tách ra: cột `mode`
         # (Hybrid/Via, trước ở màn Gen nay lưu theo acc) và HAI cột PHẦN TRĂM:
@@ -1380,6 +1388,66 @@ def den_gio_nuoi(ten_acc: str, bay_gio=None, c_user: str = "") -> bool:
     # phiên còn hơn kẹt vĩnh viễn không bao giờ nuôi nữa.
     troi = (gio - moc).total_seconds() / 60
     return troi < 0 or troi >= phut
+
+
+# ── Quét tin nhắn Marketplace (nhịp + mốc tin) ──────────────────────────────
+# Cùng khuôn với den_gio_nuoi/ghi_nhan_nuoi: acc marketplace% ghé inbox định kỳ.
+def den_gio_quet_mkt(ten_acc: str, c_user: str = "", bay_gio=None) -> bool:
+    """Acc marketplace đã tới nhịp ghé hộp thư Marketplace chưa (3–5 phút).
+
+    Chỉ acc có marketplace_pct > 0. Nhịp lấy từ settings mkt_scan_min/max (giây,
+    mặc định 180–300), random MỖI LẦN để không đều tăm tắp. Chưa quét lần nào →
+    quét ngay. Đồng hồ vặn lùi (âm) → coi như tới giờ.
+    """
+    k, kp = _khoa_acc(ten_acc, c_user)
+    with _conn() as con:
+        r = con.execute("SELECT marketplace_pct, mkt_scan_lan_cuoi "
+                        f"FROM accounts WHERE {k} LIMIT 1", kp).fetchone()
+    if not r or _pct(r["marketplace_pct"]) <= 0:
+        return False
+    cuoi = r["mkt_scan_lan_cuoi"] or ""
+    if not cuoi:
+        return True
+    try:
+        moc = datetime.fromisoformat(cuoi)
+    except ValueError:
+        return True
+    try:
+        lo = int(get_setting("mkt_scan_min", "180"))
+        hi = int(get_setting("mkt_scan_max", "300"))
+    except Exception:
+        lo, hi = 180, 300
+    lo, hi = max(30, min(lo, hi)), max(31, max(lo, hi))
+    import random as _rnd
+    troi = ((bay_gio or datetime.now()) - moc).total_seconds()
+    return troi < 0 or troi >= _rnd.randint(lo, hi)
+
+
+def ghi_nhan_quet_mkt(ten_acc: str, c_user: str = ""):
+    """Đánh mốc acc vừa quét inbox Marketplace xong."""
+    k, kp = _khoa_acc(ten_acc, c_user)
+    with _conn() as con:
+        con.execute(f"UPDATE accounts SET mkt_scan_lan_cuoi=? WHERE {k}",
+                    (datetime.now().isoformat(timespec="seconds"), *kp))
+
+
+def doc_tin_moc_mkt(ten_acc: str, c_user: str = "") -> set:
+    """Chữ ký các hội thoại chưa đọc đã thấy lần quét trước."""
+    k, kp = _khoa_acc(ten_acc, c_user)
+    with _conn() as con:
+        r = con.execute(f"SELECT mkt_tin_moc FROM accounts WHERE {k} LIMIT 1", kp).fetchone()
+    try:
+        return set(json.loads((r["mkt_tin_moc"] if r else "") or "[]"))
+    except Exception:
+        return set()
+
+
+def ghi_tin_moc_mkt(ten_acc: str, chu_ky, c_user: str = ""):
+    """Lưu lại chữ ký hội thoại chưa đọc hiện tại (để lần sau so ra tin mới)."""
+    k, kp = _khoa_acc(ten_acc, c_user)
+    with _conn() as con:
+        con.execute(f"UPDATE accounts SET mkt_tin_moc=? WHERE {k}",
+                    (json.dumps(sorted(chu_ky), ensure_ascii=False), *kp))
 
 
 def acc_dang_spam_nghi(ten_acc: str, c_user: str = "") -> bool:

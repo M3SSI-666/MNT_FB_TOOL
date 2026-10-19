@@ -97,6 +97,26 @@ def san_sang() -> bool:
     return bool(c["bat"] and c["token"] and c["chat_id"])
 
 
+def cau_hinh_mkt() -> dict:
+    """Cấu hình KÊNH RIÊNG cho cảnh báo tin nhắn Marketplace — tách hẳn kênh
+    quản lý acc (token/chat_id riêng). Cùng khuôn với cau_hinh()."""
+    try:
+        import db
+        return {
+            "bat":      db.get_setting("tg_mkt_bat", "0") == "1",
+            "token":    db.get_setting("tg_mkt_token", "").strip(),
+            "chat_id":  db.get_setting("tg_mkt_chat_id", "").strip(),
+            "ten_may":  db.get_setting("tg_ten_may", "").strip() or _ten_may_mac_dinh(),
+        }
+    except Exception:
+        return {"bat": False, "token": "", "chat_id": "", "ten_may": ""}
+
+
+def san_sang_mkt() -> bool:
+    c = cau_hinh_mkt()
+    return bool(c["bat"] and c["token"] and c["chat_id"])
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Gọi Telegram
 # ═══════════════════════════════════════════════════════════════════════════
@@ -125,6 +145,27 @@ def _goi_api(method: str, tham_so: dict, token: str = "") -> dict | None:
         # hiểu là "hôm nay không có vấn đề gì".
         logger.warning(f"⚠️  Telegram {method} hỏng: {e}")
         return None
+
+
+def bao_tin_mkt(acc_name: str, tin_moi: list) -> bool:
+    """Báo acc vừa có tin nhắn Marketplace mới — vào KÊNH RIÊNG Marketplace.
+
+    `tin_moi`: list dict {"nguoi_gui","trich"}. Trả True nếu đã gửi.
+    """
+    c = cau_hinh_mkt()
+    if not (c["bat"] and c["token"] and c["chat_id"]) or not tin_moi:
+        return False
+    dong = [f"📩 <b>{c['ten_may']}</b> · acc <b>{acc_name}</b> — "
+            f"{len(tin_moi)} tin Marketplace mới:"]
+    for t in tin_moi[:10]:
+        ng = (t.get("nguoi_gui") or "?").strip()
+        tr = (t.get("trich") or "").strip()
+        dong.append(f"• <b>{ng}</b>" + (f": {tr[:120]}" if tr else ""))
+    kq = _goi_api("sendMessage",
+                  {"chat_id": c["chat_id"], "text": "\n".join(dong),
+                   "parse_mode": "HTML", "disable_web_page_preview": "true"},
+                  token=c["token"])
+    return bool(kq and kq.get("ok"))
 
 
 def gui_file(duong_dan, chu_thich: str = "", chat_id: str = "") -> tuple[bool, str]:

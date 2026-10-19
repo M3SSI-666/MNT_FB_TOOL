@@ -10,6 +10,31 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.54.0 — 19/10/2026
+
+**Cảnh báo tin nhắn Marketplace — báo vào kênh Telegram riêng**
+
+Marketplace đăng bằng **nick cá nhân**, nên khi khách nhắn vào, tin rải khắp các
+nick — không gom về một chỗ kiểm được, mà đăng nhập nhiều nick lên một máy thì
+dễ bị quét chết hàng loạt. Bản này để **chính nick đó tự ghé hộp thư
+Marketplace** kiểm tin và báo cho bạn — **không tự trả lời**, chỉ báo để bạn vào
+trả lời tay.
+
+- **Tự quét 3–5 phút/lần** cho các acc có **marketplace% > 0**. Việc quét lồng
+  thẳng vào runner của mảng (tiến trình duy nhất mở được profile của nick đó),
+  **khoá theo acc** nên không bao giờ đụng phiên đăng/nuôi của cùng nick — đang
+  bận thì để nhịp sau.
+- **Chỉ đọc danh sách** hộp thư, **tuyệt đối không bấm vào hội thoại** (bấm vào
+  là Facebook đánh dấu đã đọc + khách thấy "Đã xem" mà mình chưa trả lời). So với
+  lần quét trước để chỉ báo **tin MỚI**, tin cũ chưa trả lời không báo lại.
+- **Kênh Telegram riêng cho Marketplace** — tách hẳn kênh báo tình trạng acc
+  (token/chat_id riêng, tên máy dùng chung). Cài trong **Cài đặt → 📩 Báo tin
+  Marketplace**: điền Token + Chat ID, bấm **Gửi thử** để kiểm.
+- Quét là **đọc thụ động**: lỗi chỉ ghi log, **không tính vào sức khoẻ acc**,
+  không làm gián đoạn việc đăng bài.
+
+---
+
 ## v2.53.2 — 19/10/2026
 
 **Vá thiếu thư viện mã hoá + thêm kiểm thử tự động (CI)**

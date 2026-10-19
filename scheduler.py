@@ -745,19 +745,62 @@ def main():
         logger.warning(f"⚠️  Không dọn được dòng đang chạy dở: {e}")
 
     running    = set()
+    # Acc ĐANG BẬN (đang có phiên đăng/nuôi/comment HOẶC đang quét inbox Market).
+    # Khoá theo acc để phiên quét Marketplace và phiên đăng/nuôi của CÙNG acc
+    # không bao giờ mở profile cùng lúc — xem khối dispatch quét bên dưới.
+    running_accs = set()
     lock       = threading.Lock()
     active_threads = []
     last_reset_date    = None
     last_refresh_check = 0
 
+    def _khoa_key(ten_acc, c_user):
+        return (c_user or "").strip() or (ten_acc or "")
+
     def _worker(item):
         key = item["id"]
+        acc_key = _khoa_key(item.get("ten_acc", ""), _cu(item))
         try:
             _run_one(item)
         finally:
             _don_cache_sau_phien(item.get("ten_acc", ""), _cu(item))
             with lock:
                 running.discard(key)
+                running_accs.discard(acc_key)
+
+    def _scan_mkt_worker(ten_acc, c_user, acc_key):
+        """Phiên QUÉT inbox Marketplace: đọc hội thoại chưa đọc → có tin MỚI (so
+        với lần trước) thì báo Telegram kênh Market. Đọc thụ động — lỗi KHÔNG
+        tính vào sức khoẻ acc. Luôn đánh nhịp cuối phiên để khỏi quét dồn."""
+        try:
+            import market_inbox
+            chua_doc = market_inbox.quet_inbox_market(ten_acc, c_user)
+            hien = {market_inbox.chu_ky(h): h for h in chua_doc}
+            da_thay = db.doc_tin_moc_mkt(ten_acc, c_user=c_user)
+            moi = [hien[k] for k in hien if k not in da_thay]
+            if moi:
+                logger.info(f"📩 [{ten_acc}] {len(moi)} tin Marketplace MỚI → báo Telegram")
+                try:
+                    import thong_bao
+                    thong_bao.bao_tin_mkt(ten_acc,
+                        [{"nguoi_gui": h.get("name", ""), "trich": h.get("preview", "")}
+                         for h in moi])
+                except Exception as e:
+                    logger.warning(f"⚠️  Báo tin Market [{ten_acc}] lỗi: {e}")
+            # Cập nhật mốc = tin chưa đọc hiện tại (tin đã đọc rụng khỏi set, tin
+            # cũ vẫn còn chưa đọc thì không báo lại).
+            db.ghi_tin_moc_mkt(ten_acc, set(hien.keys()), c_user=c_user)
+        except CookieDeadError:
+            _mark_cookie_dead(ten_acc, c_user)
+        except Exception as e:
+            logger.warning(f"⚠️  Worker quét Market [{ten_acc}] lỗi (bỏ qua): {e}")
+        finally:
+            try:
+                db.ghi_nhan_quet_mkt(ten_acc, c_user=c_user)
+            except Exception:
+                pass
+            with lock:
+                running_accs.discard(acc_key)
 
     try:
         while True:
@@ -850,7 +893,11 @@ def main():
                     with lock:
                         if item["id"] in running:
                             continue
+                        _ak = _khoa_key(item.get("ten_acc", ""), _cu(item))
+                        if _ak in running_accs:
+                            continue   # acc đang quét inbox Market → để nhịp sau
                         running.add(item["id"])
+                        running_accs.add(_ak)
                     t = threading.Thread(target=_worker, args=(item,), daemon=True)
                     t.start()
                     active_threads.append(t)
@@ -859,6 +906,36 @@ def main():
                     time.sleep(jitter(4, pct=0.5, floor=1.5))
             else:
                 logger.info("   (Không có dòng nào đến giờ)")
+
+            # ── Quét inbox Marketplace cho acc marketplace% của mảng này ──────
+            # Chạy SAU khi đã spawn hết slot đăng → đăng bài luôn được ưu tiên.
+            # Acc tới nhịp 3–5' và ĐANG RẢNH (không ở running_accs) → spawn worker
+            # quét. Nhờ khoá theo acc, phiên quét và phiên đăng/nuôi của cùng acc
+            # không bao giờ mở profile cùng lúc. Chỉ runner của MẢNG CONTENT làm
+            # (acc marketplace đều thuộc một mảng); runner nuôi/page bỏ qua.
+            try:
+                from db import (get_accounts, acc_marketplace_pct,
+                                 den_gio_quet_mkt, loai_content_bat)
+                if LOAI in loai_content_bat():
+                    for _a in get_accounts(loai=LOAI):
+                        if acc_marketplace_pct(_a) <= 0:
+                            continue
+                        _cu_a = (_a.get("c_user") or "").strip()
+                        if not den_gio_quet_mkt(_a["ten_acc"], c_user=_cu_a):
+                            continue
+                        _ak = _khoa_key(_a["ten_acc"], _cu_a)
+                        with lock:
+                            if _ak in running_accs:
+                                continue   # acc đang bận → để nhịp sau
+                            running_accs.add(_ak)
+                        t = threading.Thread(target=_scan_mkt_worker,
+                                             args=(_a["ten_acc"], _cu_a, _ak),
+                                             daemon=True)
+                        t.start()
+                        active_threads.append(t)
+                        time.sleep(jitter(3, pct=0.5, floor=1))
+            except Exception as e:
+                logger.warning(f"⚠️  Dispatch quét Market lỗi (bỏ qua): {e}")
 
             active_threads[:] = [t for t in active_threads if t.is_alive()]
             next_check = now + timedelta(seconds=CHECK_EVERY_SEC)

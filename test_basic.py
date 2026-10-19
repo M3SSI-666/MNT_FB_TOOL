@@ -3748,6 +3748,119 @@ finally:
 check("đã trả cấu hình Telegram về như cũ",
       db.get_setting("tg_bat", "") == _tb_cu["tg_bat"])
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Quét tin nhắn Marketplace — nhịp, mốc "tin mới", kênh Telegram riêng, khoá acc
+# ───────────────────────────────────────────────────────────────────────────
+# Nick marketplace tự ghé hộp thư định kỳ (3–5'), có khách nhắn MỚI thì báo vào
+# MỘT kênh Telegram RIÊNG. Bốn chốt phải giữ đúng:
+#   - chỉ acc marketplace% > 0 mới được quét;
+#   - nhịp quét lấy từ mkt_scan_min/max, chưa quét lần nào → quét ngay;
+#   - "tin mới" = chữ ký chưa đọc lần này TRỪ các chữ ký đã thấy lần trước;
+#   - kênh Market tách hẳn kênh báo trạng thái (token/chat_id riêng), tắt là im.
+import market_inbox as _mi
+from datetime import datetime as _dt, timedelta as _td
+
+_mkt_cu = {k: db.get_setting(k, "") for k in
+           ("tg_mkt_bat", "tg_mkt_token", "tg_mkt_chat_id",
+            "mkt_scan_min", "mkt_scan_max")}
+try:
+    # Nhịp cố định 200s để bài kiểm khỏi phụ thuộc random.
+    db.set_setting("mkt_scan_min", "200")
+    db.set_setting("mkt_scan_max", "200")
+
+    _aid_mz = db.upsert_account({"ten_acc": "MKT Zero", "c_user": "mkt000",
+                                 "trang_thai": "Active", "loai_dang": "homestay",
+                                 "marketplace_pct": 0})
+    _aid_mt = db.upsert_account({"ten_acc": "MKT Test", "c_user": "mkt001",
+                                 "trang_thai": "Active", "loai_dang": "homestay",
+                                 "marketplace_pct": 20})
+
+    # 1) Chỉ acc marketplace% > 0 — acc 0% không bao giờ bị quét.
+    check("acc marketplace% = 0 → không quét",
+          db.den_gio_quet_mkt("MKT Zero", c_user="mkt000") is False)
+    check("acc marketplace% > 0, chưa quét lần nào → quét ngay",
+          db.den_gio_quet_mkt("MKT Test", c_user="mkt001") is True)
+
+    # 2) Nhịp quét: vừa quét xong thì nghỉ, đủ nhịp mới quét lại.
+    db.ghi_nhan_quet_mkt("MKT Test", c_user="mkt001")
+    _bgm = _dt.now()
+    check("vừa quét xong → chưa tới nhịp",
+          db.den_gio_quet_mkt("MKT Test", c_user="mkt001", bay_gio=_bgm) is False)
+    check("120s sau → vẫn chưa tới nhịp (200s)",
+          db.den_gio_quet_mkt("MKT Test", c_user="mkt001",
+                              bay_gio=_bgm + _td(seconds=120)) is False)
+    check("360s sau → tới nhịp, quét lại",
+          db.den_gio_quet_mkt("MKT Test", c_user="mkt001",
+                              bay_gio=_bgm + _td(seconds=360)) is True)
+    check("đồng hồ vặn lùi → vẫn cho quét, không kẹt",
+          db.den_gio_quet_mkt("MKT Test", c_user="mkt001",
+                              bay_gio=_bgm - _td(seconds=120)) is True)
+
+    # 3) Mốc "tin mới": chữ ký lần này TRỪ chữ ký đã thấy lần trước. Y HỆT phép
+    #    so trong scheduler._scan_mkt_worker.
+    def _moi(chua_doc, acc, cu):
+        hien = {_mi.chu_ky(h): h for h in chua_doc}
+        da_thay = db.doc_tin_moc_mkt(acc, c_user=cu)
+        moi = [hien[k] for k in hien if k not in da_thay]
+        db.ghi_tin_moc_mkt(acc, set(hien.keys()), c_user=cu)
+        return moi
+
+    check("mốc ban đầu rỗng",
+          db.doc_tin_moc_mkt("MKT Test", c_user="mkt001") == set())
+    _A = {"name": "An Nguyen",  "preview": "còn hàng không shop"}
+    _B = {"name": "Binh Tran",  "preview": "ship về Huế bao nhiêu"}
+    _C = {"name": "Cuong Le",   "preview": "cho xem thêm ảnh với"}
+    check("lần quét đầu → cả 2 hội thoại chưa đọc đều là tin mới",
+          len(_moi([_A, _B], "MKT Test", "mkt001")) == 2)
+    # Lần sau: A còn chưa đọc (cũ, không báo lại), C mới xuất hiện → chỉ C mới.
+    _m2 = _moi([_A, _C], "MKT Test", "mkt001")
+    check("lần quét sau → chỉ hội thoại MỚI được báo, tin cũ im",
+          len(_m2) == 1 and _m2[0]["name"] == "Cuong Le")
+    # A đã rụng khỏi mốc (giờ mốc = {A,C}); nếu A quay lại chưa đọc vẫn không coi
+    # là mới vì nó vẫn nằm trong mốc.
+    check("hội thoại cũ vẫn chưa đọc ở lần kế → không báo lại",
+          len(_moi([_A, _C], "MKT Test", "mkt001")) == 0)
+
+    # 4) Kênh Telegram Market: tách hẳn, tắt là im; token/chat_id riêng.
+    db.set_setting("tg_mkt_bat", "0")
+    check("kênh Market tắt → san_sang_mkt() = False", _tb.san_sang_mkt() is False)
+    check("kênh Market tắt → bao_tin_mkt trả False, không gửi gì",
+          _tb.bao_tin_mkt("MKT Test", [{"nguoi_gui": "An", "trich": "test"}]) is False)
+    db.set_setting("tg_mkt_bat", "1")
+    db.set_setting("tg_mkt_token", "222222:TOKEN_MKT_GIA")
+    db.set_setting("tg_mkt_chat_id", "-100888")
+    _cfm = _tb.cau_hinh_mkt()
+    check("cau_hinh_mkt đọc đúng token/chat_id riêng của kênh Market",
+          _cfm["token"] == "222222:TOKEN_MKT_GIA" and _cfm["chat_id"] == "-100888")
+    check("kênh Market dùng CHUNG tên máy với kênh trạng thái",
+          _cfm["ten_may"] == _tb.cau_hinh()["ten_may"])
+    check("bật + đủ thông tin → san_sang_mkt() = True", _tb.san_sang_mkt() is True)
+    # Danh sách rỗng thì không có gì để báo, dù kênh đang bật.
+    check("không có tin mới → bao_tin_mkt trả False",
+          _tb.bao_tin_mkt("MKT Test", []) is False)
+finally:
+    for _k3, _v3 in _mkt_cu.items():
+        db.set_setting(_k3, _v3)
+    try:
+        with db._conn() as _c:
+            _c.execute("DELETE FROM accounts WHERE ten_acc IN ('MKT Test','MKT Zero')")
+    except Exception:
+        pass
+
+# Khoá theo acc + lồng quét vào runner mảng — chốt bằng mã nguồn scheduler.
+_src_sch_mkt = Path("scheduler.py").read_text(encoding="utf-8")
+check("scheduler có set running_accs khoá theo acc",
+      "running_accs" in _src_sch_mkt)
+check("worker đăng bỏ qua acc đang quét inbox Market",
+      "if _ak in running_accs:" in _src_sch_mkt)
+check("scheduler có worker quét Market riêng",
+      "def _scan_mkt_worker" in _src_sch_mkt)
+check("dispatch quét chỉ chạy ở runner mảng content",
+      "loai_content_bat()" in _src_sch_mkt and "den_gio_quet_mkt" in _src_sch_mkt)
+_src_mi = Path("market_inbox.py").read_text(encoding="utf-8")
+check("market_inbox CHỈ đọc danh sách, KHÔNG gọi click lên hội thoại",
+      ".click(" not in _src_mi and "click()" not in _src_mi)
+
 # ── Mọi chỗ ghi trạng thái đều phải báo, và báo ĐÚNG MỘT LẦN ────────────────
 # `update_account_field` là cửa chung: cả giao diện lẫn scheduler đổi Trạng thái
 # qua đó, nên nó tự so cũ với mới rồi báo. Hai hàm còn lại ghi thẳng bằng SQL

@@ -401,7 +401,7 @@ async function loadRunnerStatus(){
         if(!Object.keys(_hienChromeMap).length) await napHienChrome();
         // Cấu hình Telegram cũng chỉ nạp một lần: hàm này chạy lặp lại theo chu
         // kỳ, nạp mỗi vòng sẽ xoá mất chữ người dùng đang gõ dở vào ô Token.
-        if(!_tgDaNap){ _tgDaNap = true; tgNap(); slNap(); lmNap(); }
+        if(!_tgDaNap){ _tgDaNap = true; tgNap(); tgmktNap(); slNap(); lmNap(); }
         const res=await API.runStatus();
         _runnerStatus=res;
         renderRunnerGrid();
@@ -627,6 +627,88 @@ async function tgXemTruoc(){
         const r = await API.tgTomTat();
         alert(r.text || "(chưa có gì để tổng kết)");
     }catch(e){ Toast.error(e.message); }
+}
+
+// ── Báo tin Marketplace (kênh Telegram RIÊNG) ────────────────────
+// Tách hẳn kênh quản lý acc: khi khách nhắn vào Marketplace của một nick, cảnh
+// báo "acc X có tin mới" bắn về kênh này. Dùng chung endpoint /api/telegram/thu
+// + /tim-chat (generic theo token/chat_id). Settings riêng: tg_mkt_*.
+function tgmktGap(hien){
+    const bang = document.getElementById("tgmkt-bang");
+    if(!bang) return;
+    const mo = (hien === undefined) ? bang.style.display === "none" : hien;
+    bang.style.display = mo ? "block" : "none";
+    document.getElementById("tgmkt-mui-ten").textContent = mo ? "Ẩn ▾" : "Hiện ▸";
+    if(hien === undefined) API.saveSettings({tg_mkt_hien_bang: mo ? 1 : 0}).catch(()=>{});
+}
+function _tgmktNhan(bat, dayDu){
+    const n = document.getElementById("tgmkt-nhan"); if(!n) return;
+    if(bat && dayDu){ n.textContent = "Đang bật";       n.style.color = "var(--success)"; }
+    else if(bat)    { n.textContent = "Bật, chưa điền"; n.style.color = "var(--danger)";  }
+    else            { n.textContent = "Đang tắt";       n.style.color = "var(--text-muted)"; }
+}
+async function tgmktNap(){
+    try{
+        const s = (await API.settings()).data || {};
+        const bat = String(s.tg_mkt_bat || "0") === "1";
+        const el  = id => document.getElementById(id);
+        if(!el("tgmkt-bat")) return;
+        _tgmktNhan(bat, !!(s.tg_mkt_token||"").trim() && !!(s.tg_mkt_chat_id||"").trim());
+        tgmktGap(String(s.tg_mkt_hien_bang || "0") === "1");
+        el("tgmkt-bat").checked    = bat;
+        el("tgmkt-token").value    = s.tg_mkt_token   || "";
+        el("tgmkt-chat-id").value  = s.tg_mkt_chat_id || "";
+        el("tgmkt-form").style.display = bat ? "block" : "none";
+    }catch(e){}
+}
+async function tgmktLuu(){
+    const el = id => document.getElementById(id);
+    const bat = el("tgmkt-bat").checked;
+    el("tgmkt-form").style.display = bat ? "block" : "none";
+    const token = el("tgmkt-token").value.trim(), chatId = el("tgmkt-chat-id").value.trim();
+    _tgmktNhan(bat, !!token && !!chatId);
+    try{
+        await API.saveSettings({
+            tg_mkt_bat:     bat ? 1 : 0,
+            tg_mkt_token:   token,
+            tg_mkt_chat_id: chatId,
+        });
+    }catch(e){ Toast.error(e.message); }
+}
+async function tgmktThu(){
+    const kq = document.getElementById("tgmkt-ket-qua");
+    kq.textContent = "Đang gửi…"; kq.style.color = "var(--text-muted)";
+    await tgmktLuu();
+    try{
+        const r = await API.tgThu({
+            token:   document.getElementById("tgmkt-token").value.trim(),
+            chat_id: document.getElementById("tgmkt-chat-id").value.trim(),
+        });
+        kq.textContent = (r.ok ? "✅ " : "❌ ") + (r.msg || "");
+        kq.style.color = r.ok ? "var(--success)" : "var(--danger)";
+    }catch(e){ kq.textContent = "❌ " + e.message; kq.style.color = "var(--danger)"; }
+}
+async function tgmktTimChat(){
+    const kq = document.getElementById("tgmkt-ket-qua");
+    kq.textContent = "Đang hỏi bot…"; kq.style.color = "var(--text-muted)";
+    await tgmktLuu();
+    try{
+        const r = await API.tgTimChat({ token: document.getElementById("tgmkt-token").value.trim() });
+        if(!r.ok || !(r.ds||[]).length){
+            kq.textContent = "❌ " + (r.msg || "Không thấy khung chat nào");
+            kq.style.color = "var(--danger)"; return;
+        }
+        const ds = r.ds;
+        const chon = ds.length === 1 ? ds[0] : ds[Math.max(0, parseInt(
+            prompt("Bot đang ở những khung chat này.\n\n"
+                + ds.map((c,i)=>`${i+1}. ${c.ten} — ${c.loai} (${c.id})`).join("\n")
+                + "\n\nGõ số của khung muốn dùng:", "1") || "0", 10) - 1)];
+        if(!chon) return;
+        document.getElementById("tgmkt-chat-id").value = chon.id;
+        await tgmktLuu();
+        kq.textContent = `✅ Đã điền: ${chon.ten} (${chon.id})`;
+        kq.style.color = "var(--success)";
+    }catch(e){ kq.textContent = "❌ " + e.message; kq.style.color = "var(--danger)"; }
 }
 
 // ── Lịch của máy ─────────────────────────────────────────────────
