@@ -10,6 +10,28 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.54.1 — 19/10/2026
+
+**Vá: quét tin Marketplace đọc nhầm cả hộp thư Messenger chung**
+
+Bản v2.54.0 báo nhầm cả tin nhắn Messenger thường (chat nhóm, tin mã hoá đầu
+cuối…) chứ không riêng Marketplace. Đo thật trên nick Sa Tran Anh mới rõ:
+`facebook.com/marketplace/inbox/` **không phải trang riêng** — nó mở nguyên giao
+diện Messenger, hộp thư Marketplace chỉ là **panel giữa** (hai tab *Bán hàng* /
+*Mua hàng*); còn toàn bộ Messenger thường tuy không hiện ra nhưng vẫn nằm trong
+trang. Bản cũ quét cả trang nên vơ luôn.
+
+- **Chỉ đọc đúng panel Marketplace** (`[role="main"]`) — bỏ hẳn phần Messenger
+  chung. Giờ chỉ còn tin về **bài niêm yết** của bạn.
+- **Bỏ tin do chính mình vừa trả lời** (preview mở đầu "Bạn:…") — tránh tự báo
+  tin cho chính mình sau khi rep.
+- Vẫn giữ nguyên tắc **chỉ đọc, không bấm vào hội thoại** và chỉ báo **tin mới**.
+
+*(Đã chạy thử thật non-headless trên nick Sa Tran Anh: vào đúng hộp thư
+Marketplace, đọc đúng 1 tin khách, không đụng hộp thư chung.)*
+
+---
+
 ## v2.54.0 — 19/10/2026
 
 **Cảnh báo tin nhắn Marketplace — báo vào kênh Telegram riêng**

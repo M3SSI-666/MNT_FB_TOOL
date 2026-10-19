@@ -3821,6 +3821,19 @@ try:
     check("hội thoại cũ vẫn chưa đọc ở lần kế → không báo lại",
           len(_moi([_A, _C], "MKT Test", "mkt001")) == 0)
 
+    # 3b) Tin do CHÍNH MÌNH vừa trả lời (preview "Bạn:…") KHÔNG phải tin khách →
+    #     loại ra, không báo. Bằng không: mình rep xong lại tự báo tin cho mình.
+    check("preview mở đầu 'Bạn:' → không tính là tin khách",
+          _mi.la_tin_khach({"name": "An", "preview": "Bạn: còn hàng nhé"}) is False)
+    check("preview mở đầu 'You:' → không tính là tin khách",
+          _mi.la_tin_khach({"name": "An", "preview": "You: still available"}) is False)
+    check("preview là lời khách → tính là tin khách",
+          _mi.la_tin_khach({"name": "An", "preview": "còn hàng không shop"}) is True)
+    # chu_ky đổi khi khách nhắn tin mới (preview đổi) → báo; đứng yên → im.
+    check("khách nhắn tin mới (preview đổi) → chữ ký đổi",
+          _mi.chu_ky({"name": "An", "preview": "còn không"}) !=
+          _mi.chu_ky({"name": "An", "preview": "ship bao nhiêu"}))
+
     # 4) Kênh Telegram Market: tách hẳn, tắt là im; token/chat_id riêng.
     db.set_setting("tg_mkt_bat", "0")
     check("kênh Market tắt → san_sang_mkt() = False", _tb.san_sang_mkt() is False)
@@ -3860,6 +3873,15 @@ check("dispatch quét chỉ chạy ở runner mảng content",
 _src_mi = Path("market_inbox.py").read_text(encoding="utf-8")
 check("market_inbox CHỈ đọc danh sách, KHÔNG gọi click lên hội thoại",
       ".click(" not in _src_mi and "click()" not in _src_mi)
+# Chốt sửa lỗi 19/10: CHỈ quét panel Marketplace ([role=main]), KHÔNG vơ cả
+# Messenger thường (các /messages/e2ee/t/… nằm ngoài main nhưng vẫn ở trong DOM).
+check("market_inbox chỉ quét trong [role=main] (panel Marketplace)",
+      '[role="main"]' in _src_mi)
+check("danh sách hội thoại lấy TỪ main, không phải cả document",
+      "main.querySelectorAll(" in _src_mi
+      and "document.querySelectorAll('a" not in _src_mi)
+check("market_inbox loại tin mình vừa trả lời (la_tin_khach)",
+      "def la_tin_khach" in _src_mi and "quet_inbox_market" in _src_mi)
 
 # ── Mọi chỗ ghi trạng thái đều phải báo, và báo ĐÚNG MỘT LẦN ────────────────
 # `update_account_field` là cửa chung: cả giao diện lẫn scheduler đổi Trạng thái
