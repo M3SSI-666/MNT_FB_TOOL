@@ -10,6 +10,27 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.55.0 — 20/10/2026
+
+**Gỡ bỏ hoàn toàn biến thể ảnh — đăng thuần ảnh gốc**
+
+Bỏ hẳn engine biến thể ảnh cũ. Từ nay **mọi ảnh lên Facebook đúng y ảnh gốc**,
+không qua một bước đổi nào nữa.
+
+- Gỡ: chỉnh sáng/tương phản ngẫu nhiên, dán **mã 8 ký tự**, dán **huy hiệu số
+  điện thoại** (Marketplace), xoá EXIF. Lý do: đo thật cho thấy nó gần như
+  **không né được thuật toán nhận ảnh trùng** của Facebook (chỉ dịch 0,2–0,4/64
+  bit, dưới ngưỡng), trong khi vẫn thêm một bước xử lý mỗi lượt đăng.
+- Ảnh local giờ dùng **thẳng tại chỗ**, không sao chép — nhanh hơn, và chắc chắn
+  không bao giờ đụng tới ảnh gốc. Ảnh từ URL vẫn tải về như cũ, giữ đúng thứ tự.
+- Gỡ theo: file `anh_bien_the.py`, nút **🎲 Biến thể ảnh** trong tab Content,
+  các cài đặt `anh_bien_the_*`, số điện thoại dán ảnh `mkt_sdt_anh`, và thư viện
+  **Pillow** (không còn cần cài).
+
+*(Muốn dán số điện thoại / biến thể theo cách mới thì sẽ xây lại sau.)*
+
+---
+
 ## v2.54.2 — 19/10/2026
 
 **Tin báo Marketplace tách riêng tên bài niêm yết cho gọn**

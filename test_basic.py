@@ -2310,134 +2310,53 @@ _gio_nuoi = {r["gio_dang"] for r in _sched if r.get("hoat_dong") == "nuoi_nick"}
 _gio_cmt  = {r["gio_dang"] for r in _sched if r.get("hoat_dong") == "comment"}
 check("nuôi và comment không trùng giờ", not (_gio_nuoi & _gio_cmt))
 
-# ── Biến thể ảnh: ảnh gốc phải BẤT KHẢ XÂM PHẠM ────────────────────────────
-# Rủi ro lớn nhất của tính năng này là ghi đè lên ảnh gốc của người dùng —
-# không có bản backup nào. Test này canh đúng chỗ đó.
+# ── Biến thể ảnh ĐÃ GỠ BỎ: mọi ảnh đăng THUẦN ẢNH GỐC ──────────────────────
+# 20/10: bỏ hẳn engine biến thể (đổi sáng/tương phản + dán mã/huy hiệu số ĐT +
+# xoá EXIF). Ảnh local lên Facebook đúng y file gốc, không sao chép, không sửa;
+# chỉ ảnh từ URL mới tải về temp.
 import shutil, tempfile as _tf
-import anh_bien_the as _bt
 import storage as _st
 
-if not _bt.CO_PILLOW:
-    check("BỎ QUA test biến thể ảnh (chưa cài Pillow)", True)
-else:
-    from PIL import Image as _Im
-    _md = Path(_tf.mkdtemp(prefix="test_bt_"))
-    _goc = _md / "goc.jpg"
-    # Ảnh có cấu trúc thật, không phải nền trơn: nền trơn cho pHash toàn 0 bit
-    # nên mọi phép đo đều vô nghĩa.
-    _im = _Im.new("RGB", (600, 400))
-    _im.putdata([((x * 7) % 256, (y * 5) % 256, ((x + y) * 3) % 256)
-                 for y in range(400) for x in range(600)])
-    _im.save(_goc, "JPEG", quality=92)
-    _byte_goc = _goc.read_bytes()
-    _hash_goc = _bt.phash(str(_goc))
+check("đã xoá file anh_bien_the.py",
+      not Path("anh_bien_the.py").exists())
+_src_st = Path("storage.py").read_text(encoding="utf-8")
+check("storage.py không còn dính biến thể ảnh",
+      "anh_bien_the" not in _src_st and "bien_the" not in _src_st
+      and "seed_key" not in _src_st and "sdt" not in _src_st)
+check("prepare_images_for_post chỉ còn 1 tham số image_urls",
+      "def prepare_images_for_post(image_urls: str)" in _src_st)
+# UI: nút 🎲 Biến thể ảnh và hàm JS của nó đã gỡ.
+check("bỏ nút '🎲 Biến thể ảnh' khỏi giao diện",
+      "Biến thể ảnh" not in Path("templates/index.html").read_text(encoding="utf-8")
+      and "openBienTheSettings" not in Path("static/js/app.js").read_text(encoding="utf-8"))
+# Cài đặt số ĐT dán ảnh của Marketplace cũng bỏ.
+check("bỏ cài đặt mkt_sdt_anh",
+      "mkt_sdt_anh" not in Path("db.py").read_text(encoding="utf-8")
+      and "mkt_sdt_anh" not in db.doc_cai_dat_mkt())
 
-    _ra = _bt.tao_bien_the(str(_goc), str(_md / "ra"), seed=1, cuong_do="manh")
-    check("biến thể tạo ra file mới",     Path(_ra).exists() and _ra != str(_goc))
-    check("ẢNH GỐC KHÔNG BỊ SỬA",         _goc.read_bytes() == _byte_goc)
-    check("biến thể khác byte ảnh gốc",   Path(_ra).read_bytes() != _byte_goc)
-    check("biến thể có dịch pHash",       _bt.khoang_cach(_hash_goc,
-                                                          _bt.phash(_ra)) > 0)
-
-    # Cùng seed -> cùng kết quả. Cần cho việc dựng lại đúng ảnh đã đăng khi
-    # phải đối chiếu về sau.
-    import random as _rd
-    _ma = [_bt.sinh_ma(_rd.Random(i)) for i in range(200)]
-    check("mã đúng 8 ký tự",              all(len(m) == _bt.DAI_MA for m in _ma))
-    check("mã chỉ gồm chữ và số",         all(c in _bt.BANG_MA for m in _ma for c in m))
-    check("mã không lặp lại",             len(set(_ma)) == len(_ma))
-
-    # ── Huy hiệu số điện thoại: CHỈ bật khi bên gọi truyền `sdt` ────────────
-    # Hybrid và comment không truyền gì, nên chúng phải vẫn ra mã 8 ký tự y
-    # như trước. Đây là phép kiểm giữ cho huy hiệu của Marketplace không lan
-    # sang các luồng khác.
-    check("không truyền sdt -> vẫn dán mã như cũ, không ra huy hiệu",
-          "_dan_ma(im, dau, ts, rnd)" in Path("anh_bien_the.py").read_text(
-              encoding="utf-8"))
-    _khong_sdt = _bt.tao_bien_the(str(_goc), str(_md / "ko_sdt"), seed=7,
-                                  cuong_do="manh")
-    _co_sdt    = _bt.tao_bien_the(str(_goc), str(_md / "co_sdt"), seed=7,
-                                  cuong_do="manh", sdt="0333 194 822")
-    check("có sdt hay không cho ra hai ảnh khác hẳn",
-          Path(_khong_sdt).read_bytes() != Path(_co_sdt).read_bytes())
-
-    _GOC = {"trên trái", "trên phải", "dưới trái", "dưới phải"}
-    _dat = [_bt._dan_sdt(_im, "0333 194 822", _bt.CUONG_DO["vua"], _rd.Random(i))
-            for i in range(60)]
-    check("huy hiệu rơi đúng một trong 4 góc",
-          {g for g, _ in _dat} <= _GOC)
-    check("qua nhiều lần dùng đủ cả 4 góc",
-          {g for g, _ in _dat} == _GOC)
-    check("dán huy hiệu không đổi kích thước ảnh",
-          all(a.size == _im.size for _, a in _dat))
-    check("dán huy hiệu giữ nguyên mode ảnh",
-          all(a.mode == _im.mode for _, a in _dat))
-    # Ép góc: cần khi muốn mọi ảnh của một bài nằm cùng một chỗ.
-    check("ép góc thì luôn dán đúng góc đó",
-          all(_bt._dan_sdt(_im, "0333 194 822", _bt.CUONG_DO["vua"],
-                           _rd.Random(i), "dưới phải")[0] == "dưới phải"
-              for i in range(12)))
-    check("ép góc không hợp lệ thì quay về ngẫu nhiên",
-          _bt._dan_sdt(_im, "0333 194 822", _bt.CUONG_DO["vua"],
-                       _rd.Random(0), "chỗ nào đó")[0] in _GOC)
-    # Ảnh PNG nền trong: ép về RGB là nền trong hoá đen.
-    _png = _Im.new("RGBA", (300, 200), (0, 0, 0, 0))
-    check("ảnh RGBA vẫn ra RGBA",
-          _bt._dan_sdt(_png, "0333 194 822", _bt.CUONG_DO["vua"],
-                       _rd.Random(0))[1].mode == "RGBA")
-    # Số điện thoại phải lấy theo tham số, không được hard-code.
-    _sdt_khac = _bt.tao_bien_the(str(_goc), str(_md / "sdt"), seed=1,
-                                 cuong_do="manh", sdt="0987 654 321")
-    check("đổi số điện thoại thì ra ảnh khác",
-          Path(_sdt_khac).read_bytes() != Path(_ra).read_bytes())
-
-    _r2 = _bt.tao_bien_the(str(_goc), str(_md / "r2"), seed=1, cuong_do="manh")
-    check("cùng seed -> cùng kết quả",    Path(_ra).read_bytes() == Path(_r2).read_bytes())
-    _r3 = _bt.tao_bien_the(str(_goc), str(_md / "r3"), seed=2, cuong_do="manh")
-    check("khác seed -> khác kết quả",    Path(_ra).read_bytes() != Path(_r3).read_bytes())
-
-    # Cả bộ: phải giữ nguyên thứ tự người dùng đã xếp trong ô ảnh của content.
-    _b = _md / "b.jpg"; _im.rotate(90, expand=True).save(_b, "JPEG")
-    _bo = _bt.bien_the_ca_bo([str(_goc), str(_b)], str(_md / "out"), seed_key="acc")
-    check("cả bộ ra đủ số ảnh",           len(_bo) == 2)
-    check("cả bộ giữ đúng thứ tự",        [Path(p).stem for p in _bo] == ["1", "2"])
-    check("cả bộ nằm ngoài thư mục gốc",  all(str(_md / "out") in p for p in _bo))
-
-    # File hỏng / định dạng lạ: phải trả về ảnh gốc, tuyệt đối không ném lỗi
-    # làm chết cả lượt đăng.
-    _xau = _md / "xau.jpg"; _xau.write_bytes(b"day khong phai anh")
-    check("file hỏng -> trả lại đường dẫn gốc",
-          _bt.tao_bien_the(str(_xau), str(_md / "z"), seed=1) == str(_xau))
-
-    # storage: bật/tắt phải ăn đúng, và ảnh gốc vẫn nguyên vẹn sau khi đăng.
-    _url = "/" + str(_goc).replace("\\", "/").lstrip("/")
-    _mp = _st.MEDIA_DIR
-    try:
-        _st.MEDIA_DIR = _md / "x"          # để MEDIA_DIR.parent == _md
-        db.set_setting("anh_bien_the_bat", "0")
-        _p, _t = _st.prepare_images_for_post("/goc.jpg")
-        check("tắt -> dùng thẳng ảnh gốc", _p == [str(_goc)] and _t is None)
-
-        # Thứ tự ảnh = thứ tự trong ô ảnh của content, KHÔNG sort theo tên file.
-        # Ảnh local mang tên uuid ngẫu nhiên nên sort là xáo trộn thứ tự người dùng.
-        _p, _ = _st.prepare_images_for_post("/b.jpg,/goc.jpg")
-        check("giữ đúng thứ tự đầu vào",   _p == [str(_b), str(_goc)])
-        _p, _ = _st.prepare_images_for_post("/goc.jpg,/b.jpg")
-        check("đảo đầu vào -> đảo đầu ra", _p == [str(_goc), str(_b)])
-
-        db.set_setting("anh_bien_the_bat", "1")
-        db.set_setting("anh_bien_the_cuong_do", "manh")
-        _p, _t = _st.prepare_images_for_post("/goc.jpg", seed_key="acc")
-        check("bật -> có tạo temp",        _t is not None)
-        check("bật -> KHÔNG trả ảnh gốc",  _p and _p[0] != str(_goc))
-        check("bật -> ảnh gốc vẫn nguyên", _goc.read_bytes() == _byte_goc)
-        _st.cleanup_temp(_t)
-        check("cleanup xoá sạch temp",     not Path(_t).exists())
-        check("cleanup KHÔNG đụng ảnh gốc", _goc.exists())
-    finally:
-        _st.MEDIA_DIR = _mp
-        db.set_setting("anh_bien_the_bat", "0")
-        shutil.rmtree(_md, ignore_errors=True)
+# prepare_images_for_post: dùng THẲNG ảnh gốc, giữ đúng thứ tự, không sửa file.
+_md = Path(_tf.mkdtemp(prefix="test_img_"))
+_goc = _md / "goc.jpg"; _goc.write_bytes(b"anh-goc-1")
+_b   = _md / "b.jpg";   _b.write_bytes(b"anh-goc-2")
+_byte_goc = _goc.read_bytes()
+_mp = _st.MEDIA_DIR
+try:
+    _st.MEDIA_DIR = _md / "x"          # để MEDIA_DIR.parent == _md
+    _p, _t = _st.prepare_images_for_post("/goc.jpg")
+    check("ảnh local dùng THẲNG, không tạo temp", _p == [str(_goc)] and _t is None)
+    check("ẢNH GỐC KHÔNG BỊ SỬA",      _goc.read_bytes() == _byte_goc)
+    # Thứ tự ảnh = thứ tự trong ô ảnh của content, KHÔNG sort theo tên file.
+    _p, _ = _st.prepare_images_for_post("/b.jpg,/goc.jpg")
+    check("giữ đúng thứ tự đầu vào",   _p == [str(_b), str(_goc)])
+    _p, _ = _st.prepare_images_for_post("/goc.jpg,/b.jpg")
+    check("đảo đầu vào -> đảo đầu ra", _p == [str(_goc), str(_b)])
+    # File thiếu thì bỏ qua, không ném lỗi làm chết lượt đăng.
+    _p, _ = _st.prepare_images_for_post("/khong-co.jpg")
+    check("file thiếu -> bỏ qua",      _p == [])
+    check("rỗng -> trả ([], None)",    _st.prepare_images_for_post("") == ([], None))
+finally:
+    _st.MEDIA_DIR = _mp
+    shutil.rmtree(_md, ignore_errors=True)
 
 # ── server: KHÔNG rò rỉ credential qua /api/accounts ───────────────────────
 import server
@@ -6378,7 +6297,7 @@ check("API log KHÔNG còn runner page",
 check("API log vẫn từ chối loại lạ",
       _client.get("/api/logs/khong-co?n=5").get_json().get("ok") is False)
 # Tab Link comment: tab + thư viện câu theo mảng đang bật, không ghi cứng 3 mảng gốc.
-_khoi_cmt = _ajs_m[_ajs_m.index("// ── Link comment"):_ajs_m.index("// ── Biến thể ảnh chống dedupe")]
+_khoi_cmt = _ajs_m[_ajs_m.index("// ── Link comment"):_ajs_m.index("// ── Cài đặt nuôi nick")]
 check("tab Link comment dựng tab theo các mảng đang bật",
       "function _cmtLoaiDS()" in _khoi_cmt and "_loaiBat()" in _khoi_cmt
       and "CMT_LOAI" not in _ajs_m and '["homestay","🏠 Homestay"]' not in _khoi_cmt

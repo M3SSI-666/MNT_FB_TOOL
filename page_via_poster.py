@@ -1142,7 +1142,7 @@ def post_page_wall(
     if image_url:
         try:
             logger.info(f"  📥 Download ảnh...")
-            local_photos, temp_dir = smart_download(image_url, seed_key=acc_name)
+            local_photos, temp_dir = smart_download(image_url)
             logger.info(f"  → {len(local_photos)} ảnh đã tải")
         except Exception as e:
             logger.warning(f"  ⚠️  Không download được ảnh: {e}")
@@ -1203,7 +1203,7 @@ def post_page_via(
     if image_url:
         try:
             logger.info(f"  📥 Download ảnh...")
-            local_photos, temp_dir = smart_download(image_url, seed_key=acc_name)
+            local_photos, temp_dir = smart_download(image_url)
             logger.info(f"  → {len(local_photos)} ảnh đã tải")
         except Exception as e:
             logger.warning(f"  ⚠️  Không download được ảnh: {e}")

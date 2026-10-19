@@ -135,7 +135,6 @@ dẫn xuất từ nó.
 | `nuoi_nick.py` | Tính năng nuôi nick (ramp-up + phiên hoạt động giống người) |
 | `comment_bai.py` | Phiên đi comment vào danh sách bài viết (chạy tay được) |
 | `xep_lich.py` | Phân bổ thời điểm phiên đăng + comment sao cho phủ đều khung giờ |
-| `anh_bien_the.py` | Biến thể ảnh chống dedupe + công cụ đo pHash (chạy trực tiếp được) |
 | `cookie_exporter.py` | Đọc/refresh cookie từ profile trình duyệt |
 | `db.py` | Lớp dữ liệu SQLite (`data/app.db`) |
 | `utils.py` | Logger, jitter (chống nhịp cố định), phân loại lỗi |
@@ -445,54 +444,6 @@ mọi máy nạp ra cùng một bộ. Muốn sửa thì sửa `comment_mau.txt` 
 — cùng một chuỗi ký tự xuất hiện ở bài homestay, bài thuê lẫn bài bán, trong cùng
 cụm nhóm, từ cùng một hệ thống Page. Đó đúng là kiểu trùng lặp dễ bị quét nhất.
 Test kiểm điều này, ba bộ giao nhau bằng 0.
-
-## Biến thể ảnh
-Bật ở tab **Content → 🎲 Biến thể ảnh**. Mỗi lượt đăng sinh một bản sao trong
-temp rồi đăng bản sao đó; **ảnh gốc không bao giờ bị sửa**, bản sao xoá ngay sau
-khi đăng. Hai nick đăng cùng content vẫn ra hai bộ ảnh khác nhau. Không có thư
-viện ảnh song song nào phải đồng bộ hay dọn dẹp.
-
-Bản sao khác ảnh gốc ở 3 điểm: lệch nhẹ **độ sáng**, lệch nhẹ **độ tương phản**,
-và một **mã 8 ký tự** vàng nhạt ở một trong 4 góc chọn ngẫu nhiên. Mã ghi vào
-log (`🔖 tên_file → mã XXXXXXXX`) nên tra ngược được bài nào dùng ảnh nào. EXIF
-gốc bị xoá sạch khi ghi lại.
-
-### ⚠️ Hiệu quả né hash của bộ hiện tại rất thấp — số đo thật
-```
-python anh_bien_the.py data/media/content/homestay --manh
-```
-In ra khoảng cách Hamming gốc↔biến thể (0–64) trên chính ảnh của bạn. Facebook
-coi **dưới 8 bit là cùng một ảnh**, dưới 16 vẫn trong ngưỡng khớp lỏng. (Đừng
-lấy 32 làm mốc — 32/64 là mức của hai ảnh hoàn toàn không liên quan.)
-
-| Thành phần | Dịch được |
-|---|---|
-| Mã 8 ký tự ở góc | **~0/64** |
-| Sáng + tương phản | ~0,4/64 |
-| **Cả bộ hiện tại (mạnh)** | **0,2–0,4/64** — dưới ngưỡng khớp rất xa |
-| Lật ngang (tuỳ chọn) | ~33/64 |
-
-Nói thẳng: bộ hiện tại đổi được byte file và xoá EXIF, nhưng **gần như không né
-được perceptual hash**. Lý do mã ở góc vô hiệu: pHash hạ ảnh về lưới 32×32 rồi
-chỉ đọc 8×8 hệ số DCT tần số thấp nhất — vài chục pixel ở một góc bị làm nhoè
-gần hết ở bước đó. **Tăng cỡ chữ mã không giúp gì.**
-
-Muốn né thật thì hoặc bật **lật ngang**, hoặc lấy lại từ git các phép đã bị bỏ:
-crop mép + xoay + **trường sáng tần số thấp** (`_truong_sang()`, ~15/64 bit — nó
-nhắm đúng dải hệ số mà hash đọc). Sửa tham số thì **đo lại**, đừng đoán.
-
-> **Kể cả khi đo đẹp cũng chưa phải viên đạn bạc.** Đây chỉ là so khớp mức
-> *pixel*. Facebook còn có mô hình nhúng ảnh (SimSearchNet++) so khớp theo *nội
-> dung*, cố ý thiết kế để chịu được crop/xoay/đổi màu. Và cờ spam là đa tín
-> hiệu: **caption lặp lại**, tần suất đăng, số nhóm trên một nick thường nặng
-> hơn ảnh.
->
-> Muốn biết thật sự có tác dụng: chạy **một nhóm nick có bật, một nhóm không**
-> trong 1–2 tuần rồi so tỉ lệ bị gắn cờ. Cách chắc chắn nhất vẫn là có **nhiều
-> ảnh gốc khác nhau** để xoay vòng.
-
-Pillow là dependency **tuỳ chọn**: thiếu nó thì tính năng tự tắt và bài vẫn đăng
-bằng ảnh gốc, có cảnh báo trong log.
 
 ## Sức khoẻ acc — tự tắt acc chết ([suc_khoe_acc.py](suc_khoe_acc.py))
 

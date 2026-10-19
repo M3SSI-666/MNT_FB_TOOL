@@ -8,8 +8,6 @@ sử phát triển trong git):
     tên người bán cá nhân.
   · Chọn nhóm NGAY TRÊN TRANG, không mượn composer: trang chọn nhóm liệt kê
     sẵn mọi nhóm acc đã vào, lọc theo từ khoá rồi bốc ngẫu nhiên tối đa 20.
-  · Ảnh được dán HUY HIỆU SỐ ĐIỆN THOẠI (chỉ Marketplace), không phải mã 8 ký
-    tự như các luồng khác — truyền `sdt` cho prepare_images_for_post.
   · Giá SINH ngẫu nhiên mỗi bài (chẵn, dưới 1000).
 
 Luồng, đo trên nick Sa Tran Anh ~145 giây/bài:
@@ -552,10 +550,7 @@ def post_marketplace(acc_name: str, message: str, image_url: str = "",
     temp_dir = None
     try:
         from storage import prepare_images_for_post as smart_download
-        # sdt → dán huy hiệu số điện thoại, CHỈ Marketplace. Không truyền thì
-        # ảnh quay về đánh mã 8 ký tự như các luồng khác.
-        sdt = db.doc_cai_dat_mkt().get("mkt_sdt_anh", "")
-        local_photos, temp_dir = smart_download(image_url, seed_key=acc_name, sdt=sdt)
+        local_photos, temp_dir = smart_download(image_url)
         logger.info(f"  📥 {len(local_photos)} ảnh đã chuẩn bị")
     except Exception as e:
         logger.warning(f"  ⚠️  Chuẩn bị ảnh hỏng: {e}")

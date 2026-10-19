@@ -122,38 +122,22 @@ def quet_anh_mo_coi(xoa: bool = False, bo_qua_moi_giay: int = 3600) -> dict:
 # Download ảnh để đăng bài (trả về local paths cho poster)
 # ═══════════════════════════════════════════════════════════════
 
-def _cai_dat_bien_the() -> tuple[bool, str, bool]:
-    """Đọc cài đặt biến thể ảnh. Lỗi DB thì coi như tắt — không chặn đăng bài."""
-    try:
-        from db import get_setting
-        return (get_setting("anh_bien_the_bat", "0") == "1",
-                get_setting("anh_bien_the_cuong_do", "vua"),
-                get_setting("anh_bien_the_lat_ngang", "0") == "1")
-    except Exception:
-        return False, "vua", False
-
-
-def prepare_images_for_post(image_urls: str, seed_key: str = "",
-                            sdt: str = "") -> tuple[list[str], Optional[str]]:
+def prepare_images_for_post(image_urls: str) -> tuple[list[str], Optional[str]]:
     """
-    Chuẩn bị ảnh để đăng lên Facebook.
+    Chuẩn bị ảnh để đăng lên Facebook — ĐĂNG THUẦN ẢNH GỐC, không biến đổi gì.
 
     Args:
-        image_urls: Comma-separated URLs (có thể là /data/media/... local hoặc https:// external)
-        seed_key:   Tên acc — để hai nick đăng cùng content vẫn ra ảnh khác nhau
-        sdt:        Số điện thoại dán thành huy hiệu ở góc ảnh. CHỈ Marketplace
-                    truyền tham số này. Bỏ trống (mặc định) thì ảnh được đánh mã
-                    8 ký tự như xưa nay — hybrid, comment và mọi luồng cũ đi
-                    đường đó, hành vi không đổi.
+        image_urls: Chuỗi URL cách nhau bằng phẩy. Có thể là /data/media/...
+                    (ảnh local) hoặc https://... (ảnh ngoài, tải về temp).
 
     Returns:
         (local_paths, temp_dir)
-        - local_paths: đường dẫn tuyệt đối các file ảnh, giữ nguyên thứ tự đầu vào
-        - temp_dir: thư mục temp nếu có download/biến thể, None nếu dùng file local trực tiếp
+        - local_paths: đường dẫn tuyệt đối các file ảnh, GIỮ NGUYÊN thứ tự đầu vào.
+        - temp_dir: thư mục temp nếu có ảnh tải từ URL, None nếu toàn ảnh local.
+          Gọi `cleanup_temp()` sau khi đăng xong.
 
-    Khi bật biến thể ảnh, cái trả về là **bản sao đã biến đổi** nằm trong temp;
-    ảnh gốc trong data/media/ không bao giờ bị đụng tới. Gọi `cleanup_temp()`
-    sau khi đăng xong.
+    Ảnh local được dùng THẲNG, không sao chép, không sửa — ảnh gốc trong
+    data/media/ không bao giờ bị đụng tới.
     """
     if not image_urls:
         return [], None
@@ -162,13 +146,10 @@ def prepare_images_for_post(image_urls: str, seed_key: str = "",
     if not urls:
         return [], None
 
-    bien_the, cuong_do, lat_ngang = _cai_dat_bien_the()
-
     local_paths = []
     temp_dir    = None
-    # Ảnh local vốn dùng thẳng tại chỗ, không cần temp. Nhưng biến thể thì phải
-    # ghi ra chỗ khác — tuyệt đối không ghi đè ảnh gốc.
-    needs_temp  = any(u.startswith("http") for u in urls) or bien_the
+    # Chỉ cần temp khi có ảnh phải tải từ URL. Ảnh local dùng thẳng tại chỗ.
+    needs_temp  = any(u.startswith("http") for u in urls)
 
     if needs_temp:
         temp_dir = tempfile.mkdtemp(prefix="mnt_fb_")
@@ -203,26 +184,6 @@ def prepare_images_for_post(image_urls: str, seed_key: str = "",
     # ảnh của content. Trước đây có sort theo tên file, nhưng ảnh local mang tên
     # uuid ngẫu nhiên (storage.save_image) nên sort theo tên là xáo trộn ngẫu
     # nhiên thứ tự người dùng đã chọn.
-
-    # Biến thể đánh số lại tên file theo đúng thứ tự này, nên phải chạy sau cùng.
-    if bien_the and local_paths:
-        try:
-            from anh_bien_the import bien_the_ca_bo, CO_PILLOW
-            if CO_PILLOW:
-                # Thư mục con riêng: ảnh tải từ URL cũng đánh số 1,2,3… trong
-                # temp, ghi đè lên nhau thì mất ảnh.
-                local_paths = bien_the_ca_bo(
-                    local_paths, os.path.join(temp_dir, "bt"),
-                    seed_key=seed_key, cuong_do=cuong_do, lat_ngang=lat_ngang,
-                    sdt=sdt)
-                logger.info(f"  🎲 Biến thể ảnh ({cuong_do}"
-                            f"{', lật ngang' if lat_ngang else ''}): "
-                            f"{len(local_paths)} ảnh")
-            else:
-                logger.warning("  ⚠️  Bật biến thể ảnh nhưng thiếu Pillow "
-                               "(pip install pillow) — đăng bằng ảnh gốc")
-        except Exception as e:
-            logger.warning(f"  ⚠️  Biến thể ảnh lỗi: {e} — đăng bằng ảnh gốc")
 
     return local_paths, temp_dir
 
