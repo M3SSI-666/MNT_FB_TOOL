@@ -562,6 +562,9 @@ def init_db():
         # Tiêu đề Marketplace theo TỪNG content (13/10), thay cho một tiêu đề
         # dùng chung ở cài đặt — xem chú thích trên MKT_MAC_DINH.
         _add_col("content",    "tieu_de_mkt", "tieu_de_mkt TEXT DEFAULT ''")
+        # Mã thư viện ảnh content này trỏ tới (id của tv_mang, dạng chuỗi). Trống
+        # = dùng ảnh ở cột Ảnh; có + cột Ảnh trống = bốc bộ ảnh từ thư viện đó.
+        _add_col("content",    "ma_thu_vien", "ma_thu_vien TEXT DEFAULT ''")
         # Dòng lịch nhớ c_user của nick, không chỉ tên — hai nick trùng tên
         # (gặp thật: hai 'Tuấn Ngọc') thì tên không nói được dòng nào của nick
         # nào. Xem `_khoa_acc`. Gắn cho dòng cũ chưa có; dòng nào không suy ra

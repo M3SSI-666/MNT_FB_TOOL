@@ -2123,20 +2123,26 @@ function openContentTab(loai){
     loadContent(target);
 }
 
+let _tvMangCache = [];   // danh sách thư viện ảnh cho dropdown "Mã thư viện"
+
 async function loadContent(loai){
     _currentContentLoai = loai;
     renderContentTabs();
     document.querySelectorAll(".content-tab").forEach(b=>b.classList.toggle("active",b.dataset.loai===loai));
     const tbody=document.getElementById("content-table"); if(!tbody) return;
-    tbody.innerHTML=`<tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="9" class="loading"><span class="spin">↻</span></td></tr>`;
     try{
         const res=await API.content(loai);
+        // Danh sách thư viện ảnh cho dropdown "Mã thư viện" (dùng cả ở form sửa).
+        try{ _tvMangCache=((await (await fetch("/api/thuvien/mang")).json()).data)||[]; }catch(e){}
+        const tvOpts=(sel)=>`<option value="">— Ảnh riêng —</option>`+
+            _tvMangCache.map(m=>`<option value="${m.id}" ${String(sel||"")===String(m.id)?"selected":""}>${_escapeHtml(m.ten)}</option>`).join("");
         const total=res.data.length, active=res.data.filter(r=>r.su_dung==="Có").length;
         const box=document.getElementById("content-summary");
         if(box) box.innerHTML=[{l:"Tổng",v:total},{l:"Đang dùng",v:active,c:"var(--success)"},{l:"Dừng",v:total-active}]
             .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px;${s.c?"color:"+s.c:""}">${s.v}</div></div>`).join("");
 
-        if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="8" class="empty">Chưa có content</td></tr>`; return; }
+        if(!res.data.length){ tbody.innerHTML=`<tr><td colspan="9" class="empty">Chưa có content</td></tr>`; return; }
 
         // Helper: inline-editable cell
         const ec=(r,field,style)=>{
@@ -2178,14 +2184,23 @@ async function loadContent(loai){
                     </div>
                 </td>
 
-                <!-- Sử dụng: inline edit -->
-                <td class="editable" data-id="${r.id}" data-field="su_dung" data-val="${r.su_dung||""}"
-                    style="text-align:center;font-weight:600;font-size:12px;color:${suDung?"var(--success)":"var(--text-muted)"}"
-                    onclick="startContentFieldEdit(this)">${r.su_dung||"-"}</td>
+                <!-- Mã thư viện: dropdown chọn 1 bộ ảnh ở Thư viện ảnh. Cột Ảnh có
+                     ảnh thì ưu tiên ảnh đó; bỏ trống thì bốc từ thư viện này. -->
+                <td style="text-align:center;padding:4px 6px">
+                    <select onchange="contentSetThuVien(${r.id}, this.value)"
+                        style="font-size:12px;max-width:130px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px">
+                        ${tvOpts(r.ma_thu_vien)}
+                    </select>
+                </td>
 
                 <!-- Tiêu đề Market Place: inline edit. Trống thì slot Marketplace
                      của content này bị bỏ qua (scheduler báo rõ lý do). -->
                 ${ec(r,"tieu_de_mkt","font-size:12px;max-width:200px;word-break:break-word")}
+
+                <!-- Sử dụng: inline edit -->
+                <td class="editable" data-id="${r.id}" data-field="su_dung" data-val="${r.su_dung||""}"
+                    style="text-align:center;font-weight:600;font-size:12px;color:${suDung?"var(--success)":"var(--text-muted)"}"
+                    onclick="startContentFieldEdit(this)">${r.su_dung||"-"}</td>
 
                 <!-- Ghi chú: inline edit -->
                 ${ec(r,"ghi_chu","font-size:12px;color:var(--text-muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap")}
@@ -2198,7 +2213,7 @@ async function loadContent(loai){
                 </td>
             </tr>`;
         }).join("");
-    }catch(e){ tbody.innerHTML=`<tr><td colspan="8" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
+    }catch(e){ tbody.innerHTML=`<tr><td colspan="9" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
 }
 
 // Inline edit Nội dung bằng textarea (giữ xuống dòng)
@@ -2323,6 +2338,8 @@ function openContentEdit(data){
                 <input id="ce_imgs_file" type="file" accept="image/*" multiple style="display:none" onchange="_imgsFile(event)">
             </div>
         </div>
+        <div class="field-group"><label>Mã thư viện ảnh <span style="font-weight:400;color:var(--text-muted);font-size:11px">— nếu cột Ảnh trên bỏ trống thì bốc ngẫu nhiên 1 bộ ảnh từ thư viện này</span></label>
+            <select id="ce_tv"><option value="">— Ảnh riêng —</option>${_tvMangCache.map(m=>`<option value="${m.id}" ${String(data.ma_thu_vien||"")===String(m.id)?"selected":""}>${_escapeHtml(m.ten)}</option>`).join("")}</select></div>
         <div class="field-group"><label>Tiêu đề Market Place <span style="font-weight:400;color:var(--text-muted);font-size:11px">— tiêu đề bài niêm yết khi đăng Marketplace; để trống thì content này không đăng Marketplace được</span></label><input id="ce_tdm" value="${(data.tieu_de_mkt||"").replace(/"/g,"&quot;")}"></div>
         <div class="field-group"><label>Ghi chú</label><input id="ce_note" value="${data.ghi_chu||""}"></div>`;
     document.getElementById("cedit-overlay").style.display="block";
@@ -2380,6 +2397,7 @@ async function saveContentEdit(){
         su_dung:    document.getElementById("ce_su")?.value||"Có",
         noi_dung:   document.getElementById("ce_nd")?.value||"",
         link_anh:   (window._ceImgUrls||[]).join(", "),
+        ma_thu_vien:document.getElementById("ce_tv")?.value||"",
         tieu_de_mkt:(document.getElementById("ce_tdm")?.value||"").trim(),
         ghi_chu:    document.getElementById("ce_note")?.value||"",
     };
@@ -2396,6 +2414,15 @@ async function deleteContentItem(id){
     if(!confirm("Xóa content này?")) return;
     try{ await API.deleteContent(id); Toast.success("Đã xóa"); loadContent(_currentContentLoai); }
     catch(e){ Toast.error(e.message); }
+}
+
+// Chọn thư viện ảnh cho một content (dropdown ở cột "Mã thư viện").
+async function contentSetThuVien(id, value){
+    try{
+        const r = await API.updateContentField(parseInt(id), "ma_thu_vien", value);
+        if(r.ok) Toast.success(value ? "Đã gán thư viện ảnh" : "Đã bỏ gán thư viện");
+        else Toast.error(r.error);
+    }catch(e){ Toast.error(e.message); }
 }
 
 // ── Thư viện ảnh ──────────────────────────────────────────────

@@ -4991,9 +4991,12 @@ check("từ khoá được nạp và lưu",
 # ── Tiêu đề Market Place theo từng content ─────────────────────────────────
 _html_ct = Path("templates/index.html").read_text(encoding="utf-8")
 _bang_ct = _html_ct[_html_ct.index("<th>Mã content</th>"):_html_ct.index('id="content-table"')]
-check("bảng Content: cột Tiêu đề Market Place nằm giữa Sử dụng và Ghi chú",
-      _bang_ct.index(">Sử dụng</th>") < _bang_ct.index(">Tiêu đề Market Place</th>")
-      < _bang_ct.index("<th>Ghi chú</th>"))
+check("bảng Content: thứ tự cột Ảnh < Mã thư viện < Tiêu đề Market < Sử dụng < Ghi chú",
+      _bang_ct.index(">Ảnh</th>") < _bang_ct.index(">Mã thư viện</th>")
+      < _bang_ct.index(">Tiêu đề Market Place</th>")
+      < _bang_ct.index(">Sử dụng</th>") < _bang_ct.index(">Ghi chú</th>"))
+check("bảng Content có dropdown Mã thư viện + ô sửa form",
+      "contentSetThuVien" in _ajs_mkt and 'id="ce_tv"' in _ajs_mkt and "ma_thu_vien:" in _ajs_mkt)
 check("bảng Content có ô sửa nhanh tiêu đề",
       'ec(r,"tieu_de_mkt"' in _ajs_mkt)
 check("form Thêm/Sửa content có ô tiêu đề và gửi lên khi lưu",
@@ -6558,6 +6561,19 @@ check("mở trang thu-vien thì nạp dữ liệu",
 # Ảnh thư viện tách khỏi CONTENT_MEDIA_DIRS để dọn-ảnh-mồ-côi không xoá nhầm.
 check("thư mục ảnh thư viện NẰM NGOÀI CONTENT_MEDIA_DIRS",
       "thuvien" not in str(_cfg.CONTENT_MEDIA_DIRS))
+
+# Content trỏ vào thư viện: cột ma_thu_vien lưu + sửa nhanh được qua API.
+_cid_tv = db.upsert_content({"loai": "homestay", "ma_content": "TV1",
+                             "noi_dung": "x", "ma_thu_vien": "7"})
+check("content lưu được cột ma_thu_vien",
+      any(r["id"] == _cid_tv and r["ma_thu_vien"] == "7" for r in db.get_content("homestay")))
+check("API sửa nhanh nhận field ma_thu_vien",
+      _client.post(f"/api/content/{_cid_tv}/field",
+                   json={"field": "ma_thu_vien", "value": "9"}).get_json().get("ok") is True)
+check("content đọc lại ma_thu_vien mới",
+      any(r["id"] == _cid_tv and r["ma_thu_vien"] == "9" for r in db.get_content("homestay")))
+with db._conn() as _c_tv2:
+    _c_tv2.execute("DELETE FROM content WHERE ma_content='TV1'")
 
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):

@@ -1360,7 +1360,7 @@ def api_content_field(content_id):
     body  = request.json or {}
     field = body.get("field", "")
     value = body.get("value", "")
-    safe  = {"ma_content","noi_dung","link_anh","su_dung","tieu_de_mkt","ghi_chu"}
+    safe  = {"ma_content","noi_dung","link_anh","su_dung","tieu_de_mkt","ghi_chu","ma_thu_vien"}
     if field not in safe:
         return jsonify({"ok": False, "error": f"Field không hợp lệ: {field}"})
     # Sử dụng là tập ĐÓNG: chỉ "Có"/"Không". Giá trị lạ (gõ tay, nhập Excel) làm

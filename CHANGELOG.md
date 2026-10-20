@@ -10,6 +10,21 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.59.0 — 21/10/2026
+
+**Content: thêm cột "Mã thư viện" + dời cột Sử dụng (bước 2 kho ảnh)**
+
+- Tab **Content** có cột mới **Mã thư viện** (bên phải cột Ảnh) — **dropdown**
+  chọn 1 bộ ảnh ở tab Thư viện ảnh. Ý nghĩa: cột **Ảnh có ảnh** thì dùng chính
+  ảnh đó; cột **Ảnh bỏ trống** thì sẽ bốc 1 bộ ảnh từ thư viện đã chọn.
+- Dời cột **Sử dụng** sang ngay **bên trái cột Ghi chú** cho gọn.
+- Chọn thư viện ngay tại ô (dropdown) hoặc trong form Thêm/Sửa content.
+
+*(Bước này mới lưu lựa chọn thư viện cho từng content. Việc bốc/roll bộ ảnh lúc
+đăng sẽ làm ở bước sau.)*
+
+---
+
 ## v2.58.0 — 21/10/2026
 
 **Thêm tab "Thư viện ảnh" (bước 1 của cơ chế kho ảnh chống trùng)**
