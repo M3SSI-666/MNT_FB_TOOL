@@ -115,10 +115,16 @@ CONTENT_MEDIA_DIRS = {
     "ban":      str(MEDIA_DIR / "content" / "ban"),
 }
 
+# Thư viện ảnh (tab "Thư viện ảnh"). CỐ Ý nằm NGOÀI CONTENT_MEDIA_DIRS để lớp
+# "dọn ảnh mồ côi" của content (chỉ quét CONTENT_MEDIA_DIRS) không đụng tới ảnh
+# thư viện — ảnh thư viện do content trỏ gián tiếp, không nằm ở cột ảnh content.
+THUVIEN_MEDIA_DIR = str(MEDIA_DIR / "thuvien")
+
 # Đảm bảo tất cả thư mục tồn tại
 for _d in [DATA_DIR, MEDIA_DIR, LOG_DIR, COOKIES_DIR, PROFILES_DIR,
            MEDIA_DIR / "content" / "homestay",
            MEDIA_DIR / "content" / "thue",
            MEDIA_DIR / "content" / "ban",
+           MEDIA_DIR / "thuvien",
            MEDIA_DIR / "uploads"]:
     _d.mkdir(parents=True, exist_ok=True)

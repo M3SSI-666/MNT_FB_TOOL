@@ -5645,14 +5645,14 @@ check("đọc số thành viên chịu được cả số lẫn chuỗi",
 # Cột STT kiêm luôn tay cầm để kéo, thay cho một cột ☰ riêng: bảng Tài khoản
 # đã 19 cột, thêm cột nữa chỉ để kéo là phí chỗ.
 check("có kiểu cho cột STT", "td.stt {" in _html_mkt)
-check("cả 5 bảng đều có đầu cột #",
-      _html_mkt.count('width:40px;text-align:center">#</th>') == 4
-      and 'id="uidm-table"' in _html_mkt)
+check("các bảng đều có đầu cột # (gồm cả Thư viện ảnh)",
+      _html_mkt.count('width:40px;text-align:center">#</th>') == 5
+      and 'id="uidm-table"' in _html_mkt and 'id="tv-table"' in _html_mkt)
 check("KHÔNG còn cột ☰ rỗng", 'style="width:32px"></th>' not in _html_mkt)
 for _b in ("rows.map((r,i)=>{", "res.data.map((p,i)=>", "res.data.map((r,i)=>{",
            "res.data.map((g,i)=>{"):
     check(f"bảng có chỉ số hàng: {_b[:22]}", _b in _ajs_mkt)
-check("đủ 5 bảng có ô STT", _ajs_mkt.count('class="stt"') == 5)
+check("đủ các bảng có ô STT (gồm cả Thư viện ảnh)", _ajs_mkt.count('class="stt"') == 6)
 
 # UID Marketplace sắp xếp được theo số thành viên. Kéo trong lúc đang sắp xếp
 # thì thứ tự NHÌN THẤY bị ghi đè lên thứ tự tay — mất thứ tự Duong tự duyệt
@@ -6484,6 +6484,80 @@ import dung_het as _dh_st
 check("RESTART/UPDATE dừng đủ 6 runner — khớp server và Lịch máy",
       set(_dh_st.RUNNER) == set(server._RUNNER_KEYS) == set(_lm_m.RUNNER)
       and "page" not in _dh_st.RUNNER)   # runner Page riêng đã bỏ (15/10)
+
+# ── Thư viện ảnh: tab "Bộ ảnh" (tv_mang) + dòng ảnh (tv_bo) ──────────────────
+# Trang quản lý thư viện ảnh — na ná tab Content nhưng độc lập. Bước 1 mới chỉ
+# dựng chỗ CHỨA ảnh (chưa nối vào luồng đăng).
+with db._conn() as _c_tv:
+    _bang_tv = {r[0] for r in _c_tv.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+check("init_db tạo bảng tv_mang + tv_bo", {"tv_mang", "tv_bo"} <= _bang_tv)
+
+# DB: tab (mang) CRUD + giữ thứ tự.
+_m1 = db.tv_mang_them("3PN")
+_m2 = db.tv_mang_them("Duplex")
+check("thêm tab bộ ảnh, có id", isinstance(_m1, int) and _m1 > 0)
+check("list tab giữ đúng thứ tự thêm",
+      [m["ten"] for m in db.tv_mang_list()] == ["3PN", "Duplex"])
+db.tv_mang_doi_ten(_m2, "Đập thông")
+check("đổi tên tab", any(m["id"] == _m2 and m["ten"] == "Đập thông" for m in db.tv_mang_list()))
+
+# DB: dòng ảnh (bo) CRUD, giữ đúng tab, thứ tự xuống cuối, reorder.
+_b1 = db.tv_bo_upsert({"mang_id": _m1, "ma": "bo1", "link_anh": "/media/thuvien/a.jpg", "su_dung": "Có"})
+_b2 = db.tv_bo_upsert({"mang_id": _m1, "ma": "bo2", "su_dung": "Có"})
+db.tv_bo_upsert({"mang_id": _m2, "ma": "x", "su_dung": "Không"})
+check("dòng ảnh lọc đúng theo tab",
+      [b["ma"] for b in db.tv_bo_list(_m1)] == ["bo1", "bo2"]
+      and [b["ma"] for b in db.tv_bo_list(_m2)] == ["x"])
+db.tv_bo_reorder([_b2, _b1])
+check("reorder đổi đúng thứ tự dòng ảnh",
+      [b["ma"] for b in db.tv_bo_list(_m1)] == ["bo2", "bo1"])
+db.tv_bo_update_field(_b1, "su_dung", "Không")
+check("sửa nhanh field dòng ảnh",
+      any(b["id"] == _b1 and b["su_dung"] == "Không" for b in db.tv_bo_list(_m1)))
+_loi_field = False
+try:
+    db.tv_bo_update_field(_b1, "mang_id", 999)   # field lạ → chặn
+except ValueError:
+    _loi_field = True
+check("sửa nhanh chặn field không hợp lệ", _loi_field)
+db.tv_bo_xoa(_b1)
+check("xoá dòng ảnh", all(b["id"] != _b1 for b in db.tv_bo_list(_m1)))
+db.tv_mang_xoa(_m2)
+check("xoá tab thì xoá luôn dòng ảnh bên trong",
+      all(m["id"] != _m2 for m in db.tv_mang_list()) and db.tv_bo_list(_m2) == [])
+
+# API: endpoint hoạt động qua test client (dùng DB tạm).
+check("API thêm tab bộ ảnh",
+      _client.post("/api/thuvien/mang/them", json={"ten": "2PN"}).get_json().get("ok") is True)
+check("API chặn tab trùng tên",
+      _client.post("/api/thuvien/mang/them", json={"ten": "2pn"}).get_json().get("ok") is False)
+_js_mang = _client.get("/api/thuvien/mang").get_json()
+_mid_api = [m["id"] for m in _js_mang["data"] if m["ten"] == "2PN"][0]
+check("API lưu + đọc dòng ảnh",
+      _client.post("/api/thuvien/bo/luu",
+                   json={"mang_id": _mid_api, "ma": "api1", "link_anh": "/media/thuvien/z.jpg"}).get_json().get("ok") is True
+      and any(b["ma"] == "api1" for b in _client.get(f"/api/thuvien/bo?mang_id={_mid_api}").get_json()["data"]))
+check("API chặn lưu dòng ảnh thiếu tab",
+      _client.post("/api/thuvien/bo/luu", json={"ma": "mo_coi"}).get_json().get("ok") is False)
+
+# UI: nav + trang + cột bảng + hàm JS.
+_html_tv = Path("templates/index.html").read_text(encoding="utf-8")
+_ajs_tv = Path("static/js/app.js").read_text(encoding="utf-8")
+check("sidebar có mục Thư viện ảnh, ngay dưới UID Marketplace",
+      _html_tv.index('data-page="uid-market"') < _html_tv.index('data-page="thu-vien"')
+      < _html_tv.index('nav-section">Lịch đăng'))
+check("có trang Thư viện ảnh + đủ 6 cột bảng",
+      'id="page-thu-vien"' in _html_tv and 'id="tv-table"' in _html_tv
+      and ">Mã bộ ảnh<" in _html_tv)
+check("app.js có hàm loadThuVien + CRUD tab/dòng ảnh",
+      "function loadThuVien" in _ajs_tv and "function tvThemMang" in _ajs_tv
+      and "function tvOpenEdit" in _ajs_tv)
+check("mở trang thu-vien thì nạp dữ liệu",
+      'page==="thu-vien"' in _ajs_tv and "loadThuVien()" in _ajs_tv)
+# Ảnh thư viện tách khỏi CONTENT_MEDIA_DIRS để dọn-ảnh-mồ-côi không xoá nhầm.
+check("thư mục ảnh thư viện NẰM NGOÀI CONTENT_MEDIA_DIRS",
+      "thuvien" not in str(_cfg.CONTENT_MEDIA_DIRS))
 
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):

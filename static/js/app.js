@@ -118,6 +118,7 @@ async function lbDownloadAll(){
 const PAGE_TITLES = {
     accounts:"Tài khoản", pages:"Page", content:"Content",
     "uid-groups":"UID Nhóm", "uid-market":"UID Marketplace",
+    "thu-vien":"Thư viện ảnh",
     "lich-homestay":"Lịch Homestay", "lich-thue":"Lịch Thuê",
     "lich-ban":"Lịch Bán", "lich-nuoi":"Lịch Nuôi nick",
     "comment-posts":"Link comment",
@@ -143,6 +144,7 @@ function loadPageData(page) {
     else if(page==="content")    openContentTab(_currentContentLoai);
     else if(page==="uid-groups") loadUidGroups();
     else if(page==="uid-market") loadUidMarket();
+    else if(page==="thu-vien")   loadThuVien();
     else if(page==="comment-posts") renderCommentPostsPage();
     else if(page==="tham-gia-nhom") loadJoinSchedules();
     else if(page==="tham-gia-nhom-market") loadJoinMarket();
@@ -2394,6 +2396,262 @@ async function deleteContentItem(id){
     if(!confirm("Xóa content này?")) return;
     try{ await API.deleteContent(id); Toast.success("Đã xóa"); loadContent(_currentContentLoai); }
     catch(e){ Toast.error(e.message); }
+}
+
+// ── Thư viện ảnh ──────────────────────────────────────────────
+// Tab "Bộ ảnh" (tv_mang) + các dòng ảnh (tv_bo). Na ná tab Content nhưng độc lập.
+let _tvMang = [];
+let _tvCur  = null;   // id tab (bộ ảnh) đang mở
+
+async function loadThuVien(){
+    try{ const r = await (await fetch("/api/thuvien/mang")).json(); _tvMang = r.data || []; }
+    catch(e){ _tvMang = []; }
+    if(!_tvMang.find(m=>m.id===_tvCur)) _tvCur = _tvMang.length ? _tvMang[0].id : null;
+    tvRenderTabs();
+    tvLoadBang();
+}
+
+function tvRenderTabs(){
+    const box = document.getElementById("tv-tabs"); if(!box) return;
+    let html = _tvMang.map(m=>{
+        const active = m.id === _tvCur;
+        return `<div class="content-tab ${active?"active":""}" onclick="tvChon(${m.id})">
+                    <span>${_escapeHtml(m.ten)}</span>
+                    <span class="content-tab__act" title="Đổi tên bộ ảnh"
+                          onclick="event.stopPropagation();tvDoiTen(${m.id})">${_ICON_SUA}</span>
+                    <span class="content-tab__act content-tab__act--xoa" title="Xoá bộ ảnh"
+                          onclick="event.stopPropagation();tvXoaMang(${m.id})">${_ICON_XOA}</span>
+                </div>`;
+    }).join("");
+    html += `<div class="content-tab content-tab--them" onclick="tvThemMang()"
+                 title="Thêm bộ ảnh mới">＋ Thêm bộ ảnh</div>`;
+    box.innerHTML = html;
+    const them = document.getElementById("tv-them-btn");
+    if(them) them.style.display = _tvCur ? "" : "none";
+}
+
+function tvChon(id){ _tvCur = id; tvRenderTabs(); tvLoadBang(); }
+
+function _tvKiemTen(v){
+    if(!v) return "Nhập tên bộ ảnh";
+    if(v.length > 40) return "Tối đa 40 ký tự";
+    const trung = _tvMang.find(m => (m.ten||"").toLocaleLowerCase() === v.toLocaleLowerCase());
+    return trung ? `Đã có bộ ảnh "${trung.ten}"` : "";
+}
+
+async function tvThemMang(){
+    const ten = await Dialog.prompt({
+        icon:"＋", title:"Thêm bộ ảnh",
+        message:"Mỗi bộ ảnh là một tab chứa nhiều dòng ảnh (vd 1PN, 2PN, Duplex…).",
+        label:"Tên bộ ảnh", placeholder:"VD: 3PN", maxLength:40,
+        validate:_tvKiemTen, okText:"Thêm",
+    });
+    if(!ten) return;
+    try{
+        const r = await (await fetch("/api/thuvien/mang/them",{method:"POST",
+            headers:{"Content-Type":"application/json"},body:JSON.stringify({ten})})).json();
+        if(!r.ok){ Toast.error(r.error); return; }
+        Toast.success(`Đã thêm bộ ảnh "${ten}"`); _tvCur = r.id; await loadThuVien();
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function tvDoiTen(id){
+    const cu = (_tvMang.find(m=>m.id===id)||{}).ten || "";
+    const ten = await Dialog.prompt({
+        icon:"✎", title:"Đổi tên bộ ảnh", label:"Tên bộ ảnh",
+        value:cu, maxLength:40,
+        validate:v => (v.toLocaleLowerCase()===cu.toLocaleLowerCase()) ? "" : _tvKiemTen(v),
+        okText:"Lưu",
+    });
+    if(!ten || ten===cu) return;
+    try{
+        const r = await (await fetch("/api/thuvien/mang/doi-ten",{method:"POST",
+            headers:{"Content-Type":"application/json"},body:JSON.stringify({id,ten})})).json();
+        if(!r.ok){ Toast.error(r.error); return; }
+        Toast.success("Đã đổi tên"); await loadThuVien();
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function tvXoaMang(id){
+    const ten = (_tvMang.find(m=>m.id===id)||{}).ten || "";
+    const ok = await Dialog.confirm({
+        icon:"🗑", danger:true, title:`Xoá bộ ảnh "${ten}"?`,
+        message:"Mọi dòng ảnh trong bộ này bị xoá khỏi danh sách (file ảnh trên ổ đĩa giữ nguyên).",
+        okText:"Xoá bộ ảnh",
+    });
+    if(!ok) return;
+    try{
+        const r = await (await fetch("/api/thuvien/mang/xoa",{method:"POST",
+            headers:{"Content-Type":"application/json"},body:JSON.stringify({id})})).json();
+        if(!r.ok){ Toast.error(r.error); return; }
+        Toast.success(`Đã xoá "${ten}"`); if(_tvCur===id) _tvCur=null; await loadThuVien();
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function tvLoadBang(){
+    const tbody = document.getElementById("tv-table"); if(!tbody) return;
+    const sum = document.getElementById("tv-summary");
+    if(!_tvCur){
+        tbody.innerHTML = `<tr><td colspan="6" class="empty">Chưa có bộ ảnh nào — bấm "＋ Thêm bộ ảnh"</td></tr>`;
+        if(sum) sum.innerHTML = ""; return;
+    }
+    tbody.innerHTML = `<tr><td colspan="6" class="loading"><span class="spin">↻</span></td></tr>`;
+    try{
+        const res = await (await fetch(`/api/thuvien/bo?mang_id=${_tvCur}`)).json();
+        const rows = res.data || [];
+        const total = rows.length, active = rows.filter(r=>r.su_dung==="Có").length;
+        if(sum) sum.innerHTML = [{l:"Tổng",v:total},{l:"Đang dùng",v:active,c:"var(--success)"},{l:"Dừng",v:total-active}]
+            .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px;${s.c?"color:"+s.c:""}">${s.v}</div></div>`).join("");
+        if(!rows.length){ tbody.innerHTML = `<tr><td colspan="6" class="empty">Chưa có ảnh — bấm "+ Thêm ảnh"</td></tr>`; return; }
+
+        const ec=(r,field,style)=>{
+            const val=(r[field]||"").toString(); const esc=val.replace(/"/g,"&quot;");
+            return `<td class="editable" data-id="${r.id}" data-field="${field}" data-val="${esc}"
+                style="${style||"font-size:12px;color:var(--text-secondary)"}"
+                onclick="tvStartFieldEdit(this)">${val||"-"}</td>`;
+        };
+        tbody.innerHTML = rows.map((r,i)=>{
+            const imgs=(r.link_anh||"").split(",").map(s=>s.trim()).filter(Boolean);
+            const encImgs=encodeURIComponent(JSON.stringify(imgs));
+            const suDung=r.su_dung==="Có";
+            return `<tr data-id="${r.id}" style="vertical-align:top"
+                ondragover="accDragOver(event)" ondrop="tvDrop(event,${r.id})" ondragleave="accDragLeave(event)">
+                <td class="stt" draggable="true" ondragstart="accDragStart(event,${r.id})" ondragend="accDragEnd(event)"
+                    style="padding:8px 6px" title="Kéo để đổi thứ tự — thứ tự này là thứ tự roll khi đăng">${i+1}</td>
+                ${ec(r,"ma","font-weight:600;text-align:center;white-space:nowrap;font-size:13px")}
+                <td style="padding:4px 6px;cursor:pointer" title="Click xem ảnh"
+                    onclick="openLightbox(JSON.parse(decodeURIComponent('${encImgs}')),{name:'${(r.ma||"").replace(/'/g,'')}'})">
+                    <div style="display:flex;gap:2px;flex-wrap:wrap;max-width:140px">
+                        ${imgs.length
+                            ?imgs.slice(0,4).map(u=>`<img src="${u}" style="width:34px;height:34px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">`).join("")
+                             +(imgs.length>4?`<div style="width:34px;height:34px;border-radius:4px;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--accent)">+${imgs.length-4}</div>`:"")
+                            :`<span style="font-size:11px;color:var(--text-muted)">-</span>`}
+                    </div>
+                </td>
+                <td class="editable" data-id="${r.id}" data-field="su_dung" data-val="${r.su_dung||""}"
+                    style="text-align:center;font-weight:600;font-size:12px;color:${suDung?"var(--success)":"var(--text-muted)"}"
+                    onclick="tvStartFieldEdit(this)">${r.su_dung||"-"}</td>
+                ${ec(r,"ghi_chu","font-size:12px;color:var(--text-muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap")}
+                <td style="text-align:center;white-space:nowrap;padding:4px 6px">
+                    <button title="Chỉnh sửa" style="background:var(--accent-light);color:var(--accent);border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;margin-right:3px"
+                        onclick='tvOpenEdit(${JSON.stringify(r).replace(/"/g,"&quot;")})'>✏️</button>
+                    <button title="Xoá" style="background:var(--danger-light);color:var(--danger);border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px"
+                        onclick="tvDelete(${r.id})">🗑️</button>
+                </td>
+            </tr>`;
+        }).join("");
+    }catch(e){ tbody.innerHTML=`<tr><td colspan="6" class="empty" style="color:var(--danger)">${e.message}</td></tr>`; }
+}
+
+const _tvReorder = ids => fetch("/api/thuvien/bo/reorder",{method:"POST",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify({ids})}).then(r=>r.json());
+async function tvDrop(e,t){ return _rowDrop(e,t,"tv-table",_tvReorder); }
+
+function tvStartFieldEdit(td){
+    if(td.classList.contains("editing")) return;
+    td.classList.add("editing");
+    const id=td.dataset.id, field=td.dataset.field, val=td.dataset.val||"";
+    const luu=async(nv)=>{
+        if(nv===val) return;
+        td.classList.add("saving");
+        try{
+            const r=await (await fetch("/api/thuvien/bo/field",{method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({id:parseInt(id),field,value:nv})})).json();
+            td.classList.remove("saving");
+            if(r.ok){ td.classList.add("saved"); setTimeout(()=>td.classList.remove("saved"),1200);
+                      if(field==="su_dung") tvLoadBang(); }
+            else Toast.error(r.error);
+        }catch(e){ td.classList.remove("saving"); Toast.error(e.message); }
+    };
+    if(field==="su_dung"){
+        const sel=document.createElement("select"); sel.style.cssText="width:100%;font-size:12px";
+        const cur=(val==="Không")?"Không":"Có";
+        ["Có","Không"].forEach(v=>{ const o=document.createElement("option"); o.value=v; o.textContent=v; if(v===cur)o.selected=true; sel.appendChild(o); });
+        td.innerHTML=""; td.appendChild(sel); sel.focus();
+        let xong=false;
+        const done=async()=>{ if(xong)return; xong=true; const nv=sel.value;
+            td.classList.remove("editing"); td.dataset.val=nv;
+            td.style.color=(nv==="Có")?"var(--success)":"var(--text-muted)"; td.textContent=nv; await luu(nv); };
+        sel.addEventListener("change",done); sel.addEventListener("blur",done);
+        sel.addEventListener("keydown",e=>{ if(e.key==="Escape"){ xong=true; td.classList.remove("editing");
+            td.style.color=(val==="Có")?"var(--success)":"var(--text-muted)"; td.textContent=val||"-"; } });
+        return;
+    }
+    const inp=document.createElement("input"); inp.type="text"; inp.value=val==="-"?"":val;
+    td.innerHTML=""; td.appendChild(inp); inp.focus(); inp.select();
+    async function commit(){ const nv=inp.value; td.classList.remove("editing"); td.dataset.val=nv;
+        td.textContent=nv||"-"; await luu(nv); }
+    inp.addEventListener("blur",commit);
+    inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault();inp.blur();} if(e.key==="Escape"){inp.value=val;inp.blur();} });
+}
+
+// ── Form thêm/sửa dòng ảnh ────────────────────────────────────
+let _tvEdit=null;
+function tvThemBo(){ if(!_tvCur){ Toast.error("Chưa có bộ ảnh — thêm bộ ảnh trước"); return; } tvOpenEdit({}); }
+function tvOpenEdit(data){
+    _tvEdit = {...data, mang_id:_tvCur};
+    document.getElementById("tvedit-title").textContent = data.id ? "Sửa dòng ảnh" : "Thêm dòng ảnh";
+    document.getElementById("tvedit-body").innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="field-group"><label>Mã bộ ảnh</label><input id="tv_ma" value="${(data.ma||"").replace(/"/g,"&quot;")}" placeholder="VD: bộ 1"></div>
+            <div class="field-group"><label>Sử dụng</label><select id="tv_su"><option value="Có" ${data.su_dung==="Có"||!data.id?"selected":""}>Có</option><option value="Không" ${data.su_dung==="Không"?"selected":""}>Không</option></select></div>
+        </div>
+        <div class="field-group">
+            <label>Ảnh <span style="font-weight:400;color:var(--text-muted);font-size:11px">— nhóm ảnh của bộ này; đăng theo đúng thứ tự</span></label>
+            <div id="tv_thumbs" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
+            <div class="upload-zone" onclick="document.getElementById('tv_imgs_file').click()" ondragover="event.preventDefault()" ondrop="_tvDropImgs(event)">
+                <div class="upload-zone__icon">📤</div>
+                <div class="upload-zone__text">Kéo thả hoặc <span>click để chọn</span></div>
+                <div class="upload-zone__sub">Nhiều ảnh cùng lúc</div>
+                <input id="tv_imgs_file" type="file" accept="image/*" multiple style="display:none" onchange="_tvImgsFile(event)">
+            </div>
+        </div>
+        <div class="field-group"><label>Ghi chú</label><input id="tv_note" value="${(data.ghi_chu||"").replace(/"/g,"&quot;")}"></div>`;
+    window._tvImgUrls = (data.link_anh||"").split(",").map(s=>s.trim()).filter(Boolean);
+    _tvReRenderThumbs();
+    document.getElementById("tvedit-overlay").style.display="block";
+    document.getElementById("tvedit-panel").style.display="flex";
+}
+function tvCloseEdit(){ document.getElementById("tvedit-overlay").style.display="none"; document.getElementById("tvedit-panel").style.display="none"; }
+function _tvReRenderThumbs(){
+    document.getElementById("tv_thumbs").innerHTML=(window._tvImgUrls||[]).map((u,i)=>
+        `<div class="cedit-thumb"><img src="${u}"><button class="remove-btn" onclick="_tvRemoveImg(${i})">✕</button></div>`).join("");
+}
+function _tvRemoveImg(i){ window._tvImgUrls.splice(i,1); _tvReRenderThumbs(); }
+async function _tvUpload(file){
+    const fd=new FormData(); fd.append("image",file);
+    const r=await (await fetch("/api/thuvien/upload-image",{method:"POST",body:fd})).json();
+    if(!r.ok) throw new Error(r.error); return r.url;
+}
+async function _tvImgsFile(e){
+    for(const f of e.target.files){ try{ const u=await _tvUpload(f); window._tvImgUrls.push(u); }catch(err){ Toast.error(err.message); } }
+    _tvReRenderThumbs(); e.target.value="";
+}
+function _tvDropImgs(e){ e.preventDefault(); const files=[...e.dataTransfer.files].filter(f=>f.type.startsWith("image/"));
+    Promise.all(files.map(f=>_tvUpload(f))).then(us=>{window._tvImgUrls.push(...us);_tvReRenderThumbs();}).catch(err=>Toast.error(err.message)); }
+async function tvSaveEdit(){
+    const btn=document.getElementById("tvedit-save-btn"); btn.disabled=true; btn.innerHTML='<span class="spin">↻</span>';
+    const data={
+        id:_tvEdit?.id||undefined, mang_id:_tvCur,
+        ma:(document.getElementById("tv_ma")?.value||"").trim(),
+        su_dung:document.getElementById("tv_su")?.value||"Có",
+        link_anh:(window._tvImgUrls||[]).join(", "),
+        ghi_chu:(document.getElementById("tv_note")?.value||"").trim(),
+    };
+    if(!data.id) delete data.id;
+    try{
+        const r=await (await fetch("/api/thuvien/bo/luu",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)})).json();
+        if(r.ok){ Toast.success("Đã lưu"); tvCloseEdit(); tvLoadBang(); }
+        else Toast.error(r.error);
+    }catch(e){ Toast.error(e.message); }
+    btn.disabled=false; btn.innerHTML="💾 Lưu";
+}
+async function tvDelete(id){
+    if(!confirm("Xoá dòng ảnh này?")) return;
+    try{ const r=await (await fetch("/api/thuvien/bo/xoa",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})})).json();
+        if(r.ok){ Toast.success("Đã xoá"); tvLoadBang(); } else Toast.error(r.error);
+    }catch(e){ Toast.error(e.message); }
 }
 
 // ── UID Groups ────────────────────────────────────────────────

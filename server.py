@@ -1426,6 +1426,112 @@ def api_content_upload_image():
         return jsonify({"ok": False, "error": str(e)})
 
 
+# ── Thư viện ảnh ────────────────────────────────────────────────────────────
+# Tab "Bộ ảnh" (tv_mang) + các album ảnh bên trong (tv_bo). Na ná tab Content,
+# nhưng độc lập, không gắn runner.
+
+@app.route("/api/thuvien/mang")
+def api_tv_mang():
+    return jsonify({"ok": True, "data": db.tv_mang_list()})
+
+
+@app.route("/api/thuvien/mang/them", methods=["POST"])
+def api_tv_mang_them():
+    ten = ((request.json or {}).get("ten") or "").strip()
+    if not ten:
+        return jsonify({"ok": False, "error": "Nhập tên bộ ảnh"})
+    if any((m["ten"] or "").lower() == ten.lower() for m in db.tv_mang_list()):
+        return jsonify({"ok": False, "error": f'Đã có bộ ảnh "{ten}"'})
+    return jsonify({"ok": True, "id": db.tv_mang_them(ten)})
+
+
+@app.route("/api/thuvien/mang/doi-ten", methods=["POST"])
+def api_tv_mang_doi_ten():
+    b = request.json or {}
+    ten = (b.get("ten") or "").strip()
+    try:
+        mid = int(b.get("id"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Thiếu bộ ảnh"})
+    if not ten:
+        return jsonify({"ok": False, "error": "Nhập tên bộ ảnh"})
+    if any(m["id"] != mid and (m["ten"] or "").lower() == ten.lower()
+           for m in db.tv_mang_list()):
+        return jsonify({"ok": False, "error": f'Đã có bộ ảnh "{ten}"'})
+    db.tv_mang_doi_ten(mid, ten)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/thuvien/mang/xoa", methods=["POST"])
+def api_tv_mang_xoa():
+    try:
+        db.tv_mang_xoa(int((request.json or {}).get("id")))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Thiếu bộ ảnh"})
+    return jsonify({"ok": True})
+
+
+@app.route("/api/thuvien/bo")
+def api_tv_bo():
+    mid = request.args.get("mang_id")
+    data = db.tv_bo_list(int(mid)) if mid else []
+    return jsonify({"ok": True, "data": data})
+
+
+@app.route("/api/thuvien/bo/luu", methods=["POST"])
+def api_tv_bo_luu():
+    b = dict(request.json or {})
+    if not b.get("mang_id"):
+        return jsonify({"ok": False, "error": "Thiếu bộ ảnh (tab)"})
+    try:
+        return jsonify({"ok": True, "id": db.tv_bo_upsert(b)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/thuvien/bo/field", methods=["POST"])
+def api_tv_bo_field():
+    b = request.json or {}
+    try:
+        db.tv_bo_update_field(int(b["id"]), b["field"], b["value"])
+        return jsonify({"ok": True})
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/thuvien/bo/xoa", methods=["POST"])
+def api_tv_bo_xoa():
+    try:
+        db.tv_bo_xoa(int((request.json or {}).get("id")))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Thiếu dòng"})
+    return jsonify({"ok": True})
+
+
+@app.route("/api/thuvien/bo/reorder", methods=["POST"])
+def api_tv_bo_reorder():
+    ids = (request.json or {}).get("ids", [])
+    try:
+        db.tv_bo_reorder([int(i) for i in ids])
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/thuvien/upload-image", methods=["POST"])
+def api_tv_upload_image():
+    from storage import save_thuvien_image
+    file = request.files.get("image")
+    if not file:
+        return jsonify({"ok": False, "error": "Không có file"})
+    try:
+        return jsonify({"ok": True, "url": save_thuvien_image(file.read(), file.filename)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 # ── Sao lưu content KÈM ẢNH ─────────────────────────────────────────────
 # Ảnh của content là file thật nằm trong data/media/ (URL dạng /media/...), nên
 # Excel không mang theo được. Xuất/nhập dạng .zip gồm: content.xlsx + thư mục

@@ -340,6 +340,26 @@ def init_db():
             order_idx       INTEGER DEFAULT 0        -- thứ tự hiển thị (kéo-thả)
         );
 
+        -- ── Thư viện ảnh ─────────────────────────────────────────────────
+        -- tv_mang = các tab "Bộ ảnh" (1PN, 2PN, 3PN, Duplex...) — nhóm độc lập,
+        -- thêm/xoá/đổi tên tuỳ ý, KHÔNG gắn với runner.
+        CREATE TABLE IF NOT EXISTS tv_mang (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            ten             TEXT NOT NULL,
+            order_idx       INTEGER DEFAULT 0
+        );
+        -- tv_bo = mỗi dòng một "bộ ảnh" (album) nằm trong một tab.
+        CREATE TABLE IF NOT EXISTS tv_bo (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            mang_id         INTEGER NOT NULL,
+            ma              TEXT DEFAULT '',        -- Mã bộ ảnh
+            link_anh        TEXT DEFAULT '',        -- CSV URL, đăng theo đúng thứ tự
+            su_dung         TEXT DEFAULT 'Có',      -- Có / Không
+            ghi_chu         TEXT DEFAULT '',
+            created_at      TEXT DEFAULT (datetime('now','localtime')),
+            order_idx       INTEGER DEFAULT 0
+        );
+
         -- ── UID / Nhóm ───────────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS uid_groups (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1838,6 +1858,82 @@ def upsert_content(data: dict) -> int:
 def delete_content(content_id: int):
     with _conn() as con:
         con.execute("DELETE FROM content WHERE id=?", (content_id,))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Thư viện ảnh — tab "Bộ ảnh" (tv_mang) + các album ảnh bên trong (tv_bo)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def tv_mang_list() -> list[dict]:
+    with _conn() as con:
+        return [dict(r) for r in con.execute(
+            "SELECT * FROM tv_mang ORDER BY order_idx, id").fetchall()]
+
+
+def tv_mang_them(ten: str) -> int:
+    with _conn() as con:
+        nxt = con.execute("SELECT COALESCE(MAX(order_idx), -1) + 1 FROM tv_mang").fetchone()[0]
+        cur = con.execute("INSERT INTO tv_mang (ten, order_idx) VALUES (?, ?)",
+                          ((ten or "").strip(), nxt))
+        return cur.lastrowid
+
+
+def tv_mang_doi_ten(mang_id: int, ten: str):
+    with _conn() as con:
+        con.execute("UPDATE tv_mang SET ten=? WHERE id=?",
+                    ((ten or "").strip(), mang_id))
+
+
+def tv_mang_xoa(mang_id: int):
+    """Xoá một tab + mọi bộ ảnh trong đó (ảnh trên ổ đĩa giữ nguyên)."""
+    with _conn() as con:
+        con.execute("DELETE FROM tv_bo WHERE mang_id=?", (mang_id,))
+        con.execute("DELETE FROM tv_mang WHERE id=?", (mang_id,))
+
+
+def tv_bo_list(mang_id: int) -> list[dict]:
+    with _conn() as con:
+        return [dict(r) for r in con.execute(
+            "SELECT * FROM tv_bo WHERE mang_id=? ORDER BY order_idx, id",
+            (mang_id,)).fetchall()]
+
+
+def tv_bo_upsert(data: dict) -> int:
+    cols   = [k for k in data if k != "id"]
+    values = [data[c] for c in cols]
+    with _conn() as con:
+        if data.get("id"):
+            sets = ", ".join(f"{c}=?" for c in cols)
+            con.execute(f"UPDATE tv_bo SET {sets} WHERE id=?", values + [data["id"]])
+            return data["id"]
+        # Dòng mới xuống CUỐI tab đó (giữ thứ tự roll ổn định).
+        if "order_idx" not in cols:
+            nxt = con.execute(
+                "SELECT COALESCE(MAX(order_idx), -1) + 1 FROM tv_bo WHERE mang_id=?",
+                (data.get("mang_id"),)).fetchone()[0]
+            cols.append("order_idx"); values.append(nxt)
+        cur = con.execute(
+            f"INSERT INTO tv_bo ({', '.join(cols)}) VALUES ({', '.join(['?']*len(cols))})",
+            values)
+        return cur.lastrowid
+
+
+def tv_bo_xoa(bo_id: int):
+    with _conn() as con:
+        con.execute("DELETE FROM tv_bo WHERE id=?", (bo_id,))
+
+
+def tv_bo_update_field(bo_id: int, field: str, value):
+    if field not in ("ma", "su_dung", "ghi_chu", "link_anh"):
+        raise ValueError(f"Field không hợp lệ: {field}")
+    with _conn() as con:
+        con.execute(f"UPDATE tv_bo SET {field}=? WHERE id=?", (value, bo_id))
+
+
+def tv_bo_reorder(ordered_ids: list[int]):
+    with _conn() as con:
+        for idx, bid in enumerate(ordered_ids):
+            con.execute("UPDATE tv_bo SET order_idx=? WHERE id=?", (idx, bid))
 
 
 def _tach_urls(*chuoi) -> set:

@@ -48,6 +48,25 @@ def save_image(file_bytes: bytes, filename: str, loai: str = "uploads") -> str:
     return url
 
 
+def save_thuvien_image(file_bytes: bytes, filename: str) -> str:
+    """Lưu ảnh của Thư viện ảnh vào data/media/thuvien/ (tách khỏi ảnh content).
+    Trả URL path /media/thuvien/xxx.jpg."""
+    from config import THUVIEN_MEDIA_DIR
+    dest_dir = Path(THUVIEN_MEDIA_DIR)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_EXTS:
+        ext = ".jpg"
+    import uuid
+    dest_path = dest_dir / f"{uuid.uuid4().hex[:12]}{ext}"
+    with open(dest_path, "wb") as f:
+        f.write(file_bytes)
+    rel = dest_path.relative_to(MEDIA_DIR.parent)
+    url = "/" + str(rel).replace("\\", "/")
+    logger.info(f"  💾 Saved thư viện image: {url}")
+    return url
+
+
 def delete_image(url_path: str) -> bool:
     """Xóa ảnh theo URL path (bắt đầu bằng /data/media/...)."""
     if not url_path or not url_path.startswith("/"):

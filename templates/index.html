@@ -45,6 +45,7 @@
             <div class="nav-item" data-page="pages"><span class="nav-icon">📄</span> Page</div>
             <div class="nav-item" data-page="uid-groups"><span class="nav-icon">🔗</span> UID Nhóm</div>
             <div class="nav-item" data-page="uid-market"><span class="nav-icon">🛒</span> UID Marketplace</div>
+            <div class="nav-item" data-page="thu-vien"><span class="nav-icon">🖼️</span> Thư viện ảnh</div>
 
             <div class="nav-section">Lịch đăng</div>
             <div class="nav-item" data-page="content"><span class="nav-icon">✍️</span> Content</div>
@@ -157,6 +158,36 @@
                                 <th>Ghi chú</th><th style="width:90px">Chỉnh sửa</th>
                             </tr></thead>
                             <tbody id="content-table"><tr><td colspan="8" class="loading"><span class="spin">↻</span></td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══ Thư viện ảnh ══════════════════════════════ -->
+            <div class="page" id="page-thu-vien" style="display:none">
+                <p style="color:var(--text-muted);font-size:13px;margin-bottom:14px;max-width:720px">
+                    Mỗi tab là một <b>bộ ảnh</b> (vd 1PN, 2PN, 3PN, Đập thông, Duplex…).
+                    Bên trong là các dòng ảnh — mỗi dòng một nhóm ảnh sẽ được bốc ra để đăng.
+                    Thêm/đổi tên/xoá tab tuỳ ý.
+                </p>
+                <div style="display:flex;gap:4px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
+                    <div id="tv-tabs" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"></div>
+                    <button class="btn btn-primary" style="margin-left:auto;font-size:12px"
+                            onclick="tvThemBo()" id="tv-them-btn">+ Thêm ảnh</button>
+                </div>
+                <div id="tv-summary" style="display:flex;gap:10px;margin-bottom:12px"></div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr>
+                                <th style="width:40px;text-align:center">#</th>
+                                <th>Mã bộ ảnh</th>
+                                <th style="text-align:center">Ảnh</th>
+                                <th style="text-align:center">Sử dụng</th>
+                                <th>Ghi chú</th>
+                                <th style="width:90px">Chỉnh sửa</th>
+                            </tr></thead>
+                            <tbody id="tv-table"><tr><td colspan="6" class="loading"><span class="spin">↻</span></td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -861,6 +892,23 @@
     <div style="padding:16px 20px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
         <button onclick="closeContentEdit()" class="btn btn-ghost" style="flex:1">Huỷ</button>
         <button onclick="saveContentEdit()" class="btn btn-primary" style="flex:2" id="cedit-save-btn">💾 Lưu</button>
+    </div>
+</div>
+
+<!-- Thư viện ảnh — edit panel -->
+<div id="tvedit-overlay" onclick="if(event.target===this)tvCloseEdit()"
+    style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500"></div>
+<div id="tvedit-panel"
+    style="display:none;position:fixed;top:0;right:0;width:680px;max-width:96vw;height:100vh;
+           background:var(--bg-secondary);border-left:1px solid var(--border);z-index:501;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <span style="font-size:15px;font-weight:700" id="tvedit-title">Sửa bộ ảnh</span>
+        <button onclick="tvCloseEdit()" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px" id="tvedit-body"></div>
+    <div style="padding:16px 20px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+        <button onclick="tvCloseEdit()" class="btn btn-ghost" style="flex:1">Huỷ</button>
+        <button onclick="tvSaveEdit()" class="btn btn-primary" style="flex:2" id="tvedit-save-btn">💾 Lưu</button>
     </div>
 </div>
 

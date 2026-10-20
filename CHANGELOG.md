@@ -10,6 +10,27 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.58.0 — 21/10/2026
+
+**Thêm tab "Thư viện ảnh" (bước 1 của cơ chế kho ảnh chống trùng)**
+
+Mục mới **🖼️ Thư viện ảnh** trong nhánh Quản lý (ngay dưới UID Marketplace) —
+nơi gom và phân loại ảnh để sau này bài đăng bốc ảnh ra từ đây, tránh đăng mãi
+một bộ ảnh.
+
+- Mỗi tab là một **bộ ảnh** (vd 1PN, 2PN, 3PN, Đập thông, Duplex…) — **thêm /
+  đổi tên / xoá** tuỳ ý, giống các mảng ở tab Content.
+- Bên trong mỗi tab là bảng 6 cột như tab Content: **# · Mã bộ ảnh · Ảnh ·
+  Sử dụng · Ghi chú · Chỉnh sửa**. Thêm/sửa/xoá dòng, kéo đổi thứ tự, tải nhiều
+  ảnh một lúc, sửa nhanh tại ô.
+- Ảnh thư viện lưu riêng ở `data/media/thuvien/`, **tách khỏi** ảnh content nên
+  lớp "dọn ảnh thừa" không đụng tới.
+
+*(Bước này mới chỉ dựng chỗ CHỨA ảnh. Việc content trỏ vào thư viện + cơ chế roll
+bộ ảnh cho Marketplace sẽ làm ở các bước sau.)*
+
+---
+
 ## v2.57.0 — 20/10/2026
 
 **Huy hiệu Marketplace: bỏ icon, số điện thoại vào VÙNG AN TOÀN (vá lỗi bài nhiều ảnh)**
