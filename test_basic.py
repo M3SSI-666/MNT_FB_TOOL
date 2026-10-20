@@ -3745,11 +3745,30 @@ try:
     # 3b) Tin do CHÍNH MÌNH vừa trả lời (preview "Bạn:…") KHÔNG phải tin khách →
     #     loại ra, không báo. Bằng không: mình rep xong lại tự báo tin cho mình.
     check("preview mở đầu 'Bạn:' → không tính là tin khách",
-          _mi.la_tin_khach({"name": "An", "preview": "Bạn: còn hàng nhé"}) is False)
+          _mi.la_tin_khach({"name": "An", "preview": "Bạn: còn hàng nhé", "unread": True}) is False)
     check("preview mở đầu 'You:' → không tính là tin khách",
-          _mi.la_tin_khach({"name": "An", "preview": "You: still available"}) is False)
-    check("preview là lời khách → tính là tin khách",
-          _mi.la_tin_khach({"name": "An", "preview": "còn hàng không shop"}) is True)
+          _mi.la_tin_khach({"name": "An", "preview": "You: still available", "unread": True}) is False)
+    check("preview là lời khách, CHƯA ĐỌC → tính là tin khách",
+          _mi.la_tin_khach({"name": "An", "preview": "còn hàng không shop", "unread": True}) is True)
+    # 20/10, nick Dang Xuan Duy: card KHÔNG ghi người gửi — tin mình nhắn khách
+    # ("Chị có dùng zalo k ạ?…") hiện y như tin khách, không có "Bạn:", nên
+    # Telegram báo cả tin mình gửi. Tin mình gửi thì luôn ĐÃ ĐỌC → chỉ báo chưa đọc.
+    check("tin mình nhắn khách (card đã đọc, không có 'Bạn:') → KHÔNG báo",
+          _mi.la_tin_khach({"name": "Hong Nhung", "bai": "Liên hệ/ Zalo: 0333 194 822",
+                            "preview": "Chị có dùng zalo k ạ? Em xin phép kết nối",
+                            "unread": False}) is False)
+    check("không rõ đọc/chưa đọc (thiếu cờ) → KHÔNG báo",
+          _mi.la_tin_khach({"name": "An", "preview": "còn hàng không shop"}) is False)
+    check("tin hệ thống 'Cảnh giác với các hành vi lừa đảo…' → KHÔNG báo",
+          _mi.la_tin_khach({"name": "Hong Nhung", "unread": True, "preview":
+              "Cảnh giác với các hành vi lừa đảo thường gặp thông qua ứng dụng thanh toán"})
+          is False)
+    check("khách nhắc chữ 'lừa đảo' giữa câu vẫn được báo (lọc hệ thống khớp đầu câu)",
+          _mi.la_tin_khach({"name": "An", "unread": True,
+                            "preview": "Bên em có lừa đảo không vậy"}) is True)
+    check("khách hỏi 'Mặt hàng này vẫn còn chứ?' (chưa đọc) → báo",
+          _mi.la_tin_khach({"name": "Hong Nhung", "unread": True,
+                            "preview": "Mặt hàng này vẫn còn chứ?"}) is True)
     # chu_ky đổi khi khách nhắn tin mới (preview đổi) → báo; đứng yên → im.
     check("khách nhắn tin mới (preview đổi) → chữ ký đổi",
           _mi.chu_ky({"name": "An", "preview": "còn không"}) !=
@@ -3820,6 +3839,10 @@ check("danh sách hội thoại lấy TỪ main, không phải cả document",
       and "document.querySelectorAll('a" not in _src_mi)
 check("market_inbox loại tin mình vừa trả lời (la_tin_khach)",
       "def la_tin_khach" in _src_mi and "quet_inbox_market" in _src_mi)
+check("market_inbox đo chưa đọc theo nét chữ của CHÍNH phần tử (không lấy khối cha)",
+      "unread: fw >= 600" in _src_mi and "nodeType === 3" in _src_mi)
+check("market_inbox chỉ trả tin khách đã qua la_tin_khach",
+      "khach = [d for d in ds if la_tin_khach(d)]" in _src_mi)
 
 # ── Mọi chỗ ghi trạng thái đều phải báo, và báo ĐÚNG MỘT LẦN ────────────────
 # `update_account_field` là cửa chung: cả giao diện lẫn scheduler đổi Trạng thái

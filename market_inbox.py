@@ -24,10 +24,24 @@ CHỈ ĐỌC PANEL MARKETPLACE — đo thật trên nick Sa Tran Anh 19/10/2026:
   có lúc `div[role="row"]`), KHÔNG phải thẻ `<a href>`. Chữ nhiều dòng: tên/tiêu
   đề bài → nội dung tin → giờ. Tin do CHÍNH MÌNH vừa trả lời có preview mở đầu
   "Bạn:" → loại ra, không báo.
+
+CARD KHÔNG GHI AI LÀ NGƯỜI GỬI — đo thật trên nick Dang Xuan Duy 20/10/2026:
+  tin chính mình gửi khách ("Chị có dùng zalo k ạ?…") hiện y hệt tin khách:
+  không "Bạn:", không avatar "đã xem", không aria-label nào. Lọc theo "Bạn:" vì
+  thế để lọt, và Telegram báo luôn cả tin mình vừa nhắn. Dấu hiệu phân biệt duy
+  nhất trên card là CHƯA ĐỌC (chữ in đậm): tin mình gửi thì luôn ở trạng thái đã
+  đọc (đo thật: tên nét 500, nội dung nét 400), còn tin khách mới tới thì in đậm
+  cho tới khi mình mở ra. → CHỈ BÁO hội thoại CHƯA ĐỌC. Tin khách mà mình đã mở
+  đọc trước lần quét thì không báo nữa — đằng nào mình cũng đã thấy.
+
+  Thêm: tin HỆ THỐNG của Facebook (vd "Cảnh giác với các hành vi lừa đảo thường
+  gặp thông qua ứng dụng thanh toán") đứng làm tin cuối của hội thoại, không phải
+  khách nhắn → bỏ (xem `_TIN_HE_THONG`).
 ================================================================================
 """
 
 import asyncio
+import re
 
 from utils import logger, CookieDeadError
 from config import HEADLESS
@@ -82,25 +96,52 @@ _JS_DOC_LIST = r"""
     const key = name + '|' + bai + '|' + preview.slice(0, 40);
     if (seen.has(key)) continue;
     seen.add(key);
-    // Chưa đọc (gợi ý): có chữ ĐẬM dài (preview in đậm). Tên bài có thể luôn đậm
-    // nên chỉ tính span đủ dài để khỏi nhầm với tiêu đề ngắn.
-    let unread = false;
-    for (const el of r.querySelectorAll('span,div')) {
-      const t = (el.innerText || '').trim();
-      if (t.length >= 12 && +getComputedStyle(el).fontWeight >= 600) { unread = true; break; }
+    // Chưa đọc = có chữ in ĐẬM (nét >= 600). Chỉ xét phần chữ của CHÍNH phần
+    // tử (text node con trực tiếp), không lấy innerText của khối cha — khối cha
+    // gom chữ của cả card nên nét chữ của nó không nói lên gì. Đo thật một card
+    // ĐÃ ĐỌC: tên nét 500, nội dung + giờ nét 400.
+    let fw = 0;
+    for (const el of r.querySelectorAll('*')) {
+      const own = [...el.childNodes].filter(n => n.nodeType === 3)
+                    .map(n => n.textContent).join('').trim();
+      if (own.length < 2) continue;
+      fw = Math.max(fw, +getComputedStyle(el).fontWeight || 0);
     }
-    out.push({ name, bai, preview, unread });
+    out.push({ name, bai, preview, unread: fw >= 600, fw });
   }
   return out;
 }
 """
 
 
+# Tin HỆ THỐNG Facebook chèn vào hội thoại Marketplace — không phải khách nhắn.
+# Gặp thật 20/10: "Cảnh giác với các hành vi lừa đảo thường gặp thông qua ứng
+# dụng thanh toán" (kèm nút "Tìm hiểu thêm"). Khớp ĐẦU câu, không khớp lỏng chữ
+# "lừa đảo" ở bất kỳ đâu — khách hỏi "bên em có lừa đảo không" vẫn phải báo.
+_TIN_HE_THONG = re.compile(
+    r"^(cảnh giác với|hãy đề phòng|hãy cẩn thận với|lưu ý an toàn|mẹo an toàn"
+    r"|be cautious|watch out for|beware of|stay safe|safety tips?)\b"
+    r"|hành vi lừa đảo thường gặp|common scams?", re.IGNORECASE)
+
+
+def la_tin_he_thong(hoi_thoai: dict) -> bool:
+    """Tin cuối của hội thoại là cảnh báo/lời khuyên do Facebook chèn vào."""
+    return bool(_TIN_HE_THONG.search((hoi_thoai.get("preview") or "").strip()))
+
+
 def la_tin_khach(hoi_thoai: dict) -> bool:
-    """Tin ĐÁNG BÁO = tin khách gửi tới, KHÔNG phải mình vừa trả lời.
-    FB đặt tiền tố "Bạn:" / "You:" cho preview khi tin cuối là của mình."""
+    """Tin ĐÁNG BÁO = tin khách gửi tới mà mình CHƯA ĐỌC.
+
+    - Phải CHƯA ĐỌC: card không ghi người gửi, nên chưa đọc là dấu hiệu duy nhất
+      tách được tin khách với tin mình vừa nhắn (xem đầu file).
+    - Bỏ tiền tố "Bạn:" / "You:" (vài giao diện FB vẫn đặt khi tin cuối là của mình).
+    - Bỏ tin hệ thống của Facebook (cảnh báo lừa đảo…)."""
+    if not hoi_thoai.get("unread"):
+        return False
     pv = (hoi_thoai.get("preview") or "").strip().lower()
-    return not (pv.startswith("bạn:") or pv.startswith("bạn ") or pv.startswith("you:"))
+    if pv.startswith("bạn:") or pv.startswith("bạn ") or pv.startswith("you:"):
+        return False
+    return not la_tin_he_thong(hoi_thoai)
 
 
 async def _quet(acc_name: str, c_user: str, headless) -> list:
@@ -123,8 +164,11 @@ async def _quet(acc_name: str, c_user: str, headless) -> list:
 
             ds = await page.evaluate(_JS_DOC_LIST)
             khach = [d for d in ds if la_tin_khach(d)]
-            logger.info(f"  📥 Inbox Market [{acc_name}]: {len(ds)} hội thoại, "
-                        f"{len(khach)} là tin khách (loại tin mình vừa rep)")
+            n_doc = sum(1 for d in ds if not d.get("unread"))
+            n_ht  = sum(1 for d in ds if d.get("unread") and la_tin_he_thong(d))
+            logger.info(f"  📥 Inbox Market [{acc_name}]: {len(ds)} hội thoại → "
+                        f"{len(khach)} tin khách chưa đọc (bỏ {n_doc} đã đọc / tin mình "
+                        f"nhắn, {n_ht} tin hệ thống)")
             return khach
         finally:
             try:
