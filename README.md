@@ -137,11 +137,10 @@ dẫn xuất từ nó.
 | `xep_lich.py` | Phân bổ thời điểm phiên đăng + comment sao cho phủ đều khung giờ |
 | `cookie_exporter.py` | Đọc/refresh cookie từ profile trình duyệt |
 | `market_poster.py` | Đăng bài niêm yết Marketplace (tự tick nhóm) |
-| `mkt_anh.py` | Biến thể ảnh RIÊNG cho Marketplace: dán icon liên hệ + số điện thoại |
+| `mkt_anh.py` | Biến thể ảnh RIÊNG cho Marketplace: dán số điện thoại vào góc (vùng an toàn) |
 | `db.py` | Lớp dữ liệu SQLite (`data/app.db`) |
 | `utils.py` | Logger, jitter (chống nhịp cố định), phân loại lỗi |
 | `static/` `templates/` | Giao diện web |
-| `assets/icon_lienhe/` | ~50 icon liên hệ (PNG) cho biến thể ảnh Marketplace — thay/thêm được |
 
 > Sửa selector Facebook: nếu hàm nằm trong `fb_common.py` thì chỉ sửa một chỗ,
 > cả hai poster cùng nhận. Đừng copy hàm ngược lại vào từng file.

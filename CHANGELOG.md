@@ -10,6 +10,26 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.57.0 — 20/10/2026
+
+**Huy hiệu Marketplace: bỏ icon, số điện thoại vào VÙNG AN TOÀN (vá lỗi bài nhiều ảnh)**
+
+Bỏ hệ thống icon liên hệ — huy hiệu giờ chỉ còn **nền trắng mờ (80%) + số điện
+thoại màu đỏ**, dán ngẫu nhiên 1 trong 4 góc.
+
+**Vá lỗi bài nhiều ảnh** (số điện thoại sai vị trí / mất số / ảnh có ảnh không):
+- Nguyên nhân: Facebook Marketplace **cắt vuông ở giữa** khi hiện thumbnail / ảnh
+  bìa. Ảnh dọc (homestay thường 896×1195) mà huy hiệu dán **sát mép trên/dưới**
+  thì bị cắt mất trong thumbnail. (Ảnh gốc của phần mềm vẽ đúng, nhưng FB cắt.)
+- Sửa: huy hiệu luôn nằm trong **hình vuông giữa ảnh** (cạnh = min(rộng, cao)) —
+  góc của vùng an toàn đó, không phải góc mép ảnh. Đã kiểm: FB cắt vuông kiểu gì
+  số điện thoại vẫn còn nguyên trên mọi ảnh.
+- Phụ: ảnh nào lỗi đọc thì vẫn đăng ảnh gốc ảnh đó (không có số) — hiếm gặp.
+
+Gỡ theo: thư mục `assets/icon_lienhe/` (50 icon) và loại bỏ icon khỏi mã nguồn.
+
+---
+
 ## v2.56.2 — 20/10/2026
 
 **Báo tin Marketplace: chỉ báo tin KHÁCH gửi, bỏ tin mình nhắn và tin hệ thống**

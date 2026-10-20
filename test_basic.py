@@ -5039,9 +5039,10 @@ check("bộ đăng không còn đọc tiêu đề / giá / tình trạng / số 
 check("bộ đăng dùng Tình trạng và số nhóm cố định",
       '("Tình trạng", db.MKT_TINH_TRANG)' in _src_mp and "so_nhom = db.MKT_SO_NHOM" in _src_mp)
 
-# ── Biến thể ảnh RIÊNG cho Marketplace: icon liên hệ + số điện thoại ─────────
-# Marketplace đánh mạnh trùng bộ ảnh, nên mỗi ảnh dán 1 icon ngẫu nhiên + số ĐT
-# vào 1 trong 4 góc. CHỈ Marketplace, CHỈ khi bật + có nhập số.
+# ── Biến thể ảnh RIÊNG cho Marketplace: dán SỐ ĐIỆN THOẠI vào góc ─────────────
+# Marketplace đánh mạnh trùng bộ ảnh, nên mỗi ảnh dán số ĐT vào 1 trong 4 góc
+# (trong VÙNG AN TOÀN — hình vuông giữa ảnh — để FB cắt thumbnail không mất số).
+# CHỈ Marketplace, CHỈ khi bật + có nhập số. Không còn hệ thống icon.
 import mkt_anh as _mia
 check("mặc định Marketplace có mkt_bien_the_bat/sdt",
       "mkt_bien_the_bat" in db.MKT_MAC_DINH and "mkt_bien_the_sdt" in db.MKT_MAC_DINH)
@@ -5052,8 +5053,9 @@ check("tab Marketplace có ô tick + số điện thoại (mục 5)",
 check("UI nạp + lưu ô biến thể ảnh Marketplace",
       'el("mkt-bien-the")' in _ajs_mkt and "mkt_bien_the_bat:" in _ajs_mkt
       and "mkt_bien_the_sdt:" in _ajs_mkt)
-check("thư viện icon liên hệ có sẵn nhiều icon",
-      len(list(Path("assets/icon_lienhe").glob("*.png"))) >= 40)
+check("ĐÃ BỎ hệ thống icon (không còn thư viện icon / _ds_icon)",
+      not Path("assets/icon_lienhe").exists()
+      and "_ds_icon" not in Path("mkt_anh.py").read_text(encoding="utf-8"))
 check("market_poster gọi biến thể liên hệ, khoá theo bật + có số ĐT",
       "mkt_anh.bien_the_lien_he" in _src_mp
       and 'cd.get("mkt_bien_the_bat") == "1"' in _src_mp)
@@ -5078,6 +5080,19 @@ if _mia.CO_PILLOW:
     _xx = _mdm / "xau.jpg"; _xx.write_bytes(b"khong phai anh")
     check("ảnh hỏng → giữ nguyên đường dẫn gốc, không ném lỗi",
           _mia.bien_the_lien_he([str(_xx)], str(_mdm / "y"), "0909")[0] == str(_xx))
+    # VÙNG AN TOÀN: ảnh DỌC 400×800 → huy hiệu phải nằm trong vuông giữa [200,600],
+    # KHÔNG chạm dải trên/dưới (để FB cắt thumbnail vuông không mất số).
+    _port = _mdm / "port.jpg"
+    _ImM.new("RGB", (400, 800), (120, 130, 140)).save(_port, "JPEG")
+    _po = _mia.bien_the_lien_he([str(_port)], str(_mdm / "sz"), "0333 194 822", seed=1)[0]
+    _pim = _ImM.open(_po).convert("RGB")
+    def _lech_max(vung):
+        return max(abs(r - 120) + abs(g - 130) + abs(b - 140)
+                   for r, g, b in vung.getdata())
+    _dai_tren = _pim.crop((0, 0, 400, 150))
+    _dai_duoi = _pim.crop((0, 650, 400, 800))
+    check("huy hiệu nằm TRONG vùng an toàn (dải trên/dưới ảnh dọc KHÔNG bị đụng)",
+          _lech_max(_dai_tren) < 45 and _lech_max(_dai_duoi) < 45)
     shutil.rmtree(_mdm, ignore_errors=True)
 else:
     check("BỎ QUA test biến thể Marketplace (chưa cài Pillow)", True)
