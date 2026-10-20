@@ -10,6 +10,27 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.56.2 — 20/10/2026
+
+**Báo tin Marketplace: chỉ báo tin KHÁCH gửi, bỏ tin mình nhắn và tin hệ thống**
+
+Bản cũ báo về Telegram cả **tin chính mình vừa nhắn cho khách** và cả **tin cảnh
+báo lừa đảo của Facebook**. Đo thật trên nick Dang Xuan Duy: ô hội thoại trong
+hộp thư Marketplace **không ghi ai là người gửi** — tin mình nhắn ("Chị có dùng
+zalo k ạ?…") hiện y hệt tin khách, không có chữ "Bạn:" nên lọt qua bộ lọc cũ.
+
+- **Chỉ báo hội thoại CHƯA ĐỌC** (chữ in đậm) — dấu hiệu duy nhất tách được: tin
+  mình gửi thì luôn ở trạng thái đã đọc, còn tin khách mới tới thì in đậm cho
+  tới khi mình mở ra. Tin khách mà bạn đã mở đọc trước lần quét kế (3–5 phút)
+  thì không báo nữa — đằng nào bạn cũng đã thấy.
+- **Bỏ tin hệ thống của Facebook** như "Cảnh giác với các hành vi lừa đảo thường
+  gặp…". Chỉ khớp đầu câu — khách hỏi "bên em có lừa đảo không" vẫn được báo.
+- Log quét ghi rõ số hội thoại bị bỏ vì đã đọc / tin hệ thống.
+
+> Cập nhật xong bấm **Dừng** rồi **Run** lại runner các mảng để áp dụng.
+
+---
+
 ## v2.56.1 — 20/10/2026
 
 **Huy hiệu Marketplace: nền trắng đậm hơn cho dễ đọc**
