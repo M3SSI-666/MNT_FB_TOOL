@@ -2430,6 +2430,30 @@ async function contentSetThuVien(id, value){
 let _tvMang = [];
 let _tvCur  = null;   // id tab (bộ ảnh) đang mở
 
+// Sao lưu / chuyển máy: xuất TOÀN BỘ thư viện (mọi tab) kèm ảnh ra .zip.
+async function exportThuVienZip(){
+    try{
+        const res=await (await fetch("/api/thuvien/export-zip")).json();
+        if(!res.ok) throw new Error(res.error||"không rõ lỗi");
+        Toast.show(`Đã lưu ${res.so_thu_vien} thư viện · ${res.so_bo} bộ ảnh · ${res.so_anh} ảnh: ${res.path}`, "success", 10000);
+    }catch(e){ Toast.error("Lỗi xuất backup: "+e.message); }
+}
+
+// Nhập thư viện từ .zip: tab trùng tên thì gộp, bộ ảnh trùng thì bỏ qua.
+async function importThuVienZip(e){
+    const file=e.target.files[0]; if(!file) return;
+    e.target.value="";  // reset để chọn lại cùng file vẫn kích hoạt onchange
+    try{
+        const fd=new FormData(); fd.append("file",file);
+        const res=await (await fetch("/api/thuvien/import-zip",{method:"POST",body:fd})).json();
+        if(!res.ok) throw new Error(res.error||"không rõ lỗi");
+        Toast.show(`Đã thêm ${res.them} bộ ảnh (${res.so_anh} ảnh)`
+            +(res.tab_moi?` · ${res.tab_moi} thư viện mới`:"")
+            +(res.bo_qua?` · bỏ qua ${res.bo_qua} bộ trùng`:""), "success", 8000);
+        loadThuVien();
+    }catch(err){ Toast.error("Lỗi nhập backup: "+err.message); }
+}
+
 async function loadThuVien(){
     try{ const r = await (await fetch("/api/thuvien/mang")).json(); _tvMang = r.data || []; }
     catch(e){ _tvMang = []; }

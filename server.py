@@ -1532,6 +1532,224 @@ def api_tv_upload_image():
         return jsonify({"ok": False, "error": str(e)})
 
 
+# ── Sao lưu Thư viện ảnh KÈM ẢNH (chuyển máy) ──────────────────────────
+# Giống backup content: .zip gồm thu_vien.xlsx + images/. Xuất MỌI tab một lần —
+# đây là kho dùng chung cho cả máy, chuyển máy thì chuyển nguyên kho.
+#   - Sheet "Bộ ảnh":   mỗi dòng một bộ ảnh — cột "Thư viện" là TÊN tab.
+#   - Sheet "Thư viện": danh sách tab theo thứ tự (giữ cả tab chưa có bộ nào).
+# Nối bằng TÊN tab chứ không bằng id: id là số tự tăng của từng máy, sang máy
+# khác là lệch. Cột "Mã thư viện" trong backup content cũng ghi tên (xem
+# EXPORT_CONTENT_COLUMNS) — nhập thư viện TRƯỚC rồi mới nhập content.
+EXPORT_TV_COLUMNS = [
+    ("thu_vien", "Thư viện"),
+    ("ma",       "Mã bộ ảnh"),
+    ("link_anh", "Ảnh"),          # trong file chỉ chứa tên file
+    ("su_dung",  "Sử dụng"),
+    ("ghi_chu",  "Ghi chú"),
+]
+
+
+def _ten_anh_tv_giu_duoc(ten: str) -> bool:
+    """Tên file ảnh thư viện do chính phần mềm đặt (12 ký tự hex + đuôi ảnh) —
+    lúc nhập được GIỮ NGUYÊN tên. Nhờ vậy nhập lại cùng một file backup không
+    nhân đôi ảnh trên đĩa, và bộ ảnh không có mã vẫn nhận ra là trùng."""
+    from storage import ALLOWED_EXTS
+    goc, duoi = os.path.splitext(ten)
+    return (len(goc) == 12 and all(c in "0123456789abcdef" for c in goc)
+            and duoi.lower() in ALLOWED_EXTS)
+
+
+@app.route("/api/thuvien/export-zip")
+def api_tv_export_zip():
+    """Xuất TOÀN BỘ Thư viện ảnh ra .zip (thu_vien.xlsx + ảnh), lưu vào Downloads."""
+    import zipfile
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    mang = db.tv_mang_list()
+    if not mang:
+        return jsonify({"ok": False, "error": "Thư viện ảnh đang trống — chưa có gì để xuất"})
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Bộ ảnh"
+    ws.append([label for _, label in EXPORT_TV_COLUMNS])
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+
+    anh_can_dong, so_bo = {}, 0
+    for m in mang:
+        for b in db.tv_bo_list(m["id"]):
+            ten_anh = []
+            for u in (b.get("link_anh") or "").split(","):
+                u = u.strip()
+                if not u:
+                    continue
+                ten = os.path.basename(u)
+                ten_anh.append(ten)
+                if u.startswith("/"):
+                    p = MEDIA_DIR.parent / u.lstrip("/")
+                    if p.exists():
+                        anh_can_dong[ten] = str(p)
+            ws.append([m["ten"] or "", b.get("ma") or "", ", ".join(ten_anh),
+                       b.get("su_dung") or "Có", b.get("ghi_chu") or ""])
+            so_bo += 1
+    for col, w in zip("ABCDE", (18, 18, 60, 10, 30)):
+        ws.column_dimensions[col].width = w
+    ws.freeze_panes = "A2"
+
+    ws2 = wb.create_sheet("Thư viện")
+    ws2.append(["Thư viện"])
+    ws2["A1"].font = Font(bold=True)
+    for m in mang:
+        ws2.append([m["ten"] or ""])
+    ws2.column_dimensions["A"].width = 24
+
+    buf = BytesIO()
+    wb.save(buf)
+    path = _export_dir() / f"thu_vien_anh_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+    try:
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("thu_vien.xlsx", buf.getvalue())
+            for ten, src in anh_can_dong.items():
+                try:
+                    zf.write(src, f"images/{ten}")
+                except OSError:
+                    pass
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+    _reveal_in_explorer(path)
+    return jsonify({"ok": True, "path": str(path), "so_thu_vien": len(mang),
+                    "so_bo": so_bo, "so_anh": len(anh_can_dong)})
+
+
+@app.route("/api/thuvien/import-zip", methods=["POST"])
+def api_tv_import_zip():
+    """Nhập Thư viện ảnh từ .zip — chế độ "thêm & bỏ trùng".
+
+    - Tab: khớp theo TÊN (không phân biệt hoa thường); chưa có thì tạo mới.
+    - Bộ ảnh trùng thì bỏ qua: cùng tab + cùng Mã bộ ảnh; bộ KHÔNG có mã thì
+      so theo đúng tập ảnh.
+    - Ảnh chép vào data/media/thuvien/; tên do phần mềm đặt thì giữ nguyên (file
+      đã có thì dùng lại, không chép đè), tên lạ thì đặt tên mới.
+    """
+    import zipfile
+    from io import BytesIO
+    from openpyxl import load_workbook
+    from config import THUVIEN_MEDIA_DIR
+    from storage import save_thuvien_image
+
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"ok": False, "error": "Không có file"})
+    try:
+        zf = zipfile.ZipFile(BytesIO(file.read()))
+    except Exception:
+        return jsonify({"ok": False, "error": "File không phải .zip hợp lệ"})
+    names = set(zf.namelist())
+    if "thu_vien.xlsx" not in names:
+        return jsonify({"ok": False, "error": "Đây không phải file backup Thư viện ảnh "
+                                              "(thiếu thu_vien.xlsx)"})
+    try:
+        wb = load_workbook(BytesIO(zf.read("thu_vien.xlsx")), read_only=True, data_only=True)
+    except Exception:
+        return jsonify({"ok": False, "error": "thu_vien.xlsx trong zip không hợp lệ"})
+
+    def _o(v):
+        return "" if v is None else str(v).strip()
+
+    ws = wb["Bộ ảnh"] if "Bộ ảnh" in wb.sheetnames else wb.worksheets[0]
+    it = ws.iter_rows(values_only=True)
+    try:
+        header = next(it)
+    except StopIteration:
+        return jsonify({"ok": False, "error": "File rỗng"})
+    nhan = {label.lower(): key for key, label in EXPORT_TV_COLUMNS}
+    col = {i: nhan[_o(h).lower()] for i, h in enumerate(header) if _o(h).lower() in nhan}
+    if "thu_vien" not in col.values():
+        return jsonify({"ok": False, "error": "File thiếu cột Thư viện"})
+    dong = []
+    for row in it:
+        d = {k: _o(row[i] if i < len(row) else None) for i, k in col.items()}
+        if d.get("thu_vien"):
+            dong.append(d)
+
+    # Thứ tự tab: sheet "Thư viện" trước (giữ cả tab rỗng), rồi tab chỉ có ở dòng.
+    ten_tab = []
+    if "Thư viện" in wb.sheetnames:
+        for r in list(wb["Thư viện"].iter_rows(values_only=True))[1:]:
+            t = _o(r[0] if r else None)
+            if t:
+                ten_tab.append(t)
+    ten_tab += [d["thu_vien"] for d in dong]
+
+    tab_id = {(m["ten"] or "").strip().lower(): m["id"] for m in db.tv_mang_list()}
+    tab_moi = 0
+    for t in ten_tab:
+        if t.lower() not in tab_id:
+            tab_id[t.lower()] = db.tv_mang_them(t)
+            tab_moi += 1
+
+    thu_muc = Path(THUVIEN_MEDIA_DIR)
+    thu_muc.mkdir(parents=True, exist_ok=True)
+    url_cua, so_anh = {}, 0
+
+    def _url(ten_cu):
+        nonlocal so_anh
+        ten_cu = os.path.basename(ten_cu.strip())
+        if not ten_cu:
+            return ""
+        if ten_cu in url_cua:
+            return url_cua[ten_cu]
+        url = ""
+        if _ten_anh_tv_giu_duoc(ten_cu) and (thu_muc / ten_cu).exists():
+            url = "/" + str((thu_muc / ten_cu).relative_to(MEDIA_DIR.parent)).replace("\\", "/")
+        elif f"images/{ten_cu}" in names:
+            du_lieu = zf.read(f"images/{ten_cu}")
+            if _ten_anh_tv_giu_duoc(ten_cu):
+                (thu_muc / ten_cu).write_bytes(du_lieu)
+                url = "/" + str((thu_muc / ten_cu).relative_to(MEDIA_DIR.parent)).replace("\\", "/")
+            else:
+                url = save_thuvien_image(du_lieu, ten_cu)
+            so_anh += 1
+        url_cua[ten_cu] = url
+        return url
+
+    def _dau(ma, link):
+        return ("ma", ma.lower()) if ma else ("anh", frozenset(
+            os.path.basename(u.strip()) for u in link.split(",") if u.strip()))
+
+    da_co = {}
+    for tid in set(tab_id.values()):
+        da_co[tid] = {_dau((b.get("ma") or "").strip(), b.get("link_anh") or "")
+                      for b in db.tv_bo_list(tid)}
+
+    them = bo_qua = 0
+    for d in dong:
+        tid = tab_id[d["thu_vien"].lower()]
+        ma = d.get("ma", "")
+        ten_anh = [t.strip() for t in d.get("link_anh", "").split(",") if t.strip()]
+        dau = _dau(ma, ",".join(ten_anh))
+        if dau in da_co[tid]:
+            bo_qua += 1
+            continue
+        urls = [u for u in (_url(t) for t in ten_anh) if u]
+        if not urls and ten_anh:
+            bo_qua += 1          # zip không kèm ảnh nào của bộ này — đừng tạo bộ rỗng
+            continue
+        su_dung = d.get("su_dung") or "Có"
+        db.tv_bo_upsert({"mang_id": tid, "ma": ma, "link_anh": ", ".join(urls),
+                         "su_dung": su_dung if su_dung in ("Có", "Không") else "Có",
+                         "ghi_chu": d.get("ghi_chu", "")})
+        da_co[tid].add(dau)
+        them += 1
+
+    return jsonify({"ok": True, "tab_moi": tab_moi, "them": them,
+                    "bo_qua": bo_qua, "so_anh": so_anh})
+
+
 # ── Sao lưu content KÈM ẢNH ─────────────────────────────────────────────
 # Ảnh của content là file thật nằm trong data/media/ (URL dạng /media/...), nên
 # Excel không mang theo được. Xuất/nhập dạng .zip gồm: content.xlsx + thư mục
@@ -1546,6 +1764,9 @@ EXPORT_CONTENT_COLUMNS = [
     ("su_dung",    "Sử dụng"),
     ("tieu_de_mkt", "Tiêu đề Market Place"),
     ("ghi_chu",    "Ghi chú"),
+    # Cột CUỐI để không xô thứ tự cột cũ. Ghi TÊN tab thư viện, không ghi id —
+    # id là số tự tăng của từng máy, sang máy khác là lệch (xem sao lưu thư viện).
+    ("ma_thu_vien", "Mã thư viện"),
 ]
 
 
@@ -1570,6 +1791,7 @@ def api_content_export_zip():
 
     anh_can_dong = {}   # tên file trong zip -> đường dẫn tuyệt đối trên đĩa
     widths = [len(label) for _, label in EXPORT_CONTENT_COLUMNS]
+    ten_tv = {str(m["id"]): m["ten"] or "" for m in db.tv_mang_list()}
     for row in rows:
         values = []
         for key, _ in EXPORT_CONTENT_COLUMNS:
@@ -1587,6 +1809,8 @@ def api_content_export_zip():
                         if p.exists():
                             anh_can_dong[ten] = str(p)
                 v = ", ".join(names)
+            elif key == "ma_thu_vien":
+                v = ten_tv.get(str(row.get("ma_thu_vien") or "").strip(), "")
             else:
                 v = row.get(key, "")
                 v = "" if v is None else str(v)
@@ -1705,6 +1929,10 @@ def api_content_import_zip():
                                       (loai,)).fetchall()}
     da_them = set()
 
+    # Cột "Mã thư viện" trong file ghi TÊN tab → đổi về id của máy NÀY. Tên chưa
+    # có ở máy này (chưa nhập backup thư viện) thì để trống.
+    id_tv = {(m["ten"] or "").strip().lower(): str(m["id"]) for m in db.tv_mang_list()}
+
     records = []
     for row in rows_iter:
         # Đọc mọi ô ra trước; mã content quyết định có chép ảnh hay không, mà cột
@@ -1721,6 +1949,7 @@ def api_content_import_zip():
         da_them.add(ma)
 
         rec = dict(raw)
+        rec["ma_thu_vien"] = id_tv.get(raw.get("ma_thu_vien", "").lower(), "")
         # Chỉ chép ảnh cho dòng thật sự sẽ được thêm. Dòng trùng bỏ qua ảnh.
         anh = raw.get("link_anh", "")
         if trung or not anh:

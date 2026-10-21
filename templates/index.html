@@ -173,7 +173,12 @@
                 </p>
                 <div style="display:flex;gap:4px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
                     <div id="tv-tabs" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"></div>
-                    <button class="btn btn-primary" style="margin-left:auto;font-size:12px"
+                    <button class="btn btn-ghost" style="margin-left:auto;font-size:12px"
+                            onclick="exportThuVienZip()" title="Sao lưu TOÀN BỘ thư viện (mọi tab) kèm ảnh ra file .zip — để chuyển sang máy khác">📤 Xuất backup</button>
+                    <button class="btn btn-ghost" style="font-size:12px"
+                            onclick="document.getElementById('tv-import-file').click()" title="Nhập thư viện từ file .zip (kèm ảnh). Tab trùng tên thì gộp vào, bộ ảnh trùng thì bỏ qua">📥 Nhập backup</button>
+                    <input type="file" id="tv-import-file" accept=".zip" style="display:none" onchange="importThuVienZip(event)">
+                    <button class="btn btn-primary" style="font-size:12px"
                             onclick="tvThemBo()" id="tv-them-btn">+ Thêm ảnh</button>
                 </div>
                 <div id="tv-summary" style="display:flex;gap:10px;margin-bottom:12px"></div>

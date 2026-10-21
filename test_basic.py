@@ -6712,6 +6712,81 @@ check("bảng lịch (app.js) có cột Mã ảnh + ô maAnhCell, colspan 7",
 db.tv_mang_xoa(_mr)
 db.tv_mang_xoa(_mr0)
 
+# ── Sao lưu Thư viện ảnh: xuất → máy mới → nhập (kèm ảnh) ───────────────────
+import zipfile as _zf_tv, tempfile as _tf_tv, config as _cfg_tv
+from io import BytesIO as _BIO_tv
+_md_tv = Path(_tf_tv.mkdtemp()) / "media"          # thư mục ảnh TẠM — không đụng data/media thật
+(_md_tv / "thuvien").mkdir(parents=True)
+_goc_tv = (server.MEDIA_DIR, _st.MEDIA_DIR, _cfg_tv.THUVIEN_MEDIA_DIR)
+server.MEDIA_DIR = _st.MEDIA_DIR = _md_tv
+_cfg_tv.THUVIEN_MEDIA_DIR = str(_md_tv / "thuvien")
+try:
+    for _m in db.tv_mang_list():
+        db.tv_mang_xoa(_m["id"])
+    _u = lambda b: _st.save_thuvien_image(b, "x.jpg")
+    _a1, _a2, _a3, _a4 = _u(b"anh-1"), _u(b"anh-2"), _u(b"anh-3"), _u(b"anh-4")
+    _t1 = db.tv_mang_them("1PN")
+    _t2 = db.tv_mang_them("Rỗng")
+    db.tv_bo_upsert({"mang_id": _t1, "ma": "A1", "link_anh": f"{_a1}, {_a2}",
+                     "su_dung": "Có", "ghi_chu": "bộ có mã"})
+    db.tv_bo_upsert({"mang_id": _t1, "ma": "", "link_anh": _a3, "su_dung": "Có", "ghi_chu": ""})
+    db.tv_bo_upsert({"mang_id": _t1, "ma": "A3", "link_anh": _a4, "su_dung": "Không", "ghi_chu": ""})
+    _cid_tv = db.upsert_content({"loai": "thue", "ma_content": "TV-CT1", "noi_dung": "x",
+                                 "link_anh": "", "su_dung": "Có", "ma_thu_vien": str(_t1)})
+
+    _r_ex = _client.get("/api/thuvien/export-zip").get_json()
+    _zp = _zf_tv.ZipFile(_r_ex["path"])
+    check("Xuất thư viện: đủ thư viện / bộ ảnh / ảnh",
+          _r_ex.get("ok") and _r_ex["so_thu_vien"] == 2 and _r_ex["so_bo"] == 3
+          and _r_ex["so_anh"] == 4 and "thu_vien.xlsx" in _zp.namelist()
+          and sum(n.startswith("images/") for n in _zp.namelist()) == 4)
+    _bk_tv = Path(_r_ex["path"]).read_bytes()
+    _r_exc = _client.get("/api/content/export-zip?loai=thue").get_json()
+    _bk_ct = Path(_r_exc["path"]).read_bytes()
+
+    # "Máy mới": thư viện trống, không có file ảnh, không có content đó.
+    for _m in db.tv_mang_list():
+        db.tv_mang_xoa(_m["id"])
+    for _f in (_md_tv / "thuvien").iterdir():
+        _f.unlink()
+    db.delete_content(_cid_tv)
+    _nhap = lambda b, url, **kv: _client.post(url, data={"file": (_BIO_tv(b), "bk.zip"), **kv},
+                                              content_type="multipart/form-data").get_json()
+    _r_im = _nhap(_bk_tv, "/api/thuvien/import-zip")
+    _ds_tv = {m["ten"]: m["id"] for m in db.tv_mang_list()}
+    _bo_tv = db.tv_bo_list(_ds_tv.get("1PN", -1))
+    check("Nhập thư viện: tạo lại đủ tab, kể cả tab chưa có bộ ảnh",
+          _r_im.get("ok") and set(_ds_tv) == {"1PN", "Rỗng"} and _r_im["tab_moi"] == 2)
+    check("Nhập thư viện: đủ 3 bộ, giữ thứ tự / mã / Sử dụng / ghi chú",
+          [(b["ma"], b["su_dung"], b["ghi_chu"]) for b in _bo_tv]
+          == [("A1", "Có", "bộ có mã"), ("", "Có", ""), ("A3", "Không", "")])
+    check("Nhập thư viện: ảnh chép về đĩa, link trỏ đúng file có thật",
+          all((_md_tv.parent / u.strip().lstrip("/")).exists()
+              for b in _bo_tv for u in b["link_anh"].split(","))
+          and (_md_tv.parent / _bo_tv[0]["link_anh"].split(",")[0].strip().lstrip("/")
+               ).read_bytes() == b"anh-1"
+          and len(_bo_tv[0]["link_anh"].split(",")) == 2)
+    _so_file = len(list((_md_tv / "thuvien").iterdir()))
+    _r_im2 = _nhap(_bk_tv, "/api/thuvien/import-zip")
+    check("Nhập lại cùng file: không nhân đôi bộ ảnh (kể cả bộ không có mã) hay file ảnh",
+          _r_im2.get("ok") and _r_im2["them"] == 0 and _r_im2["bo_qua"] == 3
+          and _r_im2["tab_moi"] == 0 and len(db.tv_bo_list(_ds_tv["1PN"])) == 3
+          and len(list((_md_tv / "thuvien").iterdir())) == _so_file)
+    _r_ic = _nhap(_bk_ct, "/api/content/import-zip", loai="thue")
+    _ct_tv = db.get_content_by_code("TV-CT1", "thue") or {}
+    check("Backup content mang theo Mã thư viện — sang máy mới trỏ đúng thư viện (theo tên)",
+          _r_ic.get("ok") and str(_ct_tv.get("ma_thu_vien")) == str(_ds_tv["1PN"])
+          and str(_ds_tv["1PN"]) != str(_t1))
+    check("Nhập file không phải backup thư viện → báo rõ",
+          "không phải file backup Thư viện" in (_nhap(_bk_ct, "/api/thuvien/import-zip")
+                                                .get("error") or ""))
+    if _ct_tv.get("id"):
+        db.delete_content(_ct_tv["id"])
+finally:
+    server.MEDIA_DIR, _st.MEDIA_DIR, _cfg_tv.THUVIEN_MEDIA_DIR = _goc_tv
+    for _m in db.tv_mang_list():
+        db.tv_mang_xoa(_m["id"])
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:
