@@ -10,6 +10,31 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.62.0 — 21/10/2026
+
+**Thư viện ảnh: Xuất / Nhập backup kèm ảnh — chuyển thư viện sang máy khác**
+
+Tab **🖼️ Thư viện ảnh** có thêm 2 nút cạnh **+ Thêm ảnh**:
+
+- **📤 Xuất backup** — lưu **TOÀN BỘ** thư viện (mọi tab, mọi bộ ảnh, **kèm file
+  ảnh**) ra một file `thu_vien_anh_<ngày giờ>.zip` trong thư mục Downloads.
+- **📥 Nhập backup** — ở máy kia chọn file .zip đó:
+  - Tab **trùng tên** (không phân biệt hoa thường) thì gộp vào, chưa có thì tạo
+    mới — kể cả tab chưa có bộ ảnh nào.
+  - Bộ ảnh **trùng** thì bỏ qua (cùng tab + cùng Mã bộ ảnh; bộ không có mã thì
+    so đúng các ảnh) → nhập lại nhiều lần cũng **không nhân đôi**.
+  - Giữ nguyên thứ tự, Mã bộ ảnh, Sử dụng, Ghi chú.
+
+**Backup Content mang theo "Mã thư viện"**: file backup content (📤 Xuất backup
+ở tab Content) có thêm cột **Mã thư viện** ở cuối, ghi **tên** thư viện (không
+ghi số id vì mỗi máy một khác). Nhập ở máy mới thì content tự trỏ đúng thư viện
+cùng tên. File backup content cũ vẫn nhập bình thường.
+
+> **Chuyển máy: nhập Thư viện ảnh TRƯỚC, rồi mới nhập Content** — nhập content
+> trước thì cột Mã thư viện để trống vì máy mới chưa có thư viện đó.
+
+---
+
 ## v2.61.0 — 21/10/2026
 
 **Bảng lịch: thêm cột "Mã ảnh" — CHỐT bộ ảnh ngay lúc Gen ("nhìn sao đăng vậy")**
