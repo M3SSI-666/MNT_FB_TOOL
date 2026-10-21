@@ -132,6 +132,20 @@ def _retry_delay(attempt: int) -> float:
     return jitter(RETRY_BASE_SEC * (2 ** (attempt - 1)), pct=0.3, floor=5)
 
 
+def _anh_dang_cho(item: dict, ct: dict, c_user: str, dung_con_tro: bool) -> str:
+    """Ảnh để đăng cho 1 dòng lịch.
+
+    Ưu tiên bản ĐÃ CHỐT lúc Gen (`item['anh_dang']`) — đúng cái cột "Mã ảnh" hiện
+    trên bảng lịch, "nhìn sao đăng vậy", nên con trỏ Marketplace KHÔNG bị tiến
+    lại lần nữa ở đây. Lịch cũ (gen trước tính năng này) không có `anh_dang` thì
+    rơi về chọn ảnh động như v2.60.0 (db.anh_cho_bai)."""
+    chot = (item.get("anh_dang") or "").strip()
+    if chot:
+        return chot
+    return db.anh_cho_bai(c_user, (ct.get("link_anh") or ""),
+                          ct.get("ma_thu_vien"), dung_con_tro)
+
+
 def _attempt_post(item: dict) -> str:
     """Thực hiện đăng 1 dòng lịch. Trả về hậu tố trạng thái khi thành công,
     raise exception khi thất bại (để lớp ngoài phân loại và quyết định retry)."""
@@ -174,10 +188,8 @@ def _attempt_post(item: dict) -> str:
             raise Exception("Thiếu UID nhóm đầu để mở composer")
         acc_data  = _tk(item, theo_page=True)
         c_user_v  = _c_user_cua(item, acc_data)
-        # Cột Ảnh trống + có Mã thư viện → bốc 1 bộ ảnh từ thư viện. Page/VIA
-        # bốc NGẪU NHIÊN (không sợ trùng, không đụng con trỏ roll của Marketplace).
-        # Có ảnh riêng ở cột Ảnh thì giữ nguyên ảnh đó.
-        anh = db.anh_cho_bai(c_user_v, link_anh, ct.get("ma_thu_vien"), dung_con_tro=False)
+        # Ảnh ĐÃ CHỐT lúc Gen (cột "Mã ảnh"); lịch cũ không có thì bốc ngẫu nhiên.
+        anh = _anh_dang_cho(item, ct, c_user_v, dung_con_tro=False)
         count = post_page_via(
             acc_name=acc_name, page_uid=page_uid,
             first_group_uid=first_uid, search_kw=tu_khoa,
@@ -207,9 +219,8 @@ def _attempt_post(item: dict) -> str:
             raise Exception("Thiếu UID nhóm đầu để mở composer")
         acc_data  = _tk(item, theo_page=True)
         c_user_v  = _c_user_cua(item, acc_data)
-        # Cột Ảnh trống + có Mã thư viện → bốc 1 bộ ảnh NGẪU NHIÊN từ thư viện
-        # (Page/VIA không đụng con trỏ roll của Marketplace); có ảnh riêng thì giữ.
-        anh = db.anh_cho_bai(c_user_v, link_anh, ct.get("ma_thu_vien"), dung_con_tro=False)
+        # Ảnh ĐÃ CHỐT lúc Gen (cột "Mã ảnh"); lịch cũ không có thì bốc ngẫu nhiên.
+        anh = _anh_dang_cho(item, ct, c_user_v, dung_con_tro=False)
         count = post_via_crosspost(
             acc_name=acc_name, search_kw=tu_khoa,
             message=content, image_url=anh,
@@ -441,10 +452,9 @@ def _run_marketplace_slot(item: dict):
         from market_poster import post_marketplace
         acc_data = _tk(item)
         c_user_v = _c_user_cua(item, acc_data)
-        # Cột Ảnh trống + có Mã thư viện → bốc bộ ảnh KẾ TIẾP theo con trỏ
-        # (nick + thư viện) rồi ĐẨY con trỏ, để lần sau roll sang bộ khác (chống
-        # trùng Marketplace). Có ảnh riêng ở cột Ảnh thì giữ nguyên ảnh đó.
-        anh = db.anh_cho_bai(c_user_v, link_anh, ct.get("ma_thu_vien"), dung_con_tro=True)
+        # Ảnh ĐÃ CHỐT lúc Gen (cột "Mã ảnh" = "Bộ ảnh-..."); con trỏ roll đã tiến
+        # tại Gen nên ở đây KHÔNG tiến lại. Lịch cũ không có thì roll động như cũ.
+        anh = _anh_dang_cho(item, ct, c_user_v, dung_con_tro=True)
         so_nhom = post_marketplace(acc_name=acc_name, message=content,
                                    image_url=anh, c_user=c_user_v,
                                    tieu_de=tieu_de)
@@ -504,9 +514,8 @@ def _run_page_slot(item: dict):
     try:
         from page_via_poster import post_page_wall
         c_user_v = _c_user_cua(item, acc_data)
-        # Cột Ảnh trống + có Mã thư viện → bốc 1 bộ ảnh NGẪU NHIÊN từ thư viện
-        # (đăng tường Page không sợ trùng, không đụng con trỏ Marketplace).
-        anh = db.anh_cho_bai(c_user_v, link_anh, ct.get("ma_thu_vien"), dung_con_tro=False)
+        # Ảnh ĐÃ CHỐT lúc Gen (cột "Mã ảnh"); lịch cũ không có thì bốc ngẫu nhiên.
+        anh = _anh_dang_cho(item, ct, c_user_v, dung_con_tro=False)
         ok = post_page_wall(acc_name=acc_name, page_uid=page_uid,
                             message=content, image_url=anh, c_user=c_user_v)
         if not ok:

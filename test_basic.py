@@ -6638,6 +6638,77 @@ check("scheduler: Marketplace roll theo con trỏ (dung_con_tro=True)",
       "anh_cho_bai" in _sched_src and "dung_con_tro=True" in _sched_src
       and _sched_src.count("dung_con_tro=False") == 3)
 
+# ── Mã ảnh CHỐT lúc GEN (cột "Mã ảnh" trên bảng lịch — "nhìn sao đăng vậy") ──
+with db._conn() as _c_sc:
+    _cols_sc = {r[1] for r in _c_sc.execute("PRAGMA table_info(schedules)").fetchall()}
+check("schedules có cột ma_anh + anh_dang", {"ma_anh", "anh_dang"} <= _cols_sc)
+
+# db.chot_anh_cho_lich: trả (nhãn hiển thị, link đã chốt). Dùng lại thư viện _mr.
+_lblO, _lnkO = db.chot_anh_cho_lich("gcu1", "/media/content/own.jpg", str(_mr), True)
+check("chốt gen: có ảnh riêng → ('Ảnh', chính link đó)",
+      _lblO == "Ảnh" and _lnkO == "/media/content/own.jpg")
+_lblB, _lnkB = db.chot_anh_cho_lich("gcu1", "", str(_mr), True)
+check("chốt gen: lấy thư viện → nhãn 'Bộ ảnh-<mã>' + link CÙNG bộ",
+      _lblB.startswith("Bộ ảnh-")
+      and _lnkB == f"/media/thuvien/{_lblB.split('-', 1)[1]}.jpg")
+_lblN, _lnkN = db.chot_anh_cho_lich("gcu1", "", "", True)
+check("chốt gen: không ảnh + không thư viện → ('', '')", _lblN == "" and _lnkN == "")
+
+# replace_schedules lưu + get_schedules đọc lại ma_anh/anh_dang (round-trip).
+db.replace_schedules("tt_ma_anh", [{
+    "loai": "tt_ma_anh", "stt": 1, "ma_content": "C1", "ten_acc": "A",
+    "ten_page": "", "gio_dang": "08:00", "ma_nhom": "", "tu_khoa": "",
+    "mode": "Page", "trang_thai": "Chờ",
+    "ma_anh": "Bộ ảnh-G1", "anh_dang": "/media/thuvien/g1.jpg"}])
+_row_ma = db.get_schedules("tt_ma_anh")[0]
+check("lịch lưu + đọc lại được ma_anh / anh_dang",
+      _row_ma["ma_anh"] == "Bộ ảnh-G1" and _row_ma["anh_dang"] == "/media/thuvien/g1.jpg")
+db.replace_schedules("tt_ma_anh", [])
+
+# Gen (API): 3 kiểu content → cột Mã ảnh đúng ("Ảnh" / "Bộ ảnh-.." / trống).
+_glib = db.tv_mang_them("GENLIB")
+db.tv_bo_upsert({"mang_id": _glib, "ma": "G1", "link_anh": "/media/thuvien/g1.jpg", "su_dung": "Có"})
+db.tv_bo_upsert({"mang_id": _glib, "ma": "G2", "link_anh": "/media/thuvien/g2.jpg", "su_dung": "Có"})
+db.upsert_content({"loai": "thue", "ma_content": "GOWN", "noi_dung": "x",
+                   "link_anh": "/media/content/own.jpg", "su_dung": "Có"})
+db.upsert_content({"loai": "thue", "ma_content": "GLIB", "noi_dung": "x",
+                   "link_anh": "", "ma_thu_vien": str(_glib), "su_dung": "Có"})
+db.upsert_content({"loai": "thue", "ma_content": "GNONE", "noi_dung": "x",
+                   "link_anh": "", "ma_thu_vien": "", "su_dung": "Có"})
+_r_gma = _client.post("/api/schedule/thue/gen", json={
+    "start": "08:00", "end": "14:00", "keyword_pool": ["kw"],
+    "acc_settings": [
+        {"ten": f"GMA{i}", "c_user": f"9900{i}", "page": "", "nghi": 15,
+         "first_group_url": "123", "mode": "Page",
+         "contents": ["GOWN", "GLIB", "GNONE"]}
+        for i in range(3)]}).get_json()
+_rows_gma = db.get_schedules("thue")
+_by = lambda mc: [r for r in _rows_gma if r["ma_content"] == mc]
+check("Gen Mã ảnh: content có ảnh riêng → nhãn 'Ảnh' + chốt đúng link",
+      _r_gma.get("ok") and _by("GOWN")
+      and all(r["ma_anh"] == "Ảnh" and r["anh_dang"] == "/media/content/own.jpg"
+              for r in _by("GOWN")))
+check("Gen Mã ảnh: content trỏ thư viện → nhãn 'Bộ ảnh-<mã>' + link cùng bộ",
+      _by("GLIB") and all(
+          r["ma_anh"].startswith("Bộ ảnh-")
+          and r["anh_dang"] == f"/media/thuvien/{r['ma_anh'].split('-', 1)[1].lower()}.jpg"
+          for r in _by("GLIB")))
+check("Gen Mã ảnh: content không ảnh + không thư viện → trống",
+      _by("GNONE") and all(r["ma_anh"] == "" and r["anh_dang"] == "" for r in _by("GNONE")))
+db.replace_schedules("thue", [])
+db.tv_mang_xoa(_glib)
+with db._conn() as _c_gma:
+    _c_gma.execute("DELETE FROM content WHERE loai='thue' AND ma_content IN ('GOWN','GLIB','GNONE')")
+
+# scheduler đăng ĐÚNG ảnh đã chốt (item['anh_dang']); lịch cũ mới roll động.
+check("scheduler: 4 chỗ đăng dùng _anh_dang_cho(item, ct, c_user_v) + ưu tiên anh_dang",
+      _sched_src.count("_anh_dang_cho(item, ct, c_user_v") == 4
+      and 'item.get("anh_dang")' in _sched_src)
+
+# Frontend: bảng lịch có cột "Mã ảnh" giữa Content và Từ khóa.
+check("bảng lịch (app.js) có cột Mã ảnh + ô maAnhCell, colspan 7",
+      ">Mã ảnh<" in _ajs_mkt and "maAnhCell" in _ajs_mkt and 'colspan="7"' in _ajs_mkt)
+
 db.tv_mang_xoa(_mr)
 db.tv_mang_xoa(_mr0)
 

@@ -2147,8 +2147,25 @@ def api_schedule_gen(loai):
     # Gán SAU khi chuyển slot vì chỉ dòng đăng bài / Marketplace hiện mã content —
     # dòng comment/nuôi nằm giữa không được làm lệch vòng. Bản cũ mỗi nick một
     # con trỏ riêng → các nick liền nhau trùng content thành cụm 5–9 dòng.
-    from xep_lich import rai_content
+    from xep_lich import rai_content, _hien_content
     rai_content(schedule, contents)
+
+    # ── Mã ảnh: CHỐT bộ ảnh cho từng dòng ĐĂNG ngay lúc GEN, hiện ở cột "Mã ảnh"
+    # để kiểm tra trước khi chạy ("nhìn sao đăng vậy"). Marketplace roll theo con
+    # trỏ (nick + thư viện) + đẩy con trỏ → mỗi acc cuốn đều qua các bộ; Page/VIA/
+    # đăng tường Page bốc NGẪU NHIÊN (không đụng con trỏ). Chỉ dòng đăng mới có
+    # ảnh — comment/nuôi để trống. c_user lấy từ cu_cua vì ten_acc lúc này vẫn là
+    # khoá nội bộ (đổi về tên hiển thị ở vòng dưới).
+    _ct_map = {c["ma_content"]: c for c in db.get_content(loai)}
+    for r in schedule:
+        if not _hien_content(r):
+            r["ma_anh"], r["anh_dang"] = "", ""
+            continue
+        _ct = _ct_map.get(r.get("ma_content"), {})
+        r["ma_anh"], r["anh_dang"] = db.chot_anh_cho_lich(
+            cu_cua.get(r["ten_acc"], ""),
+            _ct.get("link_anh", ""), _ct.get("ma_thu_vien", ""),
+            dung_con_tro=(r.get("hoat_dong") == "marketplace"))
 
     # Trả khoá nội bộ về tên hiển thị, và ghi c_user vào từng dòng.
     for r in schedule:

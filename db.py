@@ -574,6 +574,15 @@ def init_db():
         # Mã thư viện ảnh content này trỏ tới (id của tv_mang, dạng chuỗi). Trống
         # = dùng ảnh ở cột Ảnh; có + cột Ảnh trống = bốc bộ ảnh từ thư viện đó.
         _add_col("content",    "ma_thu_vien", "ma_thu_vien TEXT DEFAULT ''")
+        # Cột "Mã ảnh" trên bảng lịch — CHỐT bộ ảnh ngay lúc GEN (xem
+        # server.api_schedule_gen) để "nhìn sao đăng vậy":
+        #   ma_anh   = nhãn hiển thị: "Ảnh" (lấy ảnh ở cột Ảnh của content),
+        #              "Bộ ảnh-<mã bộ>" (bốc từ Thư viện ảnh), hoặc "" (không ảnh).
+        #   anh_dang = CSV ảnh ĐÃ CHỐT để đăng đúng cái đang hiện trên lịch. Trống
+        #              = dòng lịch cũ (gen trước tính năng này) → lúc đăng rơi về
+        #              logic chọn ảnh động như cũ (db.anh_cho_bai), không đổi hành vi.
+        _add_col("schedules", "ma_anh",   "ma_anh TEXT DEFAULT ''")
+        _add_col("schedules", "anh_dang", "anh_dang TEXT DEFAULT ''")
         # Dòng lịch nhớ c_user của nick, không chỉ tên — hai nick trùng tên
         # (gặp thật: hai 'Tuấn Ngọc') thì tên không nói được dòng nào của nick
         # nào. Xem `_khoa_acc`. Gắn cho dòng cũ chưa có; dòng nào không suy ra
@@ -2010,6 +2019,39 @@ def anh_cho_bai(c_user: str, link_anh: str, ma_thu_vien, dung_con_tro: bool) -> 
     return chon_bo_anh(c_user, tv, dung_con_tro)
 
 
+def chot_anh_cho_lich(c_user: str, link_anh: str, ma_thu_vien, dung_con_tro: bool):
+    """Phiên bản dùng lúc GEN LỊCH của anh_cho_bai — CHỐT sẵn ảnh + trả thêm nhãn
+    để hiện ở cột "Mã ảnh" trên bảng lịch. Trả (ma_anh, anh_dang):
+      - Cột Ảnh có ảnh       → ("Ảnh", <link ở cột Ảnh>).
+      - Cột Ảnh trống + thư viện → bốc 1 bộ (MKP theo con trỏ / khác ngẫu nhiên)
+        → ("Bộ ảnh-<mã bộ>", <link của bộ>). Không bộ dùng được → ("", "").
+      - Cả hai trống         → ("", "").
+    Chốt ở đây để "nhìn sao đăng vậy": scheduler đăng đúng anh_dang đã lưu, không
+    roll lại (nên con trỏ Marketplace chỉ tiến đúng 1 lần — tại GEN này)."""
+    link = (link_anh or "").strip()
+    if link:
+        return ("Ảnh", link)
+    tv = (ma_thu_vien or "")
+    if isinstance(tv, str):
+        tv = tv.strip()
+    if not tv:
+        return ("", "")
+    try:
+        tvid = int(tv)
+    except (TypeError, ValueError):
+        return ("", "")
+    bo = [b for b in tv_bo_list(tvid)
+          if (b.get("su_dung") or "").strip() == "Có"
+          and (b.get("link_anh") or "").strip()]
+    if not bo:
+        return ("", "")
+    n = len(bo)
+    idx = _con_tro_tien(c_user, tvid, n) if dung_con_tro else random.randrange(n)
+    chon = bo[idx]
+    ma = (chon.get("ma") or "").strip() or f"#{chon.get('id')}"
+    return (f"Bộ ảnh-{ma}", (chon.get("link_anh") or "").strip())
+
+
 def _tach_urls(*chuoi) -> set:
     """'a.jpg, b.jpg' → {'a.jpg', 'b.jpg'} (bỏ khoảng trắng, bỏ rỗng)."""
     ra = set()
@@ -2313,6 +2355,10 @@ def replace_schedules(loai: str, rows: list[dict]):
             # Mặc định hoat_dong='dang_bai' nếu row không khai báo (lịch cũ / không nuôi).
             for r in rows:
                 r.setdefault("hoat_dong", "dang_bai")
+                # "Mã ảnh" chốt lúc gen (có thể thiếu ở lịch cũ / gen khác) — đặt
+                # mặc định để executemany không vỡ khi row không khai báo.
+                r.setdefault("ma_anh", "")
+                r.setdefault("anh_dang", "")
                 # Mỗi dòng mang c_user của nick — nơi dựng dòng biết thì truyền
                 # thẳng; không thì suy từ tên + Page (xem `tim_c_user`).
                 if not (r.get("c_user") or "").strip():
@@ -2320,9 +2366,11 @@ def replace_schedules(loai: str, rows: list[dict]):
             con.executemany(
                 """INSERT INTO schedules
                    (loai, stt, ma_content, ten_acc, ten_page, gio_dang,
-                    ma_nhom, tu_khoa, mode, trang_thai, hoat_dong, c_user)
+                    ma_nhom, tu_khoa, mode, trang_thai, hoat_dong, c_user,
+                    ma_anh, anh_dang)
                    VALUES (:loai,:stt,:ma_content,:ten_acc,:ten_page,:gio_dang,
-                           :ma_nhom,:tu_khoa,:mode,:trang_thai,:hoat_dong,:c_user)""",
+                           :ma_nhom,:tu_khoa,:mode,:trang_thai,:hoat_dong,:c_user,
+                           :ma_anh,:anh_dang)""",
                 rows
             )
 

@@ -3125,10 +3125,11 @@ function renderSchedulePage(loai){
         <div class="card"><div class="table-wrap"><table>
             <thead><tr>
                 <th>Giờ</th><th>Acc</th><th>Page</th><th>Content</th>
+                <th style="text-align:center" title="Ảnh sẽ đăng — CHỐT lúc Gen. 'Ảnh' = dùng ảnh ở cột Ảnh của content; 'Bộ ảnh-&lt;mã&gt;' = bốc từ Thư viện ảnh">Mã ảnh</th>
                 <th style="text-align:center">Từ khóa</th>
                 <th style="text-align:center">Trạng thái</th>
             </tr></thead>
-            <tbody id="${loai}-table"><tr><td colspan="6" class="loading"><span class="spin">↻</span></td></tr></tbody>
+            <tbody id="${loai}-table"><tr><td colspan="7" class="loading"><span class="spin">↻</span></td></tr></tbody>
         </table></div></div>`;
 }
 
@@ -3630,7 +3631,7 @@ function renderScheduleTable(loai,data){
         return st===filter;
     });
     if(count) count.textContent=`${rows.length}/${(data||[]).length}`;
-    if(!rows.length){ tbody.innerHTML=`<tr><td colspan="6" class="empty">Không có dòng nào</td></tr>`; return; }
+    if(!rows.length){ tbody.innerHTML=`<tr><td colspan="7" class="empty">Không có dòng nào</td></tr>`; return; }
     const sc=(r,field,style)=>{
         const val=(r[field]||"").toString(); const esc=val.replace(/"/g,"&quot;");
         return `<td class="editable" data-id="${r.id}" data-loai="${loai}" data-field="${field}" data-val="${esc}" style="font-size:12px;${style||""}" onclick="startSchedEdit(this)">${val||"-"}</td>`;
@@ -3665,10 +3666,18 @@ function renderScheduleTable(loai,data){
             : hd==="dang_page"
             ? `<td style="text-align:center"><span class="badge" style="background:#3b2d5e;color:#c4b5fd">📄 Đăng page${r.ma_content?" · "+(r.ma_content||"").replace(/</g,"&lt;"):""}</span></td>`
             : sc(r,"ma_content","text-align:center");
+        // Mã ảnh = ảnh đã CHỐT lúc Gen. "Ảnh" (xanh) = ảnh ở cột Ảnh của content;
+        // "Bộ ảnh-<mã>" (vàng) = bốc từ Thư viện ảnh. Trống = dòng không đăng ảnh
+        // (comment/nuôi) hoặc lịch cũ gen trước tính năng này. Chỉ để xem, không sửa.
+        const _ma=(r.ma_anh||"").toString(), _laBo=_ma.startsWith("Bộ ảnh");
+        const maAnhCell=_ma
+            ? `<td style="text-align:center;font-size:11px"><span class="badge" style="${_laBo?"background:#3a2f12;color:#fcd34d":"background:#17303f;color:#93c5fd"}">${_escapeHtml(_ma)}</span></td>`
+            : `<td style="text-align:center;color:var(--text-muted)">-</td>`;
         return `<tr>
             ${sc(r,"gio_dang","font-weight:600;white-space:nowrap")}
             ${sc(r,"ten_acc","")} ${sc(r,"ten_page","color:var(--text-secondary)")}
             ${contentCell}
+            ${maAnhCell}
             ${sc(r,"tu_khoa","text-align:center;color:var(--text-secondary)")}
             <td class="editable" data-id="${r.id}" data-loai="${loai}" data-field="trang_thai" data-val="${(r.trang_thai||"").replace(/"/g,"&quot;")}" style="text-align:center" onclick="startSchedEdit(this)">${stBadge}</td>
         </tr>`;

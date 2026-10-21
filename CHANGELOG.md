@@ -10,6 +10,25 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.61.0 — 21/10/2026
+
+**Bảng lịch: thêm cột "Mã ảnh" — CHỐT bộ ảnh ngay lúc Gen ("nhìn sao đăng vậy")**
+
+- Bảng lịch có **cột mới "Mã ảnh"** (giữa cột **Content** và **Từ khóa**). Mỗi
+  dòng đăng hiện sẵn ảnh sẽ dùng:
+  - **"Ảnh"** (xanh) — dùng ảnh ở **cột Ảnh** của content.
+  - **"Bộ ảnh-&lt;mã bộ&gt;"** (vàng) — bốc 1 bộ từ **Thư viện ảnh**.
+  - **trống** — dòng không đăng ảnh (comment/nuôi), hoặc content chưa có ảnh.
+- **Việc roll bộ ảnh dời từ "lúc đăng" sang "lúc Gen"**: khi Gen lịch, mỗi dòng
+  đã **chốt sẵn** bộ ảnh — Marketplace roll **tuần tự** theo con trỏ (nick + thư
+  viện), Page/VIA/đăng tường Page bốc **ngẫu nhiên**. Lúc đăng dùng **đúng** bộ
+  đã chốt, **không roll lại** → nhìn trên lịch sao thì đăng đúng vậy, kiểm tra
+  được trước khi chạy.
+- Lịch cũ (Gen trước bản này) không có sẵn cột Mã ảnh thì vẫn chạy như v2.60.0
+  (chọn ảnh lúc đăng) — Gen lại lịch là có cột mới.
+
+---
+
 ## v2.60.0 — 21/10/2026
 
 **Bốc/roll bộ ảnh từ thư viện lúc đăng (bước 3 kho ảnh) + đổi nhãn dropdown**
