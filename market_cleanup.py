@@ -6,11 +6,11 @@ Bài niêm yết cũ đọng lại làm trang bán của nick loãng + dễ bị
 Module này để nick tự ghé trang "Bài niêm yết của bạn" (định kỳ 1 lần/ngày, do
 runner của mảng gọi — xem scheduler._xoa_mkt_worker), ĐỌC danh sách + NGÀY NIÊM
 YẾT từng bài, rồi XÓA những bài quá hạn. Có chế độ CHẠY THỬ (chay_thu=True): chỉ
-liệt kê bài quá hạn để báo Telegram, KHÔNG xóa.
+liệt kê bài quá hạn, KHÔNG xóa (dùng khi cần xem trước; runner KHÔNG dùng).
 
 NGUYÊN TẮC AN TOÀN:
-  - Xóa KHÔNG hồi lại được → mặc định TẮT (db setting mkt_xoa_bat=0) và mặc định
-    CHẠY THỬ (mkt_xoa_chay_thu=1) để Duong soi "sẽ xóa bài nào" trước.
+  - Xóa KHÔNG hồi lại được → mặc định TẮT (db setting mkt_xoa_bat=0). Bật là tự
+    xóa, ghi log nội bộ, KHÔNG báo Telegram.
   - Chỉ xóa bài đọc được tuổi RÕ RÀNG và > ngưỡng. Tuổi không đọc được (None) thì
     BỎ QUA, tuyệt đối không xóa (thà sót còn hơn xóa nhầm).
 
@@ -49,8 +49,8 @@ LY_DO_XOA = [
 SELLING_URL = "https://www.facebook.com/marketplace/you/selling/"
 # Ép khổ hẹp để FB render DANH SÁCH DỌC (có "Ngày niêm yết" + nút "..." mỗi dòng).
 VIEWPORT_HEP = {"width": 700, "height": 900}
-# DOM đã đo thật nên cho phép xóa thật (vẫn do setting mkt_xoa_chay_thu quyết định
-# có xóa hay chỉ báo). Để an toàn tối đa, xem thêm scheduler gọi với chay_thu.
+# DOM đã đo thật (đã chạy xóa thật thành công) nên cho phép xóa thật. Còn False
+# thì xoa_bai_cu tự ép về chạy thử (chốt an toàn).
 _XOA_DA_DO_DOM = True
 
 # Trần số bài xóa mỗi phiên — chặn vòng lặp xóa chạy mất kiểm soát nếu DOM đổi.
@@ -324,8 +324,9 @@ async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
 
 
 def xoa_bai_cu(acc_name: str, c_user: str = "", so_ngay: int = 3,
-               chay_thu: bool = True, headless=None) -> dict:
-    """Đọc bài niêm yết → lọc quá `so_ngay` ngày → (nếu KHÔNG chạy thử) xóa.
+               chay_thu: bool = False, headless=None) -> dict:
+    """Đọc bài niêm yết → lọc quá `so_ngay` ngày → xóa. `chay_thu=True` thì CHỈ
+    liệt kê, không xóa (dùng khi cần xem trước, không nối vào runner).
 
     Trả {tong, qua_han:[{tieu_de,tuoi,ngay_text}], da_xoa, chay_thu}. Khi
     `_XOA_DA_DO_DOM` còn False thì ÉP chạy thử (chốt an toàn)."""

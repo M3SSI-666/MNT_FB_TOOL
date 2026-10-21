@@ -3899,31 +3899,28 @@ _src_mc = Path("market_cleanup.py").read_text(encoding="utf-8")
 check("market_cleanup chọn NGẪU NHIÊN lý do + bấm Tiếp (không chặn việc xóa)",
       "random.choice(LY_DO_XOA)" in _src_mc and "def _tra_loi_khao_sat" in _src_mc
       and 'name="Tiếp"' in _src_mc)
-# Soạn tin Telegram dọn — chạy thử vs xóa thật.
-_tin_thu = _tb.soan_xoa_mkt("Máy A", "Acc1",
-    {"qua_han": [{"item_id": "1", "tieu_de": "Ghế sofa", "tuoi": 5}], "da_xoa": 0},
-    chay_thu=True, so_ngay=3)
-check("soạn tin dọn (chạy thử): 'CHƯA xóa' + tên bài + tuổi",
-      "CHƯA xóa" in _tin_thu and "Ghế sofa" in _tin_thu and "5 ngày" in _tin_thu)
-_tin_that = _tb.soan_xoa_mkt("Máy A", "Acc1",
-    {"qua_han": [{"item_id": "1", "tieu_de": "Ghế", "tuoi": 5}], "da_xoa": 1},
-    chay_thu=False, so_ngay=3)
-check("soạn tin dọn (xóa thật): 'đã xóa 1/1'", "đã xóa 1/1" in _tin_that)
+# Dọn chạy im: KHÔNG báo Telegram, KHÔNG còn chế độ chạy thử ở runner.
+check("gỡ hẳn báo Telegram cho dọn (soan_xoa_mkt/bao_xoa_mkt)",
+      not hasattr(_tb, "soan_xoa_mkt") and not hasattr(_tb, "bao_xoa_mkt"))
+check("worker dọn KHÔNG gọi báo Telegram + luôn xóa thật (chay_thu=False)",
+      "bao_xoa_mkt" not in _src_sch_mkt and "chay_thu=False" in _src_sch_mkt
+      and "mkt_xoa_chay_thu" not in _src_sch_mkt)
 # Scheduler nối dọn + cài đặt mặc định + UI.
 check("scheduler có worker dọn Market + dispatch den_gio_xoa_mkt + đánh nhịp",
       "def _xoa_mkt_worker" in _src_sch_mkt and "den_gio_xoa_mkt" in _src_sch_mkt
       and "ghi_nhan_xoa_mkt" in _src_sch_mkt)
 _cd_mkt = db.doc_cai_dat_mkt()
-check("MKT mặc định có mkt_xoa_bat=0 / sau_ngay=3 / chay_thu=1",
+check("MKT mặc định có mkt_xoa_bat=0 / sau_ngay=3 (KHÔNG còn chay_thu)",
       _cd_mkt.get("mkt_xoa_bat") == "0" and _cd_mkt.get("mkt_xoa_sau_ngay") == "3"
-      and _cd_mkt.get("mkt_xoa_chay_thu") == "1")
+      and "mkt_xoa_chay_thu" not in _cd_mkt)
 _html_mkt4 = Path("templates/index.html").read_text(encoding="utf-8")
 _ajs_mkt4 = Path("static/js/app.js").read_text(encoding="utf-8")
-check("UI Marketplace có ô bật / số ngày / chạy thử tự xóa",
+check("UI Marketplace tự xóa chỉ còn ô bật + số ngày (đã bỏ Chạy thử)",
       'id="mkt-xoa-bat"' in _html_mkt4 and 'id="mkt-xoa-sau-ngay"' in _html_mkt4
-      and 'id="mkt-xoa-chay-thu"' in _html_mkt4)
-check("app.js nạp + lưu cài đặt tự xóa",
-      "mkt_xoa_bat:" in _ajs_mkt4 and "mkt-xoa-sau-ngay" in _ajs_mkt4)
+      and 'id="mkt-xoa-chay-thu"' not in _html_mkt4)
+check("app.js nạp + lưu cài đặt tự xóa (không còn mkt-xoa-chay-thu)",
+      "mkt_xoa_bat:" in _ajs_mkt4 and "mkt-xoa-sau-ngay" in _ajs_mkt4
+      and "mkt-xoa-chay-thu" not in _ajs_mkt4)
 
 _src_mi = Path("market_inbox.py").read_text(encoding="utf-8")
 check("market_inbox CHỈ đọc danh sách, KHÔNG gọi click lên hội thoại",

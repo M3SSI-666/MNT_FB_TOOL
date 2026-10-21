@@ -827,30 +827,20 @@ def main():
                 running_accs.discard(acc_key)
 
     def _xoa_mkt_worker(ten_acc, c_user, acc_key):
-        """Phiên DỌN Marketplace: tự xóa bài niêm yết quá X ngày (hoặc CHẠY THỬ:
-        chỉ báo 'sẽ xóa N bài'). Báo kết quả Telegram kênh Market. Thao tác đọc/
-        dọn thụ động — lỗi KHÔNG tính vào sức khoẻ acc. Luôn đánh nhịp cuối phiên."""
+        """Phiên DỌN Marketplace: tự xóa bài niêm yết quá X ngày. Chỉ ghi log nội
+        bộ (KHÔNG báo Telegram). Thao tác đọc/dọn thụ động — lỗi KHÔNG tính vào
+        sức khoẻ acc. Luôn đánh nhịp cuối phiên."""
         try:
             import market_cleanup
             try:
                 so_ngay = int(db.get_setting("mkt_xoa_sau_ngay", "3") or 3)
             except Exception:
                 so_ngay = 3
-            chay_thu = (db.get_setting("mkt_xoa_chay_thu", "1") or "1").strip() \
-                in ("1", "true", "True")
             kq = market_cleanup.xoa_bai_cu(ten_acc, c_user, so_ngay=so_ngay,
-                                           chay_thu=chay_thu)
-            # Chế độ thật có thể bị market_cleanup ép về chạy thử (chưa đo DOM).
-            thuc_thu = kq.get("chay_thu", chay_thu)
-            if kq and (kq.get("qua_han") or kq.get("da_xoa")):
-                logger.info(f"🧹 [{ten_acc}] dọn Market: {len(kq.get('qua_han') or [])} "
-                            f"bài quá {so_ngay} ngày (chạy thử={thuc_thu})")
-                try:
-                    import thong_bao
-                    thong_bao.bao_xoa_mkt(ten_acc, kq, chay_thu=thuc_thu,
-                                          so_ngay=so_ngay)
-                except Exception as e:
-                    logger.warning(f"⚠️  Báo dọn Market [{ten_acc}] lỗi: {e}")
+                                           chay_thu=False)
+            if kq and kq.get("da_xoa"):
+                logger.info(f"🧹 [{ten_acc}] dọn Market: xóa {kq['da_xoa']}/"
+                            f"{len(kq.get('qua_han') or [])} bài quá {so_ngay} ngày")
         except CookieDeadError:
             _mark_cookie_dead(ten_acc, c_user)
         except Exception as e:

@@ -10,6 +10,17 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.65.0 — 22/10/2026
+
+**Tự xóa: bỏ "Chạy thử" và bỏ báo Telegram — bật là xóa luôn**
+
+Gọn lại cho đúng nhu cầu: tính năng tự xóa giờ chỉ còn **Bật tự xóa** + **số
+ngày**. Bỏ ô **"Chạy thử"** và **không báo Telegram** nữa — tới hạn là xóa, chỉ
+ghi log nội bộ. (Trước đó có chạy thử + báo Telegram để xem trước; nay đã chạy
+xóa thật ổn nên không cần.)
+
+---
+
 ## v2.64.0 — 21/10/2026
 
 **Tự xóa: chọn ngẫu nhiên lý do khi Facebook hỏi "Bạn đã bán chưa?"**

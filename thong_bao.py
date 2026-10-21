@@ -178,48 +178,6 @@ def bao_tin_mkt(acc_name: str, tin_moi: list) -> bool:
     return bool(kq and kq.get("ok"))
 
 
-def soan_xoa_mkt(ten_may: str, acc_name: str, ket_qua: dict,
-                 chay_thu: bool, so_ngay: int) -> str:
-    """Soạn tin báo DỌN bài niêm yết Marketplace (HTML). Tách riêng để kiểm thử
-    không cần mạng."""
-    qh = ket_qua.get("qua_han") or []
-    da_xoa = ket_qua.get("da_xoa") or 0
-    if chay_thu:
-        dau = (f"🧹 <b>{ten_may}</b> · acc <b>{acc_name}</b> — "
-               f"(chạy thử) {len(qh)} bài quá {so_ngay} ngày, CHƯA xóa:")
-    else:
-        dau = (f"🧹 <b>{ten_may}</b> · acc <b>{acc_name}</b> — "
-               f"đã xóa {da_xoa}/{len(qh)} bài quá {so_ngay} ngày:")
-    dong = [dau]
-    for b in qh[:15]:
-        td = (b.get("tieu_de") or "?").strip()
-        tuoi = b.get("tuoi")
-        dong.append(f"• {td[:70]}" + (f" ({tuoi} ngày)" if tuoi is not None else ""))
-    if len(qh) > 15:
-        dong.append(f"… và {len(qh) - 15} bài nữa")
-    return "\n".join(dong)
-
-
-def bao_xoa_mkt(acc_name: str, ket_qua: dict, chay_thu: bool = True,
-                so_ngay: int = 3) -> bool:
-    """Báo kết quả DỌN bài niêm yết Marketplace — vào KÊNH RIÊNG Marketplace.
-
-    `ket_qua`: dict từ market_cleanup.xoa_bai_cu (có qua_han, da_xoa). Trả True
-    nếu đã gửi. Không có bài quá hạn → không báo."""
-    c = cau_hinh_mkt()
-    if not (c["bat"] and c["token"] and c["chat_id"]):
-        return False
-    if not (ket_qua.get("qua_han") or ket_qua.get("da_xoa")):
-        return False
-    kq = _goi_api("sendMessage",
-                  {"chat_id": c["chat_id"],
-                   "text": soan_xoa_mkt(c["ten_may"], acc_name, ket_qua,
-                                        chay_thu, so_ngay),
-                   "parse_mode": "HTML", "disable_web_page_preview": "true"},
-                  token=c["token"])
-    return bool(kq and kq.get("ok"))
-
-
 def gui_file(duong_dan, chu_thich: str = "", chat_id: str = "") -> tuple[bool, str]:
     """
     Gửi một file lên Telegram. Dùng cho bản sao lưu hằng ngày.

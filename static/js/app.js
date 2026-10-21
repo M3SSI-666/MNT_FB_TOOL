@@ -488,7 +488,6 @@ async function mktNap(){
         if(el("mkt-bien-the-sdt")) el("mkt-bien-the-sdt").value = d.mkt_bien_the_sdt || "";
         if(el("mkt-xoa-bat"))      el("mkt-xoa-bat").checked = String(d.mkt_xoa_bat||"0")==="1";
         if(el("mkt-xoa-sau-ngay")) el("mkt-xoa-sau-ngay").value = d.mkt_xoa_sau_ngay || "3";
-        if(el("mkt-xoa-chay-thu")) el("mkt-xoa-chay-thu").checked = String(d.mkt_xoa_chay_thu||"1")==="1";
     }catch(e){ Toast.error("Không đọc được cài đặt Marketplace: "+e.message); }
 }
 
@@ -505,7 +504,6 @@ async function mktLuu(hienToast){
             mkt_bien_the_sdt: el("mkt-bien-the-sdt").value.trim(),
             mkt_xoa_bat:      el("mkt-xoa-bat").checked ? 1 : 0,
             mkt_xoa_sau_ngay: (parseInt(el("mkt-xoa-sau-ngay").value) || 3),
-            mkt_xoa_chay_thu: el("mkt-xoa-chay-thu").checked ? 1 : 0,
         });
         // Đọc lại thay vì tự suy: ô để trống thì server thay bằng mặc định.
         // Không đọc lại là màn hình nói sai.

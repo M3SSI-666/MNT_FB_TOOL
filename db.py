@@ -2728,12 +2728,11 @@ MKT_MAC_DINH = {
     "mkt_bien_the_bat": "0",
     "mkt_bien_the_sdt": "",
     # Tự XÓA bài niêm yết Marketplace quá X ngày (bài cũ đọng lại làm loãng trang
-    # bán + dễ bị coi đăng trùng). Mặc định TẮT — xóa không hồi lại được. Khi bật,
-    # mặc định CHẠY THỬ: chỉ báo "sẽ xóa N bài" lên Telegram kênh Market, CHƯA xóa
-    # (để Duong soi bài nào trước). Xem market_cleanup.py + scheduler._xoa_mkt_worker.
+    # bán + dễ bị coi đăng trùng). Mặc định TẮT — xóa không hồi lại được. Bật là
+    # tự xóa (ghi log nội bộ, KHÔNG báo Telegram). Xem market_cleanup.py +
+    # scheduler._xoa_mkt_worker.
     "mkt_xoa_bat":      "0",   # 1 = bật tự dọn
     "mkt_xoa_sau_ngay": "3",   # xóa bài quá bao nhiêu ngày
-    "mkt_xoa_chay_thu": "1",   # 1 = chỉ báo, chưa xóa thật
 }
 
 
