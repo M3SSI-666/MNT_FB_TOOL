@@ -3808,6 +3808,24 @@ try:
     # Danh sách rỗng thì không có gì để báo, dù kênh đang bật.
     check("không có tin mới → bao_tin_mkt trả False",
           _tb.bao_tin_mkt("MKT Test", []) is False)
+
+    # 5) Bước 4 — nhịp DỌN (tự xóa) bài niêm yết: den_gio_xoa_mkt / ghi_nhan.
+    db.set_setting("mkt_xoa_bat", "0")
+    check("tự xóa TẮT → den_gio_xoa_mkt luôn False (kể cả acc marketplace%>0)",
+          db.den_gio_xoa_mkt("MKT Test", c_user="mkt001") is False)
+    db.set_setting("mkt_xoa_bat", "1")
+    check("bật tự xóa + acc marketplace%=0 → không dọn",
+          db.den_gio_xoa_mkt("MKT Zero", c_user="mkt000") is False)
+    check("bật + marketplace%>0 + chưa dọn lần nào → tới giờ",
+          db.den_gio_xoa_mkt("MKT Test", c_user="mkt001") is True)
+    db.ghi_nhan_xoa_mkt("MKT Test", c_user="mkt001")
+    _bgx = _dt.now()
+    check("vừa dọn xong → chưa tới nhịp (mặc định 24h)",
+          db.den_gio_xoa_mkt("MKT Test", c_user="mkt001", bay_gio=_bgx) is False)
+    check("25 giờ sau → tới nhịp dọn lại",
+          db.den_gio_xoa_mkt("MKT Test", c_user="mkt001",
+                             bay_gio=_bgx + _td(hours=25)) is True)
+    db.set_setting("mkt_xoa_bat", "0")
 finally:
     for _k3, _v3 in _mkt_cu.items():
         db.set_setting(_k3, _v3)
@@ -3827,6 +3845,79 @@ check("scheduler có worker quét Market riêng",
       "def _scan_mkt_worker" in _src_sch_mkt)
 check("dispatch quét chỉ chạy ở runner mảng content",
       "loai_content_bat()" in _src_sch_mkt and "den_gio_quet_mkt" in _src_sch_mkt)
+# ── Bước 4: tự xóa bài niêm yết Marketplace quá X ngày ──────────────────────
+import market_cleanup as _mc
+check("đọc tuổi: '5 ngày trước' → 5", _mc.doc_tuoi_ngay("Đã đăng 5 ngày trước") == 5)
+check("đọc tuổi: 'hôm qua' → 1", _mc.doc_tuoi_ngay("Đăng hôm qua") == 1)
+check("đọc tuổi: '2 tuần trước' → 14", _mc.doc_tuoi_ngay("2 tuần trước") == 14)
+check("đọc tuổi: '3 giờ trước' → 0 (cùng ngày)", _mc.doc_tuoi_ngay("3 giờ trước") == 0)
+check("đọc tuổi: 'vừa xong' → 0", _mc.doc_tuoi_ngay("Vừa xong") == 0)
+check("đọc tuổi: '1 tháng trước' → 30", _mc.doc_tuoi_ngay("1 tháng trước") == 30)
+check("đọc tuổi: chữ không có mốc → None (an toàn)", _mc.doc_tuoi_ngay("Ghế gỗ đẹp") is None)
+check("tìm tuổi trong card: bỏ tiêu đề có số ('3 tháng sử dụng'), lấy dòng '4 ngày trước'",
+      _mc._tim_tuoi(["Ghế sofa 3 tháng sử dụng", "2.000.000 đ", "4 ngày trước"]) == 4)
+check("tìm tuổi: card không có dòng mốc nào → None",
+      _mc._tim_tuoi(["Bàn ăn 6 ghế", "1.500.000 đ"]) is None)
+# Ngày niêm yết tuyệt đối "DD/MM" (đo thật trên trang /you/selling).
+_hn = _dt(2026, 10, 21).date()
+check("ngày niêm yết '19/10' (hôm nay 21/10) → 2 ngày",
+      _mc.doc_ngay_niem_yet("Còn hàng · Ngày niêm yết: 19/10", _hn) == 2)
+check("ngày niêm yết '8/10' → 13 ngày",
+      _mc.doc_ngay_niem_yet("Ngày niêm yết: 8/10", _hn) == 13)
+check("ngày niêm yết qua năm '30/12' (hôm nay 2/1/2026) → 3 ngày (lùi năm)",
+      _mc.doc_ngay_niem_yet("Ngày niêm yết: 30/12", _dt(2026, 1, 2).date()) == 3)
+check("ngày niêm yết: không khớp → None", _mc.doc_ngay_niem_yet("Còn hàng") is None)
+_bai_mau = [{"tieu_de": "a", "tuoi": 5}, {"tieu_de": "b", "tuoi": 2},
+            {"tieu_de": "c", "tuoi": None}]
+check("lọc quá hạn: chỉ bài tuổi > ngưỡng, BỎ bài tuổi None",
+      [b["tieu_de"] for b in _mc.loc_qua_han(_bai_mau, 3)] == ["a"])
+check("DOM luồng Xóa ĐÃ đo thật → _XOA_DA_DO_DOM = True",
+      _mc._XOA_DA_DO_DOM is True)
+_mc_quet_goc, _mc_xoa_goc = _mc.quet_bai_niem_yet, _mc._xoa
+try:
+    _mc.quet_bai_niem_yet = lambda *a, **k: list(_bai_mau)
+    # Chạy thử: liệt kê quá hạn, KHÔNG xóa (không mở trình duyệt).
+    _kq_thu = _mc.xoa_bai_cu("AccX", "cu", so_ngay=3, chay_thu=True)
+    check("xoa_bai_cu (chạy thử): liệt kê quá hạn, da_xoa=0",
+          _kq_thu["da_xoa"] == 0 and _kq_thu["chay_thu"] is True
+          and len(_kq_thu["qua_han"]) == 1 and _kq_thu["qua_han"][0]["tieu_de"] == "a")
+
+    # Xóa thật: gọi _xoa (thay bằng hàm giả để khỏi mở trình duyệt).
+    async def _fake_xoa(*a, **k):
+        return 1
+    _mc._xoa = _fake_xoa
+    _kq_that = _mc.xoa_bai_cu("AccX", "cu", so_ngay=3, chay_thu=False)
+    check("xoa_bai_cu (xóa thật): gọi _xoa, da_xoa = số bài đã xóa",
+          _kq_that["chay_thu"] is False and _kq_that["da_xoa"] == 1)
+finally:
+    _mc.quet_bai_niem_yet = _mc_quet_goc
+    _mc._xoa = _mc_xoa_goc
+# Soạn tin Telegram dọn — chạy thử vs xóa thật.
+_tin_thu = _tb.soan_xoa_mkt("Máy A", "Acc1",
+    {"qua_han": [{"item_id": "1", "tieu_de": "Ghế sofa", "tuoi": 5}], "da_xoa": 0},
+    chay_thu=True, so_ngay=3)
+check("soạn tin dọn (chạy thử): 'CHƯA xóa' + tên bài + tuổi",
+      "CHƯA xóa" in _tin_thu and "Ghế sofa" in _tin_thu and "5 ngày" in _tin_thu)
+_tin_that = _tb.soan_xoa_mkt("Máy A", "Acc1",
+    {"qua_han": [{"item_id": "1", "tieu_de": "Ghế", "tuoi": 5}], "da_xoa": 1},
+    chay_thu=False, so_ngay=3)
+check("soạn tin dọn (xóa thật): 'đã xóa 1/1'", "đã xóa 1/1" in _tin_that)
+# Scheduler nối dọn + cài đặt mặc định + UI.
+check("scheduler có worker dọn Market + dispatch den_gio_xoa_mkt + đánh nhịp",
+      "def _xoa_mkt_worker" in _src_sch_mkt and "den_gio_xoa_mkt" in _src_sch_mkt
+      and "ghi_nhan_xoa_mkt" in _src_sch_mkt)
+_cd_mkt = db.doc_cai_dat_mkt()
+check("MKT mặc định có mkt_xoa_bat=0 / sau_ngay=3 / chay_thu=1",
+      _cd_mkt.get("mkt_xoa_bat") == "0" and _cd_mkt.get("mkt_xoa_sau_ngay") == "3"
+      and _cd_mkt.get("mkt_xoa_chay_thu") == "1")
+_html_mkt4 = Path("templates/index.html").read_text(encoding="utf-8")
+_ajs_mkt4 = Path("static/js/app.js").read_text(encoding="utf-8")
+check("UI Marketplace có ô bật / số ngày / chạy thử tự xóa",
+      'id="mkt-xoa-bat"' in _html_mkt4 and 'id="mkt-xoa-sau-ngay"' in _html_mkt4
+      and 'id="mkt-xoa-chay-thu"' in _html_mkt4)
+check("app.js nạp + lưu cài đặt tự xóa",
+      "mkt_xoa_bat:" in _ajs_mkt4 and "mkt-xoa-sau-ngay" in _ajs_mkt4)
+
 _src_mi = Path("market_inbox.py").read_text(encoding="utf-8")
 check("market_inbox CHỈ đọc danh sách, KHÔNG gọi click lên hội thoại",
       ".click(" not in _src_mi and "click()" not in _src_mi)
@@ -4973,9 +5064,9 @@ check("KHÔNG có ô nhập Ảnh / Mô tả ở trang Marketplace",
 import re as _re_mkt
 _khoi_mkt = _html_mkt[_html_mkt.index('id="page-marketplace"'):]
 _khoi_mkt = _khoi_mkt[:_khoi_mkt.index('id="page-hanh-dong"')]
-check("số thứ tự đánh liền 1..5",
+check("số thứ tự đánh liền 1..6 (thêm mục 6 Tự xóa bài cũ)",
       _re_mkt.findall(r'class="mkt-so">(\d+)<', _khoi_mkt)
-      == [str(i) for i in range(1, 6)])
+      == [str(i) for i in range(1, 7)])
 check("KHÔNG còn ô Tiêu đề / Giá / Tình trạng / Số nhóm",
       not any(f'id="{x}"' in _khoi_mkt
               for x in ("mkt-tieu-de", "mkt-gia-list", "mkt-tinh-trang", "mkt-so-nhom")))

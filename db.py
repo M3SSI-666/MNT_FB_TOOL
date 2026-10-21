@@ -499,6 +499,8 @@ def init_db():
         #   mkt_tin_moc       = chữ ký các hội thoại CHƯA ĐỌC thấy lần trước, để
         #                       so ra "tin MỚI" mà không báo lại tin cũ
         _add_col("accounts",  "mkt_scan_lan_cuoi", "mkt_scan_lan_cuoi TEXT DEFAULT ''")
+        # Mốc DỌN (tự xóa) bài niêm yết Marketplace gần nhất — nhịp 1 lần/ngày.
+        _add_col("accounts",  "mkt_xoa_lan_cuoi",  "mkt_xoa_lan_cuoi TEXT DEFAULT ''")
         _add_col("accounts",  "mkt_tin_moc",       "mkt_tin_moc TEXT DEFAULT ''")
 
         # ── Migration: tách loại đăng + cột % comment / Marketplace ─────────
@@ -1469,6 +1471,44 @@ def ghi_nhan_quet_mkt(ten_acc: str, c_user: str = ""):
     k, kp = _khoa_acc(ten_acc, c_user)
     with _conn() as con:
         con.execute(f"UPDATE accounts SET mkt_scan_lan_cuoi=? WHERE {k}",
+                    (datetime.now().isoformat(timespec="seconds"), *kp))
+
+
+def den_gio_xoa_mkt(ten_acc: str, c_user: str = "", bay_gio=None) -> bool:
+    """Acc marketplace đã tới nhịp DỌN (tự xóa) bài niêm yết quá hạn chưa.
+
+    CHỈ khi bật (setting mkt_xoa_bat=1) VÀ acc có marketplace_pct > 0. Nhịp mặc
+    định 1 lần / 24 giờ (settings mkt_xoa_moi_gio). Chưa dọn lần nào → tới giờ.
+    Đồng hồ vặn lùi → coi như tới giờ."""
+    if (get_setting("mkt_xoa_bat", "0") or "0").strip() not in ("1", "true", "True"):
+        return False
+    k, kp = _khoa_acc(ten_acc, c_user)
+    with _conn() as con:
+        r = con.execute("SELECT marketplace_pct, mkt_xoa_lan_cuoi "
+                        f"FROM accounts WHERE {k} LIMIT 1", kp).fetchone()
+    if not r or _pct(r["marketplace_pct"]) <= 0:
+        return False
+    cuoi = r["mkt_xoa_lan_cuoi"] or ""
+    if not cuoi:
+        return True
+    try:
+        moc = datetime.fromisoformat(cuoi)
+    except ValueError:
+        return True
+    try:
+        gio = int(get_setting("mkt_xoa_moi_gio", "24"))
+    except Exception:
+        gio = 24
+    gio = max(1, gio)
+    troi = ((bay_gio or datetime.now()) - moc).total_seconds()
+    return troi < 0 or troi >= gio * 3600
+
+
+def ghi_nhan_xoa_mkt(ten_acc: str, c_user: str = ""):
+    """Đánh mốc acc vừa dọn (tự xóa) bài niêm yết Marketplace xong."""
+    k, kp = _khoa_acc(ten_acc, c_user)
+    with _conn() as con:
+        con.execute(f"UPDATE accounts SET mkt_xoa_lan_cuoi=? WHERE {k}",
                     (datetime.now().isoformat(timespec="seconds"), *kp))
 
 
@@ -2687,6 +2727,13 @@ MKT_MAC_DINH = {
     # nhiên — né trùng bộ ảnh. Để trống số điện thoại = coi như tắt.
     "mkt_bien_the_bat": "0",
     "mkt_bien_the_sdt": "",
+    # Tự XÓA bài niêm yết Marketplace quá X ngày (bài cũ đọng lại làm loãng trang
+    # bán + dễ bị coi đăng trùng). Mặc định TẮT — xóa không hồi lại được. Khi bật,
+    # mặc định CHẠY THỬ: chỉ báo "sẽ xóa N bài" lên Telegram kênh Market, CHƯA xóa
+    # (để Duong soi bài nào trước). Xem market_cleanup.py + scheduler._xoa_mkt_worker.
+    "mkt_xoa_bat":      "0",   # 1 = bật tự dọn
+    "mkt_xoa_sau_ngay": "3",   # xóa bài quá bao nhiêu ngày
+    "mkt_xoa_chay_thu": "1",   # 1 = chỉ báo, chưa xóa thật
 }
 
 

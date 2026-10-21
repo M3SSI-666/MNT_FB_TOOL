@@ -450,12 +450,33 @@
                                    placeholder="Số điện thoại đính lên ảnh, vd 0333 194 822"
                                    style="flex:1;min-width:190px" onchange="mktLuu()">
                         </div>
+
+                        <span class="mkt-so">6</span>
+                        <label for="mkt-xoa-bat">Tự xóa bài cũ</label>
+                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                            <label style="display:flex;gap:6px;align-items:center;white-space:nowrap;cursor:pointer">
+                                <input type="checkbox" id="mkt-xoa-bat" onchange="mktLuu()"
+                                       style="width:16px;height:16px;cursor:pointer">
+                                <span>Bật tự xóa</span>
+                            </label>
+                            <span style="color:var(--text-muted);white-space:nowrap">Xóa bài quá</span>
+                            <input class="input" id="mkt-xoa-sau-ngay" type="number" min="1"
+                                   style="width:66px" onchange="mktLuu()">
+                            <span style="color:var(--text-muted);white-space:nowrap">ngày</span>
+                            <label style="display:flex;gap:6px;align-items:center;white-space:nowrap;cursor:pointer">
+                                <input type="checkbox" id="mkt-xoa-chay-thu" onchange="mktLuu()"
+                                       style="width:16px;height:16px;cursor:pointer">
+                                <span>Chạy thử (chỉ báo, chưa xóa)</span>
+                            </label>
+                        </div>
                     </div>
 
                     <div style="font-size:11px;color:var(--text-muted);line-height:1.6;margin-top:10px">
-                        Bật thì mỗi ảnh được dán 1 <b>icon liên hệ ngẫu nhiên</b> (bộ ~50 icon) kèm
-                        <b>số điện thoại trên</b> vào 1 trong 4 góc ảnh — mỗi ảnh một kiểu, né trùng
-                        bộ ảnh của Marketplace. Để trống số điện thoại = coi như tắt.
+                        <b>Biến thể ảnh:</b> bật thì mỗi ảnh được dán <b>số điện thoại trên</b> vào
+                        vùng an toàn — né trùng bộ ảnh của Marketplace. Để trống số điện thoại = coi như tắt.<br>
+                        <b>Tự xóa bài cũ:</b> định kỳ (1 lần/ngày) tự xóa bài niêm yết quá số ngày đã đặt
+                        cho mỗi nick có Marketplace%, báo kết quả qua Telegram kênh Marketplace. Nên để
+                        <b>Chạy thử</b> trước để soi "sẽ xóa bài nào" — xóa là không lấy lại được.
                     </div>
 
                     <div style="display:flex;gap:8px;margin-top:16px;align-items:center">

@@ -10,6 +10,26 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.63.0 — 21/10/2026
+
+**Tự xóa bài niêm yết Marketplace quá X ngày (mặc định 3)**
+
+Bài niêm yết cũ đọng lại làm trang bán của nick loãng + dễ bị coi đăng trùng.
+Thêm cơ chế mỗi nick (có Marketplace%) **tự ghé trang "Bài niêm yết của bạn" 1
+lần/ngày, đọc "Ngày niêm yết" từng bài, và xóa bài quá số ngày đã đặt**.
+
+- Cài ở tab **Vận hành → Marketplace → mục 6 "Tự xóa bài cũ"**: ô **Bật tự xóa**
+  + **số ngày** (mặc định 3) + **Chạy thử (chỉ báo, chưa xóa)**.
+- **Mặc định TẮT** — xóa là không lấy lại được. Bật xong **nên để Chạy thử
+  trước**: nó chỉ báo "sẽ xóa N bài: …" qua **Telegram kênh Marketplace** để bạn
+  soi đúng chưa, rồi mới bỏ Chạy thử cho xóa thật.
+- Lồng vào runner của mảng, **khóa theo acc** (không mở profile trùng phiên đăng/
+  quét tin). Xóa lỗi KHÔNG tính vào sức khoẻ acc.
+- Đã **đo DOM thật** trên nick thật: đọc đúng danh sách bài + "Ngày niêm yết:
+  DD/MM" + luồng "..." → "Xóa bài niêm yết" → xác nhận.
+
+---
+
 ## v2.62.0 — 21/10/2026
 
 **Thư viện ảnh: Xuất / Nhập backup kèm ảnh — chuyển thư viện sang máy khác**

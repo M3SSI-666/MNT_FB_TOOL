@@ -826,6 +826,43 @@ def main():
             with lock:
                 running_accs.discard(acc_key)
 
+    def _xoa_mkt_worker(ten_acc, c_user, acc_key):
+        """Phiên DỌN Marketplace: tự xóa bài niêm yết quá X ngày (hoặc CHẠY THỬ:
+        chỉ báo 'sẽ xóa N bài'). Báo kết quả Telegram kênh Market. Thao tác đọc/
+        dọn thụ động — lỗi KHÔNG tính vào sức khoẻ acc. Luôn đánh nhịp cuối phiên."""
+        try:
+            import market_cleanup
+            try:
+                so_ngay = int(db.get_setting("mkt_xoa_sau_ngay", "3") or 3)
+            except Exception:
+                so_ngay = 3
+            chay_thu = (db.get_setting("mkt_xoa_chay_thu", "1") or "1").strip() \
+                in ("1", "true", "True")
+            kq = market_cleanup.xoa_bai_cu(ten_acc, c_user, so_ngay=so_ngay,
+                                           chay_thu=chay_thu)
+            # Chế độ thật có thể bị market_cleanup ép về chạy thử (chưa đo DOM).
+            thuc_thu = kq.get("chay_thu", chay_thu)
+            if kq and (kq.get("qua_han") or kq.get("da_xoa")):
+                logger.info(f"🧹 [{ten_acc}] dọn Market: {len(kq.get('qua_han') or [])} "
+                            f"bài quá {so_ngay} ngày (chạy thử={thuc_thu})")
+                try:
+                    import thong_bao
+                    thong_bao.bao_xoa_mkt(ten_acc, kq, chay_thu=thuc_thu,
+                                          so_ngay=so_ngay)
+                except Exception as e:
+                    logger.warning(f"⚠️  Báo dọn Market [{ten_acc}] lỗi: {e}")
+        except CookieDeadError:
+            _mark_cookie_dead(ten_acc, c_user)
+        except Exception as e:
+            logger.warning(f"⚠️  Worker dọn Market [{ten_acc}] lỗi (bỏ qua): {e}")
+        finally:
+            try:
+                db.ghi_nhan_xoa_mkt(ten_acc, c_user=c_user)
+            except Exception:
+                pass
+            with lock:
+                running_accs.discard(acc_key)
+
     try:
         while True:
             now = datetime.now()
@@ -960,6 +997,34 @@ def main():
                         time.sleep(jitter(3, pct=0.5, floor=1))
             except Exception as e:
                 logger.warning(f"⚠️  Dispatch quét Market lỗi (bỏ qua): {e}")
+
+            # ── Dọn (tự xóa) bài niêm yết Marketplace quá hạn ─────────────────
+            # Nhịp 1 lần/ngày, CHỈ khi bật (setting mkt_xoa_bat). Cùng khoá theo
+            # acc như phiên quét — không mở profile trùng. den_gio_xoa_mkt đã tự
+            # kiểm cờ bật + marketplace% + nhịp, nên tắt thì vòng này không làm gì.
+            try:
+                from db import (get_accounts, acc_marketplace_pct,
+                                 den_gio_xoa_mkt, loai_content_bat)
+                if LOAI in loai_content_bat():
+                    for _a in get_accounts(loai=LOAI):
+                        if acc_marketplace_pct(_a) <= 0:
+                            continue
+                        _cu_a = (_a.get("c_user") or "").strip()
+                        if not den_gio_xoa_mkt(_a["ten_acc"], c_user=_cu_a):
+                            continue
+                        _ak = _khoa_key(_a["ten_acc"], _cu_a)
+                        with lock:
+                            if _ak in running_accs:
+                                continue   # acc đang bận → để nhịp sau
+                            running_accs.add(_ak)
+                        t = threading.Thread(target=_xoa_mkt_worker,
+                                             args=(_a["ten_acc"], _cu_a, _ak),
+                                             daemon=True)
+                        t.start()
+                        active_threads.append(t)
+                        time.sleep(jitter(3, pct=0.5, floor=1))
+            except Exception as e:
+                logger.warning(f"⚠️  Dispatch dọn Market lỗi (bỏ qua): {e}")
 
             active_threads[:] = [t for t in active_threads if t.is_alive()]
             next_check = now + timedelta(seconds=CHECK_EVERY_SEC)
