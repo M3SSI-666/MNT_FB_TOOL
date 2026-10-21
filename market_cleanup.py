@@ -28,10 +28,22 @@ DOM đã ĐO THẬT trên nick Sa Tran Anh 21/10/2026 (xem huy_hieu/scratchpad):
 
 import asyncio
 import re
+import random
 import datetime
 
 from utils import logger, CookieDeadError
 from config import HEADLESS
+
+# 4 lý do FB hỏi SAU khi bấm Xóa ("Bạn đã bán mặt hàng này chưa?") — chọn NGẪU
+# NHIÊN 1 để trả lời cho tự nhiên. Đo thật trên nick Sa Tran Anh 21/10/2026. Đây
+# là khảo sát TÙY CHỌN: bài đã bị xóa ở bước xác nhận "Xóa", trả lời hay không
+# không ảnh hưởng việc xóa.
+LY_DO_XOA = [
+    "Tôi đã bán trên Facebook rồi",
+    "Tôi bán ở nơi khác rồi",
+    "Tôi chưa bán",
+    "Tôi không muốn trả lời",
+]
 
 # Trang quản lý bài niêm yết đang bán của chính nick.
 SELLING_URL = "https://www.facebook.com/marketplace/you/selling/"
@@ -224,6 +236,25 @@ def quet_bai_niem_yet(acc_name: str, c_user: str = "", headless=None) -> list:
         return []
 
 
+async def _tra_loi_khao_sat(page):
+    """Sau khi xóa, FB hiện hộp 'Bạn đã bán mặt hàng này chưa?' với 4 lý do +
+    nút 'Tiếp' (nút mờ tới khi chọn 1 lý do). Chọn NGẪU NHIÊN 1 lý do rồi bấm
+    Tiếp. Là khảo sát TÙY CHỌN (bài đã bị xóa) → lỗi thì bỏ qua, trả None."""
+    try:
+        ks = page.get_by_role("dialog").filter(has_text="Bạn đã bán mặt hàng này")
+        if not await ks.count():
+            return None
+        ld = random.choice(LY_DO_XOA)
+        await ks.last.get_by_text(ld, exact=True).first.click(timeout=4000)
+        await page.wait_for_timeout(700)
+        await ks.last.get_by_role("button", name="Tiếp").first.click(timeout=4000)
+        await page.wait_for_timeout(1500)
+        return ld
+    except Exception as e:
+        logger.info(f"  (khảo sát lý do xóa — bỏ qua: {e})")
+        return None
+
+
 async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
     """Mở trang selling rồi lặp: tìm 1 dòng QUÁ HẠN → bấm '...' → 'Xóa bài niêm
     yết' → xác nhận 'Xóa' → tải lại → lặp. Tải lại mỗi lần để DOM sạch, tránh
@@ -273,9 +304,14 @@ async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
                     await page.keyboard.press("Escape")
                     break
                 await nut_xoa.first.click(timeout=6000)
-                await page.wait_for_timeout(3000)
+                await page.wait_for_timeout(2500)
+                # FB hỏi lý do xóa (4 lựa chọn) → chọn ngẫu nhiên 1 + Tiếp. Bài
+                # đã bị xóa ở bước trên rồi; đây chỉ cho tự nhiên, lỗi thì bỏ qua.
+                ld = await _tra_loi_khao_sat(page)
+                await page.wait_for_timeout(1200)
                 da_xoa += 1
-                logger.info(f"  🧹 [{acc_name}] đã xóa 1 bài quá hạn ({da_xoa})")
+                logger.info(f"  🧹 [{acc_name}] đã xóa 1 bài quá hạn ({da_xoa})"
+                            + (f" · lý do: {ld}" if ld else ""))
                 # Tải lại cho DOM sạch rồi quét tiếp.
                 await page.goto(SELLING_URL, wait_until="domcontentloaded", timeout=45000)
                 await page.wait_for_timeout(6000)

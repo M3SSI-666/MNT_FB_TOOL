@@ -10,6 +10,18 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.64.0 — 21/10/2026
+
+**Tự xóa: chọn ngẫu nhiên lý do khi Facebook hỏi "Bạn đã bán chưa?"**
+
+Sau khi bấm Xóa, Facebook hiện hộp khảo sát "Bạn đã bán mặt hàng này chưa?" với
+4 lựa chọn. Nay tự **chọn ngẫu nhiên 1 trong 4 lý do** rồi bấm "Tiếp" cho tự
+nhiên (đã bán trên Facebook / bán ở nơi khác / chưa bán / không muốn trả lời).
+Khảo sát này là tùy chọn — bài đã bị xóa ở bước xác nhận, nên nếu bước này lỗi
+thì bỏ qua, không ảnh hưởng việc xóa.
+
+---
+
 ## v2.63.0 — 21/10/2026
 
 **Tự xóa bài niêm yết Marketplace quá X ngày (mặc định 3)**

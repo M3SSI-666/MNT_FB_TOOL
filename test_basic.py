@@ -3892,6 +3892,13 @@ try:
 finally:
     _mc.quet_bai_niem_yet = _mc_quet_goc
     _mc._xoa = _mc_xoa_goc
+# Sau khi xóa, FB hỏi 'Bạn đã bán...?' → chọn NGẪU NHIÊN 1 trong 4 lý do + Tiếp.
+check("có đúng 4 lý do xóa để chọn ngẫu nhiên",
+      len(_mc.LY_DO_XOA) == 4 and all(isinstance(x, str) and x for x in _mc.LY_DO_XOA))
+_src_mc = Path("market_cleanup.py").read_text(encoding="utf-8")
+check("market_cleanup chọn NGẪU NHIÊN lý do + bấm Tiếp (không chặn việc xóa)",
+      "random.choice(LY_DO_XOA)" in _src_mc and "def _tra_loi_khao_sat" in _src_mc
+      and 'name="Tiếp"' in _src_mc)
 # Soạn tin Telegram dọn — chạy thử vs xóa thật.
 _tin_thu = _tb.soan_xoa_mkt("Máy A", "Acc1",
     {"qua_han": [{"item_id": "1", "tieu_de": "Ghế sofa", "tuoi": 5}], "da_xoa": 0},
