@@ -6494,7 +6494,8 @@ check("RESTART/UPDATE dừng đủ 6 runner — khớp server và Lịch máy",
 with db._conn() as _c_tv:
     _bang_tv = {r[0] for r in _c_tv.execute(
         "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-check("init_db tạo bảng tv_mang + tv_bo", {"tv_mang", "tv_bo"} <= _bang_tv)
+check("init_db tạo bảng tv_mang + tv_bo + tv_con_tro",
+      {"tv_mang", "tv_bo", "tv_con_tro"} <= _bang_tv)
 
 # DB: tab (mang) CRUD + giữ thứ tự.
 _m1 = db.tv_mang_them("3PN")
@@ -6574,6 +6575,71 @@ check("content đọc lại ma_thu_vien mới",
       any(r["id"] == _cid_tv and r["ma_thu_vien"] == "9" for r in db.get_content("homestay")))
 with db._conn() as _c_tv2:
     _c_tv2.execute("DELETE FROM content WHERE ma_content='TV1'")
+
+# ── Bước 3: roll bộ ảnh lúc đăng (anh_cho_bai / chon_bo_anh / con trỏ) ───────
+# Dựng 1 thư viện 3 bộ (bo A/B/C) đều dùng được, +1 bộ "Không" để chắc chắn bị bỏ.
+_mr = db.tv_mang_them("ROLL")
+db.tv_bo_upsert({"mang_id": _mr, "ma": "A", "link_anh": "/media/thuvien/A.jpg", "su_dung": "Có"})
+db.tv_bo_upsert({"mang_id": _mr, "ma": "B", "link_anh": "/media/thuvien/B.jpg", "su_dung": "Có"})
+db.tv_bo_upsert({"mang_id": _mr, "ma": "C", "link_anh": "/media/thuvien/C.jpg", "su_dung": "Có"})
+db.tv_bo_upsert({"mang_id": _mr, "ma": "D", "link_anh": "/media/thuvien/D.jpg", "su_dung": "Không"})
+
+# Ưu tiên ảnh riêng: cột Ảnh có ảnh thì dùng chính nó, KHÔNG đụng thư viện.
+check("roll: có ảnh riêng thì giữ nguyên, bỏ qua thư viện",
+      db.anh_cho_bai("u1", "/media/content/rieng.jpg", str(_mr), True) == "/media/content/rieng.jpg")
+# Không ảnh riêng, không thư viện → rỗng.
+check("roll: không ảnh riêng + không thư viện → rỗng",
+      db.anh_cho_bai("u1", "", "", True) == "" and db.anh_cho_bai("u1", "  ", None, False) == "")
+# Chỉ lấy bộ su_dung='Có' + có link_anh (bộ D bị loại khỏi mọi lần bốc).
+check("roll: chỉ bốc trong {A,B,C}, không bao giờ ra D",
+      all(db.anh_cho_bai(f"rand{i}", "", str(_mr), False) in
+          {"/media/thuvien/A.jpg", "/media/thuvien/B.jpg", "/media/thuvien/C.jpg"}
+          for i in range(30)))
+
+# Marketplace: con trỏ chạy TUẦN TỰ qua 3 bộ rồi vòng lại (bắt đầu từ chỗ nào
+# cũng được — kiểm bằng cách 3 lần liên tiếp phải phủ đúng 3 bộ khác nhau).
+_cu_mkt = "acc_roll_mkt"
+_lan = [db.anh_cho_bai(_cu_mkt, "", str(_mr), True) for _ in range(3)]
+check("roll Marketplace: 3 lần liên tiếp phủ đủ 3 bộ (tuần tự, không lặp)",
+      set(_lan) == {"/media/thuvien/A.jpg", "/media/thuvien/B.jpg", "/media/thuvien/C.jpg"})
+check("roll Marketplace: vòng thứ 2 lặp lại y hệt vòng 1 (con trỏ vòng tròn)",
+      [db.anh_cho_bai(_cu_mkt, "", str(_mr), True) for _ in range(3)] == _lan)
+
+# Mỗi nick một con trỏ riêng (roll độc lập).
+with db._conn() as _c_ct:
+    _ct_rows = _c_ct.execute(
+        "SELECT c_user FROM tv_con_tro WHERE thu_vien_id=?", (_mr,)).fetchall()
+check("con trỏ roll lưu riêng theo nick", any(r[0] == _cu_mkt for r in _ct_rows))
+
+# Page/VIA (dung_con_tro=False) KHÔNG được đụng vào con trỏ Marketplace.
+with db._conn() as _c_ct2:
+    _vt_truoc = _c_ct2.execute(
+        "SELECT vi_tri FROM tv_con_tro WHERE c_user=? AND thu_vien_id=?",
+        (_cu_mkt, _mr)).fetchone()[0]
+for _ in range(5):
+    db.anh_cho_bai(_cu_mkt, "", str(_mr), False)   # bốc ngẫu nhiên
+with db._conn() as _c_ct3:
+    _vt_sau = _c_ct3.execute(
+        "SELECT vi_tri FROM tv_con_tro WHERE c_user=? AND thu_vien_id=?",
+        (_cu_mkt, _mr)).fetchone()[0]
+check("Page/VIA bốc ngẫu nhiên KHÔNG đẩy con trỏ Marketplace", _vt_truoc == _vt_sau)
+
+# Thư viện rỗng / toàn bộ 'Không' → rỗng (không nổ).
+_mr0 = db.tv_mang_them("ROLL_RONG")
+check("roll: thư viện không có bộ dùng được → rỗng",
+      db.anh_cho_bai("u1", "", str(_mr0), True) == ""
+      and db.anh_cho_bai("u1", "", str(_mr0), False) == "")
+# ma_thu_vien rác (không phải số) → rỗng, không nổ.
+check("roll: mã thư viện rác → rỗng", db.anh_cho_bai("u1", "", "abc", True) == "")
+
+# Scheduler nối đúng: Marketplace dùng con trỏ, 3 kênh còn lại ngẫu nhiên.
+_sched_src = Path("scheduler.py").read_text(encoding="utf-8")
+check("scheduler: Marketplace roll theo con trỏ (dung_con_tro=True)",
+      "anh_cho_bai" in _sched_src and "dung_con_tro=True" in _sched_src
+      and _sched_src.count("dung_con_tro=False") == 3)
+
+db.tv_mang_xoa(_mr)
+db.tv_mang_xoa(_mr0)
 
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):

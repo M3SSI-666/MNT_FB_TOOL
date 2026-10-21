@@ -359,6 +359,15 @@ def init_db():
             created_at      TEXT DEFAULT (datetime('now','localtime')),
             order_idx       INTEGER DEFAULT 0
         );
+        -- tv_con_tro = con trỏ roll bộ ảnh, theo (nick + thư viện). Marketplace
+        -- đăng xong thì đẩy con trỏ +1 để lần sau bốc bộ KẾ TIẾP (roll đều, mỗi
+        -- nick một con trỏ riêng). Page/VIA bốc ngẫu nhiên nên KHÔNG đụng vào đây.
+        CREATE TABLE IF NOT EXISTS tv_con_tro (
+            c_user          TEXT NOT NULL,
+            thu_vien_id     INTEGER NOT NULL,
+            vi_tri          INTEGER DEFAULT 0,
+            PRIMARY KEY (c_user, thu_vien_id)
+        );
 
         -- ── UID / Nhóm ───────────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS uid_groups (
@@ -1888,9 +1897,11 @@ def tv_mang_doi_ten(mang_id: int, ten: str):
 
 
 def tv_mang_xoa(mang_id: int):
-    """Xoá một tab + mọi bộ ảnh trong đó (ảnh trên ổ đĩa giữ nguyên)."""
+    """Xoá một tab + mọi bộ ảnh trong đó + con trỏ roll của nó (ảnh trên ổ đĩa
+    giữ nguyên)."""
     with _conn() as con:
         con.execute("DELETE FROM tv_bo WHERE mang_id=?", (mang_id,))
+        con.execute("DELETE FROM tv_con_tro WHERE thu_vien_id=?", (mang_id,))
         con.execute("DELETE FROM tv_mang WHERE id=?", (mang_id,))
 
 
@@ -1937,6 +1948,66 @@ def tv_bo_reorder(ordered_ids: list[int]):
     with _conn() as con:
         for idx, bid in enumerate(ordered_ids):
             con.execute("UPDATE tv_bo SET order_idx=? WHERE id=?", (idx, bid))
+
+
+# ── Roll bộ ảnh lúc đăng ─────────────────────────────────────────────────
+def _con_tro_tien(c_user: str, thu_vien_id: int, n: int) -> int:
+    """Trả vị trí DÙNG LẦN NÀY (trong [0, n)) rồi đẩy con trỏ +1 (vòng về 0).
+    Con trỏ theo (nick + thư viện): mỗi nick roll độc lập. Lần đầu chưa có con
+    trỏ thì gieo lệch theo nick để nhiều acc KHÔNG cùng bắt đầu ở bộ 0 (đỡ trùng
+    khi cùng lúc đăng chung 1 content/thư viện)."""
+    if n <= 0:
+        return 0
+    with _conn() as con:
+        r = con.execute(
+            "SELECT vi_tri FROM tv_con_tro WHERE c_user=? AND thu_vien_id=?",
+            (c_user, thu_vien_id)).fetchone()
+        if r is None:
+            idx = sum(ord(ch) for ch in (c_user or "")) % n   # gieo lệch theo nick
+        else:
+            idx = int(r["vi_tri"]) % n
+        nxt = (idx + 1) % n
+        con.execute(
+            "INSERT INTO tv_con_tro (c_user, thu_vien_id, vi_tri) VALUES (?,?,?) "
+            "ON CONFLICT(c_user, thu_vien_id) DO UPDATE SET vi_tri=excluded.vi_tri",
+            (c_user, thu_vien_id, nxt))
+        return idx
+
+
+def chon_bo_anh(c_user: str, thu_vien_id, dung_con_tro: bool) -> str:
+    """Bốc link_anh (CSV) của 1 'bộ ảnh' trong thư viện.
+    - dung_con_tro=True  (Marketplace): bốc bộ KẾ TIẾP theo con trỏ rồi đẩy con trỏ.
+    - dung_con_tro=False (Page / VIA):  bốc NGẪU NHIÊN, KHÔNG đụng con trỏ.
+    Chỉ xét bộ su_dung='Có' và có ảnh. Không có bộ nào hợp lệ → ''."""
+    try:
+        tvid = int(thu_vien_id)
+    except (TypeError, ValueError):
+        return ""
+    bo = [b for b in tv_bo_list(tvid)
+          if (b.get("su_dung") or "").strip() == "Có"
+          and (b.get("link_anh") or "").strip()]
+    if not bo:
+        return ""
+    n = len(bo)
+    idx = _con_tro_tien(c_user, tvid, n) if dung_con_tro else random.randrange(n)
+    return (bo[idx].get("link_anh") or "").strip()
+
+
+def anh_cho_bai(c_user: str, link_anh: str, ma_thu_vien, dung_con_tro: bool) -> str:
+    """Ảnh để đăng cho MỘT bài, theo luật ưu tiên:
+      - Cột Ảnh (link_anh) có ảnh       → luôn dùng chính ảnh đó (bỏ qua thư viện).
+      - Cột Ảnh trống + có Mã thư viện  → bốc 1 bộ ảnh từ thư viện (xem chon_bo_anh).
+      - Cả hai trống                    → ''.
+    """
+    link = (link_anh or "").strip()
+    if link:
+        return link
+    tv = (ma_thu_vien or "")
+    if isinstance(tv, str):
+        tv = tv.strip()
+    if not tv:
+        return ""
+    return chon_bo_anh(c_user, tv, dung_con_tro)
 
 
 def _tach_urls(*chuoi) -> set:

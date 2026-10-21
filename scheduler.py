@@ -174,10 +174,14 @@ def _attempt_post(item: dict) -> str:
             raise Exception("Thiếu UID nhóm đầu để mở composer")
         acc_data  = _tk(item, theo_page=True)
         c_user_v  = _c_user_cua(item, acc_data)
+        # Cột Ảnh trống + có Mã thư viện → bốc 1 bộ ảnh từ thư viện. Page/VIA
+        # bốc NGẪU NHIÊN (không sợ trùng, không đụng con trỏ roll của Marketplace).
+        # Có ảnh riêng ở cột Ảnh thì giữ nguyên ảnh đó.
+        anh = db.anh_cho_bai(c_user_v, link_anh, ct.get("ma_thu_vien"), dung_con_tro=False)
         count = post_page_via(
             acc_name=acc_name, page_uid=page_uid,
             first_group_uid=first_uid, search_kw=tu_khoa,
-            message=content, image_url=link_anh,
+            message=content, image_url=anh,
             c_user=c_user_v,
             # Link bài vừa đăng được lưu vào danh sách comment của ĐÚNG loại
             # lịch đang chạy — lưu nhầm thì acc homestay đi comment bài bán nhà.
@@ -203,9 +207,12 @@ def _attempt_post(item: dict) -> str:
             raise Exception("Thiếu UID nhóm đầu để mở composer")
         acc_data  = _tk(item, theo_page=True)
         c_user_v  = _c_user_cua(item, acc_data)
+        # Cột Ảnh trống + có Mã thư viện → bốc 1 bộ ảnh NGẪU NHIÊN từ thư viện
+        # (Page/VIA không đụng con trỏ roll của Marketplace); có ảnh riêng thì giữ.
+        anh = db.anh_cho_bai(c_user_v, link_anh, ct.get("ma_thu_vien"), dung_con_tro=False)
         count = post_via_crosspost(
             acc_name=acc_name, search_kw=tu_khoa,
-            message=content, image_url=link_anh,
+            message=content, image_url=anh,
             first_group_uid=first_uid,
             c_user=c_user_v,
             # Thu link bài VIA vừa đăng lưu vào danh sách comment của ĐÚNG mảng
@@ -434,8 +441,12 @@ def _run_marketplace_slot(item: dict):
         from market_poster import post_marketplace
         acc_data = _tk(item)
         c_user_v = _c_user_cua(item, acc_data)
+        # Cột Ảnh trống + có Mã thư viện → bốc bộ ảnh KẾ TIẾP theo con trỏ
+        # (nick + thư viện) rồi ĐẨY con trỏ, để lần sau roll sang bộ khác (chống
+        # trùng Marketplace). Có ảnh riêng ở cột Ảnh thì giữ nguyên ảnh đó.
+        anh = db.anh_cho_bai(c_user_v, link_anh, ct.get("ma_thu_vien"), dung_con_tro=True)
         so_nhom = post_marketplace(acc_name=acc_name, message=content,
-                                   image_url=link_anh, c_user=c_user_v,
+                                   image_url=anh, c_user=c_user_v,
                                    tieu_de=tieu_de)
         done = datetime.now().strftime("%H:%M")
         _update_status(sid, f"✅ {done} 🛒 ({so_nhom} nhóm)")
@@ -493,8 +504,11 @@ def _run_page_slot(item: dict):
     try:
         from page_via_poster import post_page_wall
         c_user_v = _c_user_cua(item, acc_data)
+        # Cột Ảnh trống + có Mã thư viện → bốc 1 bộ ảnh NGẪU NHIÊN từ thư viện
+        # (đăng tường Page không sợ trùng, không đụng con trỏ Marketplace).
+        anh = db.anh_cho_bai(c_user_v, link_anh, ct.get("ma_thu_vien"), dung_con_tro=False)
         ok = post_page_wall(acc_name=acc_name, page_uid=page_uid,
-                            message=content, image_url=link_anh, c_user=c_user_v)
+                            message=content, image_url=anh, c_user=c_user_v)
         if not ok:
             raise Exception("Đăng tường Page về kết quả rỗng mà không báo lỗi bước nào")
         done = datetime.now().strftime("%H:%M")

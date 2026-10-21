@@ -10,6 +10,26 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.60.0 — 21/10/2026
+
+**Bốc/roll bộ ảnh từ thư viện lúc đăng (bước 3 kho ảnh) + đổi nhãn dropdown**
+
+- **Luật ưu tiên ảnh (áp dụng cho CẢ 4 kiểu đăng):** mỗi dòng content lúc đăng
+  xét **cột Ảnh trước** — cột Ảnh **có ảnh** thì luôn dùng chính ảnh đó; cột Ảnh
+  **bỏ trống** mà có chọn **Mã thư viện** thì mới bốc 1 bộ ảnh từ thư viện; cả
+  hai trống thì không có ảnh.
+- **Marketplace: roll tuần tự.** Bốc **bộ ảnh kế tiếp** trong thư viện theo con
+  trỏ riêng của **(nick + thư viện)** rồi đẩy con trỏ — lần đăng sau tự sang bộ
+  khác (chống trùng), hết vòng thì quay lại đầu. Mỗi nick roll độc lập, nick
+  khác nhau khởi đầu ở bộ khác nhau nên đỡ đụng nhau.
+- **Page / VIA / đăng tường Page: bốc ngẫu nhiên.** Không sợ trùng nên lấy đại 1
+  bộ, và **không đụng** vào con trỏ roll của Marketplace.
+- Chỉ bốc các bộ ảnh **Sử dụng = Có** và **có ảnh**.
+- Ô dropdown cột **Mã thư viện** đổi nhãn ô trống từ "— Ảnh riêng —" thành
+  "— Mã thư viện —".
+
+---
+
 ## v2.59.0 — 21/10/2026
 
 **Content: thêm cột "Mã thư viện" + dời cột Sử dụng (bước 2 kho ảnh)**

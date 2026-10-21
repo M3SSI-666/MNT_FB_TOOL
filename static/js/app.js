@@ -2135,7 +2135,7 @@ async function loadContent(loai){
         const res=await API.content(loai);
         // Danh sách thư viện ảnh cho dropdown "Mã thư viện" (dùng cả ở form sửa).
         try{ _tvMangCache=((await (await fetch("/api/thuvien/mang")).json()).data)||[]; }catch(e){}
-        const tvOpts=(sel)=>`<option value="">— Ảnh riêng —</option>`+
+        const tvOpts=(sel)=>`<option value="">— Mã thư viện —</option>`+
             _tvMangCache.map(m=>`<option value="${m.id}" ${String(sel||"")===String(m.id)?"selected":""}>${_escapeHtml(m.ten)}</option>`).join("");
         const total=res.data.length, active=res.data.filter(r=>r.su_dung==="Có").length;
         const box=document.getElementById("content-summary");
@@ -2339,7 +2339,7 @@ function openContentEdit(data){
             </div>
         </div>
         <div class="field-group"><label>Mã thư viện ảnh <span style="font-weight:400;color:var(--text-muted);font-size:11px">— nếu cột Ảnh trên bỏ trống thì bốc ngẫu nhiên 1 bộ ảnh từ thư viện này</span></label>
-            <select id="ce_tv"><option value="">— Ảnh riêng —</option>${_tvMangCache.map(m=>`<option value="${m.id}" ${String(data.ma_thu_vien||"")===String(m.id)?"selected":""}>${_escapeHtml(m.ten)}</option>`).join("")}</select></div>
+            <select id="ce_tv"><option value="">— Mã thư viện —</option>${_tvMangCache.map(m=>`<option value="${m.id}" ${String(data.ma_thu_vien||"")===String(m.id)?"selected":""}>${_escapeHtml(m.ten)}</option>`).join("")}</select></div>
         <div class="field-group"><label>Tiêu đề Market Place <span style="font-weight:400;color:var(--text-muted);font-size:11px">— tiêu đề bài niêm yết khi đăng Marketplace; để trống thì content này không đăng Marketplace được</span></label><input id="ce_tdm" value="${(data.tieu_de_mkt||"").replace(/"/g,"&quot;")}"></div>
         <div class="field-group"><label>Ghi chú</label><input id="ce_note" value="${data.ghi_chu||""}"></div>`;
     document.getElementById("cedit-overlay").style.display="block";
