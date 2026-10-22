@@ -1994,6 +1994,13 @@ def tv_bo_update_field(bo_id: int, field: str, value):
         con.execute(f"UPDATE tv_bo SET {field}=? WHERE id=?", (value, bo_id))
 
 
+def tv_mang_reorder(ordered_ids: list[int]):
+    """Đổi thứ tự các TAB thư viện (kéo thả tab trái ↔ phải)."""
+    with _conn() as con:
+        for idx, mid in enumerate(ordered_ids):
+            con.execute("UPDATE tv_mang SET order_idx=? WHERE id=?", (idx, mid))
+
+
 def tv_bo_reorder(ordered_ids: list[int]):
     with _conn() as con:
         for idx, bid in enumerate(ordered_ids):

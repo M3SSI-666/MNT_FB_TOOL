@@ -1510,6 +1510,16 @@ def api_tv_bo_xoa():
     return jsonify({"ok": True})
 
 
+@app.route("/api/thuvien/mang/reorder", methods=["POST"])
+def api_tv_mang_reorder():
+    ids = (request.json or {}).get("ids", [])
+    try:
+        db.tv_mang_reorder([int(i) for i in ids])
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @app.route("/api/thuvien/bo/reorder", methods=["POST"])
 def api_tv_bo_reorder():
     ids = (request.json or {}).get("ids", [])
@@ -1630,8 +1640,11 @@ def api_tv_import_zip():
     """Nhập Thư viện ảnh từ .zip — chế độ "thêm & bỏ trùng".
 
     - Tab: khớp theo TÊN (không phân biệt hoa thường); chưa có thì tạo mới.
-    - Bộ ảnh trùng thì bỏ qua: cùng tab + cùng Mã bộ ảnh; bộ KHÔNG có mã thì
-      so theo đúng tập ảnh.
+    - Nhập THÊM, giữ nguyên bộ ảnh sẵn có. Chỉ bỏ qua bộ có ĐÚNG Y các ảnh đó
+      trong cùng tab (nhập lại cùng file không nhân đôi). Bộ khác ảnh mà TRÙNG
+      MÃ thì vẫn thêm, đổi sang mã mới — mã số lấy số kế tiếp (đã có 1–14 thì
+      bộ nhập vào thành 15, 16…), mã chữ thêm " (2)", " (3)"… Bản đầu coi trùng
+      mã là trùng bộ: hai máy cùng đánh mã 1, 2, 3… nên bộ khác hẳn vẫn bị bỏ.
     - Ảnh chép vào data/media/thuvien/; tên do phần mềm đặt thì giữ nguyên (file
       đã có thì dùng lại, không chép đè), tên lạ thì đặt tên mới.
     """
@@ -1717,22 +1730,37 @@ def api_tv_import_zip():
         url_cua[ten_cu] = url
         return url
 
-    def _dau(ma, link):
-        return ("ma", ma.lower()) if ma else ("anh", frozenset(
-            os.path.basename(u.strip()) for u in link.split(",") if u.strip()))
+    def _dau(link):
+        """Dấu nhận diện một bộ = tập TÊN FILE ảnh (tên do phần mềm đặt được giữ
+        nguyên khi chuyển máy — xem _ten_anh_tv_giu_duoc)."""
+        return frozenset(os.path.basename(u.strip()) for u in link.split(",") if u.strip())
 
-    da_co = {}
+    da_co, ma_da_co = {}, {}
     for tid in set(tab_id.values()):
-        da_co[tid] = {_dau((b.get("ma") or "").strip(), b.get("link_anh") or "")
-                      for b in db.tv_bo_list(tid)}
+        bos = db.tv_bo_list(tid)
+        da_co[tid] = {_dau(b.get("link_anh") or "") for b in bos}
+        ma_da_co[tid] = {(b.get("ma") or "").strip().lower() for b in bos}
 
-    them = bo_qua = 0
+    def _ma_moi(tid, ma):
+        """Mã chưa ai dùng trong tab: giữ nguyên nếu được, trùng thì đổi."""
+        dung = ma_da_co[tid]
+        if not ma or ma.lower() not in dung:
+            return ma
+        so = [int(m) for m in dung if m.isdigit()]
+        if ma.isdigit():
+            return str(max(so + [int(ma)]) + 1)
+        k = 2
+        while f"{ma} ({k})".lower() in dung:
+            k += 1
+        return f"{ma} ({k})"
+
+    them = bo_qua = doi_ma = 0
     for d in dong:
         tid = tab_id[d["thu_vien"].lower()]
         ma = d.get("ma", "")
         ten_anh = [t.strip() for t in d.get("link_anh", "").split(",") if t.strip()]
-        dau = _dau(ma, ",".join(ten_anh))
-        if dau in da_co[tid]:
+        dau = _dau(",".join(ten_anh))
+        if dau and dau in da_co[tid]:
             bo_qua += 1
             continue
         urls = [u for u in (_url(t) for t in ten_anh) if u]
@@ -1740,6 +1768,9 @@ def api_tv_import_zip():
             bo_qua += 1          # zip không kèm ảnh nào của bộ này — đừng tạo bộ rỗng
             continue
         su_dung = d.get("su_dung") or "Có"
+        ma = _ma_moi(tid, ma)
+        doi_ma += ma != d.get("ma", "")
+        ma_da_co[tid].add(ma.lower())
         db.tv_bo_upsert({"mang_id": tid, "ma": ma, "link_anh": ", ".join(urls),
                          "su_dung": su_dung if su_dung in ("Có", "Không") else "Có",
                          "ghi_chu": d.get("ghi_chu", "")})
@@ -1747,7 +1778,7 @@ def api_tv_import_zip():
         them += 1
 
     return jsonify({"ok": True, "tab_moi": tab_moi, "them": them,
-                    "bo_qua": bo_qua, "so_anh": so_anh})
+                    "bo_qua": bo_qua, "doi_ma": doi_ma, "so_anh": so_anh})
 
 
 # ── Sao lưu content KÈM ẢNH ─────────────────────────────────────────────

@@ -2453,7 +2453,8 @@ async function importThuVienZip(e){
         if(!res.ok) throw new Error(res.error||"không rõ lỗi");
         Toast.show(`Đã thêm ${res.them} bộ ảnh (${res.so_anh} ảnh)`
             +(res.tab_moi?` · ${res.tab_moi} thư viện mới`:"")
-            +(res.bo_qua?` · bỏ qua ${res.bo_qua} bộ trùng`:""), "success", 8000);
+            +(res.doi_ma?` · ${res.doi_ma} bộ trùng mã đã đổi sang mã mới`:"")
+            +(res.bo_qua?` · bỏ qua ${res.bo_qua} bộ đã có sẵn (đúng y ảnh)`:""), "success", 9000);
         loadThuVien();
     }catch(err){ Toast.error("Lỗi nhập backup: "+err.message); }
 }
@@ -2470,7 +2471,11 @@ function tvRenderTabs(){
     const box = document.getElementById("tv-tabs"); if(!box) return;
     let html = _tvMang.map(m=>{
         const active = m.id === _tvCur;
-        return `<div class="content-tab ${active?"active":""}" onclick="tvChon(${m.id})">
+        return `<div class="content-tab ${active?"active":""}" onclick="tvChon(${m.id})"
+                     draggable="true" data-tv="${m.id}" title="Kéo thả để đổi vị trí"
+                     ondragstart="tvTabKeo(event,${m.id})" ondragover="tvTabQua(event)"
+                     ondragleave="tvTabRoi(event)" ondrop="tvTabTha(event,${m.id})"
+                     ondragend="tvTabXong()">
                     <span>${_escapeHtml(m.ten)}</span>
                     <span class="content-tab__act" title="Đổi tên bộ ảnh"
                           onclick="event.stopPropagation();tvDoiTen(${m.id})">${_ICON_SUA}</span>
@@ -2486,6 +2491,47 @@ function tvRenderTabs(){
 }
 
 function tvChon(id){ _tvCur = id; tvRenderTabs(); tvLoadBang(); }
+
+// ── Kéo thả đổi vị trí tab thư viện (trái ↔ phải) ──
+// Thả vào NỬA TRÁI tab đích thì đứng trước nó, nửa phải thì đứng sau. Thứ tự lưu
+// vào tv_mang.order_idx — dropdown "Mã thư viện" ở tab Content đi theo thứ tự này.
+let _tvKeoId = null;
+function _tvBenPhai(e){ const r=e.currentTarget.getBoundingClientRect(); return e.clientX > r.left + r.width/2; }
+function tvTabKeo(e, id){
+    _tvKeoId = id;
+    e.dataTransfer.effectAllowed = "move";
+    try{ e.dataTransfer.setData("text/plain", String(id)); }catch(_){}
+    e.currentTarget.classList.add("tv-tab--keo");
+}
+function tvTabQua(e){
+    if(_tvKeoId===null) return;
+    e.preventDefault();
+    const phai=_tvBenPhai(e);
+    e.currentTarget.classList.toggle("tv-tab--tha-phai", phai);
+    e.currentTarget.classList.toggle("tv-tab--tha-trai", !phai);
+}
+function tvTabRoi(e){ e.currentTarget.classList.remove("tv-tab--tha-trai","tv-tab--tha-phai"); }
+function tvTabXong(){
+    _tvKeoId = null;
+    document.querySelectorAll("#tv-tabs .content-tab").forEach(el=>
+        el.classList.remove("tv-tab--keo","tv-tab--tha-trai","tv-tab--tha-phai"));
+}
+async function tvTabTha(e, dichId){
+    e.preventDefault();
+    const keo=_tvKeoId, phai=_tvBenPhai(e);
+    tvTabXong();
+    if(keo===null || keo===dichId) return;
+    const ds=_tvMang.filter(m=>m.id!==keo), m=_tvMang.find(x=>x.id===keo);
+    if(!m) return;
+    let i=ds.findIndex(x=>x.id===dichId); if(phai) i++;
+    ds.splice(i,0,m);
+    const cu=_tvMang; _tvMang=ds; tvRenderTabs();
+    try{
+        const r=await (await fetch("/api/thuvien/mang/reorder",{method:"POST",
+            headers:{"Content-Type":"application/json"},body:JSON.stringify({ids:ds.map(x=>x.id)})})).json();
+        if(!r.ok) throw new Error(r.error||"không rõ lỗi");
+    }catch(err){ _tvMang=cu; tvRenderTabs(); Toast.error("Không lưu được thứ tự: "+err.message); }
+}
 
 function _tvKiemTen(v){
     if(!v) return "Nhập tên bộ ảnh";
@@ -2576,10 +2622,10 @@ async function tvLoadBang(){
                 ${ec(r,"ma","font-weight:600;text-align:center;white-space:nowrap;font-size:13px")}
                 <td style="padding:4px 6px;cursor:pointer" title="Click xem ảnh"
                     onclick="openLightbox(JSON.parse(decodeURIComponent('${encImgs}')),{name:'${(r.ma||"").replace(/'/g,'')}'})">
-                    <div style="display:flex;gap:2px;flex-wrap:wrap;max-width:140px">
+                    <div style="display:flex;gap:2px;flex-wrap:wrap;max-width:324px" title="Tối đa 8 ảnh một hàng">
                         ${imgs.length
-                            ?imgs.slice(0,4).map(u=>`<img src="${u}" style="width:34px;height:34px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">`).join("")
-                             +(imgs.length>4?`<div style="width:34px;height:34px;border-radius:4px;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--accent)">+${imgs.length-4}</div>`:"")
+                            ?imgs.slice(0,8).map(u=>`<img src="${u}" style="width:34px;height:34px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">`).join("")
+                             +(imgs.length>8?`<div style="width:34px;height:34px;border-radius:4px;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--accent)">+${imgs.length-8}</div>`:"")
                             :`<span style="font-size:11px;color:var(--text-muted)">-</span>`}
                     </div>
                 </td>

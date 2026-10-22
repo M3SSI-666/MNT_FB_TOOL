@@ -771,3 +771,9 @@ td.saved  { outline: 2px solid var(--success) !important; }
 .content-tab__act--xoa:hover { background: var(--danger-light); color: var(--danger); }
 .content-tab--them { border-style: dashed; background: transparent; color: var(--text-secondary); font-weight: 600; }
 .content-tab--them:hover { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
+
+/* Kéo thả tab Thư viện ảnh — vạch xanh báo chỗ sẽ thả (trước / sau tab đích) */
+#tv-tabs .content-tab[draggable="true"] { cursor: grab; }
+.content-tab.tv-tab--keo { opacity: .4; }
+.content-tab.tv-tab--tha-trai { box-shadow: inset 3px 0 0 var(--accent); }
+.content-tab.tv-tab--tha-phai { box-shadow: inset -3px 0 0 var(--accent); }

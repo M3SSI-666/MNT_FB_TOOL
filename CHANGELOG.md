@@ -10,6 +10,25 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.66.0 — 22/10/2026
+
+**Thư viện ảnh: 8 ảnh một hàng, nhập backup THÊM giữ bộ sẵn có, kéo thả đổi vị trí tab**
+
+- **8 ảnh trên một hàng:** cột Ảnh hiện tới **8 ảnh** cùng một hàng (trước tới ảnh
+  thứ 4 đã xuống dòng dù hàng còn trống). Bộ có hơn 8 ảnh thì ô **+N** đứng cuối.
+- **Nhập backup = nhập THÊM, giữ nguyên bộ ảnh sẵn có.** Trước đây bộ nào **trùng
+  mã** với bộ đang có (hai máy cùng đánh mã 1, 2, 3…) đều bị bỏ qua dù ảnh khác
+  hẳn. Nay bộ mới vẫn được thêm, **đổi sang mã mới**: mã số lấy số kế tiếp (đã có
+  1–14 thì bộ nhập vào thành 15, 16…), mã chữ thêm " (2)", " (3)"… Chỉ bỏ qua bộ
+  có **đúng y các ảnh đó** — nhập lại cùng một file vẫn không nhân đôi.
+- **Kéo thả đổi vị trí tab bộ ảnh** (trái ↔ phải): giữ chuột vào tab rồi kéo, vạch
+  xanh báo chỗ sẽ thả. Thứ tự được lưu lại; ô chọn **Mã thư viện** ở tab Content
+  cũng theo thứ tự này.
+
+> Cập nhật xong **khởi động lại app**.
+
+---
+
 ## v2.65.1 — 22/10/2026
 
 **Cột "Mã ảnh" ghi TÊN thư viện thay cho chữ "Bộ ảnh"**

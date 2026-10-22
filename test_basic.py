@@ -6448,6 +6448,13 @@ check("Lịch máy dừng/bật được runner của cả 5 mảng + nuôi (kh�
       {"homestay", "thue", "ban", "loai4", "loai5", "nuoi"} <= set(_lm_m.RUNNER)
       and "page" not in _lm_m.RUNNER)
 _ajs_m = Path("static/js/app.js").read_text(encoding="utf-8")
+# Thư viện ảnh: tới 8 ảnh một hàng — bản đầu khung 140px nên ảnh thứ 4 đã xuống dòng.
+_khoi_tvb = _ajs_m[_ajs_m.index("async function tvLoadBang"):][:6000]
+check("Thư viện ảnh: hiện tới 8 ảnh trên một hàng (không xuống dòng ở ảnh thứ 4)",
+      "imgs.slice(0,8)" in _khoi_tvb and "max-width:324px" in _khoi_tvb
+      and "imgs.slice(0,4)" not in _khoi_tvb and "+${imgs.length-8}" in _khoi_tvb)
+check("tab Thư viện ảnh kéo thả được (draggable + lưu qua /api/thuvien/mang/reorder)",
+      'ondrop="tvTabTha(event,${m.id})"' in _ajs_m and "/api/thuvien/mang/reorder" in _ajs_m)
 check("bảng lịch tô màu bộ ảnh theo nhãn mới (không dò chữ 'Bộ ảnh' cứng)",
       '_laBo=!!_ma && _ma!=="Ảnh"' in _ajs_m and '_ma.startsWith("Bộ ảnh")' not in _ajs_m)
 _khoi_mang = _ajs_m[_ajs_m.index("function renderContentTabs"):_ajs_m.index("async function _luuLoai")]
@@ -6869,6 +6876,42 @@ try:
           _r_im2.get("ok") and _r_im2["them"] == 0 and _r_im2["bo_qua"] == 3
           and _r_im2["tab_moi"] == 0 and len(db.tv_bo_list(_ds_tv["1PN"])) == 3
           and len(list((_md_tv / "thuvien").iterdir())) == _so_file)
+    # Máy đích ĐÃ CÓ bộ cùng mã nhưng ảnh khác (hai máy cùng đánh mã 1, 2, 3…):
+    # nhập THÊM, giữ bộ sẵn có, bộ trùng mã đổi sang mã mới. Bản đầu bỏ qua vì
+    # coi trùng mã là trùng bộ — nhập không thêm được gì.
+    _tk = db.tv_mang_them("KHAC_MAY")
+    _anh_cu = _u(b"anh-cu")
+    db.tv_bo_upsert({"mang_id": _tk, "ma": "1", "link_anh": _anh_cu, "su_dung": "Có"})
+    db.tv_bo_upsert({"mang_id": _tk, "ma": "2", "link_anh": _u(b"anh-cu-2"), "su_dung": "Có"})
+    _buf_k = _BIO_tv()
+    from openpyxl import Workbook as _WB_tv
+    _wb_k = _WB_tv(); _ws_k = _wb_k.active; _ws_k.title = "Bộ ảnh"
+    _ws_k.append(["Thư viện", "Mã bộ ảnh", "Ảnh", "Sử dụng", "Ghi chú"])
+    _ws_k.append(["KHAC_MAY", "1", "aaaaaaaaaaa1.jpg", "Có", ""])
+    _ws_k.append(["KHAC_MAY", "2", "aaaaaaaaaaa2.jpg", "Có", ""])
+    _ws_k.append(["KHAC_MAY", "A", "aaaaaaaaaaa3.jpg", "Có", ""])
+    _ws_k.append(["KHAC_MAY", "A", "aaaaaaaaaaa4.jpg", "Có", ""])
+    _x = _BIO_tv(); _wb_k.save(_x)
+    with _zf_tv.ZipFile(_buf_k, "w") as _z:
+        _z.writestr("thu_vien.xlsx", _x.getvalue())
+        for _i in range(1, 5):
+            _z.writestr(f"images/aaaaaaaaaaa{_i}.jpg", f"moi-{_i}".encode())
+    _r_k = _nhap(_buf_k.getvalue(), "/api/thuvien/import-zip")
+    _ma_k = [(b["ma"], b["link_anh"]) for b in db.tv_bo_list(_tk)]
+    check("Nhập THÊM: bộ sẵn có giữ nguyên, bộ trùng mã vẫn được thêm với mã mới",
+          _r_k.get("ok") and _r_k["them"] == 4 and _r_k["doi_ma"] == 3
+          and _ma_k[0] == ("1", _anh_cu)
+          and [m for m, _ in _ma_k] == ["1", "2", "3", "4", "A", "A (2)"])
+    _r_k2 = _nhap(_buf_k.getvalue(), "/api/thuvien/import-zip")
+    check("Nhập THÊM lần 2 cùng file: không nhân đôi (nhận ra bộ theo ảnh)",
+          _r_k2.get("ok") and _r_k2["them"] == 0 and _r_k2["bo_qua"] == 4
+          and len(db.tv_bo_list(_tk)) == 6)
+    # Kéo thả đổi vị trí tab thư viện (trái ↔ phải).
+    _ids_tab = [m["id"] for m in db.tv_mang_list()]
+    _r_ro = _client.post("/api/thuvien/mang/reorder", json={"ids": _ids_tab[::-1]}).get_json()
+    check("Thư viện: kéo thả đổi vị trí tab → lưu đúng thứ tự mới",
+          _r_ro.get("ok") and [m["id"] for m in db.tv_mang_list()] == _ids_tab[::-1]
+          and len(_ids_tab) >= 2)
     _r_ic = _nhap(_bk_ct, "/api/content/import-zip", loai="thue")
     _ct_tv = db.get_content_by_code("TV-CT1", "thue") or {}
     check("Backup content mang theo Mã thư viện — sang máy mới trỏ đúng thư viện (theo tên)",
