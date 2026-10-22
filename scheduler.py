@@ -452,7 +452,7 @@ def _run_marketplace_slot(item: dict):
         from market_poster import post_marketplace
         acc_data = _tk(item)
         c_user_v = _c_user_cua(item, acc_data)
-        # Ảnh ĐÃ CHỐT lúc Gen (cột "Mã ảnh" = "Bộ ảnh-..."); con trỏ roll đã tiến
+        # Ảnh ĐÃ CHỐT lúc Gen (cột "Mã ảnh" = "<thư viện> - <mã bộ>"); con trỏ roll đã tiến
         # tại Gen nên ở đây KHÔNG tiến lại. Lịch cũ không có thì roll động như cũ.
         anh = _anh_dang_cho(item, ct, c_user_v, dung_con_tro=True)
         so_nhom = post_marketplace(acc_name=acc_name, message=content,

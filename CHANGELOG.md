@@ -10,6 +10,22 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.65.1 — 22/10/2026
+
+**Cột "Mã ảnh" ghi TÊN thư viện thay cho chữ "Bộ ảnh"**
+
+Trước đây mọi bộ ảnh lấy từ Thư viện ảnh đều hiện là **"Bộ ảnh-12"**, **"Bộ
+ảnh-4"**… — không biết bộ đó của thư viện nào. Nay ghi **tên thư viện - mã bộ**,
+ví dụ thư viện **3PN** bộ 12 → **`3PN - 12`**, thư viện **4PN** bộ 4 → **`4PN - 4`**.
+
+- Nhãn bộ ảnh vẫn **màu vàng**, nhãn "Ảnh" (ảnh riêng của content) vẫn **màu xanh**.
+- Chỉ đổi chữ hiển thị — ảnh đăng không đổi.
+
+> Cập nhật xong **khởi động lại app** rồi **Gen lại lịch** để thấy nhãn mới.
+> Lịch đã Gen trước đó vẫn hiện "Bộ ảnh-…" cho tới khi Gen lại.
+
+---
+
 ## v2.65.0 — 22/10/2026
 
 **Tự xóa: bỏ "Chạy thử" và bỏ báo Telegram — bật là xóa luôn**

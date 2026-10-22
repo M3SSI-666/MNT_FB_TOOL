@@ -579,7 +579,8 @@ def init_db():
         # Cột "Mã ảnh" trên bảng lịch — CHỐT bộ ảnh ngay lúc GEN (xem
         # server.api_schedule_gen) để "nhìn sao đăng vậy":
         #   ma_anh   = nhãn hiển thị: "Ảnh" (lấy ảnh ở cột Ảnh của content),
-        #              "Bộ ảnh-<mã bộ>" (bốc từ Thư viện ảnh), hoặc "" (không ảnh).
+        #              "<tên thư viện> - <mã bộ>" (bốc từ Thư viện ảnh, vd "4PN - 4"),
+        #              hoặc "" (không ảnh).
         #   anh_dang = CSV ảnh ĐÃ CHỐT để đăng đúng cái đang hiện trên lịch. Trống
         #              = dòng lịch cũ (gen trước tính năng này) → lúc đăng rơi về
         #              logic chọn ảnh động như cũ (db.anh_cho_bai), không đổi hành vi.
@@ -2064,7 +2065,8 @@ def chot_anh_cho_lich(c_user: str, link_anh: str, ma_thu_vien, dung_con_tro: boo
     để hiện ở cột "Mã ảnh" trên bảng lịch. Trả (ma_anh, anh_dang):
       - Cột Ảnh có ảnh       → ("Ảnh", <link ở cột Ảnh>).
       - Cột Ảnh trống + thư viện → bốc 1 bộ (MKP theo con trỏ / khác ngẫu nhiên)
-        → ("Bộ ảnh-<mã bộ>", <link của bộ>). Không bộ dùng được → ("", "").
+        → ("<tên thư viện> - <mã bộ>", <link của bộ>), vd "4PN - 4".
+        Không bộ dùng được → ("", "").
       - Cả hai trống         → ("", "").
     Chốt ở đây để "nhìn sao đăng vậy": scheduler đăng đúng anh_dang đã lưu, không
     roll lại (nên con trỏ Marketplace chỉ tiến đúng 1 lần — tại GEN này)."""
@@ -2089,7 +2091,10 @@ def chot_anh_cho_lich(c_user: str, link_anh: str, ma_thu_vien, dung_con_tro: boo
     idx = _con_tro_tien(c_user, tvid, n) if dung_con_tro else random.randrange(n)
     chon = bo[idx]
     ma = (chon.get("ma") or "").strip() or f"#{chon.get('id')}"
-    return (f"Bộ ảnh-{ma}", (chon.get("link_anh") or "").strip())
+    # Nhãn = TÊN thư viện + mã bộ (vd "4PN - 4") — nhìn lịch biết ngay bộ của
+    # thư viện nào. Bản đầu ghi cứng "Bộ ảnh-4": mọi thư viện ra cùng một chữ.
+    ten = next((m["ten"] for m in tv_mang_list() if m["id"] == tvid), "") or "Bộ ảnh"
+    return (f"{ten.strip()} - {ma}", (chon.get("link_anh") or "").strip())
 
 
 def _tach_urls(*chuoi) -> set:

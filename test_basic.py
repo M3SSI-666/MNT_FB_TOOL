@@ -6448,6 +6448,8 @@ check("Lịch máy dừng/bật được runner của cả 5 mảng + nuôi (kh�
       {"homestay", "thue", "ban", "loai4", "loai5", "nuoi"} <= set(_lm_m.RUNNER)
       and "page" not in _lm_m.RUNNER)
 _ajs_m = Path("static/js/app.js").read_text(encoding="utf-8")
+check("bảng lịch tô màu bộ ảnh theo nhãn mới (không dò chữ 'Bộ ảnh' cứng)",
+      '_laBo=!!_ma && _ma!=="Ảnh"' in _ajs_m and '_ma.startsWith("Bộ ảnh")' not in _ajs_m)
 _khoi_mang = _ajs_m[_ajs_m.index("function renderContentTabs"):_ajs_m.index("async function _luuLoai")]
 check("quản lý mảng dùng hộp thoại của app, KHÔNG dùng prompt/confirm trình duyệt",
       "Dialog.prompt(" in _khoi_mang and "Dialog.confirm(" in _khoi_mang
@@ -6743,9 +6745,9 @@ _lblO, _lnkO = db.chot_anh_cho_lich("gcu1", "/media/content/own.jpg", str(_mr), 
 check("chốt gen: có ảnh riêng → ('Ảnh', chính link đó)",
       _lblO == "Ảnh" and _lnkO == "/media/content/own.jpg")
 _lblB, _lnkB = db.chot_anh_cho_lich("gcu1", "", str(_mr), True)
-check("chốt gen: lấy thư viện → nhãn 'Bộ ảnh-<mã>' + link CÙNG bộ",
-      _lblB.startswith("Bộ ảnh-")
-      and _lnkB == f"/media/thuvien/{_lblB.split('-', 1)[1]}.jpg")
+check("chốt gen: lấy thư viện → nhãn '<tên thư viện> - <mã>' + link CÙNG bộ",
+      _lblB.startswith("ROLL - ")
+      and _lnkB == f"/media/thuvien/{_lblB.split(' - ', 1)[1]}.jpg")
 _lblN, _lnkN = db.chot_anh_cho_lich("gcu1", "", "", True)
 check("chốt gen: không ảnh + không thư viện → ('', '')", _lblN == "" and _lnkN == "")
 
@@ -6783,10 +6785,10 @@ check("Gen Mã ảnh: content có ảnh riêng → nhãn 'Ảnh' + chốt đúng
       _r_gma.get("ok") and _by("GOWN")
       and all(r["ma_anh"] == "Ảnh" and r["anh_dang"] == "/media/content/own.jpg"
               for r in _by("GOWN")))
-check("Gen Mã ảnh: content trỏ thư viện → nhãn 'Bộ ảnh-<mã>' + link cùng bộ",
+check("Gen Mã ảnh: content trỏ thư viện → nhãn 'GENLIB - <mã>' (tên thư viện) + link cùng bộ",
       _by("GLIB") and all(
-          r["ma_anh"].startswith("Bộ ảnh-")
-          and r["anh_dang"] == f"/media/thuvien/{r['ma_anh'].split('-', 1)[1].lower()}.jpg"
+          r["ma_anh"] in ("GENLIB - G1", "GENLIB - G2")
+          and r["anh_dang"] == f"/media/thuvien/{r['ma_anh'].split(' - ', 1)[1].lower()}.jpg"
           for r in _by("GLIB")))
 check("Gen Mã ảnh: content không ảnh + không thư viện → trống",
       _by("GNONE") and all(r["ma_anh"] == "" and r["anh_dang"] == "" for r in _by("GNONE")))

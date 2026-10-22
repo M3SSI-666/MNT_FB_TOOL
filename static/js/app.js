@@ -3697,7 +3697,7 @@ function renderScheduleTable(loai,data){
         // Mã ảnh = ảnh đã CHỐT lúc Gen. "Ảnh" (xanh) = ảnh ở cột Ảnh của content;
         // "Bộ ảnh-<mã>" (vàng) = bốc từ Thư viện ảnh. Trống = dòng không đăng ảnh
         // (comment/nuôi) hoặc lịch cũ gen trước tính năng này. Chỉ để xem, không sửa.
-        const _ma=(r.ma_anh||"").toString(), _laBo=_ma.startsWith("Bộ ảnh");
+        const _ma=(r.ma_anh||"").toString(), _laBo=!!_ma && _ma!=="Ảnh";   // nhãn bộ ảnh thư viện = "<tên thư viện> - <mã bộ>"
         const maAnhCell=_ma
             ? `<td style="text-align:center;font-size:11px"><span class="badge" style="${_laBo?"background:#3a2f12;color:#fcd34d":"background:#17303f;color:#93c5fd"}">${_escapeHtml(_ma)}</span></td>`
             : `<td style="text-align:center;color:var(--text-muted)">-</td>`;
