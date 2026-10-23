@@ -1365,6 +1365,8 @@ def api_content_field(content_id):
         return jsonify({"ok": False, "error": f"Field không hợp lệ: {field}"})
     # Sử dụng là tập ĐÓNG: chỉ "Có"/"Không". Giá trị lạ (gõ tay, nhập Excel) làm
     # content âm thầm rơi khỏi Gen (chỉ lấy su_dung="Có") — chặn tại cửa ghi.
+    if field == "ma_content":
+        value = (value or "").strip()          # dấu cách thừa làm tra mã trượt
     if field == "su_dung":
         value = (value or "").strip()
         if value not in ("Có", "Không"):
@@ -2416,7 +2418,10 @@ def api_schedule_gen(loai):
     # đăng tường Page bốc NGẪU NHIÊN (không đụng con trỏ). Chỉ dòng đăng mới có
     # ảnh — comment/nuôi để trống. c_user lấy từ cu_cua vì ten_acc lúc này vẫn là
     # khoá nội bộ (đổi về tên hiển thị ở vòng dưới).
-    _ct_map = {c["ma_content"]: c for c in db.get_content(loai)}
+    # Khoá theo mã ĐÃ CẮT dấu cách: rai_content ghi mã đã cắt vào dòng lịch, còn
+    # content gõ tay có thể là "P062806 " — khoá thô thì tra trượt, cột Mã ảnh
+    # trống (gặp thật 23/10).
+    _ct_map = {(c["ma_content"] or "").strip(): c for c in db.get_content(loai)}
     for r in schedule:
         if not _hien_content(r):
             r["ma_anh"], r["anh_dang"] = "", ""

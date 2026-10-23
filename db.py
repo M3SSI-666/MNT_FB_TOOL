@@ -586,6 +586,17 @@ def init_db():
         #              logic chọn ảnh động như cũ (db.anh_cho_bai), không đổi hành vi.
         _add_col("schedules", "ma_anh",   "ma_anh TEXT DEFAULT ''")
         _add_col("schedules", "anh_dang", "anh_dang TEXT DEFAULT ''")
+        # Mã content có dấu cách thừa ở đầu/cuối (gõ tay: "P062806 ") — Gen lịch
+        # ghi mã đã cắt, còn bảng content giữ nguyên dấu cách → tra content theo
+        # mã trượt: cột Mã ảnh trống, lúc đăng báo "Không có content". Gặp thật
+        # 23/10: 'P062806 ' (Bán), 'Shophouse ' (Thuê). Cắt hẳn trong DB; mã nào
+        # cắt xong đụng mã khác cùng mảng thì để nguyên (tra cứu vẫn chịu được —
+        # xem get_content_by_code).
+        con.execute(
+            "UPDATE content SET ma_content=TRIM(ma_content) "
+            "WHERE ma_content <> TRIM(ma_content) AND NOT EXISTS ("
+            " SELECT 1 FROM content c2 WHERE c2.loai=content.loai "
+            " AND c2.id<>content.id AND c2.ma_content=TRIM(content.ma_content))")
         # Dòng lịch nhớ c_user của nick, không chỉ tên — hai nick trùng tên
         # (gặp thật: hai 'Tuấn Ngọc') thì tên không nói được dòng nào của nick
         # nào. Xem `_khoa_acc`. Gắn cho dòng cũ chưa có; dòng nào không suy ra
@@ -1880,20 +1891,25 @@ def get_content_by_code(ma_content: str, loai: str = None) -> dict | None:
     Có `loai` mà không tìm ra thì lùi về tra toàn bảng — lịch cũ có thể trỏ tới
     content đã được chuyển sang mảng khác, thà lấy đúng nội dung còn hơn chết.
     """
+    # So theo mã ĐÃ CẮT dấu cách hai đầu — content gõ tay "P062806 " vẫn khớp
+    # dòng lịch "P062806" (Gen lịch ghi mã đã cắt). Xem migration trong init_db.
+    ma_ct = (ma_content or "").strip()
     with _conn() as con:
         if loai:
             r = con.execute(
-                "SELECT * FROM content WHERE ma_content=? AND loai=? LIMIT 1",
-                (ma_content, loai)).fetchone()
+                "SELECT * FROM content WHERE TRIM(ma_content)=? AND loai=? LIMIT 1",
+                (ma_ct, loai)).fetchone()
             if r:
                 return dict(r)
         r = con.execute(
-            "SELECT * FROM content WHERE ma_content=? LIMIT 1", (ma_content,)
+            "SELECT * FROM content WHERE TRIM(ma_content)=? LIMIT 1", (ma_ct,)
         ).fetchone()
         return dict(r) if r else None
 
 
 def upsert_content(data: dict) -> int:
+    if isinstance(data.get("ma_content"), str):
+        data = {**data, "ma_content": data["ma_content"].strip()}   # chặn "P062806 "
     cols   = [k for k in data if k != "id"]
     values = [data[c] for c in cols]
     with _conn() as con:

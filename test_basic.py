@@ -6927,6 +6927,42 @@ finally:
     for _m in db.tv_mang_list():
         db.tv_mang_xoa(_m["id"])
 
+# ── Mã content có dấu cách thừa ("P062806 ") — gặp thật 23/10 ───────────────
+# Gen ghi mã ĐÃ CẮT vào lịch, bảng content giữ dấu cách → tra mã trượt: cột Mã
+# ảnh trống dù content trỏ thư viện, và lúc đăng báo "Không có content".
+_tvsp = db.tv_mang_them("3PN_SP")
+db.tv_bo_upsert({"mang_id": _tvsp, "ma": "7", "link_anh": "/media/thuvien/sp7.jpg", "su_dung": "Có"})
+with db._conn() as _c_sp:                        # chèn THÔ, đúng như dữ liệu cũ đang có
+    _c_sp.execute("INSERT INTO content (loai, ma_content, noi_dung, link_anh, su_dung, "
+                  "ma_thu_vien, order_idx) VALUES ('loai4', 'P062806 ', 'x', '', 'Có', ?, 0)",
+                  (str(_tvsp),))
+check("tra content theo mã chịu được dấu cách thừa (runner tìm được content)",
+      (db.get_content_by_code("P062806", "loai4") or {}).get("noi_dung") == "x")
+_r_sp = _client.post("/api/schedule/loai4/gen", json={
+    "start": "08:00", "end": "10:00", "keyword_pool": ["kw"],
+    "acc_settings": [{"ten": "SP1", "c_user": "990555", "page": "", "nghi": 30,
+                      "first_group_url": "123", "mode": "Page", "contents": []}]}).get_json()
+_rows_sp = [r for r in db.get_schedules("loai4") if (r.get("hoat_dong") or "dang_bai") == "dang_bai"]
+check("Gen: content 'P062806 ' trỏ thư viện → cột Mã ảnh có bộ ảnh (không còn trống)",
+      _r_sp.get("ok") and _rows_sp
+      and all(r["ma_anh"] == "3PN_SP - 7" and r["anh_dang"] == "/media/thuvien/sp7.jpg"
+              for r in _rows_sp))
+db.init_db()                                     # migration cắt dấu cách mã cũ
+with db._conn() as _c_sp:
+    _ma_sp = [r[0] for r in _c_sp.execute("SELECT ma_content FROM content WHERE loai='loai4'")]
+check("migration: cắt dấu cách thừa của mã content đang có", _ma_sp == ["P062806"])
+_id_sp = db.upsert_content({"loai": "loai4", "ma_content": "  Shophouse  ", "noi_dung": "y",
+                            "su_dung": "Có"})
+_client.post(f"/api/content/{_id_sp}/field", json={"field": "ma_content", "value": " SH2 "})
+with db._conn() as _c_sp:
+    _ma_sp2 = _c_sp.execute("SELECT ma_content FROM content WHERE id=?", (_id_sp,)).fetchone()[0]
+check("lưu / sửa mã content tự cắt dấu cách thừa", _ma_sp2 == "SH2"
+      and (db.get_content_by_code("Shophouse", "loai4") is None))
+with db._conn() as _c_sp:
+    _c_sp.execute("DELETE FROM content WHERE loai='loai4'")
+db.replace_schedules("loai4", [])
+db.tv_mang_xoa(_tvsp)
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:

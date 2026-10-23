@@ -10,6 +10,24 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.66.1 — 23/10/2026
+
+**Vá: content có dấu cách thừa trong mã → không lấy được bộ ảnh, không đăng được**
+
+Content mã **"P062806 "** (thừa dấu cách ở cuối) trỏ thư viện **3PN** nhưng Gen
+lịch Bán thì cột **Mã ảnh trống**. Nguyên nhân: Gen ghi vào lịch mã ĐÃ CẮT dấu
+cách ("P062806"), còn lúc tra content thì so nguyên chữ có dấu cách → không tìm
+thấy content. Lúc đăng cũng tra y như vậy nên dòng đó sẽ báo **"Không có
+content"**. Content **"Shophouse "** (Thuê) dính cùng lỗi.
+
+- Tra content theo mã (lúc Gen lẫn lúc đăng) **bỏ qua dấu cách thừa** hai đầu.
+- Lưu / sửa mã content **tự cắt dấu cách** — không phát sinh lại.
+- Khởi động lại app thì **tự dọn dấu cách** các mã đang có.
+
+> Cập nhật xong **khởi động lại app** rồi **Gen lại lịch** các mảng.
+
+---
+
 ## v2.66.0 — 22/10/2026
 
 **Thư viện ảnh: 8 ảnh một hàng, nhập backup THÊM giữ bộ sẵn có, kéo thả đổi vị trí tab**
