@@ -10,6 +10,17 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.68.0 — 25/10/2026
+
+**Tóm tắt lịch: thêm "Theo loại phiên"**
+
+Sau khi Gen lịch, phần tóm tắt trên mỗi bảng lịch có thêm **hàng "Theo loại
+phiên"** — đếm ngay có bao nhiêu phiên **Đăng nhóm**, **Đăng tường Page**,
+**Comment**, **Nuôi nick**, **Marketplace** (ngoài các số trạng thái Tổng / Chờ /
+✅ / ❌ / Nghỉ / X như cũ). Số đếm thẳng từ lịch nên mở lại lúc nào cũng đúng.
+
+---
+
 ## v2.67.0 — 25/10/2026
 
 **Acc bị "chặn nhóm" → Gen chỉ giao đăng tường Page**

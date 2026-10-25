@@ -3690,8 +3690,25 @@ function renderScheduleSummary(loai,data){
           fail=data.filter(r=>r.trang_thai.startsWith("❌")).length,
           nghi=data.filter(r=>r.trang_thai==="X😴").length,
           stop=data.filter(r=>r.trang_thai==="X").length;
-    box.innerHTML=[{l:"Tổng",v:total},{l:"Chờ",v:cho},{l:"✅",v:done},{l:"❌",v:fail},{l:"😴 Nghỉ",v:nghi},{l:"X",v:stop}]
-        .map(s=>`<div class="metric-card" style="padding:10px 14px;flex:1;min-width:70px"><div class="metric-label">${s.l}</div><div class="metric-value" style="font-size:20px">${s.v}</div></div>`).join("");
+    const card=(l,v,c)=>`<div class="metric-card" style="padding:8px 12px;flex:1;min-width:72px"><div class="metric-label">${l}</div><div class="metric-value" style="font-size:19px;${c?`color:${c}`:""}">${v}</div></div>`;
+    // Hàng 1: theo TRẠNG THÁI. Hàng 2: theo LOẠI PHIÊN (hoat_dong) — để sau khi
+    // Gen là thấy ngay có bao nhiêu phiên đăng nhóm / đăng Page / comment / nuôi /
+    // marketplace. Tính thẳng từ dữ liệu lịch nên mở lại lúc nào cũng đúng.
+    const trangThai=[{l:"Tổng",v:total},{l:"Chờ",v:cho},{l:"✅",v:done},{l:"❌",v:fail},{l:"😴 Nghỉ",v:nghi},{l:"X",v:stop}]
+        .map(s=>card(s.l,s.v)).join("");
+    const hd=x=>data.filter(r=>(r.hoat_dong||"dang_bai")===x).length;
+    const theoLoai=[
+        {l:"📝 Đăng nhóm",v:hd("dang_bai"),c:"#93c5fd"},
+        {l:"📄 Đăng Page",v:hd("dang_page"),c:"#c4b5fd"},
+        {l:"💬 Comment",v:hd("comment"),c:"#7dd3fc"},
+        {l:"🌱 Nuôi nick",v:hd("nuoi_nick"),c:"#6ee7b7"},
+        {l:"🛒 Market",v:hd("marketplace"),c:"#fcd34d"},
+    ].map(s=>card(s.l,s.v,s.c)).join("");
+    box.innerHTML=
+        `<div style="display:flex;gap:10px;flex-wrap:wrap;flex-basis:100%">${trangThai}</div>`+
+        `<div style="display:flex;gap:10px;flex-wrap:wrap;flex-basis:100%;margin-top:4px">`+
+          `<div style="display:flex;align-items:center;font-size:11px;color:var(--text-muted);font-weight:600;padding:0 2px;white-space:nowrap">Theo loại phiên</div>`+
+          `${theoLoai}</div>`;
 }
 
 function renderScheduleTable(loai,data){

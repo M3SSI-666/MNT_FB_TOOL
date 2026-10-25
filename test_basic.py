@@ -6888,6 +6888,14 @@ check("scheduler: 4 chỗ đăng dùng _anh_dang_cho(item, ct, c_user_v) + ưu t
 check("bảng lịch (app.js) có cột Mã ảnh + ô maAnhCell, colspan 7",
       ">Mã ảnh<" in _ajs_mkt and "maAnhCell" in _ajs_mkt and 'colspan="7"' in _ajs_mkt)
 
+# Tóm tắt lịch: ngoài trạng thái, có hàng "Theo loại phiên" đếm từng hoat_dong.
+check("tóm tắt lịch đếm theo loại phiên (đăng nhóm/Page/comment/nuôi/market)",
+      "Theo loại phiên" in _ajs_mkt and "Đăng nhóm" in _ajs_mkt
+      and "Đăng Page" in _ajs_mkt
+      and 'hd("dang_bai")' in _ajs_mkt and 'hd("dang_page")' in _ajs_mkt
+      and 'hd("comment")' in _ajs_mkt and 'hd("nuoi_nick")' in _ajs_mkt
+      and 'hd("marketplace")' in _ajs_mkt)
+
 db.tv_mang_xoa(_mr)
 db.tv_mang_xoa(_mr0)
 
