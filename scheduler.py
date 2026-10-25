@@ -23,7 +23,7 @@ from db import (
 )
 from cookie_exporter import load_cookie
 from utils import (logger, jitter, CookieDeadError, ComposerBiChan,
-                   DinhSpamGiuaPhien, classify_error)
+                   DinhSpamGiuaPhien, ChanNhomError, classify_error)
 from config import CHECK_EVERY_SEC, WINDOW_MINUTES
 
 # ── Cấu hình ─────────────────────────────────────────────────
@@ -310,6 +310,25 @@ def _mark_cookie_dead(acc_name: str, c_user: str = ""):
             logger.info(f"  🚫 Đã đánh X {n} slot còn lại hôm nay của '{acc_name}'")
     except Exception as e:
         logger.warning(f"⚠️  Không đánh X được lịch của '{acc_name}': {e}")
+
+
+def _mark_chan_nhom(acc_name: str, c_user: str = ""):
+    """Đánh dấu acc bị FB chặn hành động NHÓM (Gen sau chỉ giao đăng tường Page)
+    + đánh X các slot NHÓM còn lại hôm nay (GIỮ slot đăng tường Page). KHÔNG tính
+    vào sức khoẻ acc: đây là FB chủ động chặn, không phải lỗi kỹ thuật."""
+    try:
+        a = get_account_by_name(acc_name, c_user=c_user)
+        if a and not db.acc_chan_nhom(a):
+            update_account_field(a["id"], "chan_nhom", 1)
+            logger.info(f"  🔖 Đã đánh dấu acc '{acc_name}' = chặn nhóm")
+    except Exception as e:
+        logger.warning(f"⚠️  Không đánh dấu chặn nhóm '{acc_name}': {e}")
+    try:
+        n = db.danh_dau_x_nhom_con_lai_hom_nay(acc_name, c_user=c_user)
+        if n:
+            logger.info(f"  🚫 Đánh X {n} slot nhóm còn lại hôm nay của '{acc_name}'")
+    except Exception as e:
+        logger.warning(f"⚠️  Không đánh X slot nhóm của '{acc_name}': {e}")
 
 
 def _run_warming(item: dict, ghi_chu: str = ""):
@@ -630,6 +649,18 @@ def _run_one(item: dict):
             _mark_cookie_dead(acc_name, _cu(item))
             # Cookie chết đã có trạng thái riêng và cách xử lý riêng (đăng nhập
             # lại), đừng tính vào sức khoẻ — nó không phải dấu hiệu bị FB chặn.
+            return
+
+        except ChanNhomError as e:
+            # FB hạn chế hành động NHÓM của acc (dialog "bị hạn chế do có hoạt
+            # động bất thường"). Đánh dấu acc 'chặn nhóm' để Gen sau chỉ giao đăng
+            # tường Page, + đánh X slot nhóm còn lại hôm nay (giữ slot Page). KHÔNG
+            # tính vào sức khoẻ: đây là FB chặn, không phải lỗi kỹ thuật.
+            ts2 = datetime.now().strftime("%H:%M")
+            _update_status(sid, f"🚫 {ts2} Bị chặn nhóm")
+            _mark_chan_nhom(acc_name, _cu(item))
+            logger.error(f"🚫 STT {stt}: acc '{acc_name}' BỊ CHẶN NHÓM — Gen sau "
+                         f"chỉ giao đăng tường Page. {e}")
             return
 
         except DinhSpamGiuaPhien as e:

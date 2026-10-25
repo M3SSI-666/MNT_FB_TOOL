@@ -1035,6 +1035,7 @@ const ACC_FIELDS = [
     {key:"thoi_gian_nghi",label:"Nghỉ (p)"},
     {key:"comment_pct",label:"Comment %"},
     {key:"marketplace_pct",label:"Market %"},
+    {key:"chan_nhom",label:"Chặn nhóm",type:"check",title:"Acc bị FB hạn chế hành động nhóm → Gen chỉ giao đăng tường Page (tự bật khi gặp dialog hạn chế, hoặc tick tay)"},
     {key:"link_profile",label:"Link profile"},
     {key:"email_sdt",label:"Email/SDT"},
     {key:"password",label:"Password",mono:true},

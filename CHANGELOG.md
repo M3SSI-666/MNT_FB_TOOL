@@ -10,6 +10,25 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.67.0 — 25/10/2026
+
+**Acc bị "chặn nhóm" → Gen chỉ giao đăng tường Page**
+
+Một số nick bị Facebook hạn chế hành động trong nhóm (hiện dialog *"Một số hành
+động đã bị hạn chế do có hoạt động bất thường"*) nên không đăng/comment nhóm
+được, nhưng vẫn đăng tường Page được. Nay:
+
+- **Cột "Chặn nhóm"** ở bảng Tài khoản (ô tick). Acc có tick này, khi **Gen lịch**
+  sẽ **chỉ còn nhiệm vụ đăng tường Page** — bỏ hết đăng nhóm, comment, nuôi,
+  Marketplace.
+- **Tự nhận diện:** lúc đăng nhóm mà gặp đúng dialog hạn chế đó, phần mềm **tự
+  tick "Chặn nhóm"** cho acc + đánh X các slot nhóm còn lại trong ngày (giữ slot
+  đăng Page) để khỏi tốn phiên vô ích. Lần Gen sau acc đó tự chuyển sang
+  chỉ-đăng-Page.
+- Acc hồi phục thì **bỏ tick** là chạy nhóm lại bình thường.
+
+---
+
 ## v2.66.1 — 23/10/2026
 
 **Vá: content có dấu cách thừa trong mã → không lấy được bộ ảnh, không đăng được**

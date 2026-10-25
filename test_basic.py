@@ -6804,6 +6804,81 @@ db.tv_mang_xoa(_glib)
 with db._conn() as _c_gma:
     _c_gma.execute("DELETE FROM content WHERE loai='thue' AND ma_content IN ('GOWN','GLIB','GNONE')")
 
+# ── Chặn nhóm: acc bị FB hạn chế nhóm → Gen CHỈ giao đăng tường Page ─────────
+import utils as _u_cn
+check("có ChanNhomError (exception riêng cho acc bị chặn nhóm)",
+      issubclass(_u_cn.ChanNhomError, _u_cn.PostError))
+with db._conn() as _c_cn:
+    _cols_acc = {r[1] for r in _c_cn.execute("PRAGMA table_info(accounts)").fetchall()}
+check("accounts có cột chan_nhom", "chan_nhom" in _cols_acc)
+check("acc_chan_nhom đọc đúng cờ",
+      db.acc_chan_nhom({"chan_nhom": 1}) is True and db.acc_chan_nhom({"chan_nhom": 0}) is False
+      and db.acc_chan_nhom({}) is False)
+_cid_cnf = db.upsert_account({"ten_acc": "CNFlag", "c_user": "cnf1", "trang_thai": "Active"})
+db.update_account_field(_cid_cnf, "chan_nhom", 1)
+check("update_account_field lưu được chan_nhom",
+      db.acc_chan_nhom(db.get_account_by_id(_cid_cnf)) is True)
+
+# danh_dau_x_nhom_con_lai_hom_nay: đánh X slot nhóm, GIỮ đăng Page + Marketplace.
+db.replace_schedules("cn_x", [
+    {"loai": "cn_x", "stt": i + 1, "ma_content": "C", "ten_acc": "CNX", "c_user": "cnx1",
+     "ten_page": "", "gio_dang": "23:59", "ma_nhom": "", "tu_khoa": "", "mode": "Page",
+     "trang_thai": "Chờ", "hoat_dong": hd}
+    for i, hd in enumerate(["dang_bai", "comment", "nuoi_nick", "dang_page", "marketplace"])])
+db.danh_dau_x_nhom_con_lai_hom_nay("CNX", c_user="cnx1")
+_tt_x = {r["hoat_dong"]: r["trang_thai"] for r in db.get_schedules("cn_x")}
+check("chặn nhóm: đánh X slot đăng nhóm / comment / nuôi",
+      _tt_x["dang_bai"].startswith("X") and _tt_x["comment"].startswith("X")
+      and _tt_x["nuoi_nick"].startswith("X"))
+check("chặn nhóm: GIỮ nguyên slot đăng tường Page + Marketplace",
+      _tt_x["dang_page"] == "Chờ" and _tt_x["marketplace"] == "Chờ")
+db.replace_schedules("cn_x", [])
+
+# Gen (API): acc chặn nhóm chỉ còn slot dang_page; acc thường vẫn có việc nhóm.
+db.upsert_page({"ten_page": "Page CN", "page_uid": "PGCN", "bai_dang_toi_da": 3})
+db.upsert_page({"ten_page": "Page OK", "page_uid": "PGOK", "bai_dang_toi_da": 3})
+db.upsert_account({"ten_acc": "CNGen", "c_user": "cn900", "loai_dang": "thue",
+                   "trang_thai": "Active", "page_uid": "PGCN", "chan_nhom": 1,
+                   "thoi_gian_nghi": 12})
+db.upsert_account({"ten_acc": "CNok", "c_user": "cn901", "loai_dang": "thue",
+                   "trang_thai": "Active", "page_uid": "PGOK", "chan_nhom": 0,
+                   "thoi_gian_nghi": 12})
+db.upsert_content({"loai": "thue", "ma_content": "GC1", "noi_dung": "x", "su_dung": "Có"})
+_r_cn = _client.post("/api/schedule/thue/gen", json={
+    "start": "08:00", "end": "14:00", "keyword_pool": ["kw"],
+    "acc_settings": [
+        {"ten": "CNGen", "c_user": "cn900", "page": "Page CN", "nghi": 12,
+         "first_group_url": "123", "mode": "Page", "contents": ["GC1"]},
+        {"ten": "CNok", "c_user": "cn901", "page": "Page OK", "nghi": 12,
+         "first_group_url": "123", "mode": "Page", "contents": ["GC1"]}]}).get_json()
+_rows_cn = db.get_schedules("thue")
+_cn_only = [r for r in _rows_cn if r["ten_acc"] == "CNGen"]
+_ok_only = [r for r in _rows_cn if r["ten_acc"] == "CNok"]
+check("Gen chặn nhóm: acc CHỈ còn slot đăng tường Page (không việc nhóm)",
+      _r_cn.get("ok") and _cn_only
+      and all(r["hoat_dong"] == "dang_page" for r in _cn_only))
+check("Gen: acc thường (không chặn) vẫn có slot đăng nhóm",
+      _ok_only and any(r["hoat_dong"] == "dang_bai" for r in _ok_only))
+db.replace_schedules("thue", [])
+with db._conn() as _c_cn2:
+    _c_cn2.execute("DELETE FROM accounts WHERE ten_acc IN ('CNFlag','CNGen','CNok')")
+    _c_cn2.execute("DELETE FROM pages WHERE page_uid IN ('PGCN','PGOK')")
+    _c_cn2.execute("DELETE FROM content WHERE loai='thue' AND ma_content='GC1'")
+
+# Nhận diện tự động + nối scheduler + UI.
+_pv_src = Path("page_via_poster.py").read_text(encoding="utf-8")
+_via_src = Path("via_poster.py").read_text(encoding="utf-8")
+check("poster báo ChanNhomError khi FB hạn chế nhóm (is_messaging_restricted)",
+      "ChanNhomError" in _pv_src and "is_messaging_restricted" in _pv_src
+      and "ChanNhomError" in _via_src and "is_messaging_restricted" in _via_src)
+check("scheduler bắt ChanNhomError → _mark_chan_nhom (đánh dấu + đánh X slot nhóm)",
+      "except ChanNhomError" in _sched_src and "def _mark_chan_nhom" in _sched_src
+      and "danh_dau_x_nhom_con_lai_hom_nay" in _sched_src
+      and 'update_account_field(a["id"], "chan_nhom", 1)' in _sched_src)
+_ajs_cn = Path("static/js/app.js").read_text(encoding="utf-8")
+check("bảng Tài khoản có cột 'Chặn nhóm' (ô tick)",
+      'key:"chan_nhom"' in _ajs_cn and 'label:"Chặn nhóm"' in _ajs_cn)
+
 # scheduler đăng ĐÚNG ảnh đã chốt (item['anh_dang']); lịch cũ mới roll động.
 check("scheduler: 4 chỗ đăng dùng _anh_dang_cho(item, ct, c_user_v) + ưu tiên anh_dang",
       _sched_src.count("_anh_dang_cho(item, ct, c_user_v") == 4

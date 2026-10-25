@@ -246,6 +246,14 @@ def acc_co_marketplace(acc: dict) -> bool:
     return acc_marketplace_pct(acc) > 0
 
 
+def acc_chan_nhom(acc: dict) -> bool:
+    """Acc đang bị Facebook HẠN CHẾ hành động nhóm (không đăng/comment nhóm được).
+    Khi bật, Gen lịch CHỈ giao đăng tường Page cho acc này — bỏ mọi việc nhóm/
+    comment/nuôi/marketplace. Đặt tay ở bảng Tài khoản, hoặc tự bật khi phiên đăng
+    nhóm gặp dialog 'bị hạn chế do có hoạt động bất thường'."""
+    return str(acc.get("chan_nhom") or "0").strip() in ("1", "True", "true")
+
+
 def khop_loai_lich(loai_dang: str, loai_lich: str) -> bool:
     """Acc thuộc lịch nào. loai_dang nay LƯU KHOÁ mảng (homestay/loai4…), nên
     khớp lịch = trùng khoá VÀ mảng đó đang bật."""
@@ -501,6 +509,10 @@ def init_db():
         _add_col("accounts",  "mkt_scan_lan_cuoi", "mkt_scan_lan_cuoi TEXT DEFAULT ''")
         # Mốc DỌN (tự xóa) bài niêm yết Marketplace gần nhất — nhịp 1 lần/ngày.
         _add_col("accounts",  "mkt_xoa_lan_cuoi",  "mkt_xoa_lan_cuoi TEXT DEFAULT ''")
+        # Acc bị FB hạn chế hành động NHÓM (đăng/comment nhóm) → Gen chỉ giao đăng
+        # tường Page. Bật tay ở bảng Tài khoản hoặc tự bật khi phiên đăng nhóm gặp
+        # dialog "bị hạn chế do có hoạt động bất thường". Xem acc_chan_nhom().
+        _add_col("accounts",  "chan_nhom",          "chan_nhom INTEGER DEFAULT 0")
         _add_col("accounts",  "mkt_tin_moc",       "mkt_tin_moc TEXT DEFAULT ''")
 
         # ── Migration: tách loại đăng + cột % comment / Marketplace ─────────
@@ -1010,7 +1022,7 @@ def update_account_field(acc_id: int, field: str, value: str):
         "thoi_gian_nghi","link_profile","email_sdt",
         "password","ten_page","page_uid","c_user","xs","refresh","trang_thai",
         "email_khoiphuc","pass_khoiphuc","twofa","ghi_chu",
-        "nuoi_nick","nuoi_interval"
+        "nuoi_nick","nuoi_interval","chan_nhom"
     }
     if field not in safe:
         raise ValueError(f"Field không hợp lệ: {field}")
@@ -2384,6 +2396,20 @@ def danh_dau_x_con_lai_hom_nay(ten_acc: str, loai: str = None, c_user: str = "")
         sql += " AND loai=?"; args.append(loai)
     with _conn() as con:
         return con.execute(sql, args).rowcount
+
+
+def danh_dau_x_nhom_con_lai_hom_nay(ten_acc: str, c_user: str = "") -> int:
+    """Đánh 'X😴' cho các slot NHÓM (đăng nhóm/comment/nuôi) còn 'Chờ' của acc
+    trong hôm nay — GIỮ NGUYÊN slot đăng tường Page + Marketplace. Dùng khi acc
+    vừa bị phát hiện CHẶN NHÓM: khỏi tốn phiên đăng nhóm vô ích tới hết ngày."""
+    gio = datetime.now().strftime("%H:%M")
+    kl, klp = _khoa_lich(ten_acc, c_user)
+    with _conn() as con:
+        return con.execute(
+            "UPDATE schedules SET trang_thai=?, updated_at=datetime('now','localtime') "
+            f"WHERE {kl} AND trang_thai='Chờ' AND gio_dang > ? "
+            "AND COALESCE(hoat_dong,'dang_bai') NOT IN ('dang_page','marketplace')",
+            [TT_LICH_X_TU_DONG, *klp, gio]).rowcount
 
 
 def bulk_set_schedule_status(loai: str, old_status_prefix: str, new_status: str) -> int:

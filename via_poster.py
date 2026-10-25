@@ -32,7 +32,7 @@ import unicodedata
 
 from cookie_exporter import load_cookie
 from config import HEADLESS
-from utils import logger, jitter_ms, CookieDeadError, LoiBuoc
+from utils import logger, jitter_ms, CookieDeadError, LoiBuoc, ChanNhomError
 from fb_common import (kiem_vi_pham, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, danh_dau_da_dang, browser_launch_kwargs,
                        human_delay, jwait, clipboard_paste, browse_and_like, CHO_SAU_DANG_GIAY)
@@ -206,7 +206,16 @@ async def _run_crosspost(
                 break
         if not opened:
             logger.error(f"  ❌ Không mở được composer!")
+            # FB chặn hành động nhóm? Đọc text trang để phân biệt với tải chậm.
+            try:
+                from nuoi_nick import is_messaging_restricted
+                _body = await page.inner_text("body")
+            except Exception:
+                _body = ""
             await ctx.close()
+            if _body and is_messaging_restricted(_body):
+                raise ChanNhomError(
+                    f"Acc bị hạn chế hành động nhóm (nhóm {first_group_uid})")
             raise LoiBuoc(f"Không mở được ô soạn bài (nhóm {first_group_uid})")
 
         # Paste nội dung

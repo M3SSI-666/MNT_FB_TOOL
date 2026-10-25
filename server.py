@@ -47,6 +47,7 @@ from db import (
     loai_content_ds, loai_content_bat, loai_dang_options, luu_loai_content, nhan_loai,
     thong_ke_loai_content, TEN_MANG_TOI_DA,
     acc_co_comment, acc_co_marketplace, acc_comment_pct, acc_marketplace_pct,
+    acc_chan_nhom,
     JOIN_NGHI_MOI_MAC_DINH, JOIN_NGHI_BO_QUA_MAC_DINH,
     accounts_theo_lich,
     # settings
@@ -2355,9 +2356,16 @@ def api_schedule_gen(loai):
         for r in schedule:
             tong_phien[r["ten_acc"]] = tong_phien.get(r["ten_acc"], 0) + 1
 
+        # Acc BỊ CHẶN NHÓM: FB hạn chế hành động nhóm → chỉ giao đăng tường Page.
+        # Loại khỏi nuôi/comment/marketplace (đều là việc nhóm hoặc không cần),
+        # giữ nguyên chuyển dang_page; cuối cùng lọc bỏ mọi slot không phải Page.
+        chan_nhom_accs = {a["ten_acc"] for a in accs_db if acc_chan_nhom(a)}
+
         # 1. Nuôi nick — áp cho MỌI acc tick Nuôi, kể cả acc đang dính spam.
+        #    TRỪ acc chặn nhóm (nuôi tương tác trong nhóm → cũng bị chặn).
         warm_accs = {a["ten_acc"]: a.get("nuoi_interval")
-                     for a in accs_db if int(a.get("nuoi_nick", 0) or 0) == 1}
+                     for a in accs_db if int(a.get("nuoi_nick", 0) or 0) == 1
+                     and a["ten_acc"] not in chan_nhom_accs}
         if warm_accs:
             n_warm = plan_warming_conversion(schedule, warm_accs, da_dat=da_dat)
 
@@ -2393,14 +2401,30 @@ def api_schedule_gen(loai):
                 return int(round(pct_fn(a) / 100 * t))
 
             han_cmt = {a["ten_acc"]: _so(a, acc_comment_pct)
-                       for a in accs_db if acc_comment_pct(a) > 0}
+                       for a in accs_db if acc_comment_pct(a) > 0
+                       and a["ten_acc"] not in chan_nhom_accs}
             if han_cmt:
                 n_cmt += chuyen_slot_so_luong(schedule, han_cmt, "comment")
 
             han_mkt = {a["ten_acc"]: _so(a, acc_marketplace_pct)
-                       for a in accs_db if acc_marketplace_pct(a) > 0}
+                       for a in accs_db if acc_marketplace_pct(a) > 0
+                       and a["ten_acc"] not in chan_nhom_accs}
             if han_mkt:
                 n_mkt += chuyen_slot_so_luong(schedule, han_mkt, "marketplace")
+
+            # Acc chặn nhóm: BỎ mọi slot KHÔNG phải đăng tường Page (đăng nhóm /
+            # comment / nuôi / marketplace còn sót). Để lại đúng các slot dang_page
+            # đã chuyển ở trên. Acc chỉ còn nhiệm vụ đăng tường Page được phân công.
+            if chan_nhom_accs:
+                truoc = len(schedule)
+                schedule[:] = [r for r in schedule
+                               if r["ten_acc"] not in chan_nhom_accs
+                               or r.get("hoat_dong") == "dang_page"]
+                for i, r in enumerate(schedule, 1):
+                    r["stt"] = i
+                if len(schedule) != truoc:
+                    logger.info(f"Chặn nhóm: bỏ {truoc - len(schedule)} slot nhóm "
+                                f"của {len(chan_nhom_accs)} acc (chỉ giữ đăng Page)")
 
     except Exception as e:
         logger.warning(f"Chuyển slot nuôi/page/comment/marketplace: bỏ qua ({e})")

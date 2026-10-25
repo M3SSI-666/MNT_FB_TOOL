@@ -45,7 +45,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cookie_exporter import load_cookie
 from storage import prepare_images_for_post as smart_download, cleanup_temp
 from config import HEADLESS
-from utils import logger, ComposerBiChan, jitter_ms, CookieDeadError, LoiBuoc
+from utils import logger, ComposerBiChan, jitter_ms, CookieDeadError, LoiBuoc, ChanNhomError
 from fb_common import (kiem_vi_pham, composer_bi_chan, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, danh_dau_da_dang, browser_launch_kwargs,
                        human_delay, jwait, clipboard_paste, browse_and_like,
@@ -408,7 +408,18 @@ async def _run_page_via(
 
         if not opened:
             logger.error(f"  ❌ Không mở được composer!")
+            # Phân biệt "tải chậm" với "FB chặn hành động nhóm": đọc text trang,
+            # nếu có dấu hiệu bị hạn chế thì báo riêng để scheduler đánh dấu acc
+            # 'chặn nhóm' (Gen sau chỉ giao đăng tường Page).
+            try:
+                from nuoi_nick import is_messaging_restricted
+                _body = await page.inner_text("body")
+            except Exception:
+                _body = ""
             await ctx.close()
+            if _body and is_messaging_restricted(_body):
+                raise ChanNhomError(
+                    f"Acc bị hạn chế hành động nhóm (nhóm {first_group_uid})")
             raise LoiBuoc(f"Không mở được ô soạn bài (nhóm {first_group_uid})")
 
         # Paste nội dung

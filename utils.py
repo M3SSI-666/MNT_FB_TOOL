@@ -118,6 +118,13 @@ class LoiBuoc(PostError):
     """
 
 
+class ChanNhomError(PostError):
+    """Facebook HẠN CHẾ hành động NHÓM của acc: khi mở ô soạn bài ở nhóm thì hiện
+    dialog 'bị hạn chế do có hoạt động bất thường' / 'xác nhận danh tính'. Khác
+    với lỗi tải chậm thường: đây là FB chủ động chặn, nên scheduler đánh dấu acc
+    `chan_nhom` để Gen sau chỉ giao đăng tường Page (xem db.acc_chan_nhom)."""
+
+
 def classify_error(exc) -> tuple:
     """
     Đoán loại lỗi từ exception → (category, nhãn tiếng Việt) để hiển thị.
