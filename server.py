@@ -1123,16 +1123,26 @@ def api_accounts_thu_cookie(acc_id):
 @app.route("/api/accounts/refresh-now", methods=["POST"])
 def api_accounts_refresh_now():
     """
-    Làm mới cookie NGAY cho các acc đang để cột Refresh = Yes.
+    Cập nhật xs cho TẤT CẢ acc Active — không cần cờ Refresh=Yes.
 
-    Vòng lặp scheduler cũng làm việc này, nhưng 10 phút mới quét một lần và chỉ
-    chạy bên trong runner đang bật — dừng hết runner thì cột Refresh nằm ở Yes
-    vĩnh viễn. Nút này gỡ cả hai ràng buộc.
+    Mỗi acc đọc cookie sống từ profile: xs đổi thì ghi về DB, không đổi / đọc
+    không ra / acc đang chạy phiên thì giữ nguyên. Chạy ở LUỒNG NỀN (mỗi acc mở
+    một Chrome ẩn → chục acc mất vài phút); giao diện poll /refresh-status.
     """
     try:
-        from cookie_exporter import refresh_pending_accounts
-        kq = refresh_pending_accounts()
+        from cookie_exporter import refresh_all_accounts_async
+        kq = refresh_all_accounts_async()
         return jsonify({"ok": True, **kq})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/accounts/refresh-status")
+def api_accounts_refresh_status():
+    """Tiến trình/kết quả lượt 'Cập nhật xs tất cả' đang/vừa chạy."""
+    try:
+        from cookie_exporter import refresh_all_status
+        return jsonify({"ok": True, **refresh_all_status()})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 

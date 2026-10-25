@@ -6,6 +6,7 @@ cookie_exporter.py — MNT_FB version
 import os
 import sys
 import json
+import threading
 import unicodedata
 from datetime import datetime
 from pathlib import Path
@@ -275,6 +276,65 @@ def refresh_pending_accounts() -> dict:
             ket_qua["loi"].append(f"{ten}: {e}")
 
     return ket_qua
+
+
+# ── Cập nhật xs cho TẤT CẢ acc (không cần cờ Refresh) ────────────────────────
+# Mỗi acc mở một Chrome ẩn đọc cookie sống → chục acc mất vài phút, nên chạy ở
+# luồng NỀN; giao diện poll `refresh_all_status()` để xem tiến trình + kết quả.
+_RA_LOCK = threading.Lock()
+_RA_TT = {"dang_chay": False, "tong": 0, "xong": 0,
+          "cap_nhat": 0, "giu_nguyen": 0, "loi": [], "ket_thuc": ""}
+
+
+def refresh_all_status() -> dict:
+    """Tiến trình/kết quả lượt 'Cập nhật xs tất cả' gần nhất (cho giao diện poll)."""
+    with _RA_LOCK:
+        return dict(_RA_TT)
+
+
+def refresh_all_accounts_async() -> dict:
+    """Bắt đầu cập nhật xs cho MỌI acc Active ở LUỒNG NỀN. Mỗi acc: đọc cookie
+    sống từ profile; xs ĐỔI thì ghi về DB, KHÔNG đổi / đọc không ra / đang chạy
+    phiên thì GIỮ NGUYÊN (xem _sync_xs_to_db + _read_cookies_from_profile). Trả
+    về {dang_chay, tong} ngay; theo dõi qua refresh_all_status()."""
+    from db import get_accounts
+
+    with _RA_LOCK:
+        if _RA_TT["dang_chay"]:
+            return {"dang_chay": True, "tong": _RA_TT["tong"], "da_chay_roi": True}
+
+    accs = [a for a in get_accounts(trang_thai="Active")
+            if (a.get("c_user") or "").strip() and (a.get("xs") or "").strip()]
+    with _RA_LOCK:
+        _RA_TT.update({"dang_chay": True, "tong": len(accs), "xong": 0,
+                       "cap_nhat": 0, "giu_nguyen": 0, "loi": [], "ket_thuc": ""})
+
+    def _chay():
+        for a in accs:
+            ten = a.get("ten_acc", "")
+            try:
+                live = _read_cookies_from_profile(ten, (a.get("c_user") or "").strip())
+                moi = _sync_xs_to_db(a, live)
+                with _RA_LOCK:
+                    _RA_TT["cap_nhat" if moi else "giu_nguyen"] += 1
+                if moi:
+                    logger.info(f"  🔄 '{ten}': xs mới → cập nhật DB")
+            except Exception as e:
+                logger.error(f"  ❌ '{ten}': lỗi cập nhật xs: {e}")
+                with _RA_LOCK:
+                    _RA_TT["loi"].append(f"{ten}: {e}")
+            finally:
+                with _RA_LOCK:
+                    _RA_TT["xong"] += 1
+        with _RA_LOCK:
+            _RA_TT["dang_chay"] = False
+            _RA_TT["ket_thuc"] = datetime.now().strftime("%H:%M:%S")
+            _kq = dict(_RA_TT)
+        logger.info(f"🔄 Cập nhật xs tất cả xong: cập nhật {_kq['cap_nhat']}, "
+                    f"giữ nguyên {_kq['giu_nguyen']}, lỗi {len(_kq['loi'])}")
+
+    threading.Thread(target=_chay, daemon=True).start()
+    return {"dang_chay": True, "tong": len(accs)}
 
 
 # Cookie phụ giúp Facebook nhận ra "vẫn là máy cũ" — thiếu chúng thì phiên

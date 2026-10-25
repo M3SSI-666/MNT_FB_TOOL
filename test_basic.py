@@ -2400,13 +2400,16 @@ check("dấu che không ghi đè xs",       db.get_account_by_id(_acc_id)["xs"] 
 _client.post(f"/api/accounts/{_acc_id}/field", json={"field": "xs", "value": "xs-moi"})
 check("sửa xs bằng giá trị thật OK",   db.get_account_by_id(_acc_id)["xs"] == "xs-moi")
 
-# Nút "Refresh cookie ngay" — không acc nào để Yes thì phải im lặng trả rỗng,
-# tuyệt đối không mở trình duyệt. (Refresh của scheduler 10 phút mới quét và
-# chỉ chạy khi có runner bật; nút này là đường thoát khi runner đều tắt.)
-db.update_account_field(_ar["id"], "refresh", "Done")
+# Nút "Cập nhật xs tất cả" — chạy ở NỀN cho mọi acc Active, trả {dang_chay, tong}
+# ngay; giao diện poll /refresh-status. Môi trường test không có profile nên chỉ
+# đọc rỗng (giữ nguyên xs), KHÔNG mở trình duyệt.
 _res = _client.post("/api/accounts/refresh-now").get_json()
-check("endpoint refresh-now tồn tại",  _res.get("ok") is True)
-check("không có acc Yes -> rỗng",      _res.get("da_lam") == [] and _res.get("loi") == [])
+check("endpoint cập nhật xs tất cả trả dang_chay + tong",
+      _res.get("ok") is True and "tong" in _res)
+_st_xs = _client.get("/api/accounts/refresh-status").get_json()
+check("endpoint refresh-status trả tiến trình",
+      _st_xs.get("ok") is True and "dang_chay" in _st_xs and "cap_nhat" in _st_xs
+      and "giu_nguyen" in _st_xs)
 
 # ── Sức khoẻ acc: nghỉ tạm vs tắt hẳn ──────────────────────────────────────
 import suc_khoe_acc as _sk

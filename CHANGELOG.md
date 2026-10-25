@@ -10,6 +10,19 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.69.0 — 26/10/2026
+
+**Nút "Cập nhật xs tất cả" — thay cho cột Refresh**
+
+Gộp lại cho gọn: **bỏ cột "Refresh"** ở bảng Tài khoản (khỏi phải tự đánh "Yes"
+từng acc). Nút ở đầu bảng đổi thành **"🔄 Cập nhật xs tất cả"** — bấm là nó đọc
+cookie sống từ profile của **mọi acc Active**: acc nào **xs đổi** thì cập nhật
+lại DB, acc nào **không đổi / đọc không ra / đang chạy phiên** thì **giữ nguyên**
+(an toàn, không ghi đè bừa, không phá phiên đang chạy). Chạy ở **nền** (chục acc
+mất vài phút), nút hiện tiến trình X/Y, xong báo "cập nhật A, giữ nguyên B".
+
+---
+
 ## v2.68.0 — 25/10/2026
 
 **Tóm tắt lịch: thêm "Theo loại phiên"**

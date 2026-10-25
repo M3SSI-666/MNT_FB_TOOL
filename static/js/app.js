@@ -1042,7 +1042,6 @@ const ACC_FIELDS = [
     {key:"page_uid",label:"Tên Page"},
     {key:"c_user",label:"c_user",mono:true},
     {key:"xs",label:"xs",mono:true},
-    {key:"refresh",label:"Refresh"},
     {key:"trang_thai",label:"Trạng thái"},
     {key:"email_khoiphuc",label:"Email KP"},
     {key:"pass_khoiphuc",label:"Pass KP"},
@@ -1169,24 +1168,43 @@ async function importAccountsExcel(e){
     }catch(err){ Toast.error("Lỗi nhập Excel: "+err.message); }
 }
 
-// Mỗi acc phải mở một Chrome ẩn để đọc cookie nên có thể mất vài chục giây.
-// Khoá nút trong lúc chạy, tránh người dùng bấm chồng làm mở nhiều Chrome
-// cùng trỏ vào một profile — thứ chắc chắn làm hỏng dữ liệu đăng nhập.
+// Cập nhật xs cho TẤT CẢ acc Active: mỗi acc mở một Chrome ẩn đọc cookie sống
+// (xs đổi thì ghi về DB, không đổi/đang chạy phiên thì giữ nguyên) → chục acc
+// mất vài phút, nên chạy ở NỀN và poll tiến trình. Khoá nút trong lúc chạy.
 async function refreshCookiesNow(){
     const btn=document.getElementById("btn-refresh-cookie");
-    const cu=btn.textContent;
-    btn.disabled=true; btn.textContent="⏳ Đang refresh...";
+    const cu=btn.dataset.label||btn.textContent; btn.dataset.label=cu;
+    btn.disabled=true; btn.textContent="⏳ Đang cập nhật...";
     try{
         const r=await fetch("/api/accounts/refresh-now",{method:"POST"});
         const res=await r.json();
         if(!res.ok) throw new Error(res.error||"không rõ lỗi");
-        const n=(res.da_lam||[]).length, loi=(res.loi||[]).length;
-        if(!n && !loi) Toast.info("Không có acc nào để Refresh = Yes");
-        else if(loi)   Toast.error(`Xong ${n} acc, ${loi} acc lỗi — xem log`);
-        else           Toast.success(`Đã refresh cookie ${n} acc: ${res.da_lam.join(", ")}`);
-        loadAccounts();
-    }catch(err){ Toast.error("Lỗi refresh: "+err.message); }
-    finally{ btn.disabled=false; btn.textContent=cu; }
+        if(!res.da_chay_roi && !res.tong){
+            Toast.info("Không có acc Active nào để cập nhật");
+            btn.disabled=false; btn.textContent=cu; return;
+        }
+        Toast.info(res.da_chay_roi ? "Đang cập nhật xs rồi, chờ xong…"
+                                   : `Đang cập nhật xs ${res.tong} acc ở nền (có thể vài phút)…`);
+        _pollRefreshXs(btn,cu);
+    }catch(err){ Toast.error("Lỗi cập nhật xs: "+err.message); btn.disabled=false; btn.textContent=cu; }
+}
+
+async function _pollRefreshXs(btn,cu){
+    try{
+        const s=await (await fetch("/api/accounts/refresh-status")).json();
+        if(s.ok && s.dang_chay){
+            btn.textContent=`⏳ ${s.xong}/${s.tong}…`;
+            setTimeout(()=>_pollRefreshXs(btn,cu),2000);
+            return;
+        }
+        btn.disabled=false; btn.textContent=cu;
+        if(s.ok){
+            const loi=(s.loi||[]).length;
+            const msg=`xs: cập nhật ${s.cap_nhat}, giữ nguyên ${s.giu_nguyen}`+(loi?`, lỗi ${loi}`:"");
+            loi ? Toast.error("Đã "+msg+" — xem log") : Toast.success("Đã "+msg);
+            loadAccounts();
+        }
+    }catch(e){ btn.disabled=false; btn.textContent=cu; loadAccounts(); }
 }
 
 async function loadAccounts(){
