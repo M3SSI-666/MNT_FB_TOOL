@@ -3934,6 +3934,32 @@ _tg_mc = _TrangGia(23)
 _aio.run(_mc._cuon_tai_het(_tg_mc))
 check("cuộn nạp tới khi danh sách thôi dài thêm (23 bài → nạp đủ 23, không cuộn vô hạn)",
       _tg_mc.da_nap == 23 and _tg_mc.cuon <= 8)
+
+
+class _TrangCham(_TrangGia):
+    """FB nạp CHẬM: cứ 3 lượt cuộn mới thêm 5 dòng (27/10 Mai Trung Thao: 43 bài)."""
+    async def evaluate(self, js, *a):
+        if "scrollHeight" in js:
+            self.cuon += 1
+            if self.cuon % 3 == 0:
+                self.da_nap = min(self.tong, self.da_nap + 5)
+        elif "Ngày niêm yết" in js:
+            return self.da_nap
+
+
+_tc_mc = _TrangCham(43)
+_aio.run(_mc._cuon_tai_het(_tc_mc))
+check("cuộn kiên nhẫn: FB nạp chậm (3 lượt mới thêm bài) vẫn nạp đủ 43 bài",
+      _tc_mc.da_nap == 43)
+check("dọn Market: 1 bài hỏng không bỏ cả phiên — thử tiếp, chỉ dừng khi hỏng 3 lần liền",
+      "loi_lien >= 3" in _than_xoa_mc and "await _tai_selling(page)" in _than_xoa_mc
+      and "continue" in _than_xoa_mc)
+check("dọn Market: lỗi giữa chừng vẫn trả số bài ĐÃ xóa (không mất tổng kết)",
+      _than_xoa_mc.rstrip().endswith("return da_xoa"))
+check("dọn Market: dừng mà còn bài quá hạn thì ghi log số dòng / số nút để chẩn đoán",
+      "dừng mà còn" in _than_xoa_mc)
+check("scheduler ghi tổng kết dọn cả khi xóa được 0 bài",
+      'kq.get("da_xoa") or kq.get("qua_han")' in Path("scheduler.py").read_text(encoding="utf-8"))
 # Dọn chạy im: KHÔNG báo Telegram, KHÔNG còn chế độ chạy thử ở runner.
 check("gỡ hẳn báo Telegram cho dọn (soan_xoa_mkt/bao_xoa_mkt)",
       not hasattr(_tb, "soan_xoa_mkt") and not hasattr(_tb, "bao_xoa_mkt"))

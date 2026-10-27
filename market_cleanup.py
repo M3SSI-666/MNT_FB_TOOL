@@ -180,17 +180,20 @@ def _trich_ngay(text: str) -> str:
 _JS_DEM_DONG = "() => (document.body.innerText.match(/Ngày niêm yết/g) || []).length"
 
 
-async def _cuon_tai_het(page, toi_da: int = 15):
+async def _cuon_tai_het(page, toi_da: int = 25):
     """Cuộn xuống đáy tới khi số dòng 'Ngày niêm yết' thôi tăng — FB chỉ nạp
     thêm bài khi cuộn tới, mà danh sách xếp MỚI → CŨ nên bài quá hạn luôn nằm
-    dưới cùng. Cuộn xong về lại đầu trang."""
+    dưới cùng. Cuộn xong về lại đầu trang.
+
+    Phải KIÊN NHẪN: 27/10 bản đầu (chờ 0,9s, dừng sau 2 lượt đứng yên) dừng sớm
+    ở nick 43 bài khi FB nạp chậm — Mai Trung Thao xóa 5/18 rồi tưởng hết."""
     truoc, dung_yen = -1, 0
     for _ in range(toi_da):
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        await page.wait_for_timeout(900)
+        await page.wait_for_timeout(1500)
         n = await page.evaluate(_JS_DEM_DONG)
         dung_yen = dung_yen + 1 if n == truoc else 0
-        if dung_yen >= 2:            # 2 lượt liền không thêm dòng nào → đã đủ
+        if dung_yen >= 3:            # 3 lượt liền (~4,5s) không thêm dòng → đã đủ
             break
         truoc = n
     await page.evaluate("window.scrollTo(0, 0)")
@@ -310,49 +313,88 @@ async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
                 return el
         return None
 
+    async def _xoa_mot(muc_tieu) -> str | None:
+        """Xóa MỘT bài: '...' → 'Xóa bài niêm yết' → 'Xóa'. Trả lý do khảo sát
+        (hoặc ''); ném lỗi nếu hỏng ở bước nào."""
+        await muc_tieu.scroll_into_view_if_needed(timeout=5000)
+        await muc_tieu.click(timeout=6000)
+        await page.wait_for_timeout(1500)
+        mi = page.get_by_role("menuitem", name="Xóa bài niêm yết")
+        if not await mi.count():
+            raise RuntimeError("menu không có 'Xóa bài niêm yết'")
+        await mi.first.click(timeout=6000)
+        await page.wait_for_timeout(2000)
+        # Hộp xác nhận → nút 'Xóa' (đúng chữ, không phải 'Xóa bài niêm yết').
+        nut_xoa = page.locator('[role="dialog"]').last.get_by_role(
+            "button", name="Xóa", exact=True)
+        if not await nut_xoa.count():
+            raise RuntimeError("không thấy nút xác nhận 'Xóa'")
+        await nut_xoa.first.click(timeout=6000)
+        await page.wait_for_timeout(2500)
+        # FB hỏi lý do xóa (4 lựa chọn) → chọn ngẫu nhiên 1 + Tiếp. Bài đã bị
+        # xóa ở bước trên rồi; đây chỉ cho tự nhiên, lỗi thì bỏ qua.
+        ld = await _tra_loi_khao_sat(page)
+        await page.wait_for_timeout(1200)
+        return ld or ""
+
     async with async_playwright() as p:
         ctx, page = await _mo_selling(p, acc_name, c_user, headless)
+        loi_lien = 0
         try:
             for _ in range(_TRAN_XOA):
-                muc_tieu = await _tim_muc_tieu()
-                if muc_tieu is None:
-                    # Chưa thấy → cuộn nạp thêm một lượt nữa rồi mới kết luận.
-                    await _cuon_tai_het(page)
+                try:
                     muc_tieu = await _tim_muc_tieu()
-                if muc_tieu is None:
-                    break   # không còn bài quá hạn
-                await muc_tieu.scroll_into_view_if_needed(timeout=5000)
-                await muc_tieu.click(timeout=6000)
-                await page.wait_for_timeout(1500)
-                mi = page.get_by_role("menuitem", name="Xóa bài niêm yết")
-                if not await mi.count():
-                    await page.keyboard.press("Escape")
-                    break
-                await mi.first.click(timeout=6000)
-                await page.wait_for_timeout(2000)
-                # Hộp xác nhận → nút 'Xóa' (đúng chữ, không phải 'Xóa bài niêm yết').
-                nut_xoa = page.locator('[role="dialog"]').last.get_by_role(
-                    "button", name="Xóa", exact=True)
-                if not await nut_xoa.count():
-                    await page.keyboard.press("Escape")
-                    break
-                await nut_xoa.first.click(timeout=6000)
-                await page.wait_for_timeout(2500)
-                # FB hỏi lý do xóa (4 lựa chọn) → chọn ngẫu nhiên 1 + Tiếp. Bài
-                # đã bị xóa ở bước trên rồi; đây chỉ cho tự nhiên, lỗi thì bỏ qua.
-                ld = await _tra_loi_khao_sat(page)
-                await page.wait_for_timeout(1200)
+                    if muc_tieu is None:
+                        # Chưa thấy → cuộn nạp thêm một lượt nữa rồi mới kết luận.
+                        await _cuon_tai_het(page)
+                        muc_tieu = await _tim_muc_tieu()
+                    if muc_tieu is None:
+                        break   # không còn bài quá hạn
+                    ld = await _xoa_mot(muc_tieu)
+                except CookieDeadError:
+                    raise
+                except Exception as e:
+                    # MỘT bài hỏng (27/10 Hoàng Alex: "Locator.click: Timeout
+                    # 6000ms" ở bài thứ 10) không được bỏ cả phiên — đóng menu,
+                    # tải lại, thử tiếp. Chỉ dừng khi hỏng 3 lần LIÊN TIẾP.
+                    loi_lien += 1
+                    logger.warning(f"  ⚠️  [{acc_name}] xóa 1 bài hỏng ({loi_lien}/3): {e}")
+                    if loi_lien >= 3:
+                        break
+                    try:
+                        await page.keyboard.press("Escape")
+                        await _tai_selling(page)
+                    except Exception:
+                        break
+                    continue
+                loi_lien = 0
                 da_xoa += 1
                 logger.info(f"  🧹 [{acc_name}] đã xóa 1 bài quá hạn ({da_xoa})"
                             + (f" · lý do: {ld}" if ld else ""))
                 # Tải lại cho DOM sạch, CUỘN cho nạp đủ danh sách, rồi quét tiếp.
                 await _tai_selling(page)
-            return da_xoa
+            try:
+                con_lai = sum(1 for b in await _doc_rows(page, hom_nay)
+                              if b["tuoi"] is not None and b["tuoi"] > max(0, int(so_ngay)))
+                if con_lai:
+                    nut = await page.locator('[aria-label^="Lựa chọn khác cho"]').count()
+                    so_dong = await page.evaluate(_JS_DEM_DONG)
+                    logger.warning(f"  ⚠️  [{acc_name}] dừng mà còn {con_lai} bài quá hạn "
+                                   f"(đã nạp {so_dong} dòng, {nut} nút '...')")
+            except Exception:
+                pass
+        except CookieDeadError:
+            raise
+        except Exception as e:
+            # Lỗi ngoài vòng (mở trang…): vẫn trả số bài ĐÃ xóa — bản trước làm
+            # mất con số này (Hoàng Alex xóa 9 bài mà tổng kết không ghi).
+            logger.warning(f"⚠️  Xóa bài niêm yết [{acc_name}] lỗi giữa chừng: {e}")
         finally:
             try:
                 await ctx.close()
             except Exception:
                 pass
+        return da_xoa
 
 
 def xoa_bai_cu(acc_name: str, c_user: str = "", so_ngay: int = 3,

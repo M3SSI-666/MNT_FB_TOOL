@@ -869,8 +869,10 @@ def main():
                 so_ngay = 3
             kq = market_cleanup.xoa_bai_cu(ten_acc, c_user, so_ngay=so_ngay,
                                            chay_thu=False)
-            if kq and kq.get("da_xoa"):
-                logger.info(f"🧹 [{ten_acc}] dọn Market: xóa {kq['da_xoa']}/"
+            # Ghi tổng kết cả khi xóa được 0 bài mà vẫn có bài quá hạn — im lặng
+            # thì không ai biết phiên dọn có chạy mà xóa hỏng.
+            if kq and (kq.get("da_xoa") or kq.get("qua_han")):
+                logger.info(f"🧹 [{ten_acc}] dọn Market: xóa {kq.get('da_xoa', 0)}/"
                             f"{len(kq.get('qua_han') or [])} bài quá {so_ngay} ngày")
         except CookieDeadError:
             _mark_cookie_dead(ten_acc, c_user)

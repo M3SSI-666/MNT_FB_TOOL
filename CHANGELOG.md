@@ -10,6 +10,27 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.69.2 — 27/10/2026
+
+**Tự xóa bài niêm yết: cuộn kiên nhẫn hơn + 1 bài lỗi không bỏ cả phiên**
+
+Chạy thật v2.69.1 lúc 18:46 ngày 27/10: mỗi phiên đã xóa được **nhiều bài** (Alex
+Tường 11, Nguyễn Bảo Ngọc 9, Hoàng Alex 9, Dang Xuan Duy 6…) thay vì 1. Còn 2 chỗ
+chưa ổn, nay vá:
+
+- **Dừng sớm khi Facebook nạp chậm** — Mai Trung Thao (43 bài) xóa **5/18** rồi
+  tưởng hết. Giờ cuộn chờ lâu hơn (1,5s/lượt, phải 3 lượt liền không thêm bài mới
+  coi là đủ).
+- **1 bài lỗi làm dừng cả phiên** — Hoàng Alex lỗi bấm nút ở bài thứ 10 thì bỏ
+  luôn, và tổng kết **mất cả 9 bài đã xóa**. Giờ bài lỗi thì đóng menu, tải lại,
+  thử tiếp; chỉ dừng khi lỗi **3 lần liên tiếp**. Số bài đã xóa luôn được ghi.
+- **Log rõ hơn:** luôn ghi dòng tổng kết `dọn Market: xóa X/Y` (kể cả khi X = 0);
+  dừng mà còn bài quá hạn thì ghi số dòng đã nạp + số nút "…" để chẩn đoán.
+
+> Cập nhật xong **Dừng → Run** lại runner các mảng.
+
+---
+
 ## v2.69.1 — 27/10/2026
 
 **Vá: tự xóa bài niêm yết Marketplace mỗi phiên chỉ xóa được 1 bài**
