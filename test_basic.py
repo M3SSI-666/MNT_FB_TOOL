@@ -6728,6 +6728,33 @@ check("mở trang thu-vien thì nạp dữ liệu",
 check("thư mục ảnh thư viện NẰM NGOÀI CONTENT_MEDIA_DIRS",
       "thuvien" not in str(_cfg.CONTENT_MEDIA_DIRS))
 
+# ── Chống lag lưới ảnh: thumbnail sinh khi cần + lazy-load ───────────────────
+import storage as _stg_th
+from PIL import Image as _PILImg
+import tempfile as _tf_th, shutil as _sh_th
+_tmp_md = Path(_tf_th.gettempdir()) / "mnt_thumb_test"
+_sh_th.rmtree(_tmp_md, ignore_errors=True)
+(_tmp_md / "thuvien").mkdir(parents=True, exist_ok=True)
+_PILImg.new("RGB", (800, 600), (10, 20, 30)).save(_tmp_md / "thuvien" / "aa.png")
+check("không phải ảnh thumbs → không sinh (False)",
+      _stg_th.tao_thumbnail_neu_can(_tmp_md, "thuvien/aa.png") is False)
+check("sinh thumbnail khi cần → file có thật + cạnh ≤ 160px",
+      _stg_th.tao_thumbnail_neu_can(_tmp_md, "thuvien/thumbs/aa.png") is True
+      and (_tmp_md / "thuvien" / "thumbs" / "aa.png").exists()
+      and max(_PILImg.open(_tmp_md / "thuvien" / "thumbs" / "aa.png").size) <= 160)
+check("thiếu ảnh gốc → False (route 404, onerror rơi về ảnh gốc)",
+      _stg_th.tao_thumbnail_neu_can(_tmp_md, "thuvien/thumbs/khong_co.png") is False)
+_sh_th.rmtree(_tmp_md, ignore_errors=True)
+check("quét ảnh mồ côi KHÔNG đệ quy → thư mục thumbs/ không bị xóa",
+      "iterdir()" in Path("storage.py").read_text(encoding="utf-8"))
+_ajs_th = Path("static/js/app.js").read_text(encoding="utf-8")
+check("lưới ảnh dùng thumbnail nhỏ (_thumb) + lazy-load",
+      "function _thumb(" in _ajs_th and "_thumb(u)" in _ajs_th
+      and 'loading="lazy"' in _ajs_th and 'decoding="async"' in _ajs_th
+      and "onerror=" in _ajs_th)
+check("route /media sinh thumbnail khi cần",
+      "tao_thumbnail_neu_can" in Path("server.py").read_text(encoding="utf-8"))
+
 # Content trỏ vào thư viện: cột ma_thu_vien lưu + sửa nhanh được qua API.
 _cid_tv = db.upsert_content({"loai": "homestay", "ma_content": "TV1",
                              "noi_dung": "x", "ma_thu_vien": "7"})

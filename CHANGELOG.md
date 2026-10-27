@@ -10,6 +10,24 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.70.0 — 28/10/2026
+
+**Hết lag tab Thư viện ảnh (và các lưới ảnh): thumbnail + lazy-load**
+
+Trước đây lưới ảnh trỏ thẳng **ảnh GỐC (~2–3 MB, ~1600px)** cho mỗi ô 34px, lại
+tải + giải mã HẾT cùng lúc → mở tab Thư viện ảnh (và Content) rất **lag/đơ**.
+
+- **Thumbnail tự sinh:** lưới giờ hiện ảnh nhỏ ≤160px (đo thật: 2932 KB → 33 KB,
+  **nhẹ ~89 lần**, RAM giải mã nhẹ ~100 lần). Ảnh gốc chỉ tải khi **bấm xem lớn**.
+  Thumbnail sinh ở lần xem đầu, lần sau phục vụ thẳng file nhỏ.
+- **Lazy-load:** chỉ tải ảnh **khi cuộn tới** → mở tab tức thì, ảnh ngoài màn
+  hình không tải.
+- Áp cho cả tab **Thư viện ảnh**, tab **Content**, khung xem lớn và panel sửa.
+
+> Cập nhật xong **khởi động lại app** để nạp cơ chế thumbnail.
+
+---
+
 ## v2.69.2 — 27/10/2026
 
 **Tự xóa bài niêm yết: cuộn kiên nhẫn hơn + 1 bài lỗi không bỏ cả phiên**

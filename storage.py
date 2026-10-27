@@ -67,6 +67,43 @@ def save_thuvien_image(file_bytes: bytes, filename: str) -> str:
     return url
 
 
+# ── Thumbnail sinh KHI CẦN (chống lag khi hiện lưới ảnh) ─────────────────────
+# Ảnh thư viện là file gốc ~2-3 MB, ~1600px. Lưới thumbnail 34px mà trỏ thẳng ảnh
+# gốc thì trình duyệt tải + giải mã nguyên ảnh cho MỖI ô → lag. Giao diện trỏ vào
+# URL '.../thumbs/<tên>' (xem app.js _thumb); route /media gọi hàm này sinh ảnh
+# nhỏ (tối đa 160px) ở lần xem đầu, các lần sau phục vụ thẳng file nhỏ đã lưu.
+THUMB_MAX_PX = 160
+
+
+def tao_thumbnail_neu_can(media_dir, rel_path) -> bool:
+    """rel_path dạng '<dir>/thumbs/<tên>' → nếu chưa có file thì sinh từ ảnh gốc
+    cùng tên ở thư mục cha, thu nhỏ còn tối đa THUMB_MAX_PX (giữ tỉ lệ). Trả True
+    nếu thumbnail đã sẵn sàng. Không phải ảnh thumbs / không có ảnh gốc / lỗi →
+    False (route trả 404, <img onerror> rơi về ảnh gốc)."""
+    parts = str(rel_path).replace("\\", "/").split("/")
+    if len(parts) < 2 or parts[-2] != "thumbs":
+        return False
+    base = Path(media_dir)
+    thumb = base.joinpath(*parts)
+    if thumb.exists():
+        return True
+    goc = base.joinpath(*parts[:-2], parts[-1])      # bỏ segment 'thumbs'
+    if not goc.exists():
+        return False
+    try:
+        from PIL import Image
+        thumb.parent.mkdir(parents=True, exist_ok=True)
+        im = Image.open(goc)
+        im.thumbnail((THUMB_MAX_PX, THUMB_MAX_PX))
+        if thumb.suffix.lower() in (".jpg", ".jpeg") and im.mode in ("RGBA", "P", "LA"):
+            im = im.convert("RGB")
+        im.save(thumb)
+        return True
+    except Exception as e:
+        logger.warning(f"  ⚠️  Không tạo được thumbnail {rel_path}: {e}")
+        return False
+
+
 def delete_image(url_path: str) -> bool:
     """Xóa ảnh theo URL path (bắt đầu bằng /data/media/...)."""
     if not url_path or not url_path.startswith("/"):

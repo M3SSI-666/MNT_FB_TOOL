@@ -82,7 +82,7 @@ function renderLb(){
     document.getElementById("lb-img").src = url;
     document.getElementById("lb-counter").textContent = `${_lbIdx+1} / ${_lbImgs.length}`;
     document.getElementById("lb-thumbs").innerHTML = _lbImgs.map((u,i)=>
-        `<img src="${u}" onclick="lbGoto(${i})" style="height:52px;width:52px;object-fit:cover;border-radius:4px;cursor:pointer;opacity:${i===_lbIdx?1:.4};border:2px solid ${i===_lbIdx?"var(--accent)":"transparent"}">`
+        `<img src="${_thumb(u)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${u}'" onclick="lbGoto(${i})" style="height:52px;width:52px;object-fit:cover;border-radius:4px;cursor:pointer;opacity:${i===_lbIdx?1:.4};border:2px solid ${i===_lbIdx?"var(--accent)":"transparent"}">`
     ).join("");
     const dl = document.getElementById("lb-dl");
     if(dl){ dl.href=url; dl.download=_lbFilename(url, _lbIdx); }
@@ -2201,7 +2201,7 @@ async function loadContent(loai){
                     onclick="openLightbox(JSON.parse(decodeURIComponent('${encImgs}')),{name:'${r.ma_content}'})">
                     <div style="display:flex;gap:2px;flex-wrap:wrap;max-width:140px">
                         ${imgs.length
-                            ?imgs.slice(0,4).map(u=>`<img src="${u}" style="width:34px;height:34px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">`).join("")
+                            ?imgs.slice(0,4).map(u=>`<img src="${_thumb(u)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${u}'" style="width:34px;height:34px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">`).join("")
                              +(imgs.length>4?`<div style="width:34px;height:34px;border-radius:4px;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--accent)">+${imgs.length-4}</div>`:"")
                             :`<span style="font-size:11px;color:var(--text-muted)">-</span>`}
                     </div>
@@ -2353,7 +2353,7 @@ function openContentEdit(data){
         <div class="field-group"><label>Nội dung</label><textarea id="ce_nd" rows="8" style="width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;color:var(--text-primary);font-size:13px;line-height:1.6;resize:vertical;outline:none;font-family:inherit">${data.noi_dung||""}</textarea></div>
         <div class="field-group">
             <label>Ảnh <span style="font-weight:400;color:var(--text-muted);font-size:11px">— đăng lên Facebook theo đúng thứ tự này, ảnh đầu tiên đứng đầu bài</span></label>
-            <div id="ce_thumbs" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${(data.link_anh||"").split(",").filter(Boolean).map((u,i)=>`<div class="cedit-thumb"><img src="${u.trim()}"><button class="remove-btn" onclick="_removeImg(${i})">✕</button></div>`).join("")}</div>
+            <div id="ce_thumbs" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${(data.link_anh||"").split(",").filter(Boolean).map((u,i)=>`<div class="cedit-thumb"><img src="${_thumb(u.trim())}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${u.trim()}'"><button class="remove-btn" onclick="_removeImg(${i})">✕</button></div>`).join("")}</div>
             <div class="upload-zone" onclick="document.getElementById('ce_imgs_file').click()" ondragover="event.preventDefault()" ondrop="_dropImgs(event)">
                 <div class="upload-zone__icon">📤</div>
                 <div class="upload-zone__text">Kéo thả hoặc <span>click để chọn</span></div>
@@ -2380,7 +2380,7 @@ function closeContentEdit(){
 function _removeImg(i){ window._ceImgUrls.splice(i,1); _reRenderImgThumbs(); }
 function _reRenderImgThumbs(){
     document.getElementById("ce_thumbs").innerHTML=window._ceImgUrls.map((u,i)=>
-        `<div class="cedit-thumb"><img src="${u}"><button class="remove-btn" onclick="_removeImg(${i})">✕</button></div>`
+        `<div class="cedit-thumb"><img src="${_thumb(u)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${u}'"><button class="remove-btn" onclick="_removeImg(${i})">✕</button></div>`
     ).join("");
 }
 
@@ -2477,6 +2477,11 @@ async function importThuVienZip(e){
         loadThuVien();
     }catch(err){ Toast.error("Lỗi nhập backup: "+err.message); }
 }
+
+// URL thumbnail nhỏ cho lưới ảnh: chèn /thumbs/ trước tên file. Server sinh ảnh
+// nhỏ (≤160px) ở lần xem đầu (storage.tao_thumbnail_neu_can); <img onerror> rơi
+// về ảnh gốc nếu thiếu. Nhờ vậy lưới 34px không tải/giải mã ảnh gốc ~3MB mỗi ô.
+function _thumb(u){ if(!u) return u; const i=u.lastIndexOf("/"); return i<0?u:u.slice(0,i)+"/thumbs"+u.slice(i); }
 
 async function loadThuVien(){
     try{ const r = await (await fetch("/api/thuvien/mang")).json(); _tvMang = r.data || []; }
@@ -2643,7 +2648,7 @@ async function tvLoadBang(){
                     onclick="openLightbox(JSON.parse(decodeURIComponent('${encImgs}')),{name:'${(r.ma||"").replace(/'/g,'')}'})">
                     <div style="display:flex;gap:2px;flex-wrap:wrap;max-width:324px" title="Tối đa 8 ảnh một hàng">
                         ${imgs.length
-                            ?imgs.slice(0,8).map(u=>`<img src="${u}" style="width:34px;height:34px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">`).join("")
+                            ?imgs.slice(0,8).map(u=>`<img src="${_thumb(u)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${u}'" style="width:34px;height:34px;object-fit:cover;border-radius:4px;border:1px solid var(--border)">`).join("")
                              +(imgs.length>8?`<div style="width:34px;height:34px;border-radius:4px;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--accent)">+${imgs.length-8}</div>`:"")
                             :`<span style="font-size:11px;color:var(--text-muted)">-</span>`}
                     </div>
@@ -2736,7 +2741,7 @@ function tvOpenEdit(data){
 function tvCloseEdit(){ document.getElementById("tvedit-overlay").style.display="none"; document.getElementById("tvedit-panel").style.display="none"; }
 function _tvReRenderThumbs(){
     document.getElementById("tv_thumbs").innerHTML=(window._tvImgUrls||[]).map((u,i)=>
-        `<div class="cedit-thumb"><img src="${u}"><button class="remove-btn" onclick="_tvRemoveImg(${i})">✕</button></div>`).join("");
+        `<div class="cedit-thumb"><img src="${_thumb(u)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${u}'"><button class="remove-btn" onclick="_tvRemoveImg(${i})">✕</button></div>`).join("");
 }
 function _tvRemoveImg(i){ window._tvImgUrls.splice(i,1); _tvReRenderThumbs(); }
 async function _tvUpload(file){

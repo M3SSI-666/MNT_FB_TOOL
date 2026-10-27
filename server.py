@@ -308,13 +308,23 @@ def api_chromium_install():
 
 
 # ── Serve media files ─────────────────────────────────────────
+def _media(filename):
+    # Ảnh thumbnail (.../thumbs/<tên>): sinh từ ảnh gốc ở lần xem đầu nếu chưa có.
+    if "thumbs/" in filename.replace("\\", "/"):
+        try:
+            from storage import tao_thumbnail_neu_can
+            tao_thumbnail_neu_can(MEDIA_DIR, filename)
+        except Exception:
+            pass
+    return send_from_directory(str(MEDIA_DIR), filename)
+
 @app.route("/media/<path:filename>")
 def serve_media(filename):
-    return send_from_directory(str(MEDIA_DIR), filename)
+    return _media(filename)
 
 @app.route("/data/media/<path:filename>")
 def serve_media_alt(filename):
-    return send_from_directory(str(MEDIA_DIR), filename)
+    return _media(filename)
 
 
 # ── Runner management ─────────────────────────────────────────
