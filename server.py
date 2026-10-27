@@ -3218,6 +3218,24 @@ def _chain_dang_chay(nguon: str) -> bool:
     return False
 
 
+@app.route("/api/join/xoa-het", methods=["POST"])
+def api_join_xoa_het():
+    """Xoá sạch lịch Tham gia nhóm của một nguồn ('' = Page, 'MARKET' = Market).
+    Chặn khi runner của nguồn đó đang chạy — rút lịch dưới chân phiên đang chạy
+    thì phiên ghi trạng thái vào dòng vừa biến mất (giống xoá lịch Thuê/Bán)."""
+    nguon = ((request.json or {}).get("nguon") or "").strip()
+    if _chain_dang_chay(nguon):
+        ten = "Marketplace" if nguon == "MARKET" else "Page"
+        return jsonify({"ok": False,
+                        "error": f"Lịch tham gia nhóm {ten} đang chạy — hãy Dừng trước"})
+    try:
+        n = db.xoa_het_join(nguon)
+        logger.info(f"🗑️  Xoá sạch lịch tham gia nhóm ({nguon or 'Page'}): {n} dòng")
+        return jsonify({"ok": True, "deleted": n})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @app.route("/api/join/<int:sched_id>/lam-sach", methods=["POST"])
 def api_join_lam_sach(sched_id):
     """Bật/tắt "làm sạch nhóm" cho một lịch tham gia nhóm.

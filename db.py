@@ -2443,6 +2443,16 @@ def xoa_het_lich(loai: str) -> int:
         return con.execute("DELETE FROM schedules WHERE loai=?", (loai,)).rowcount
 
 
+def xoa_het_join(nguon: str = "") -> int:
+    """Xoá SẠCH lịch Tham gia nhóm của một nguồn — '' = Page (UID Nhóm),
+    'MARKET' = Marketplace. Trả về số dòng xoá. (Giống xoa_het_lich nhưng cho
+    bảng join_schedules.)"""
+    with _conn() as con:
+        return con.execute(
+            "DELETE FROM join_schedules WHERE COALESCE(nguon,'')=?",
+            ((nguon or "").strip(),)).rowcount
+
+
 def replace_schedules(loai: str, rows: list[dict]):
     """Xóa lịch cũ và ghi lịch mới — dùng khi gen lịch."""
     with _conn() as con:

@@ -10,6 +10,17 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.71.0 — 28/10/2026
+
+**Thêm nút "Xoá lịch" cho Tham gia nhóm Page / Marketplace**
+
+Hai tab **Tham gia nhóm Page** và **Tham gia nhóm Market** nay có nút **🗑 Xoá
+lịch** (giống lịch Thuê/Bán) — xoá sạch lịch tham gia nhóm của đúng tab đó, như
+chưa từng tạo. Chặn khi chuỗi đang chạy (phải **Dừng** trước). Muốn có lại thì
+bấm **"Tạo lịch nhanh"**.
+
+---
+
 ## v2.70.0 — 28/10/2026
 
 **Hết lag tab Thư viện ảnh (và các lưới ảnh): thumbnail + lazy-load**

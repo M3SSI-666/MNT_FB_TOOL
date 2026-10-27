@@ -310,6 +310,8 @@
                             style="display:none;color:var(--danger)">■ Dừng</button>
                     <button class="btn btn-ghost" onclick="openQuickJoinSchedule()">⚡ Tạo lịch nhanh</button>
                     <button class="btn btn-ghost" onclick="openAddJoinSchedule()">+ Thêm thủ công</button>
+                    <button class="btn btn-danger" onclick="joinXoaHet('')"
+                            title="Xoá sạch lịch tham gia nhóm Page, như chưa từng tạo">🗑 Xoá lịch</button>
                     <button class="btn btn-ghost" onclick="loadJoinSchedules()" title="Refresh">🔄</button>
 
                     <!-- Toggle headless riêng cho join -->
@@ -366,6 +368,8 @@
                             style="display:none;color:var(--danger)">■ Dừng</button>
                     <button class="btn btn-ghost" onclick="jmTaoNhanh()">⚡ Tạo lịch cho mọi nick Active</button>
                     <button class="btn btn-ghost" onclick="jmThem()">+ Thêm một nick</button>
+                    <button class="btn btn-danger" onclick="joinXoaHet('MARKET')"
+                            title="Xoá sạch lịch tham gia nhóm Marketplace, như chưa từng tạo">🗑 Xoá lịch</button>
                     <button class="btn btn-ghost" onclick="loadJoinMarket()" title="Refresh">🔄</button>
                     <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius)">
                         <label class="toggle-switch" style="margin:0">

@@ -76,6 +76,7 @@ const API = {
     joinStop:       (id)                            => API.post(`/api/join/${id}/stop`),
     joinStatus:     (id)                            => API.get(`/api/join/${id}/status`),
     joinDelete:     (id)                            => API.del(`/api/join/${id}`),
+    joinXoaHet:     (nguon)                         => API.post("/api/join/xoa-het", {nguon}),
     logsJoin:       (n=200)                         => API.get(`/api/logs/join?n=${n}`),
 
     // Link comment

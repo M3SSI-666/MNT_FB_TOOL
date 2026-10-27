@@ -2852,6 +2852,18 @@ async function jcDung(nguon){
     }catch(e){ Toast.error(e.message); }
 }
 
+// Xoá SẠCH lịch tham gia nhóm của một nguồn ('' = Page, 'MARKET' = Market) —
+// giống nút "Xoá lịch" của lịch Thuê/Bán. Server chặn nếu chuỗi đang chạy.
+async function joinXoaHet(nguon){
+    const ten = nguon==="MARKET" ? "Marketplace" : "Page";
+    if(!confirm(`Xoá SẠCH lịch tham gia nhóm ${ten}?\n\nBảng sẽ trống như chưa từng tạo. KHÔNG khôi phục được.\nMuốn có lại thì bấm "Tạo lịch nhanh".`)) return;
+    try{
+        const r = await API.joinXoaHet(nguon);
+        if(r.ok){ Toast.success(`Đã xoá ${r.deleted} dòng`); (_JC[nguon]||{}).nap?.(); }
+        else Toast.error(r.error);
+    }catch(e){ Toast.error(e.message); }
+}
+
 function jcTheoDoi(nguon){
     clearInterval(_jcHen[nguon]);
     _jcHen[nguon]=setInterval(()=>jcTrangThai(nguon), 5000);

@@ -4847,6 +4847,33 @@ db.xoa_het_lich("ban")
 check("không đụng loại lịch khác", len(db.get_schedules("thue")) == 1
       and db.get_schedules("ban") == [])
 
+# Xoá sạch lịch THAM GIA NHÓM — Page ('') và Market ('MARKET') riêng biệt.
+with db._conn() as _c_j:
+    _c_j.execute("DELETE FROM join_schedules")
+    _c_j.execute("INSERT INTO join_schedules (ten_acc,nguon) VALUES ('JA','')")
+    _c_j.execute("INSERT INTO join_schedules (ten_acc,nguon) VALUES ('JB','')")
+    _c_j.execute("INSERT INTO join_schedules (ten_acc,nguon) VALUES ('JC','MARKET')")
+def _dem_join(ng):
+    with db._conn() as _c:
+        return _c.execute("SELECT COUNT(*) FROM join_schedules WHERE COALESCE(nguon,'')=?",
+                          (ng,)).fetchone()[0]
+check("xoa_het_join('') xoá lịch Page, GIỮ Market",
+      db.xoa_het_join("") == 2 and _dem_join("") == 0 and _dem_join("MARKET") == 1)
+check("xoa_het_join('MARKET') xoá lịch Market",
+      db.xoa_het_join("MARKET") == 1 and _dem_join("MARKET") == 0)
+with db._conn() as _c_j2:
+    _c_j2.execute("INSERT INTO join_schedules (ten_acc,nguon) VALUES ('JX','')")
+_rjx = _client.post("/api/join/xoa-het", json={"nguon": ""}).get_json()
+check("endpoint /api/join/xoa-het xoá lịch Page",
+      _rjx.get("ok") is True and _rjx.get("deleted") == 1)
+check("nút 'Xoá lịch' cho cả 2 tab tham gia nhóm + hàm + API",
+      "joinXoaHet('')" in Path("templates/index.html").read_text(encoding="utf-8")
+      and "joinXoaHet('MARKET')" in Path("templates/index.html").read_text(encoding="utf-8")
+      and "async function joinXoaHet" in Path("static/js/app.js").read_text(encoding="utf-8")
+      and "joinXoaHet:" in Path("static/js/api.js").read_text(encoding="utf-8"))
+with db._conn() as _c_j3:
+    _c_j3.execute("DELETE FROM join_schedules")
+
 # Endpoint: route nhận chuỗi tự do mà đây là lệnh XOÁ, nên loại lạ phải bị chặn
 # TRƯỚC khi chạm vào bảng.
 _r = _client.post("/api/schedule/khong_co_loai_nay/xoa-het").get_json()
