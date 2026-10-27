@@ -3467,6 +3467,22 @@ check("không còn gọi logger trực tiếp trong phiên",
 check("hết cookie thì đánh dấu tài khoản",
       "UPDATE accounts SET trang_thai='Cookie hết hạn'" in _jgr)
 
+# Gặp dialog hạn chế ("hoạt động bất thường") khi tham gia nhóm → acc bị chặn
+# nhóm: DỪNG tham gia nhóm cho acc đó, chuỗi sang acc kế tiếp.
+import join_groups_runner as _jgr_mod
+check("join: nhận diện dialog FB hạn chế → True",
+      _jgr_mod._la_bi_han_che([{"chu": "Mở Facebook trên thiết bị di động để xác "
+          "nhận danh tính của bạn. Một số hành động đã bị hạn chế do có hoạt động "
+          "bất thường", "nut": ["Đóng", "OK"]}]) is True)
+check("join: dialog thường (không hạn chế) → False",
+      _jgr_mod._la_bi_han_che([{"chu": "Bạn có chắc muốn rời nhóm?",
+                                "nut": ["Hủy", "Rời"]}]) is False
+      and _jgr_mod._la_bi_han_che([]) is False)
+check("join: gặp chặn nhóm thì DỪNG acc (break) + đánh status 'Bị chặn nhóm'",
+      'return "chan_nhom"' in _jgr and 'if result == "chan_nhom":' in _jgr
+      and "bi_chan_nhom = True" in _jgr and "Bị chặn nhóm" in _jgr
+      and "_la_bi_han_che" in _jgr)
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Nghỉ giữa hai nhóm khi đi tham gia nhóm
 # ───────────────────────────────────────────────────────────────────────────

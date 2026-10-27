@@ -282,6 +282,20 @@ async def _ghi_chan_doan(page, ten_nhom: str, hop=None, anh: bytes = None):
         _log("warning", f"   không chụp được màn hình: {e}")
 
 
+def _la_bi_han_che(hop) -> bool:
+    """Trong các hộp thoại đang mở (hop) có dialog FB HẠN CHẾ hành động nhóm
+    không ('Một số hành động đã bị hạn chế do có hoạt động bất thường' / 'xác
+    nhận danh tính'). Dùng lại dấu hiệu RESTRICT_MARKERS của nuoi_nick."""
+    try:
+        from nuoi_nick import is_messaging_restricted
+    except Exception:
+        return False
+    for h in (hop or []):
+        if is_messaging_restricted(h.get("chu", "")):
+            return True
+    return False
+
+
 # Bóc mọi id/slug nhóm từ link trên trang. Nhận cả UID số lẫn slug chữ vì tag
 # đang có cả hai dạng (54/58 là số, còn lại như "lucnhare24h").
 _JS_BOC_NHOM = r"""() => {
@@ -615,6 +629,13 @@ async def _join_one_group(page, uid: str, ten_nhom: str, link_url: str) -> str:
             anh = await page.screenshot()
         except Exception:
             pass
+        # Dialog FB HẠN CHẾ hành động nhóm ("hoạt động bất thường") → acc này bị
+        # CHẶN NHÓM. Không thử tiếp nhóm nào nữa; báo để lớp ngoài bỏ qua acc.
+        if _la_bi_han_che(hop):
+            _log("warning", f"🚫 '{ten_nhom}': Facebook hạn chế hành động nhóm "
+                            f"(hoạt động bất thường) — acc đang bị chặn nhóm")
+            await _ghi_chan_doan(page, ten_nhom, hop, anh)
+            return "chan_nhom"
         # Vẫn chưa rõ thì vào lại trang — bằng URL chống cache.
         try:
             await page.goto(_url_chong_cache(url), wait_until="domcontentloaded", timeout=30000)
@@ -797,9 +818,17 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
 
         # Duyệt từng nhóm
         nhom_loi = []
+        bi_chan_nhom = False
         for i, g in enumerate(groups, 1):
             _log("info", f"\n[{i}/{total}] {g['ten_nhom'] or g['uid']}")
             result = await _join_one_group(page, g["uid"], g["ten_nhom"], g["link_url"])
+            # Acc bị FB chặn hành động nhóm → DỪNG tham gia nhóm cho acc này,
+            # không thử nốt các nhóm còn lại; chuỗi sẽ sang acc kế tiếp.
+            if result == "chan_nhom":
+                bi_chan_nhom = True
+                _log("warning", f"🚫 Acc '{acc_name}' BỊ CHẶN NHÓM — bỏ {total - i + 1} "
+                                f"nhóm còn lại, chuyển sang acc kế tiếp.")
+                break
             stats[result] += 1
             results.append({"uid": g["uid"], "ten": g["ten_nhom"], "result": result})
             if result == "loi":
@@ -831,7 +860,7 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
             _log("warning", "🧹 BỎ QUA làm sạch: Facebook không xác nhận đang dùng "
                             "Page — rời nhóm lúc này có thể là rời nhóm của NICK")
             lam_sach_nay = False
-        if nhom_loi or lam_sach_nay:
+        if (nhom_loi or lam_sach_nay) and not bi_chan_nhom:
             try:
                 dang_o = await _lay_nhom_da_vao(page, chu_the)
             except Exception as e:
@@ -874,7 +903,7 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
         await ctx.close()
 
     ket_qua = json.dumps(results, ensure_ascii=False)
-    _update_status("Hoàn thành",
+    _update_status("Bị chặn nhóm" if bi_chan_nhom else "Hoàn thành",
                    tong_nhom=total,
                    moi_join=stats["moi_join"],
                    da_join=stats["da_join"],
@@ -882,6 +911,8 @@ async def _run_join(schedule_id: int, acc_name: str, page_uid: str, nguon: str =
                    da_roi=stats.get("da_roi", 0),
                    ket_qua=ket_qua)
 
+    if bi_chan_nhom:
+        _log("warning", f"\n🚫 '{acc_name}' BỊ CHẶN NHÓM — đã dừng, sang acc kế tiếp.")
     _log("info", f"\n✅ HOÀN THÀNH:")
     _log("info", f"   Mới tham gia: {stats['moi_join']}")
     _log("info", f"   Đã join rồi:  {stats['da_join']}")

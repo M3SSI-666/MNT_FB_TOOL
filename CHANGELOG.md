@@ -10,6 +10,22 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.72.0 — 28/10/2026
+
+**Tham gia nhóm: gặp dialog hạn chế → bỏ acc đó, sang acc kế tiếp**
+
+Khi một nick đi tham gia nhóm (Page hoặc Marketplace) mà gặp dialog *"Một số hành
+động đã bị hạn chế do có hoạt động bất thường"*, nghĩa là nick đó **đang bị FB
+chặn hành động nhóm**. Trước đây nó vẫn thử nốt mọi nhóm còn lại (mỗi nhóm tốn
+~5s dù chắc chắn hỏng). Nay:
+
+- **Phát hiện ngay** dialog đó → **dừng tham gia nhóm cho acc này**, không thử
+  các nhóm còn lại.
+- **Chuỗi tự chuyển sang acc kế tiếp** để tiếp tục.
+- Dòng lịch acc đó ghi trạng thái **"Bị chặn nhóm"** cho dễ nhận ra.
+
+---
+
 ## v2.71.0 — 28/10/2026
 
 **Thêm nút "Xoá lịch" cho Tham gia nhóm Page / Marketplace**
