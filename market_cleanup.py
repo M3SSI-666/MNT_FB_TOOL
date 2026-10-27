@@ -177,6 +177,33 @@ def _trich_ngay(text: str) -> str:
     return m.group(0) if m else ""
 
 
+_JS_DEM_DONG = "() => (document.body.innerText.match(/Ngày niêm yết/g) || []).length"
+
+
+async def _cuon_tai_het(page, toi_da: int = 15):
+    """Cuộn xuống đáy tới khi số dòng 'Ngày niêm yết' thôi tăng — FB chỉ nạp
+    thêm bài khi cuộn tới, mà danh sách xếp MỚI → CŨ nên bài quá hạn luôn nằm
+    dưới cùng. Cuộn xong về lại đầu trang."""
+    truoc, dung_yen = -1, 0
+    for _ in range(toi_da):
+        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await page.wait_for_timeout(900)
+        n = await page.evaluate(_JS_DEM_DONG)
+        dung_yen = dung_yen + 1 if n == truoc else 0
+        if dung_yen >= 2:            # 2 lượt liền không thêm dòng nào → đã đủ
+            break
+        truoc = n
+    await page.evaluate("window.scrollTo(0, 0)")
+    await page.wait_for_timeout(500)
+
+
+async def _tai_selling(page):
+    """Mở (hoặc tải lại) trang selling rồi cuộn cho nạp ĐỦ danh sách."""
+    await page.goto(SELLING_URL, wait_until="domcontentloaded", timeout=45000)
+    await page.wait_for_timeout(7000)
+    await _cuon_tai_het(page)
+
+
 async def _mo_selling(p, acc_name, c_user, headless):
     from nuoi_nick import _open_context, _dismiss_pin_dialog
     ctx, page = await _open_context(p, acc_name, c_user, headless)
@@ -185,13 +212,7 @@ async def _mo_selling(p, acc_name, c_user, headless):
         await _dismiss_pin_dialog(page)
     except Exception:
         pass
-    await page.goto(SELLING_URL, wait_until="domcontentloaded", timeout=45000)
-    await page.wait_for_timeout(7000)
-    for _ in range(6):
-        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        await page.wait_for_timeout(800)
-    await page.evaluate("window.scrollTo(0, 0)")
-    await page.wait_for_timeout(500)
+    await _tai_selling(page)
     return ctx, page
 
 
@@ -258,34 +279,46 @@ async def _tra_loi_khao_sat(page):
 async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
     """Mở trang selling rồi lặp: tìm 1 dòng QUÁ HẠN → bấm '...' → 'Xóa bài niêm
     yết' → xác nhận 'Xóa' → tải lại → lặp. Tải lại mỗi lần để DOM sạch, tránh
-    phần tử cũ. Trả số bài đã xóa."""
+    phần tử cũ. Trả số bài đã xóa.
+
+    Tải lại xong PHẢI cuộn cho nạp đủ danh sách (_tai_selling). Bản trước tải
+    lại mà không cuộn: bài cũ nằm dưới cùng chưa được FB nạp → tưởng hết bài
+    quá hạn → mỗi phiên chỉ xóa 1 bài. Đo thật 26/10: "xóa 1/10 bài quá 2 ngày"
+    ở Dang Xuan Duy, Alex Tường; 1/7 Tien Duongg; 1/4 Hoàng Alex."""
     from playwright.async_api import async_playwright
     hom_nay = datetime.date.today()
     da_xoa = 0
+
+    async def _tim_muc_tieu():
+        """Nút '...' ĐANG HIỆN của một dòng quá hạn, không có → None."""
+        btns = page.locator('[aria-label^="Lựa chọn khác cho"]')
+        n = await btns.count()
+        for i in range(n):
+            el = btns.nth(i)
+            try:
+                if not await el.is_visible():
+                    continue
+                row_text = await el.evaluate(
+                    "el => { let r = el;"
+                    " for (let i=0;i<8&&r.parentElement;i++){ r=r.parentElement;"
+                    "  if(/Ngày niêm yết/.test(r.innerText)) return r.innerText; }"
+                    " return el.innerText; }")
+            except Exception:
+                continue
+            tuoi = doc_ngay_niem_yet(row_text, hom_nay)
+            if tuoi is not None and tuoi > max(0, int(so_ngay)):
+                return el
+        return None
+
     async with async_playwright() as p:
         ctx, page = await _mo_selling(p, acc_name, c_user, headless)
         try:
             for _ in range(_TRAN_XOA):
-                # Tìm nút '...' ĐANG HIỆN của một dòng quá hạn.
-                btns = page.locator('[aria-label^="Lựa chọn khác cho"]')
-                n = await btns.count()
-                muc_tieu = None
-                for i in range(n):
-                    el = btns.nth(i)
-                    try:
-                        if not await el.is_visible():
-                            continue
-                        row_text = await el.evaluate(
-                            "el => { let r = el;"
-                            " for (let i=0;i<8&&r.parentElement;i++){ r=r.parentElement;"
-                            "  if(/Ngày niêm yết/.test(r.innerText)) return r.innerText; }"
-                            " return el.innerText; }")
-                    except Exception:
-                        continue
-                    tuoi = doc_ngay_niem_yet(row_text, hom_nay)
-                    if tuoi is not None and tuoi > max(0, int(so_ngay)):
-                        muc_tieu = el
-                        break
+                muc_tieu = await _tim_muc_tieu()
+                if muc_tieu is None:
+                    # Chưa thấy → cuộn nạp thêm một lượt nữa rồi mới kết luận.
+                    await _cuon_tai_het(page)
+                    muc_tieu = await _tim_muc_tieu()
                 if muc_tieu is None:
                     break   # không còn bài quá hạn
                 await muc_tieu.scroll_into_view_if_needed(timeout=5000)
@@ -312,9 +345,8 @@ async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
                 da_xoa += 1
                 logger.info(f"  🧹 [{acc_name}] đã xóa 1 bài quá hạn ({da_xoa})"
                             + (f" · lý do: {ld}" if ld else ""))
-                # Tải lại cho DOM sạch rồi quét tiếp.
-                await page.goto(SELLING_URL, wait_until="domcontentloaded", timeout=45000)
-                await page.wait_for_timeout(6000)
+                # Tải lại cho DOM sạch, CUỘN cho nạp đủ danh sách, rồi quét tiếp.
+                await _tai_selling(page)
             return da_xoa
         finally:
             try:

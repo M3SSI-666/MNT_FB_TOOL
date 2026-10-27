@@ -10,6 +10,27 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.69.1 — 27/10/2026
+
+**Vá: tự xóa bài niêm yết Marketplace mỗi phiên chỉ xóa được 1 bài**
+
+Cài xóa bài quá 2 ngày nhưng bài cũ vẫn còn. Log 26/10 cho thấy mỗi phiên chỉ
+xóa **1 bài** rồi dừng: "xóa 1/10 bài quá 2 ngày" (Dang Xuan Duy, Alex Tường),
+1/7 (Tien Duongg), 1/4 (Hoàng Alex) — mà mỗi acc chỉ dọn 1 lần/24 giờ nên bài
+cũ dồn mãi không hết.
+
+Nguyên nhân: danh sách bài xếp **mới → cũ**, Facebook chỉ nạp thêm bài khi cuộn
+xuống. Xóa xong bài đầu, phần mềm **tải lại trang mà không cuộn** → bài cũ ở dưới
+chưa được nạp → tưởng hết bài quá hạn.
+
+- Mỗi lần mở / tải lại trang: **cuộn tới khi danh sách thôi dài thêm** (nạp đủ).
+- Chưa thấy bài quá hạn thì **cuộn thêm 1 lượt** rồi mới kết luận hết.
+
+> Cập nhật xong **Dừng → Run** lại runner các mảng. Xem kết quả ở trang Logs:
+> dòng `🧹 [acc] dọn Market: xóa X/Y bài` — đúng thì X = Y.
+
+---
+
 ## v2.69.0 — 26/10/2026
 
 **Nút "Cập nhật xs tất cả" — thay cho cột Refresh**

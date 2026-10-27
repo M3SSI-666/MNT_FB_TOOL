@@ -3902,6 +3902,38 @@ _src_mc = Path("market_cleanup.py").read_text(encoding="utf-8")
 check("market_cleanup chọn NGẪU NHIÊN lý do + bấm Tiếp (không chặn việc xóa)",
       "random.choice(LY_DO_XOA)" in _src_mc and "def _tra_loi_khao_sat" in _src_mc
       and 'name="Tiếp"' in _src_mc)
+# 26/10: mỗi phiên chỉ xóa 1 bài ("xóa 1/10 bài quá 2 ngày") — sau khi xóa thì
+# tải lại trang mà KHÔNG cuộn, bài cũ nằm dưới cùng chưa được FB nạp → tưởng hết.
+_than_xoa_mc = _src_mc[_src_mc.index("async def _xoa("):_src_mc.index("def xoa_bai_cu(")]
+check("dọn Market: tải lại sau mỗi lần xóa PHẢI cuộn nạp đủ danh sách",
+      "await _tai_selling(page)" in _than_xoa_mc
+      and "page.goto(SELLING_URL" not in _than_xoa_mc
+      and "await _cuon_tai_het(page)" in _src_mc[_src_mc.index("async def _tai_selling"):])
+check("dọn Market: chưa thấy bài quá hạn thì cuộn thêm 1 lượt rồi mới dừng",
+      _than_xoa_mc.count("await _tim_muc_tieu()") == 2
+      and "await _cuon_tai_het(page)" in _than_xoa_mc)
+
+
+class _TrangGia:
+    """Giả trang selling: mỗi lần cuộn đáy FB nạp thêm 5 dòng, tối đa `tong`."""
+    def __init__(self, tong):
+        self.tong, self.da_nap, self.cuon = tong, 5, 0
+
+    async def evaluate(self, js, *a):
+        if "scrollHeight" in js:
+            self.cuon += 1
+            self.da_nap = min(self.tong, self.da_nap + 5)
+        elif "Ngày niêm yết" in js:
+            return self.da_nap
+
+    async def wait_for_timeout(self, ms):
+        pass
+
+
+_tg_mc = _TrangGia(23)
+_aio.run(_mc._cuon_tai_het(_tg_mc))
+check("cuộn nạp tới khi danh sách thôi dài thêm (23 bài → nạp đủ 23, không cuộn vô hạn)",
+      _tg_mc.da_nap == 23 and _tg_mc.cuon <= 8)
 # Dọn chạy im: KHÔNG báo Telegram, KHÔNG còn chế độ chạy thử ở runner.
 check("gỡ hẳn báo Telegram cho dọn (soan_xoa_mkt/bao_xoa_mkt)",
       not hasattr(_tb, "soan_xoa_mkt") and not hasattr(_tb, "bao_xoa_mkt"))
