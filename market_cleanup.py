@@ -146,28 +146,72 @@ def loc_qua_han(bai: list, so_ngay: int) -> list:
             if b.get("tuoi") is not None and b["tuoi"] > max(0, int(so_ngay))]
 
 
+# Cảnh báo TRÙNG của Facebook, hiện ở mục "Cần chú ý" (đo thật 28/10, Dang Xuan
+# Duy): "Bài niêm yết này có vẻ giống một bài niêm yết khác nên chúng tôi không
+# đăng. Hãy xóa bài niêm yết này rồi thử lại." — bài này KHÔNG được hiển thị, giữ
+# lại chỉ làm loãng trang bán → xóa luôn, bất kể mới đăng bao lâu.
+_RE_TRUNG = re.compile(
+    r"giống một bài niêm yết khác|không đăng\.\s*Hãy xóa bài niêm yết"
+    r"|similar to another listing", re.IGNORECASE)
+
+
+def la_bi_trung(text: str) -> bool:
+    """Thẻ bài có cảnh báo trùng của Facebook không."""
+    return bool(_RE_TRUNG.search(text or ""))
+
+
+def _tieu_de(text: str) -> str:
+    """Dòng tiêu đề của thẻ bài — bỏ qua dòng cảnh báo trùng đứng phía trên."""
+    for ln in (text or "").split("\n"):
+        ln = ln.strip()
+        if ln and not la_bi_trung(ln) and not ln.lower().startswith("bài niêm yết này"):
+            return ln
+    return ""
+
+
+def loc_can_xoa(bai: list, so_ngay: int) -> list:
+    """Bài phải xóa: QUÁ HẠN (tuổi rõ ràng > so_ngay) HOẶC bị cảnh báo TRÙNG."""
+    return [b for b in bai
+            if b.get("trung")
+            or (b.get("tuoi") is not None and b["tuoi"] > max(0, int(so_ngay)))]
+
+
+# Leo từ một phần tử lên tới KHỐI LỚN NHẤT vẫn chỉ chứa ĐÚNG MỘT "Ngày niêm yết:"
+# — tức trọn thẻ của MỘT bài, gồm cả dòng cảnh báo trùng đứng trên tiêu đề (bản
+# đầu dừng ở khối nhỏ nhất có ngày nên có thể hụt dòng cảnh báo). Gặp khối chứa
+# từ 2 ngày trở lên là đã sang khối nhiều bài → thôi leo.
+_JS_LEO_THE = r"""
+function leoThe(el) {
+  let r = el, ok = null;
+  for (let i = 0; i < 12 && r.parentElement; i++) {
+    r = r.parentElement;
+    const n = ((r.innerText || '').match(/Ngày niêm yết:/g) || []).length;
+    if (n === 1) ok = r; else if (n > 1) break;
+  }
+  return ok ? (ok.innerText || '') : (el.innerText || '');
+}
+"""
+
 # ── Đọc danh sách bài trên trang selling (viewport hẹp) ──────────────────────
 # Mỗi dòng bài = khối chứa nút "Đánh dấu là hết hàng" và chữ "Ngày niêm yết:".
-_JS_DOC_ROWS = r"""
-() => {
+_JS_DOC_ROWS = "() => {" + _JS_LEO_THE + r"""
   const rows = [], seen = new Set();
+  // "hết hàng" = bài Còn hàng; "đã bán" = bài Đang hoạt động (đăng kèm nhóm) —
+  // 28/10 bài 14/10 của Alex Tường là kiểu sau, bản đầu không đếm tới.
   const btns = [...document.querySelectorAll('[role="button"],button')]
-    .filter(b => /Đánh dấu là hết hàng/i.test(b.innerText || ''));
+    .filter(b => /Đánh dấu là (hết hàng|đã bán)/i.test(b.innerText || ''));
   for (const b of btns) {
-    let row = b;
-    for (let i = 0; i < 8 && row.parentElement; i++) {
-      row = row.parentElement;
-      if (/Ngày niêm yết/i.test(row.innerText || '')) break;
-    }
-    const txt = (row.innerText || '').trim();
+    const txt = leoThe(b).trim();
     if (!txt || !/Ngày niêm yết/i.test(txt) || seen.has(txt)) continue;
     seen.add(txt);
-    const lines = txt.split('\n').map(s => s.trim()).filter(Boolean);
-    rows.push({ tieu_de: lines[0] || '', text: txt });
+    rows.push({ text: txt });
   }
   return rows;
 }
 """
+
+# Chữ của TRỌN thẻ bài quanh nút "..." (dùng lúc xóa).
+_JS_THE_CUA_NUT = "el => {" + _JS_LEO_THE + " return leoThe(el); }"
 
 _RE_NGAY_HIEN = re.compile(r"Ngày niêm yết:\s*[\d/]+")
 
@@ -223,10 +267,12 @@ async def _doc_rows(page, hom_nay) -> list:
     raw = await page.evaluate(_JS_DOC_ROWS)
     out = []
     for r in raw:
+        txt = r.get("text", "")
         out.append({
-            "tieu_de":   r.get("tieu_de", ""),
-            "ngay_text": _trich_ngay(r.get("text", "")),
-            "tuoi":      doc_ngay_niem_yet(r.get("text", ""), hom_nay),
+            "tieu_de":   _tieu_de(txt),
+            "ngay_text": _trich_ngay(txt),
+            "tuoi":      doc_ngay_niem_yet(txt, hom_nay),
+            "trung":     la_bi_trung(txt),
         })
     return out
 
@@ -292,8 +338,16 @@ async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
     hom_nay = datetime.date.today()
     da_xoa = 0
 
+    bo_qua = set()      # chữ ký các bài đã xóa HỎNG — không chọn lại trong phiên này
+
     async def _tim_muc_tieu():
-        """Nút '...' ĐANG HIỆN của một dòng quá hạn, không có → None."""
+        """(nút '...', chữ ký, tiêu đề, ngày, lý do) của một bài PHẢI XÓA đang
+        hiện mà chưa bị bỏ qua; không có → None. Phải xóa = bị cảnh báo TRÙNG
+        (bất kể tuổi) hoặc QUÁ HẠN.
+
+        AN TOÀN: chữ quanh nút phải chứa ĐÚNG MỘT "Ngày niêm yết". Leo khối cha
+        mà ra khối chứa nhiều bài thì không biết ngày nào của bài nào — bỏ, thà
+        sót còn hơn xóa nhầm bài mới."""
         btns = page.locator('[aria-label^="Lựa chọn khác cho"]')
         n = await btns.count()
         for i in range(n):
@@ -301,35 +355,63 @@ async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
             try:
                 if not await el.is_visible():
                     continue
-                row_text = await el.evaluate(
-                    "el => { let r = el;"
-                    " for (let i=0;i<8&&r.parentElement;i++){ r=r.parentElement;"
-                    "  if(/Ngày niêm yết/.test(r.innerText)) return r.innerText; }"
-                    " return el.innerText; }")
+                row_text = await el.evaluate(_JS_THE_CUA_NUT)
             except Exception:
                 continue
+            if len(_RE_NGAY_HIEN.findall(row_text or "")) != 1:
+                continue
+            trung = la_bi_trung(row_text)
             tuoi = doc_ngay_niem_yet(row_text, hom_nay)
-            if tuoi is not None and tuoi > max(0, int(so_ngay)):
-                return el
+            qua_han = tuoi is not None and tuoi > max(0, int(so_ngay))
+            if not (trung or qua_han):
+                continue
+            tieu_de, ngay = _tieu_de(row_text), _trich_ngay(row_text)
+            ky = f"{tieu_de}|{ngay}|{'trung' if trung else ''}"
+            if ky in bo_qua:
+                continue
+            return el, ky, tieu_de, ngay, ("bị cảnh báo trùng" if trung else "quá hạn")
         return None
 
+    async def _bam(el):
+        """Bấm bình thường; bị phần tử khác che (27/10: 'Locator.click: Timeout
+        6000ms' ở 5 acc) thì bấm thẳng bằng JS."""
+        try:
+            await el.click(timeout=6000)
+        except Exception:
+            await el.evaluate("el => el.click()")
+
     async def _xoa_mot(muc_tieu) -> str | None:
-        """Xóa MỘT bài: '...' → 'Xóa bài niêm yết' → 'Xóa'. Trả lý do khảo sát
+        """Xóa MỘT bài: '...' → mục xóa → xác nhận 'Xóa'. Trả lý do khảo sát
         (hoặc ''); ném lỗi nếu hỏng ở bước nào."""
-        await muc_tieu.scroll_into_view_if_needed(timeout=5000)
-        await muc_tieu.click(timeout=6000)
+        try:
+            await muc_tieu.scroll_into_view_if_needed(timeout=5000)
+        except Exception:
+            pass
+        await _bam(muc_tieu)
         await page.wait_for_timeout(1500)
-        mi = page.get_by_role("menuitem", name="Xóa bài niêm yết")
-        if not await mi.count():
-            raise RuntimeError("menu không có 'Xóa bài niêm yết'")
-        await mi.first.click(timeout=6000)
+        # Bài đăng kèm nhóm ("Đang hoạt động") có thể đặt tên mục khác. Chỉ nhận
+        # đúng các tên XÓA BÀI — KHÔNG lấy kiểu "Xóa khỏi nhóm" (chỉ gỡ khỏi
+        # nhóm, bài niêm yết vẫn còn).
+        mi = None
+        for ten in ("Xóa bài niêm yết", "Xóa bài viết", "Xóa"):
+            loc = page.get_by_role("menuitem", name=ten, exact=True)
+            if await loc.count():
+                mi = loc.first
+                break
+        if mi is None:
+            await page.keyboard.press("Escape")
+            raise RuntimeError("menu không có mục xóa bài")
+        await _bam(mi)
         await page.wait_for_timeout(2000)
         # Hộp xác nhận → nút 'Xóa' (đúng chữ, không phải 'Xóa bài niêm yết').
-        nut_xoa = page.locator('[role="dialog"]').last.get_by_role(
-            "button", name="Xóa", exact=True)
+        hop = page.locator('[role="dialog"]').last
+        nut_xoa = hop.get_by_role("button", name="Xóa", exact=True)
         if not await nut_xoa.count():
+            nut_xoa = hop.get_by_role("button", name="Xóa bài niêm yết", exact=True)
+        if not await nut_xoa.count():
+            await page.keyboard.press("Escape")
             raise RuntimeError("không thấy nút xác nhận 'Xóa'")
-        await nut_xoa.first.click(timeout=6000)
+        await _bam(nut_xoa.first)
         await page.wait_for_timeout(2500)
         # FB hỏi lý do xóa (4 lựa chọn) → chọn ngẫu nhiên 1 + Tiếp. Bài đã bị
         # xóa ở bước trên rồi; đây chỉ cho tự nhiên, lỗi thì bỏ qua.
@@ -341,24 +423,34 @@ async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
         ctx, page = await _mo_selling(p, acc_name, c_user, headless)
         loi_lien = 0
         try:
-            for _ in range(_TRAN_XOA):
+            for _ in range(_TRAN_XOA + 5):          # +5 lượt dành cho bài bị bỏ qua
+                if da_xoa >= _TRAN_XOA:
+                    break
+                ky = tieu_de = ngay = ""
                 try:
-                    muc_tieu = await _tim_muc_tieu()
-                    if muc_tieu is None:
+                    tim = await _tim_muc_tieu()
+                    if tim is None:
                         # Chưa thấy → cuộn nạp thêm một lượt nữa rồi mới kết luận.
                         await _cuon_tai_het(page)
-                        muc_tieu = await _tim_muc_tieu()
-                    if muc_tieu is None:
-                        break   # không còn bài quá hạn
+                        tim = await _tim_muc_tieu()
+                    if tim is None:
+                        break   # không còn bài phải xóa
+                    muc_tieu, ky, tieu_de, ngay, vi_sao = tim
                     ld = await _xoa_mot(muc_tieu)
                 except CookieDeadError:
                     raise
                 except Exception as e:
-                    # MỘT bài hỏng (27/10 Hoàng Alex: "Locator.click: Timeout
-                    # 6000ms" ở bài thứ 10) không được bỏ cả phiên — đóng menu,
-                    # tải lại, thử tiếp. Chỉ dừng khi hỏng 3 lần LIÊN TIẾP.
+                    # MỘT bài hỏng không được bỏ cả phiên, và cũng không được
+                    # CHẶN các bài khác: 28/10 bài 14/10 ("Đang hoạt động") của
+                    # Alex Tường lần nào cũng hỏng → bản trước chọn lại đúng nó
+                    # mãi. Nay ghi chữ ký để bỏ qua, chuyển sang bài kế tiếp.
+                    # Chỉ dừng khi hỏng 3 lần LIÊN TIẾP (thường là FB đổi giao diện).
                     loi_lien += 1
-                    logger.warning(f"  ⚠️  [{acc_name}] xóa 1 bài hỏng ({loi_lien}/3): {e}")
+                    if ky:
+                        bo_qua.add(ky)
+                    logger.warning(f"  ⚠️  [{acc_name}] xóa bài hỏng, bỏ qua ({loi_lien}/3)"
+                                   + (f" — \"{tieu_de[:50]}\" {ngay}" if ky else "")
+                                   + f": {e}")
                     if loi_lien >= 3:
                         break
                     try:
@@ -369,18 +461,19 @@ async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
                     continue
                 loi_lien = 0
                 da_xoa += 1
-                logger.info(f"  🧹 [{acc_name}] đã xóa 1 bài quá hạn ({da_xoa})"
+                logger.info(f"  🧹 [{acc_name}] đã xóa 1 bài {vi_sao} ({da_xoa}): "
+                            f"\"{tieu_de[:60]}\" · {ngay}"
                             + (f" · lý do: {ld}" if ld else ""))
                 # Tải lại cho DOM sạch, CUỘN cho nạp đủ danh sách, rồi quét tiếp.
                 await _tai_selling(page)
             try:
-                con_lai = sum(1 for b in await _doc_rows(page, hom_nay)
-                              if b["tuoi"] is not None and b["tuoi"] > max(0, int(so_ngay)))
+                con_lai = len(loc_can_xoa(await _doc_rows(page, hom_nay), so_ngay))
                 if con_lai:
                     nut = await page.locator('[aria-label^="Lựa chọn khác cho"]').count()
                     so_dong = await page.evaluate(_JS_DEM_DONG)
-                    logger.warning(f"  ⚠️  [{acc_name}] dừng mà còn {con_lai} bài quá hạn "
-                                   f"(đã nạp {so_dong} dòng, {nut} nút '...')")
+                    logger.warning(f"  ⚠️  [{acc_name}] dừng mà còn {con_lai} bài phải xóa "
+                                   f"(đã nạp {so_dong} dòng, {nut} nút '...', "
+                                   f"bỏ qua {len(bo_qua)} bài hỏng)")
             except Exception:
                 pass
         except CookieDeadError:
@@ -406,18 +499,21 @@ def xoa_bai_cu(acc_name: str, c_user: str = "", so_ngay: int = 3,
     `_XOA_DA_DO_DOM` còn False thì ÉP chạy thử (chốt an toàn)."""
     bai = quet_bai_niem_yet(acc_name, c_user, headless=headless)
     qua_han = loc_qua_han(bai, so_ngay)
+    can_xoa = loc_can_xoa(bai, so_ngay)          # quá hạn + bị cảnh báo trùng
     ep_thu = chay_thu or not _XOA_DA_DO_DOM
     kq = {
         "tong": len(bai),
         "qua_han": [{"tieu_de": b.get("tieu_de", ""), "tuoi": b.get("tuoi"),
                      "ngay_text": b.get("ngay_text", "")} for b in qua_han],
+        "trung": sum(1 for b in bai if b.get("trung")),
+        "can_xoa": len(can_xoa),
         "da_xoa": 0,
         "chay_thu": ep_thu,
     }
-    if ep_thu or not qua_han:
-        if qua_han:
-            logger.info(f"  🧹 [{acc_name}] (chạy thử) {len(qua_han)} bài quá "
-                        f"{so_ngay} ngày — CHƯA xóa")
+    if ep_thu or not can_xoa:
+        if can_xoa:
+            logger.info(f"  🧹 [{acc_name}] (chạy thử) {len(can_xoa)} bài phải xóa "
+                        f"(quá {so_ngay} ngày / bị cảnh báo trùng) — CHƯA xóa")
         return kq
     try:
         kq["da_xoa"] = asyncio.run(

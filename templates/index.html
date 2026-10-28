@@ -473,9 +473,11 @@
                     <div style="font-size:11px;color:var(--text-muted);line-height:1.6;margin-top:10px">
                         <b>Biến thể ảnh:</b> bật thì mỗi ảnh được dán <b>số điện thoại trên</b> vào
                         vùng an toàn — né trùng bộ ảnh của Marketplace. Để trống số điện thoại = coi như tắt.<br>
-                        <b>Tự xóa bài cũ:</b> định kỳ (1 lần/ngày) tự xóa bài niêm yết quá số ngày đã đặt,
-                        cho mỗi nick có Marketplace%. Xóa là không lấy lại được nên mặc định TẮT — bật khi
-                        đã chắc chắn.
+                        <b>Tự xóa bài cũ:</b> ở <b>phiên Marketplace đầu tiên trong ngày</b> của mỗi nick,
+                        trước khi đăng bài mới, tự xóa bài niêm yết quá số ngày đã đặt <b>và</b> bài bị Facebook
+                        cảnh báo trùng ("có vẻ giống một bài niêm yết khác…"). Xong thì báo số bài đã dọn vào
+                        kênh Telegram Marketplace; các phiên sau trong ngày không dọn lại.
+                        Xóa là không lấy lại được nên mặc định TẮT — bật khi đã chắc chắn.
                     </div>
 
                     <div style="display:flex;gap:8px;margin-top:16px;align-items:center">

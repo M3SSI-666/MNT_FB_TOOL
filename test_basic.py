@@ -3839,11 +3839,15 @@ try:
           db.den_gio_xoa_mkt("MKT Test", c_user="mkt001") is True)
     db.ghi_nhan_xoa_mkt("MKT Test", c_user="mkt001")
     _bgx = _dt.now()
-    check("vừa dọn xong → chưa tới nhịp (mặc định 24h)",
+    check("vừa dọn xong → hôm nay không dọn nữa",
           db.den_gio_xoa_mkt("MKT Test", c_user="mkt001", bay_gio=_bgx) is False)
-    check("25 giờ sau → tới nhịp dọn lại",
+    # Theo NGÀY, không theo nhịp 24h: bản cũ trôi giờ dọn 14:5x → 18:44 → 18:46.
+    check("cùng ngày, cuối ngày → vẫn không dọn lại (phiên MKP sau bỏ qua)",
           db.den_gio_xoa_mkt("MKT Test", c_user="mkt001",
-                             bay_gio=_bgx + _td(hours=25)) is True)
+                             bay_gio=_bgx.replace(hour=23, minute=59)) is False)
+    check("sang ngày mới → phiên MKP đầu ngày phải dọn",
+          db.den_gio_xoa_mkt("MKT Test", c_user="mkt001",
+                             bay_gio=(_bgx + _td(days=1)).replace(hour=0, minute=1)) is True)
     db.set_setting("mkt_xoa_bat", "0")
 finally:
     for _k3, _v3 in _mkt_cu.items():
@@ -3974,18 +3978,79 @@ check("dọn Market: lỗi giữa chừng vẫn trả số bài ĐÃ xóa (khôn
       _than_xoa_mc.rstrip().endswith("return da_xoa"))
 check("dọn Market: dừng mà còn bài quá hạn thì ghi log số dòng / số nút để chẩn đoán",
       "dừng mà còn" in _than_xoa_mc)
+# 28/10: bài 14/10 "Đang hoạt động" (nút "Đánh dấu là đã bán") của Alex Tường
+# không bị xóa — lần nào cũng hỏng và chặn phiên.
+check("dọn Market: đọc cả bài 'Đang hoạt động' (nút 'Đánh dấu là đã bán')",
+      "Đánh dấu là (hết hàng|đã bán)" in _src_mc)
+check("dọn Market: bài xóa hỏng thì BỎ QUA, chuyển bài kế tiếp (không chặn cả phiên)",
+      "bo_qua.add(ky)" in _than_xoa_mc and "if ky in bo_qua" in _than_xoa_mc)
+check("dọn Market: bấm '...' bị che thì bấm bằng JS",
+      'el.evaluate("el => el.click()")' in _than_xoa_mc)
+check("dọn Market: nhận các tên mục xóa, KHÔNG nhận 'Xóa khỏi nhóm'",
+      '("Xóa bài niêm yết", "Xóa bài viết", "Xóa")' in _than_xoa_mc
+      and "exact=True" in _than_xoa_mc)
+check("dọn Market: chỉ xóa khi chữ quanh nút có ĐÚNG MỘT ngày niêm yết (không xóa nhầm)",
+      "len(_RE_NGAY_HIEN.findall(row_text or \"\")) != 1" in _than_xoa_mc)
+check("dọn Market: log ghi lý do + tiêu đề + ngày niêm yết của từng bài đã xóa",
+      "đã xóa 1 bài {vi_sao} ({da_xoa}): " in _than_xoa_mc and "{ngay}" in _than_xoa_mc)
+# 28/10 (Dang Xuan Duy): mục "Cần chú ý" — FB cảnh báo trùng, bài KHÔNG được đăng
+# → xóa luôn, bất kể mới đăng bao lâu.
+_CB_TRUNG = ("Bài niêm yết này có vẻ giống một bài niêm yết khác nên chúng tôi không "
+             "đăng. Hãy xóa bài niêm yết này rồi thử lại.")
+_the_trung = (f"{_CB_TRUNG}\nBÁN 2PN 83m - giá: 6.x Tỷ\n916 ₫\n"
+              "Còn hàng · Ngày niêm yết: 28/10\nĐánh dấu là hết hàng\nChia sẻ")
+check("nhận ra thẻ bị cảnh báo trùng", _mc.la_bi_trung(_the_trung)
+      and not _mc.la_bi_trung("BÁN 2PN 83m\nCòn hàng · Ngày niêm yết: 28/10"))
+check("tiêu đề thẻ trùng bỏ qua dòng cảnh báo", _mc._tieu_de(_the_trung) == "BÁN 2PN 83m - giá: 6.x Tỷ")
+_ds_cx = [{"tuoi": 0, "trung": True}, {"tuoi": 5, "trung": False},
+          {"tuoi": 1, "trung": False}, {"tuoi": None, "trung": False}]
+check("bài bị cảnh báo trùng phải xóa DÙ MỚI ĐĂNG hôm nay; bài mới bình thường giữ",
+      len(_mc.loc_can_xoa(_ds_cx, 2)) == 2
+      and _mc.loc_can_xoa(_ds_cx, 2)[0]["trung"] and _mc.loc_can_xoa(_ds_cx, 2)[1]["tuoi"] == 5)
+check("dọn Market chọn bài trùng HOẶC quá hạn",
+      "if not (trung or qua_han)" in _than_xoa_mc)
+check("đọc trọn thẻ bài (leo tới khối lớn nhất chỉ chứa 1 ngày) để thấy cả dòng cảnh báo",
+      "function leoThe" in _mc._JS_DOC_ROWS and "function leoThe" in _mc._JS_THE_CUA_NUT
+      and "n === 1" in _mc._JS_LEO_THE and "n > 1" in _mc._JS_LEO_THE)
+check("phiên dọn chạy cả khi chỉ có bài trùng (không có bài quá hạn)",
+      "if ep_thu or not can_xoa:" in _src_mc)
+_src_sch_dmk = Path("scheduler.py").read_text(encoding="utf-8")
 check("scheduler ghi tổng kết dọn cả khi xóa được 0 bài",
-      'kq.get("da_xoa") or kq.get("qua_han")' in Path("scheduler.py").read_text(encoding="utf-8"))
-# Dọn chạy im: KHÔNG báo Telegram, KHÔNG còn chế độ chạy thử ở runner.
-check("gỡ hẳn báo Telegram cho dọn (soan_xoa_mkt/bao_xoa_mkt)",
+      "dọn Market: xóa {kq.get('da_xoa', 0)}/" in
+      _src_sch_dmk[_src_sch_dmk.index("def _don_mkt_dau_ngay"):])
+# Bộ báo Telegram cũ (soan_xoa_mkt/bao_xoa_mkt, có chạy thử) đã gỡ ở v2.65.0;
+# 28/10 người dùng muốn báo lại — nay là bao_don_mkt, luôn xóa thật.
+check("không còn bộ báo dọn cũ (soan_xoa_mkt/bao_xoa_mkt)",
       not hasattr(_tb, "soan_xoa_mkt") and not hasattr(_tb, "bao_xoa_mkt"))
-check("worker dọn KHÔNG gọi báo Telegram + luôn xóa thật (chay_thu=False)",
+check("dọn luôn xóa thật (chay_thu=False), không còn mkt_xoa_chay_thu",
       "bao_xoa_mkt" not in _src_sch_mkt and "chay_thu=False" in _src_sch_mkt
       and "mkt_xoa_chay_thu" not in _src_sch_mkt)
-# Scheduler nối dọn + cài đặt mặc định + UI.
-check("scheduler có worker dọn Market + dispatch den_gio_xoa_mkt + đánh nhịp",
-      "def _xoa_mkt_worker" in _src_sch_mkt and "den_gio_xoa_mkt" in _src_sch_mkt
-      and "ghi_nhan_xoa_mkt" in _src_sch_mkt)
+# 28/10: dọn ở PHIÊN MARKETPLACE ĐẦU NGÀY (trước khi đăng), không chạy theo giờ.
+_than_dmk = _src_sch_mkt[_src_sch_mkt.index("def _don_mkt_dau_ngay"):
+                         _src_sch_mkt.index("def _run_marketplace_slot")]
+_than_rms = _src_sch_mkt[_src_sch_mkt.index("def _run_marketplace_slot"):]
+_than_rms = _than_rms[:_than_rms.index("\ndef ")]
+check("phiên Marketplace dọn TRƯỚC rồi mới đăng",
+      "_don_mkt_dau_ngay(acc_name, c_user_v)" in _than_rms
+      and _than_rms.index("_don_mkt_dau_ngay(acc_name, c_user_v)")
+          < _than_rms.index("post_marketplace(acc_name="))
+check("dọn đầu ngày: kiểm 'hôm nay đã dọn chưa', đánh dấu, báo Telegram",
+      "db.den_gio_xoa_mkt(acc_name" in _than_dmk and "db.ghi_nhan_xoa_mkt(acc_name" in _than_dmk
+      and "thong_bao.bao_don_mkt(acc_name" in _than_dmk)
+check("dọn lỗi KHÔNG chặn đăng (chỉ cookie chết mới ném ra)",
+      "except CookieDeadError:\n        raise" in _than_dmk and "vẫn đăng" in _than_dmk)
+check("bỏ worker dọn chạy theo nhịp giờ trong vòng lặp runner",
+      "def _xoa_mkt_worker" not in _src_sch_mkt and "target=_xoa_mkt_worker" not in _src_sch_mkt)
+_tin_dmk = _tb.soan_tin_don_mkt("Máy công ty", "Dang Xuan Duy", "28/10/2026",
+                                {"tong": 38, "qua_han": [{}] * 8, "trung": 4,
+                                 "can_xoa": 12, "da_xoa": 12}, 2)
+check("tin Telegram dọn Market: máy · acc · ngày · số bài đã dọn (quá hạn / trùng)",
+      "Máy công ty" in _tin_dmk and "Dang Xuan Duy" in _tin_dmk and "28/10/2026" in _tin_dmk
+      and "Số bài đã dọn: <b>12</b>" in _tin_dmk and "quá 2 ngày: 8" in _tin_dmk
+      and "bị cảnh báo trùng: 4" in _tin_dmk and "Còn" not in _tin_dmk)
+check("tin Telegram báo còn bài chưa xóa được",
+      "Còn 3 bài chưa xóa được" in _tb.soan_tin_don_mkt(
+          "M", "A", "28/10/2026", {"can_xoa": 5, "da_xoa": 2}, 2))
 _cd_mkt = db.doc_cai_dat_mkt()
 check("MKT mặc định có mkt_xoa_bat=0 / sau_ngay=3 (KHÔNG còn chay_thu)",
       _cd_mkt.get("mkt_xoa_bat") == "0" and _cd_mkt.get("mkt_xoa_sau_ngay") == "3"

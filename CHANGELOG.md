@@ -10,6 +10,38 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.73.0 — 28/10/2026
+
+**Tự xóa bài niêm yết: dọn ở phiên Marketplace ĐẦU NGÀY, xóa cả bài bị cảnh báo trùng, báo Telegram**
+
+**Thời điểm dọn mới.** Trước đây mỗi acc dọn theo nhịp "24 giờ kể từ lần trước"
+nên giờ dọn trôi dần (25/10 14:5x → 26/10 18:44 → 27/10 18:46) và chạy chen giữa
+các phiên đăng. Nay: **phiên Marketplace đầu tiên trong ngày** của mỗi acc
+**dọn trước rồi mới đăng** bài mới; các phiên Marketplace sau trong ngày **không
+kiểm tra lại**. Sang ngày mới, phiên Market đầu ngày lại dọn.
+
+**Báo Telegram (kênh Marketplace)** sau khi dọn, ví dụ:
+`🧹 Máy công ty · Đã dọn Market acc Dang Xuan Duy ngày 28/10/2026 — Số bài đã
+dọn: 12 (quá 2 ngày: 8 · bị cảnh báo trùng: 4)`.
+
+**Xóa cả bài bị cảnh báo trùng** — bài có dòng "Bài niêm yết này có vẻ giống một
+bài niêm yết khác nên chúng tôi không đăng…" (mục *Cần chú ý*) bị xóa **bất kể mới
+đăng bao lâu**: Facebook không hiển thị bài này, giữ lại vô ích.
+
+**Xóa triệt để hơn** (bài 14/10 của Alex Tường còn sót):
+- Bài nào xóa **lỗi thì bỏ qua**, chuyển bài kế tiếp — không chặn cả phiên (chỉ
+  dừng khi lỗi 3 bài liên tiếp).
+- Nút "…" bị che (lỗi `Locator.click: Timeout` ở 5 acc ngày 27/10) thì bấm cách khác.
+- Đọc cả bài **"Đang hoạt động"** (nút "Đánh dấu là đã bán"), chấp nhận các tên mục
+  xóa khác ("Xóa bài viết", "Xóa") — KHÔNG nhận "Xóa khỏi nhóm".
+- **An toàn:** chỉ xóa khi chắc nút "…" thuộc đúng 1 bài. Log ghi **tiêu đề + ngày
+  niêm yết** từng bài đã xóa.
+
+> Cập nhật xong **Dừng → Run** lại runner các mảng. Cần đã cài kênh Telegram
+> Marketplace (Cài đặt → 📩 Báo tin Marketplace) để nhận tin báo dọn.
+
+---
+
 ## v2.72.0 — 28/10/2026
 
 **Tham gia nhóm: gặp dialog hạn chế → bỏ acc đó, sang acc kế tiếp**

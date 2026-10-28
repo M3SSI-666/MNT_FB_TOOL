@@ -1499,11 +1499,14 @@ def ghi_nhan_quet_mkt(ten_acc: str, c_user: str = ""):
 
 
 def den_gio_xoa_mkt(ten_acc: str, c_user: str = "", bay_gio=None) -> bool:
-    """Acc marketplace đã tới nhịp DỌN (tự xóa) bài niêm yết quá hạn chưa.
+    """Acc này HÔM NAY đã dọn (tự xóa) bài niêm yết chưa — chưa thì phiên
+    Marketplace sắp chạy phải dọn trước khi đăng.
 
-    CHỈ khi bật (setting mkt_xoa_bat=1) VÀ acc có marketplace_pct > 0. Nhịp mặc
-    định 1 lần / 24 giờ (settings mkt_xoa_moi_gio). Chưa dọn lần nào → tới giờ.
-    Đồng hồ vặn lùi → coi như tới giờ."""
+    CHỈ khi bật (setting mkt_xoa_bat=1) VÀ acc có marketplace_pct > 0. Mỗi acc dọn
+    MỘT lần mỗi NGÀY, ở phiên Marketplace ĐẦU TIÊN trong ngày (xem
+    scheduler._don_mkt_dau_ngay). Bản trước theo nhịp "24 giờ kể từ lần dọn
+    trước" nên giờ dọn trôi dần (25/10 14:5x → 26/10 18:44 → 27/10 18:46), lại
+    chạy giữa lúc nick đang đăng bài — người dùng muốn dọn xong rồi mới đăng."""
     if (get_setting("mkt_xoa_bat", "0") or "0").strip() not in ("1", "true", "True"):
         return False
     k, kp = _khoa_acc(ten_acc, c_user)
@@ -1519,13 +1522,7 @@ def den_gio_xoa_mkt(ten_acc: str, c_user: str = "", bay_gio=None) -> bool:
         moc = datetime.fromisoformat(cuoi)
     except ValueError:
         return True
-    try:
-        gio = int(get_setting("mkt_xoa_moi_gio", "24"))
-    except Exception:
-        gio = 24
-    gio = max(1, gio)
-    troi = ((bay_gio or datetime.now()) - moc).total_seconds()
-    return troi < 0 or troi >= gio * 3600
+    return moc.date() != (bay_gio or datetime.now()).date()
 
 
 def ghi_nhan_xoa_mkt(ten_acc: str, c_user: str = ""):
@@ -2792,9 +2789,10 @@ MKT_MAC_DINH = {
     "mkt_bien_the_bat": "0",
     "mkt_bien_the_sdt": "",
     # Tự XÓA bài niêm yết Marketplace quá X ngày (bài cũ đọng lại làm loãng trang
-    # bán + dễ bị coi đăng trùng). Mặc định TẮT — xóa không hồi lại được. Bật là
-    # tự xóa (ghi log nội bộ, KHÔNG báo Telegram). Xem market_cleanup.py +
-    # scheduler._xoa_mkt_worker.
+    # bán + dễ bị coi đăng trùng) + bài bị FB cảnh báo trùng. Mặc định TẮT — xóa
+    # không hồi lại được. Bật là phiên Marketplace ĐẦU NGÀY của mỗi nick dọn trước
+    # khi đăng rồi báo Telegram kênh Marketplace. Xem market_cleanup.py +
+    # scheduler._don_mkt_dau_ngay.
     "mkt_xoa_bat":      "0",   # 1 = bật tự dọn
     "mkt_xoa_sau_ngay": "3",   # xóa bài quá bao nhiêu ngày
 }
