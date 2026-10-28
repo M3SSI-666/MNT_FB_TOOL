@@ -4048,6 +4048,26 @@ check("tin Telegram dọn Market: máy · acc · ngày · số bài đã dọn (
       "Máy công ty" in _tin_dmk and "Dang Xuan Duy" in _tin_dmk and "28/10/2026" in _tin_dmk
       and "Số bài đã dọn: <b>12</b>" in _tin_dmk and "quá 2 ngày: 8" in _tin_dmk
       and "bị cảnh báo trùng: 4" in _tin_dmk and "Còn" not in _tin_dmk)
+# 28/10 Mai Tùng: 51 bài quá hạn, mỗi phiên xóa tối đa 30 → còn 28 phải đợi tới mai.
+# Chạm trần thì KHÔNG đánh dấu "hôm nay đã dọn" → phiên Marketplace sau dọn tiếp.
+check("dọn chạm trần số bài/phiên → phiên Marketplace sau trong ngày dọn TIẾP",
+      'kq["cham_tran"] = kq["da_xoa"] >= _TRAN_XOA' in _src_mc
+      and 'if kq.get("cham_tran"):' in _than_dmk
+      and _than_dmk.index('if kq.get("cham_tran"):') < _than_dmk.index("db.ghi_nhan_xoa_mkt(acc_name"))
+check("tin Telegram báo 'phiên sau dọn tiếp' khi còn bài cũ",
+      "dọn tiếp" in _tb.soan_tin_don_mkt("M", "A", "28/10/2026",
+                                         {"can_xoa": 51, "da_xoa": 30, "cham_tran": True}, 2))
+check("menu không có mục xóa → log các mục THẬT của menu để biết tên đúng",
+      "menu không có mục xóa bài — các mục:" in _src_mc)
+# Đo thật 28/10 (Alex Tường, bài 14/10 "Đang hoạt động"): menu 12 mục, CÓ "Xóa bài
+# niêm yết" nhưng hiện chậm — chờ cứng 1,5s thì tìm lúc menu chưa vẽ xong.
+_than_xm = _src_mc[_src_mc.index("async def _xoa_mot"):_src_mc.index("async with async_playwright() as p:", _src_mc.index("async def _xoa_mot"))]
+check("xóa bài: CHỜ menu hiện ra rồi mới tìm mục xóa (không chờ cứng)",
+      'get_by_role("menuitem").first.wait_for(state="visible"' in _than_xm
+      and _than_xm.index("wait_for(state=") < _than_xm.index('for ten in ("Xóa bài niêm yết"'))
+check("mở trang bài niêm yết thì đóng khung chat / hộp mã PIN đè lên bài dưới cùng",
+      "_dismiss_pin_dialog(page)" in _src_mc[_src_mc.index("async def _tai_selling"):
+                                           _src_mc.index("async def _mo_selling")])
 check("tin Telegram báo còn bài chưa xóa được",
       "Còn 3 bài chưa xóa được" in _tb.soan_tin_don_mkt(
           "M", "A", "28/10/2026", {"can_xoa": 5, "da_xoa": 2}, 2))

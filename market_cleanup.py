@@ -248,6 +248,14 @@ async def _tai_selling(page):
     """Mở (hoặc tải lại) trang selling rồi cuộn cho nạp ĐỦ danh sách."""
     await page.goto(SELLING_URL, wait_until="domcontentloaded", timeout=45000)
     await page.wait_for_timeout(7000)
+    # Khung "Đoạn chat" + hộp "Tạo mã PIN" của Messenger hay bật lên ĐÈ các bài dưới
+    # cùng (đo thật 28/10, Alex Tường) → bấm "..." của bài cũ bị Timeout. Đóng trước.
+    try:
+        from nuoi_nick import _dismiss_pin_dialog
+        await _dismiss_pin_dialog(page)
+        await page.keyboard.press("Escape")
+    except Exception:
+        pass
     await _cuon_tai_het(page)
 
 
@@ -388,7 +396,15 @@ async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
         except Exception:
             pass
         await _bam(muc_tieu)
-        await page.wait_for_timeout(1500)
+        # CHỜ menu hiện ra, không chờ cứng 1,5s: đo thật 28/10 (Alex Tường, bài 14/10
+        # "Đang hoạt động"): menu kiểu bài này có 12 mục, mục "Xóa bài niêm yết" gần
+        # cuối, hiện chậm — chờ cứng là tìm lúc menu chưa vẽ xong → báo "không có mục
+        # xóa" dù mục đó có thật.
+        try:
+            await page.get_by_role("menuitem").first.wait_for(state="visible", timeout=5000)
+            await page.wait_for_timeout(600)
+        except Exception:
+            await page.wait_for_timeout(1500)
         # Bài đăng kèm nhóm ("Đang hoạt động") có thể đặt tên mục khác. Chỉ nhận
         # đúng các tên XÓA BÀI — KHÔNG lấy kiểu "Xóa khỏi nhóm" (chỉ gỡ khỏi
         # nhóm, bài niêm yết vẫn còn).
@@ -399,8 +415,15 @@ async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
                 mi = loc.first
                 break
         if mi is None:
+            # Ghi lại menu THẬT có những mục gì — để biết bài kiểu này (vd "Đang hoạt
+            # động", đăng kèm nhóm) đặt tên mục xóa ra sao, thay vì đoán.
+            try:
+                ten_muc = [((await m.inner_text()) or "").strip()
+                           for m in await page.get_by_role("menuitem").all()][:15]
+            except Exception:
+                ten_muc = []
             await page.keyboard.press("Escape")
-            raise RuntimeError("menu không có mục xóa bài")
+            raise RuntimeError(f"menu không có mục xóa bài — các mục: {ten_muc}")
         await _bam(mi)
         await page.wait_for_timeout(2000)
         # Hộp xác nhận → nút 'Xóa' (đúng chữ, không phải 'Xóa bài niêm yết').
@@ -523,4 +546,7 @@ def xoa_bai_cu(acc_name: str, c_user: str = "", so_ngay: int = 3,
         raise
     except Exception as e:
         logger.warning(f"⚠️  Xóa bài niêm yết [{acc_name}] lỗi (bỏ qua): {e}")
+    # Chạm trần _TRAN_XOA bài/phiên → nhiều khả năng còn bài cũ: phiên Marketplace
+    # kế tiếp trong ngày phải dọn TIẾP (28/10 Mai Tùng: 51 bài quá hạn, xóa 30, còn 28).
+    kq["cham_tran"] = kq["da_xoa"] >= _TRAN_XOA
     return kq

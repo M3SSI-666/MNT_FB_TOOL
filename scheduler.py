@@ -483,12 +483,18 @@ def _don_mkt_dau_ngay(acc_name: str, c_user: str):
     except Exception as e:
         logger.warning(f"⚠️  Dọn Market [{acc_name}] lỗi (bỏ qua, vẫn đăng): {e}")
     finally:
-        # Đánh dấu cả khi lỗi — không thì phiên Marketplace nào trong ngày cũng
-        # dọn lại, mỗi lần chậm thêm vài phút. Mai dọn tiếp.
-        try:
-            db.ghi_nhan_xoa_mkt(acc_name, c_user=c_user)
-        except Exception:
-            pass
+        # Đánh dấu "hôm nay đã dọn" cả khi lỗi — không thì phiên Marketplace nào
+        # trong ngày cũng dọn lại, mỗi lần chậm thêm vài phút. NGOẠI LỆ: chạm trần số
+        # bài/phiên (còn bài cũ) thì KHÔNG đánh dấu, để phiên Marketplace kế tiếp
+        # trong ngày dọn tiếp (28/10 Mai Tùng: 51 bài quá hạn, xóa 30, còn 28).
+        if kq.get("cham_tran"):
+            logger.info(f"  🧹 [{acc_name}] còn bài cũ (đã xóa đủ {kq.get('da_xoa')} bài/phiên) "
+                        f"→ phiên Marketplace sau dọn tiếp")
+        else:
+            try:
+                db.ghi_nhan_xoa_mkt(acc_name, c_user=c_user)
+            except Exception:
+                pass
     try:
         import thong_bao
         thong_bao.bao_don_mkt(acc_name, kq, so_ngay)

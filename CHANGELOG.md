@@ -10,6 +10,29 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.74.1 — 28/10/2026
+
+**Tự xóa bài niêm yết: xóa được bài "Đang hoạt động" + dọn tiếp khi còn nhiều bài cũ**
+
+Chạy thật ngày 28/10: phiên Market đầu ngày đã xóa **121 bài quá hạn** (đều đúng
+bài cũ, ngày 12/10 → 25/10), nhưng còn sót 2 chỗ:
+
+- **Bài "Đang hoạt động" (đăng kèm nhóm, nút "Đánh dấu là đã bán") không xóa được** —
+  log báo "menu không có mục xóa bài". Đo thật trên nick Alex Tường (bài 14/10):
+  menu CÓ mục "Xóa bài niêm yết", nhưng menu kiểu bài này có 12 mục và **hiện chậm**,
+  phần mềm chờ cứng 1,5 giây rồi tìm khi menu chưa vẽ xong. Thêm nữa **khung chat
+  Messenger + hộp "Tạo mã PIN" đè lên các bài dưới cùng** làm bấm "…" bị Timeout.
+  Nay: **chờ menu hiện ra** (tối đa 5 giây) rồi mới tìm, và **đóng hộp mã PIN / khung
+  chat** mỗi lần mở trang bài niêm yết. Vẫn không thấy mục xóa thì log ghi rõ các
+  mục thật của menu.
+- **Acc nhiều bài cũ dọn không hết trong ngày** (Mai Tùng: 51 bài quá hạn, mỗi phiên
+  tối đa 30 → còn 28). Nay chạm mức 30 bài thì **phiên Marketplace sau trong ngày dọn
+  tiếp**; tin Telegram ghi "🔁 Còn bài cũ — phiên sau dọn tiếp".
+
+> Cập nhật xong **Dừng → Run** lại runner các mảng.
+
+---
+
 ## v2.74.0 — 28/10/2026
 
 **Mã ảnh: phân bổ thông minh tránh trùng + tự xoay mỗi ngày**

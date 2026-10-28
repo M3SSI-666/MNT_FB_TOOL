@@ -191,7 +191,9 @@ def soan_tin_don_mkt(ten_may: str, acc_name: str, ngay: str, kq: dict,
             + (f"/{can_xoa}" if can_xoa and can_xoa != da_xoa else "")
             + f" (quá {so_ngay} ngày: {qua_han} · bị cảnh báo trùng: {trung})",
             f"Bài niêm yết đọc được: {int(kq.get('tong') or 0)}"]
-    if can_xoa > da_xoa:
+    if kq.get("cham_tran"):
+        dong.append("🔁 Còn bài cũ — phiên Marketplace sau trong ngày dọn tiếp")
+    elif can_xoa > da_xoa:
         dong.append(f"⚠️ Còn {can_xoa - da_xoa} bài chưa xóa được — xem log ô Bán/Thuê")
     return "\n".join(dong)
 
