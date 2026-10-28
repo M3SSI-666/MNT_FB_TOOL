@@ -2457,24 +2457,22 @@ def api_schedule_gen(loai):
     rai_content(schedule, contents)
 
     # ── Mã ảnh: CHỐT bộ ảnh cho từng dòng ĐĂNG ngay lúc GEN, hiện ở cột "Mã ảnh"
-    # để kiểm tra trước khi chạy ("nhìn sao đăng vậy"). Marketplace roll theo con
-    # trỏ (nick + thư viện) + đẩy con trỏ → mỗi acc cuốn đều qua các bộ; Page/VIA/
-    # đăng tường Page bốc NGẪU NHIÊN (không đụng con trỏ). Chỉ dòng đăng mới có
-    # ảnh — comment/nuôi để trống. c_user lấy từ cu_cua vì ten_acc lúc này vẫn là
-    # khoá nội bộ (đổi về tên hiển thị ở vòng dưới).
-    # Khoá theo mã ĐÃ CẮT dấu cách: rai_content ghi mã đã cắt vào dòng lịch, còn
-    # content gõ tay có thể là "P062806 " — khoá thô thì tra trượt, cột Mã ảnh
-    # trống (gặp thật 23/10).
+    # để kiểm tra trước khi chạy ("nhìn sao đăng vậy"). Bộ phân bổ db.phan_bo_anh
+    # chọn cho CẢ LỊCH một lượt, tránh trùng: nick ít dùng nhất → hôm nay ít dùng
+    # nhất → 14 ngày ít dùng nhất → lâu chưa dùng nhất (Marketplace chọn trước).
+    # Chỉ dòng đăng mới có ảnh — comment/nuôi để trống. Khoá nick lấy từ cu_cua vì
+    # ten_acc lúc này vẫn là khoá nội bộ (đổi về tên hiển thị ở vòng dưới).
+    # Khoá content theo mã ĐÃ CẮT dấu cách: rai_content ghi mã đã cắt vào dòng
+    # lịch, còn content gõ tay có thể là "P062806 " (gặp thật 23/10).
     _ct_map = {(c["ma_content"] or "").strip(): c for c in db.get_content(loai)}
+    _dong_dang = []
     for r in schedule:
-        if not _hien_content(r):
+        if _hien_content(r):
+            _dong_dang.append(r)
+        else:
             r["ma_anh"], r["anh_dang"] = "", ""
-            continue
-        _ct = _ct_map.get(r.get("ma_content"), {})
-        r["ma_anh"], r["anh_dang"] = db.chot_anh_cho_lich(
-            cu_cua.get(r["ten_acc"], ""),
-            _ct.get("link_anh", ""), _ct.get("ma_thu_vien", ""),
-            dung_con_tro=(r.get("hoat_dong") == "marketplace"))
+    db.phan_bo_anh(loai, _dong_dang, _ct_map,
+                   lambda r: cu_cua.get(r["ten_acc"], "") or r["ten_acc"])
 
     # Trả khoá nội bộ về tên hiển thị, và ghi c_user vào từng dòng.
     for r in schedule:
@@ -2483,6 +2481,9 @@ def api_schedule_gen(loai):
         r["c_user"]  = cu_cua.get(k, "")
 
     replace_schedules(loai, schedule)
+    # Gen vừa chốt bộ ảnh cho HÔM NAY → đánh dấu đã xoay, để khối "đầu ngày" của
+    # runner không xoay thêm lần nữa trong ngày (con trỏ Marketplace tiến 2 lần).
+    set_setting(f"xoay_anh_{loai}", datetime.now().date().isoformat())
 
     # Lưu thiết lập gần nhất để lần gen sau prefill (thay cho hardcode mặc định).
     set_setting(f"gen_prefs_{loai}", json.dumps({

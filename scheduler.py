@@ -433,6 +433,22 @@ def _run_commenting(item: dict):
             logger.error(f"❌ STT {stt} comment lỗi [{cat}]: {e}")
 
 
+def _can_reset_dau_ngay(first_run: bool, da_lam: str, hom_nay: str) -> bool:
+    """Có đưa lịch về 'Chờ' (reset đầu ngày) không.
+
+    - Runner đang chạy mà qua ngày mới (first_run=False) → reset.
+    - Runner VỪA khởi động (first_run=True):
+        · mốc đầu ngày = hôm nay  → đã reset hôm nay rồi (khởi động lại giữa
+          ngày) → KHÔNG reset, kẻo dòng đã đăng hôm nay về Chờ và đăng lại;
+        · mốc trống               → lần đầu có mốc này (vừa cập nhật bản mới):
+          không biết hôm nay đã reset chưa → giữ cách cũ, KHÔNG reset;
+        · mốc là ngày cũ          → máy tắt qua đêm, chưa ai reset hôm nay → reset.
+    """
+    if not first_run:
+        return True
+    return bool(da_lam) and da_lam != hom_nay
+
+
 def _don_mkt_dau_ngay(acc_name: str, c_user: str):
     """Phiên Marketplace ĐẦU TIÊN trong ngày của acc: dọn (tự xóa) bài niêm yết
     quá hạn + bị cảnh báo trùng TRƯỚC khi đăng, báo Telegram kênh Marketplace,
@@ -919,14 +935,34 @@ def main():
             if last_reset_date != now.date():
                 first_run       = last_reset_date is None
                 last_reset_date = now.date()
-                if first_run:
-                    # Khởi động giữa ngày: chỉ ghi nhận ngày hiện tại. Reset ở
-                    # đây sẽ đưa các dòng ĐÃ đăng hôm nay về Chờ và đăng lại.
+                # Ngày đã làm việc "đầu ngày" được NHỚ trong DB (dau_ngay_<loai>).
+                # Bản trước chỉ reset khi runner đang chạy lúc qua 00:00: máy tắt
+                # qua đêm, sáng mở lên là runner khởi động mới → "không reset" →
+                # các dòng vẫn ✅ của hôm qua, cả ngày không đăng gì.
+                hom_nay   = now.date().isoformat()
+                khoa_ngay = f"dau_ngay_{LOAI}"
+                da_lam    = (db.get_setting(khoa_ngay, "") or "").strip()
+                if not _can_reset_dau_ngay(first_run, da_lam, hom_nay):
                     logger.info(f"📅 Bắt đầu theo dõi ngày {now.date()} — không reset")
                 else:
                     from db import reset_schedules_to_wait
                     n = reset_schedules_to_wait(LOAI)
-                    logger.info(f"🌅 Reset ngày mới — {LOAI}: {n} dòng về Chờ")
+                    logger.info(f"🌅 Reset ngày mới — {LOAI}: {n} dòng về Chờ"
+                                + (" (máy tắt qua đêm, làm bù lúc mở máy)" if first_run else ""))
+                db.set_setting(khoa_ngay, hom_nay)
+
+                # XOAY Mã ảnh đầu ngày — đúng 1 lần/ngày/mảng (mốc xoay_anh_<loai>;
+                # Gen lịch cũng đặt mốc này vì Gen đã chốt ảnh mới cho hôm nay).
+                # Lịch dùng lại mỗi ngày mà ảnh không đổi là đăng lặp bộ ảnh cũ.
+                try:
+                    if (LOAI in db.loai_content_bat()
+                            and (db.get_setting(f"xoay_anh_{LOAI}", "") or "") != hom_nay):
+                        n_xoay = db.xoay_ma_anh(LOAI)
+                        db.set_setting(f"xoay_anh_{LOAI}", hom_nay)
+                        logger.info(f"🎲 Xoay Mã ảnh đầu ngày — {LOAI}: {n_xoay} dòng "
+                                    f"lấy bộ ảnh mới từ thư viện")
+                except Exception as e:
+                    logger.warning(f"⚠️  Xoay Mã ảnh đầu ngày lỗi (bỏ qua): {e}")
 
                 # Quét dọn cache: bắt cả profile của acc đã ngừng dùng — loại
                 # mà việc dọn-sau-mỗi-phiên không bao giờ chạm tới. Chạy lúc

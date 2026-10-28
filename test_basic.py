@@ -7237,10 +7237,121 @@ with db._conn() as _c_sp:
     _ma_sp2 = _c_sp.execute("SELECT ma_content FROM content WHERE id=?", (_id_sp,)).fetchone()[0]
 check("lưu / sửa mã content tự cắt dấu cách thừa", _ma_sp2 == "SH2"
       and (db.get_content_by_code("Shophouse", "loai4") is None))
+import datetime as _dtm_xa
+check("Gen lịch đánh dấu 'hôm nay đã xoay Mã ảnh' (không xoay lần 2 trong ngày)",
+      db.get_setting("xoay_anh_loai4", "") == _dtm_xa.date.today().isoformat())
 with db._conn() as _c_sp:
     _c_sp.execute("DELETE FROM content WHERE loai='loai4'")
 db.replace_schedules("loai4", [])
 db.tv_mang_xoa(_tvsp)
+
+# ── Xoay Mã ảnh đầu ngày (lịch dùng lại mỗi ngày → ảnh phải đổi) ────────────
+# 28/10: lịch Gen 1 lần rồi dùng lại; ngày nào cũng đăng đúng bộ ảnh đã chốt
+# hôm Gen → lặp ảnh, FB báo "giống một bài niêm yết khác". Content GIỮ NGUYÊN.
+_tvx = db.tv_mang_them("XOAY_TV")
+for _i in range(1, 5):
+    db.tv_bo_upsert({"mang_id": _tvx, "ma": str(_i), "link_anh": f"/media/thuvien/x{_i}.jpg",
+                     "su_dung": "Có"})
+db.upsert_content({"loai": "loai5", "ma_content": "XLIB", "noi_dung": "x", "link_anh": "",
+                   "ma_thu_vien": str(_tvx), "su_dung": "Có"})
+db.upsert_content({"loai": "loai5", "ma_content": "XOWN", "noi_dung": "y",
+                   "link_anh": "/media/content/own_moi.jpg", "su_dung": "Có"})
+_dong_x = lambda stt, mc, hd, tt="Chờ": {
+    "loai": "loai5", "stt": stt, "ma_content": mc, "ten_acc": "XA", "ten_page": "",
+    "gio_dang": f"0{stt}:00", "ma_nhom": "1", "tu_khoa": "", "mode": "Page",
+    "trang_thai": tt, "hoat_dong": hd, "c_user": "770077",
+    "ma_anh": "XOAY_TV - 1", "anh_dang": "/media/thuvien/x1.jpg"}
+db.replace_schedules("loai5", [
+    _dong_x(1, "XLIB", "marketplace"), _dong_x(2, "XLIB", "marketplace"),
+    _dong_x(3, "XOWN", "dang_bai"), _dong_x(4, "XLIB", "comment"),
+    _dong_x(5, "XLIB", "marketplace", "✅ 05:10 🛒 (20 nhóm)")])
+_ma_x = lambda: [(r["stt"], r["ma_anh"], r["anh_dang"], r["ma_content"])
+                 for r in sorted(db.get_schedules("loai5"), key=lambda r: r["stt"])]
+_hn_x = _dtm_xa.date.today()
+_n_x1 = db.xoay_ma_anh("loai5", hom_nay=_hn_x); _sau1 = _ma_x()
+_n_x2 = db.xoay_ma_anh("loai5", hom_nay=_hn_x + _dtm_xa.timedelta(days=1)); _sau2 = _ma_x()
+check("xoay: cùng nick 2 dòng Marketplace trong ngày → 2 bộ khác nhau",
+      _n_x1 == 2 and _sau1[0][1] != _sau1[1][1]
+      and _sau1[0][1].startswith("XOAY_TV - ") and _sau1[0][2].startswith("/media/thuvien/x"))
+check("xoay ngày hôm sau → Marketplace sang bộ ảnh MỚI (không lặp hôm trước)",
+      {_sau2[0][1], _sau2[1][1]}.isdisjoint({_sau1[0][1], _sau1[1][1]}))
+check("xoay: content GIỮ NGUYÊN, chỉ đổi Mã ảnh",
+      [x[3] for x in _sau2] == ["XLIB", "XLIB", "XOWN", "XLIB", "XLIB"])
+check("xoay: dòng dùng ảnh riêng của content → 'Ảnh' + đúng ảnh HIỆN TẠI của content",
+      _sau1[2][1:3] == ("Ảnh", "/media/content/own_moi.jpg"))
+check("xoay: KHÔNG đụng dòng comment/nuôi và dòng đã chạy",
+      _sau2[3][1:3] == ("XOAY_TV - 1", "/media/thuvien/x1.jpg")
+      and _sau2[4][1:3] == ("XOAY_TV - 1", "/media/thuvien/x1.jpg"))
+# Bộ phân bổ ảnh (phan_bo_anh): dùng ĐỀU cả thư viện, tránh trùng giữa các nick.
+_tv_pb = db.tv_mang_them("PB_TV")
+for _i in range(1, 7):                                  # thư viện 6 bộ
+    db.tv_bo_upsert({"mang_id": _tv_pb, "ma": str(_i), "link_anh": f"/media/thuvien/p{_i}.jpg",
+                     "su_dung": "Có"})
+_cts_pb = {"C": {"link_anh": "", "ma_thu_vien": str(_tv_pb)}}
+_dong_pb = lambda nicks, hd="marketplace": [{"ma_content": "C", "hoat_dong": hd, "nick": n}
+                                             for n in nicks]
+_d1 = _dong_pb(["A", "B", "C"] * 2)                     # 3 nick × 2 phiên Market = 6 dòng
+db.phan_bo_anh("tt_pb", _d1, _cts_pb, lambda r: r["nick"], hom_nay=_hn_x)
+check("phân bổ: 6 dòng Market / thư viện 6 bộ → dùng ĐỦ 6 bộ, KHÔNG bộ nào trùng trong ngày",
+      len({r["ma_anh"] for r in _d1}) == 6)
+_d2 = _dong_pb(["A", "B", "C"] * 2)
+db.phan_bo_anh("tt_pb", _d2, _cts_pb, lambda r: r["nick"],
+               hom_nay=_hn_x + _dtm_xa.timedelta(days=1))
+_cua = lambda ds, n: {r["ma_anh"] for r in ds if r["nick"] == n}
+check("phân bổ hôm sau: mỗi nick sang bộ nó CHƯA dùng hôm qua",
+      all(_cua(_d1, n).isdisjoint(_cua(_d2, n)) for n in "ABC"))
+_d3 = _dong_pb(["A"] * 6)
+db.phan_bo_anh("tt_pb", _d3, _cts_pb, lambda r: r["nick"],
+               hom_nay=_hn_x + _dtm_xa.timedelta(days=2))
+check("phân bổ: 1 nick 6 phiên → đi hết 6 bộ của thư viện rồi mới lặp",
+      len({r["ma_anh"] for r in _d3}) == 6)
+check("phân bổ: dòng Marketplace được chọn TRƯỚC dòng đăng nhóm",
+      'thu_tu = ([r for r in rows if r.get("hoat_dong") == "marketplace"]'
+      in Path("db.py").read_text(encoding="utf-8"))
+# Lịch sử TÁCH KÊNH: nick đăng nhóm dày đặc (phủ gần hết bộ) không được làm nhiễu
+# việc chọn bộ Marketplace — bản gộp làm nick lặp bộ Market hôm trước 73 lần/3 ngày.
+_d4a = _dong_pb(["Q"], "marketplace") + _dong_pb(["Q"] * 5, "dang_bai")
+db.phan_bo_anh("tt_pb", _d4a, _cts_pb, lambda r: r["nick"],
+               hom_nay=_hn_x + _dtm_xa.timedelta(days=3))
+_d4b = _dong_pb(["Q"] * 5, "marketplace")
+db.phan_bo_anh("tt_pb", _d4b, _cts_pb, lambda r: r["nick"],
+               hom_nay=_hn_x + _dtm_xa.timedelta(days=4))
+check("phân bổ tách kênh: hôm sau 5 phiên Market của nick đều KHÁC bộ Market hôm qua",
+      _d4a[0]["ma_anh"] not in {r["ma_anh"] for r in _d4b}
+      and len({r["ma_anh"] for r in _d4b}) == 5)
+with db._conn() as _c_pb:
+    _so0 = _c_pb.execute("SELECT COUNT(*) FROM tv_lich_su WHERE so_lan<=0").fetchone()[0]
+check("lịch sử KHÔNG lưu mục 0 lần (mục 0 lần làm bộ chưa dùng bị coi là vừa dùng)",
+      _so0 == 0)
+_d5 = _dong_pb(["A", "B"])
+db.phan_bo_anh("tt_pb", _d5, _cts_pb, lambda r: r["nick"], hom_nay=_hn_x)
+with db._conn() as _c_pb:
+    _ls_pb = _c_pb.execute("SELECT SUM(so_lan) FROM tv_lich_su WHERE loai='tt_pb' AND ngay=?",
+                           (_hn_x.isoformat(),)).fetchone()[0]
+check("Gen lại trong ngày GHI ĐÈ kế hoạch hôm nay (không cộng dồn lịch sử)", _ls_pb == 2)
+check("Gen lịch dùng bộ phân bổ (không còn con trỏ / bốc ngẫu nhiên từng dòng)",
+      "db.phan_bo_anh(loai, _dong_dang, _ct_map" in Path("server.py").read_text(encoding="utf-8"))
+with db._conn() as _c_pb:
+    _c_pb.execute("DELETE FROM tv_lich_su WHERE loai IN ('tt_pb','loai5')")
+db.tv_mang_xoa(_tv_pb)
+
+import scheduler as _sch_x
+check("đầu ngày: runner chạy qua 00:00 → reset",
+      _sch_x._can_reset_dau_ngay(False, "2026-10-27", "2026-10-28") is True)
+check("đầu ngày: MÁY TẮT QUA ĐÊM, sáng mở máy → vẫn reset (bản cũ bỏ qua cả ngày)",
+      _sch_x._can_reset_dau_ngay(True, "2026-10-27", "2026-10-28") is True)
+check("đầu ngày: khởi động lại GIỮA ngày đã reset → KHÔNG reset (khỏi đăng lại)",
+      _sch_x._can_reset_dau_ngay(True, "2026-10-28", "2026-10-28") is False)
+check("đầu ngày: chưa có mốc (vừa lên bản mới) → giữ cách cũ, không reset",
+      _sch_x._can_reset_dau_ngay(True, "", "2026-10-28") is False)
+_src_sch_x = Path("scheduler.py").read_text(encoding="utf-8")
+check("runner xoay Mã ảnh đầu ngày đúng 1 lần/ngày/mảng (mốc xoay_anh_<loai>)",
+      "db.xoay_ma_anh(LOAI)" in _src_sch_x and 'f"xoay_anh_{LOAI}"' in _src_sch_x
+      and "db.loai_content_bat()" in _src_sch_x)
+with db._conn() as _c_x:
+    _c_x.execute("DELETE FROM content WHERE loai='loai5'")
+db.replace_schedules("loai5", [])
+db.tv_mang_xoa(_tvx)
 
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):

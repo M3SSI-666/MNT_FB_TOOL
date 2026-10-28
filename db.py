@@ -367,9 +367,22 @@ def init_db():
             created_at      TEXT DEFAULT (datetime('now','localtime')),
             order_idx       INTEGER DEFAULT 0
         );
-        -- tv_con_tro = con trỏ roll bộ ảnh, theo (nick + thư viện). Marketplace
-        -- đăng xong thì đẩy con trỏ +1 để lần sau bốc bộ KẾ TIẾP (roll đều, mỗi
-        -- nick một con trỏ riêng). Page/VIA bốc ngẫu nhiên nên KHÔNG đụng vào đây.
+        -- tv_lich_su = KẾ HOẠCH dùng bộ ảnh theo ngày: lịch mảng `loai` ngày `ngay`
+        -- cho nick `nick` dùng bộ `bo_id` mấy lần. Bộ phân bổ ảnh (phan_bo_anh)
+        -- đọc để tránh trùng: nick ít dùng nhất → hôm nay ít dùng nhất → 14 ngày
+        -- ít dùng nhất → lâu chưa dùng nhất. Gen lại trong ngày thì GHI ĐÈ kế
+        -- hoạch hôm nay của mảng đó (không cộng dồn).
+        CREATE TABLE IF NOT EXISTS tv_lich_su (
+            loai            TEXT NOT NULL,
+            ngay            TEXT NOT NULL,
+            nick            TEXT NOT NULL,
+            bo_id           INTEGER NOT NULL,
+            so_lan          INTEGER DEFAULT 0,
+            PRIMARY KEY (loai, ngay, nick, bo_id)
+        );
+        -- tv_con_tro = con trỏ roll bộ ảnh, theo (nick + thư viện). Chỉ còn dùng
+        -- cho lịch CŨ chưa chốt ảnh (chọn ảnh lúc đăng — anh_cho_bai); Gen và xoay
+        -- đầu ngày dùng phan_bo_anh.
         CREATE TABLE IF NOT EXISTS tv_con_tro (
             c_user          TEXT NOT NULL,
             thu_vien_id     INTEGER NOT NULL,
@@ -2127,6 +2140,159 @@ def chot_anh_cho_lich(c_user: str, link_anh: str, ma_thu_vien, dung_con_tro: boo
     # thư viện nào. Bản đầu ghi cứng "Bộ ảnh-4": mọi thư viện ra cùng một chữ.
     ten = next((m["ten"] for m in tv_mang_list() if m["id"] == tvid), "") or "Bộ ảnh"
     return (f"{ten.strip()} - {ma}", (chon.get("link_anh") or "").strip())
+
+
+TV_CUA_SO_NGAY = 14     # số ngày lịch sử dùng ảnh mà bộ phân bổ nhìn lại
+
+
+def phan_bo_anh(loai: str, rows: list, cts: dict, nick_cua, hom_nay=None) -> int:
+    """Chốt Mã ảnh cho MỘT LƯỢT dòng đăng (cả lịch lúc Gen, hoặc các dòng 'Chờ'
+    lúc xoay đầu ngày) sao cho TRÁNH TRÙNG nhiều nhất và dùng ĐỀU cả thư viện.
+    Gán tại chỗ r["ma_anh"], r["anh_dang"]; trả số dòng lấy bộ từ thư viện.
+
+    `rows`: dict có ma_content, hoat_dong — theo thứ tự thời gian. `cts`: {mã
+    content đã cắt dấu cách: {link_anh, ma_thu_vien}}. `nick_cua(row)`: khoá nick.
+
+    Luật ưu tiên ảnh không đổi: cột Ảnh của content có ảnh → ("Ảnh", ảnh đó);
+    trống + có Mã thư viện → chọn 1 bộ; cả hai trống → ("", "").
+
+    Chọn bộ (thay cho con trỏ riêng từng nick + bốc ngẫu nhiên — bản cũ: mỗi nick
+    tự đi vòng mà không biết nick khác, nên nhiều nick trùng bộ trong cùng ngày;
+    còn dòng đăng nhóm bốc ngẫu nhiên nên có bộ dồn, có bộ bỏ xó). Lấy bộ nhỏ
+    nhất theo thứ tự:
+      1. bộ NICK NÀY dùng LÂU NHẤT (chưa dùng lần nào = ưu tiên nhất) — mỗi
+         nick đi hết thư viện rồi mới lặp, lặp thì lặp bộ cũ nhất của nó;
+      2. NICK NÀY ít dùng nhất (14 ngày);
+      3. HÔM NAY ít bị dùng nhất (mọi nick, mọi mảng) — các nick không đụng nhau;
+      4. 14 NGÀY ít bị dùng nhất — dùng đều cả thư viện;
+      5. LÂU NHẤT chưa dùng (mọi nick); còn hoà thì ngẫu nhiên.
+    Lịch sử TÁCH theo kênh (Marketplace / đăng nhóm). Dòng Marketplace chọn
+    TRƯỚC (nhạy trùng ảnh nhất) rồi mới tới dòng đăng nhóm.
+    Kế hoạch được lưu vào tv_lich_su; gọi lại trong cùng ngày cho cùng mảng thì
+    GHI ĐÈ kế hoạch hôm nay của mảng đó (Gen lại không cộng dồn)."""
+    from collections import defaultdict
+    hom_nay = hom_nay or datetime.now().date()
+    ngay = hom_nay.isoformat()
+    tu = (hom_nay - timedelta(days=TV_CUA_SO_NGAY)).isoformat()
+    ten_tv = {m["id"]: ((m["ten"] or "").strip() or "Bộ ảnh") for m in tv_mang_list()}
+    _bo_cache = {}
+
+    def _bo(tvid):
+        if tvid not in _bo_cache:
+            _bo_cache[tvid] = [b for b in tv_bo_list(tvid)
+                               if (b.get("su_dung") or "").strip() == "Có"
+                               and (b.get("link_anh") or "").strip()]
+        return _bo_cache[tvid]
+
+    # Lịch sử TÁCH THEO KÊNH ("mkp" / "nhom", lưu ở cột nick dạng "<kênh>:<nick>"):
+    # mỗi nick ~70 phiên đăng nhóm/ngày phủ gần đều mọi bộ, gộp chung thì không
+    # còn biết bộ nào nick vừa đăng MARKETPLACE hôm qua — đo trên lịch Bán thật,
+    # bản gộp để nick lặp bộ Market của hôm trước 73 lần / 3 ngày. Marketplace chỉ
+    # cần tránh trùng với Marketplace (bộ nhận diện trùng của FB là của Market).
+    with _conn() as con:
+        ls = con.execute("SELECT loai, ngay, nick, bo_id, so_lan FROM tv_lich_su "
+                         "WHERE ngay>=?", (tu,)).fetchall()
+    nick_dem, tong, hom_nay_dem, cuoi = (defaultdict(int), defaultdict(int),
+                                         defaultdict(int), {})
+    nick_cuoi = {}          # (kênh, nick, bộ) → ngày nick đó dùng bộ đó gần nhất
+    for r in ls:
+        if r["loai"] == loai and r["ngay"] == ngay:
+            continue            # kế hoạch cũ hôm nay của chính mảng này — sắp ghi đè
+        kenh, _, nk = (r["nick"] or "").partition(":")
+        n = int(r["so_lan"] or 0)
+        if n <= 0:
+            continue
+        nick_dem[(kenh, nk, r["bo_id"])] += n
+        kn = (kenh, nk, r["bo_id"])
+        nick_cuoi[kn] = max(nick_cuoi.get(kn, ""), r["ngay"])
+        tong[(kenh, r["bo_id"])] += n
+        if r["ngay"] == ngay:
+            hom_nay_dem[(kenh, r["bo_id"])] += n
+        k = (kenh, r["bo_id"])
+        cuoi[k] = max(cuoi.get(k, ""), r["ngay"])
+
+    ke_hoach = defaultdict(int)
+    thu_tu = ([r for r in rows if r.get("hoat_dong") == "marketplace"]
+              + [r for r in rows if r.get("hoat_dong") != "marketplace"])
+    so_tv = 0
+    for r in thu_tu:
+        ct = cts.get((r.get("ma_content") or "").strip()) or {}
+        link = (ct.get("link_anh") or "").strip()
+        if link:
+            r["ma_anh"], r["anh_dang"] = "Ảnh", link
+            continue
+        try:
+            tvid = int(str(ct.get("ma_thu_vien") or "").strip())
+        except ValueError:
+            r["ma_anh"], r["anh_dang"] = "", ""
+            continue
+        bos = _bo(tvid)
+        if not bos:
+            r["ma_anh"], r["anh_dang"] = "", ""
+            continue
+        nk = nick_cua(r) or ""
+        kenh = "mkp" if r.get("hoat_dong") == "marketplace" else "nhom"
+        # .get, KHÔNG đọc defaultdict trong khoá so sánh: đọc là đẻ ra mục 0 lần,
+        # mục 0 lần của ke_hoach bị GHI vào lịch sử như "đã dùng hôm nay" → ngày
+        # sau bộ chưa dùng bị coi là vừa dùng (đo thật: lặp bộ hôm trước 45/5 ngày).
+        chon = min(bos, key=lambda b: (
+            # Bộ CHÍNH NICK NÀY dùng LÂU NHẤT (chưa dùng = ưu tiên nhất) — đúng
+            # kiểu đi vòng: hết thư viện mới lặp, lặp thì lặp bộ cũ nhất.
+            nick_cuoi.get((kenh, nk, b["id"]), ""),
+            nick_dem.get((kenh, nk, b["id"]), 0) + ke_hoach.get((kenh, nk, b["id"]), 0),
+            hom_nay_dem.get((kenh, b["id"]), 0), tong.get((kenh, b["id"]), 0),
+            cuoi.get((kenh, b["id"]), ""), random.random()))
+        bid = chon["id"]
+        nick_cuoi[(kenh, nk, bid)] = ngay
+        ke_hoach[(kenh, nk, bid)] += 1
+        hom_nay_dem[(kenh, bid)] += 1
+        tong[(kenh, bid)] += 1
+        cuoi[(kenh, bid)] = ngay
+        ma = (chon.get("ma") or "").strip() or f"#{bid}"
+        r["ma_anh"] = f"{ten_tv.get(tvid, 'Bộ ảnh')} - {ma}"
+        r["anh_dang"] = (chon.get("link_anh") or "").strip()
+        so_tv += 1
+
+    with _conn() as con:
+        con.execute("DELETE FROM tv_lich_su WHERE loai=? AND ngay=?", (loai, ngay))
+        con.execute("DELETE FROM tv_lich_su WHERE ngay<?",
+                    ((hom_nay - timedelta(days=60)).isoformat(),))
+        con.executemany(
+            "INSERT INTO tv_lich_su (loai, ngay, nick, bo_id, so_lan) VALUES (?,?,?,?,?)",
+            [(loai, ngay, f"{kenh}:{nk}", bid, n)
+             for (kenh, nk, bid), n in ke_hoach.items() if n > 0])
+    return so_tv
+
+
+def xoay_ma_anh(loai: str, hom_nay=None) -> int:
+    """XOAY Mã ảnh của lịch `loai` — chạy MỘT lần mỗi ngày, đầu ngày (xem
+    scheduler, khối "đầu ngày"). Trả số dòng lấy bộ ảnh từ thư viện.
+
+    Lịch Gen một lần rồi dùng lại mỗi ngày: không xoay thì ngày nào nick cũng
+    đăng đúng bộ ảnh đã chốt hôm Gen — thư viện rộng mấy cũng thành lặp, và
+    Facebook báo "giống một bài niêm yết khác". Content GIỮ NGUYÊN (người dùng
+    chỉ muốn xoay ảnh); ảnh chọn lại bằng phan_bo_anh — nhìn lịch sử các ngày
+    trước nên hôm nay nick đi sang bộ nó ít dùng nhất. Dòng dùng ảnh riêng của
+    content ("Ảnh") thì làm mới theo ảnh hiện tại của content. Chỉ đụng dòng đăng
+    đang 'Chờ' — dòng đã chạy giữ nguyên nhãn."""
+    with _conn() as con:
+        rows = [dict(r) for r in con.execute(
+            "SELECT id, c_user, ten_acc, ma_content, COALESCE(hoat_dong,'dang_bai') hoat_dong "
+            "FROM schedules WHERE loai=? AND trang_thai='Chờ' "
+            "AND COALESCE(hoat_dong,'dang_bai') IN ('dang_bai','marketplace') "
+            "ORDER BY stt, id", (loai,)).fetchall()]
+        cts = {(r["ma_content"] or "").strip(): dict(r) for r in con.execute(
+            "SELECT ma_content, link_anh, ma_thu_vien FROM content WHERE loai=?",
+            (loai,)).fetchall()}
+    rows = [r for r in rows if (r["ma_content"] or "").strip() in cts]
+    n = phan_bo_anh(loai, rows, cts,
+                    lambda r: (r.get("c_user") or "").strip() or r.get("ten_acc") or "",
+                    hom_nay=hom_nay)
+    if rows:
+        with _conn() as con:
+            con.executemany("UPDATE schedules SET ma_anh=?, anh_dang=? WHERE id=?",
+                            [(r["ma_anh"], r["anh_dang"], r["id"]) for r in rows])
+    return n
 
 
 def _tach_urls(*chuoi) -> set:

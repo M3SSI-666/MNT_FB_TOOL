@@ -10,6 +10,39 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.74.0 — 28/10/2026
+
+**Mã ảnh: phân bổ thông minh tránh trùng + tự xoay mỗi ngày**
+
+Lịch Gen một lần rồi dùng lại mỗi ngày, mà Mã ảnh không đổi → ngày nào nick cũng
+đăng đúng bộ ảnh đã chốt hôm Gen, thư viện rộng mấy cũng thành lặp (Facebook báo
+"giống một bài niêm yết khác").
+
+- **Tự xoay Mã ảnh đầu ngày.** Lần chạy đầu tiên trong ngày của runner (qua 00:00,
+  hoặc sáng mới mở máy) chọn lại bộ ảnh cho mọi dòng đăng đang Chờ. **Content giữ
+  nguyên** — chỉ đổi ảnh. Cột Mã ảnh trên bảng lịch đổi theo ("nhìn sao đăng vậy").
+  Ngày bấm Gen thì không xoay thêm (Gen đã chọn bộ mới).
+- **Phân bổ ảnh thông minh** (cả lúc Gen lẫn lúc xoay) — nhớ lịch sử dùng ảnh 14
+  ngày, chọn theo thứ tự: bộ **chính nick đó dùng lâu nhất** (chưa dùng = ưu tiên
+  nhất) → bộ **hôm nay ít bị dùng nhất** (mọi nick) → bộ **14 ngày ít dùng nhất** →
+  bộ lâu nhất chưa ai dùng. Lịch sử **tách riêng** Marketplace / đăng nhóm;
+  Marketplace được chọn trước.
+- Đo trên lịch Bán thật (5 ngày mô phỏng): Marketplace đạt **đúng mức trùng tối
+  thiểu** có thể với số bộ hiện có (nick không bao giờ lặp bộ trong ngày hay bộ
+  của hôm trước); đăng nhóm giảm **một nửa** số lần nick lặp bộ trong ngày
+  (1176 → 600) và dùng các bộ đều hơn. Muốn ít trùng hơn nữa thì thêm bộ ảnh vào
+  thư viện.
+- **Vá: máy tắt qua đêm thì cả ngày không đăng.** Trước đây lịch chỉ về "Chờ" nếu
+  runner đang chạy lúc 00:00; sáng mở máy lên các dòng vẫn ✅ của hôm qua. Nay phần
+  mềm nhớ ngày đã làm đầu ngày → mở máy là tự reset bù rồi xoay ảnh. Khởi động lại
+  giữa ngày thì vẫn không reset (không đăng lại dòng đã chạy).
+
+> Content có ảnh ở **cột Ảnh** thì luôn dùng chính ảnh đó (không xoay). Muốn ảnh
+> Marketplace đổi mỗi ngày: để trống cột Ảnh và chọn **Mã thư viện**.
+> Cập nhật xong **Dừng → Run** lại runner các mảng.
+
+---
+
 ## v2.73.0 — 28/10/2026
 
 **Tự xóa bài niêm yết: dọn ở phiên Marketplace ĐẦU NGÀY, xóa cả bài bị cảnh báo trùng, báo Telegram**
