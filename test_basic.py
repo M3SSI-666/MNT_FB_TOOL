@@ -4022,6 +4022,14 @@ _the_rong = f"{_CB_TRUNG}\nBÁN 3PN Parkhill - Hướng Đông Nam\n338\xa0₫\n
 check("chữ ký thẻ (tiêu đề, giá, ngày) khớp CÙNG một bài ở khổ rộng (có cảnh báo) và khổ hẹp",
       _mc.chu_ky_the(_the_hep) == _mc.chu_ky_the(_the_rong)
       == ("BÁN 3PN Parkhill - Hướng Đông Nam", "338\xa0₫", "Ngày niêm yết: 27/10"))
+# 29/10 (Dang Xuan Duy): bài DUY NHẤT còn lại trong mục "Cần chú ý" → khối leo lên
+# gồm cả tiêu đề mục → bản trước lấy nhầm "Cần chú ý" làm tiêu đề, bài trùng sót lại.
+_the_le = "Cần chú ý\nẨn\nBÁN 3PN Parkhill - Hướng Đông Nam\n338\xa0₫\nCòn hàng\n\xa0\n · Ngày niêm yết: 27/10"
+check("thẻ là bài duy nhất của mục 'Cần chú ý': tiêu đề KHÔNG lấy nhầm tên mục",
+      _mc._tieu_de(_the_le) == "BÁN 3PN Parkhill - Hướng Đông Nam"
+      and _mc.chu_ky_the(_the_le) == _mc.chu_ky_the(_the_rong))
+check("tiêu đề thẻ không có dòng giá → lấy dòng đầu như cũ",
+      _mc._tieu_de("Liên hệ/ Zalo\nĐang hoạt động · Ngày niêm yết: 14/10") == "Liên hệ/ Zalo")
 check("chữ ký thẻ phân biệt 2 bài cùng tiêu đề + ngày nhưng khác giá ngẫu nhiên",
       _mc.chu_ky_the(_the_hep) != _mc.chu_ky_the(_the_hep.replace("338", "180")))
 _than_dbt = _src_mc[_src_mc.index("async def doc_bai_trung"):_src_mc.index("async def _cuon_tai_het")]

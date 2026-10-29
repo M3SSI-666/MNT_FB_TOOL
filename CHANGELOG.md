@@ -10,6 +10,18 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.74.4 — 29/10/2026
+
+**Vá: bài trùng cuối cùng của mục "Cần chú ý" bị sót**
+
+Chạy thật trên Dang Xuan Duy (29/10): xóa được 11/12 bài bị cảnh báo trùng, sót 1.
+Bài sót là bài **duy nhất còn lại** trong mục "Cần chú ý" — khi đó phần chữ đọc được
+của thẻ dính cả tên mục ("Cần chú ý / Ẩn") nên phần mềm lấy nhầm "Cần chú ý" làm
+tiêu đề, không khớp với bài trùng đã ghi. Nay tiêu đề lấy **dòng ngay trước dòng giá**,
+không bị tên mục chen vào.
+
+---
+
 ## v2.74.3 — 29/10/2026
 
 **Cập nhật không còn xoá mất code đang sửa dở**

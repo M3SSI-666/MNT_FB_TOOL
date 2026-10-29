@@ -160,13 +160,23 @@ def la_bi_trung(text: str) -> bool:
     return bool(_RE_TRUNG.search(text or ""))
 
 
+_RE_GIA_DONG = re.compile(r"^\s*[\d.,]+\s*₫\s*$")
+
+
 def _tieu_de(text: str) -> str:
-    """Dòng tiêu đề của thẻ bài — bỏ qua dòng cảnh báo trùng đứng phía trên."""
-    for ln in (text or "").split("\n"):
-        ln = ln.strip()
-        if ln and not la_bi_trung(ln) and not ln.lower().startswith("bài niêm yết này"):
-            return ln
-    return ""
+    """Dòng tiêu đề của thẻ bài = dòng NGAY TRƯỚC dòng giá ("338 ₫").
+
+    Không lấy dòng đầu: thẻ là bài DUY NHẤT còn lại của một mục thì khối leo lên
+    (_JS_LEO_THE) gồm cả tiêu đề mục — đo thật 29/10, Dang Xuan Duy: "Cần chú ý\\nẨn\\n
+    BÁN 3PN Parkhill…" → lấy nhầm "Cần chú ý" làm tiêu đề, không khớp bài trùng đã ghi
+    ở khổ rộng, bài đó sót lại. Không có dòng giá thì lấy dòng đầu không phải cảnh báo."""
+    dong = [ln.strip() for ln in (text or "").split("\n")]
+    dong = [ln for ln in dong if ln and not la_bi_trung(ln)
+            and not ln.lower().startswith("bài niêm yết này")]
+    for i, ln in enumerate(dong):
+        if _RE_GIA_DONG.match(ln) and i > 0:
+            return dong[i - 1]
+    return dong[0] if dong else ""
 
 
 _RE_GIA = re.compile(r"^\s*[\d.,]+\s*₫\s*$")
