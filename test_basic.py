@@ -7404,6 +7404,39 @@ with db._conn() as _c_x:
 db.replace_schedules("loai5", [])
 db.tv_mang_xoa(_tvx)
 
+# ── Cập nhật KHÔNG được xoá code sửa dở chưa phát hành ───────────────────────
+# Đã mất code thật 3 lần (20/10, 21/10, 28/10): sửa xong chưa kịp phát hành thì có
+# người bấm Cập nhật → `git reset --hard` về tag xoá sạch phần sửa, không hỏi.
+_goc_git_cn = server._git
+_popen_cn = []
+_goc_popen_cn = server.subprocess.Popen
+try:
+    def _git_gia(*a, **k):
+        if a[:1] == ("status",):
+            return True, " M market_cleanup.py\n M scheduler.py"
+        if a[:1] == ("tag",):
+            return True, "v2.74.1\nv2.74.2"
+        return True, ""
+    server._git = _git_gia
+    server.subprocess.Popen = lambda *a, **k: _popen_cn.append(a)
+    _r_cn = _client.post("/api/update", json={"version": "v2.74.2"}).get_json()
+    check("nút Cập nhật: máy có code SỬA DỞ chưa phát hành → TỪ CHỐI, báo rõ file nào",
+          _r_cn.get("ok") is False and "market_cleanup.py" in (_r_cn.get("error") or "")
+          and "XOÁ MẤT" in (_r_cn.get("error") or "") and not _popen_cn)
+    server._git = lambda *a, **k: ((True, "") if a[:1] == ("status",)
+                                   else (True, "v2.74.1\nv2.74.2") if a[:1] == ("tag",)
+                                   else (True, ""))
+    _r_cn2 = _client.post("/api/update", json={"version": "v2.74.2"}).get_json()
+    check("nút Cập nhật: máy sạch (không có sửa dở) → vẫn cập nhật bình thường",
+          _r_cn2.get("ok") is True and len(_popen_cn) == 1)
+finally:
+    server._git = _goc_git_cn
+    server.subprocess.Popen = _goc_popen_cn
+_upd_bat = Path("UPDATE.bat").read_text(encoding="utf-8", errors="replace")
+check("UPDATE.bat: có code sửa dở thì DỪNG trước bước reset --hard về tag",
+      "git status --porcelain --untracked-files^=no" in _upd_bat
+      and _upd_bat.index("if defined CO_SUA") < _upd_bat.index('git reset --hard "!DICH!"'))
+
 # ── dọn dẹp ────────────────────────────────────────────────────────────────
 for suffix in ("", "-wal", "-shm"):
     try:

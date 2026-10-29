@@ -228,6 +228,23 @@ if errorlevel 1 (
     exit /b 1
 )
 
+:: CHAN: may dang co code SUA DO chua commit thi KHONG reset --hard — lenh do xoa
+:: sach phan sua khong hoi. Da mat code that 3 lan (20/10, 21/10, 28/10): sua xong
+:: chua kip phat hanh thi co nguoi bam Cap nhat. File chua theo doi (data\, profiles\)
+:: khong tinh. Nut Cap nhat trong app cung chan y nhu vay (server._code_chua_luu).
+set "CO_SUA="
+for /f "delims=" %%f in ('git status --porcelain --untracked-files^=no 2^>nul') do set "CO_SUA=1"
+if defined CO_SUA (
+    echo.
+    echo [DUNG] May nay dang co code SUA DO chua phat hanh:
+    git status --short --untracked-files=no
+    echo.
+    echo        Cap nhat bay gio se XOA MAT phan sua do.
+    echo        Hay phat hanh ^(commit + tag^) truoc, hoac bao nguoi phat trien.
+    pause
+    exit /b 1
+)
+
 echo      Cap nhat len: !DICH!
 git reset --hard "!DICH!"
 if errorlevel 1 (

@@ -10,6 +10,23 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.74.3 — 29/10/2026
+
+**Cập nhật không còn xoá mất code đang sửa dở**
+
+Cập nhật = đặt code về đúng bản phát hành (`git reset --hard`), nên mọi thay đổi chưa
+phát hành trên máy bị **xoá sạch không hỏi**. Đã mất code thật 3 lần (20/10, 21/10,
+28/10): sửa xong, chưa kịp phát hành thì máy bấm Cập nhật.
+
+- **Nút Cập nhật trong app**: máy đang có code sửa dở chưa phát hành thì **từ chối**,
+  báo rõ những file nào — không chạy UPDATE.bat.
+- **UPDATE.bat** (chạy tay): kiểm tra ngay trước bước đặt lại code; có sửa dở thì
+  **liệt kê file và dừng**.
+- Dữ liệu (`data/`, `profiles/`, `cookies/`…) vốn không bị cập nhật đụng tới — không đổi.
+  Máy dùng bình thường (không ai sửa code) cập nhật **như cũ**.
+
+---
+
 ## v2.74.2 — 29/10/2026
 
 **Tự xóa bài bị cảnh báo trùng — giờ mới thật sự xóa được**

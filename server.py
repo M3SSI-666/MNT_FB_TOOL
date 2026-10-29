@@ -243,9 +243,29 @@ def api_versions():
     })
 
 
+def _code_chua_luu() -> list:
+    """File CODE (git theo dõi) đang bị sửa mà chưa commit. Cập nhật = `git reset
+    --hard` về tag → xoá sạch các sửa đổi này không hỏi. Đã mất code thật 3 lần (20/10
+    15:52, 21/10 15:12, 28/10 18:12): sửa xong chưa kịp phát hành thì có người bấm Cập
+    nhật. Không tính file chưa theo dõi (data/, profiles/… vốn nằm ngoài git)."""
+    ok, ra = _git("status", "--porcelain", "--untracked-files=no")
+    if not ok:
+        return []
+    return [ln[3:].strip() for ln in ra.splitlines() if ln.strip()]
+
+
 @app.route("/api/update", methods=["POST"])
 def api_update():
     xin = (request.json or {}).get("version", "").strip()
+
+    # Có code chưa lưu thì KHÔNG cập nhật — cập nhật sẽ xoá mất nó (xem _code_chua_luu).
+    chua_luu = _code_chua_luu()
+    if chua_luu:
+        ds = ", ".join(chua_luu[:6]) + (f" … (+{len(chua_luu) - 6})" if len(chua_luu) > 6 else "")
+        return jsonify({"ok": False, "error":
+                        f"Máy này đang có code SỬA DỞ chưa phát hành ({ds}). Cập nhật bây giờ "
+                        "sẽ XOÁ MẤT phần sửa đó. Hãy phát hành (commit + tag) trước rồi mới "
+                        "cập nhật — hoặc báo người phát triển."})
 
     # KHÔNG đưa chuỗi khách gửi thẳng vào lệnh chạy. Chỉ chấp nhận đúng một
     # phiên bản có thật trong danh sách tag; sai một ly là mở cửa cho người ta
