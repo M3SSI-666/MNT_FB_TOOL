@@ -169,6 +169,17 @@ def _tieu_de(text: str) -> str:
     return ""
 
 
+_RE_GIA = re.compile(r"^\s*[\d.,]+\s*₫\s*$")
+
+
+def chu_ky_the(text: str) -> tuple:
+    """(tiêu đề, giá, ngày niêm yết) của một thẻ bài — để nhận ra CÙNG MỘT bài ở hai
+    khổ màn hình. Giá Marketplace là số ngẫu nhiên mỗi bài (332 ₫, 82 ₫…) nên bộ ba
+    này gần như chỉ khớp đúng một bài."""
+    gia = next((ln.strip() for ln in (text or "").split("\n") if _RE_GIA.match(ln)), "")
+    return (_tieu_de(text), gia, _trich_ngay(text))
+
+
 def loc_can_xoa(bai: list, so_ngay: int) -> list:
     """Bài phải xóa: QUÁ HẠN (tuổi rõ ràng > so_ngay) HOẶC bị cảnh báo TRÙNG."""
     return [b for b in bai
@@ -212,6 +223,45 @@ _JS_DOC_ROWS = "() => {" + _JS_LEO_THE + r"""
 
 # Chữ của TRỌN thẻ bài quanh nút "..." (dùng lúc xóa).
 _JS_THE_CUA_NUT = "el => {" + _JS_LEO_THE + " return leoThe(el); }"
+
+# Chữ của các thẻ CÓ dòng cảnh báo trùng (đọc ở khổ RỘNG — xem doc_bai_trung).
+_JS_THE_CANH_BAO = "() => {" + _JS_LEO_THE + r"""
+  const ra = [], seen = new Set();
+  const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = w.nextNode())) {
+    if (!/giống một bài niêm yết khác|similar to another listing/i.test(n.textContent)) continue;
+    const t = leoThe(n.parentElement).trim();
+    if (t && /Ngày niêm yết/.test(t) && !seen.has(t)) { seen.add(t); ra.push(t); }
+  }
+  return ra;
+}
+"""
+
+VIEWPORT_RONG = {"width": 1280, "height": 900}
+
+
+async def doc_bai_trung(page) -> set:
+    """Chữ ký (chu_ky_the) các bài bị Facebook cảnh báo TRÙNG.
+
+    Đo thật 28/10 (Dang Xuan Duy): ở khổ HẸP (danh sách dọc, nơi phần mềm đọc và
+    xóa) Facebook KHÔNG hiện dòng cảnh báo trùng — 0 lần; ở khổ RỘNG thì có (6 lần).
+    Bản trước chỉ đọc khổ hẹp nên mọi phiên dọn đều ghi "bị cảnh báo trùng: 0". Nên:
+    phóng rộng đọc cảnh báo → ghi chữ ký → trả về khổ hẹp (cuộn nạp lại) để xóa."""
+    try:
+        await page.set_viewport_size(VIEWPORT_RONG)
+        await page.wait_for_timeout(3500)
+        the = await page.evaluate(_JS_THE_CANH_BAO)
+    except Exception:
+        the = []
+    finally:
+        try:
+            await page.set_viewport_size(VIEWPORT_HEP)
+            await page.wait_for_timeout(2500)
+            await _cuon_tai_het(page)
+        except Exception:
+            pass
+    return {chu_ky_the(t) for t in the if chu_ky_the(t)[0]}
 
 _RE_NGAY_HIEN = re.compile(r"Ngày niêm yết:\s*[\d/]+")
 
@@ -271,7 +321,7 @@ async def _mo_selling(p, acc_name, c_user, headless):
     return ctx, page
 
 
-async def _doc_rows(page, hom_nay) -> list:
+async def _doc_rows(page, hom_nay, ky_trung: set = frozenset()) -> list:
     raw = await page.evaluate(_JS_DOC_ROWS)
     out = []
     for r in raw:
@@ -280,7 +330,7 @@ async def _doc_rows(page, hom_nay) -> list:
             "tieu_de":   _tieu_de(txt),
             "ngay_text": _trich_ngay(txt),
             "tuoi":      doc_ngay_niem_yet(txt, hom_nay),
-            "trung":     la_bi_trung(txt),
+            "trung":     la_bi_trung(txt) or chu_ky_the(txt) in ky_trung,
         })
     return out
 
@@ -290,8 +340,10 @@ async def _quet(acc_name, c_user, headless) -> list:
     async with async_playwright() as p:
         ctx, page = await _mo_selling(p, acc_name, c_user, headless)
         try:
-            bai = await _doc_rows(page, datetime.date.today())
-            logger.info(f"  🧹 Bài niêm yết [{acc_name}]: đọc {len(bai)} bài")
+            ky_trung = await doc_bai_trung(page)
+            bai = await _doc_rows(page, datetime.date.today(), ky_trung)
+            logger.info(f"  🧹 Bài niêm yết [{acc_name}]: đọc {len(bai)} bài"
+                        + (f", {len(ky_trung)} bài bị cảnh báo trùng" if ky_trung else ""))
             return bai
         finally:
             try:
@@ -333,8 +385,11 @@ async def _tra_loi_khao_sat(page):
         return None
 
 
-async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
-    """Mở trang selling rồi lặp: tìm 1 dòng QUÁ HẠN → bấm '...' → 'Xóa bài niêm
+async def _xoa(acc_name, c_user, so_ngay, headless, chi_trung: bool = False) -> int:
+    """`chi_trung=True`: CHỈ xóa bài bị cảnh báo trùng, không đụng bài quá hạn (dùng
+    ngay sau mỗi phiên đăng Marketplace — xem scheduler).
+
+    Mở trang selling rồi lặp: tìm 1 dòng QUÁ HẠN → bấm '...' → 'Xóa bài niêm
     yết' → xác nhận 'Xóa' → tải lại → lặp. Tải lại mỗi lần để DOM sạch, tránh
     phần tử cũ. Trả số bài đã xóa.
 
@@ -347,6 +402,7 @@ async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
     da_xoa = 0
 
     bo_qua = set()      # chữ ký các bài đã xóa HỎNG — không chọn lại trong phiên này
+    ky_trung = set()    # chữ ký bài bị cảnh báo trùng (đọc ở khổ rộng — doc_bai_trung)
 
     async def _tim_muc_tieu():
         """(nút '...', chữ ký, tiêu đề, ngày, lý do) của một bài PHẢI XÓA đang
@@ -368,9 +424,9 @@ async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
                 continue
             if len(_RE_NGAY_HIEN.findall(row_text or "")) != 1:
                 continue
-            trung = la_bi_trung(row_text)
+            trung = la_bi_trung(row_text) or chu_ky_the(row_text) in ky_trung
             tuoi = doc_ngay_niem_yet(row_text, hom_nay)
-            qua_han = tuoi is not None and tuoi > max(0, int(so_ngay))
+            qua_han = (not chi_trung) and tuoi is not None and tuoi > max(0, int(so_ngay))
             if not (trung or qua_han):
                 continue
             tieu_de, ngay = _tieu_de(row_text), _trich_ngay(row_text)
@@ -446,6 +502,9 @@ async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
         ctx, page = await _mo_selling(p, acc_name, c_user, headless)
         loi_lien = 0
         try:
+            ky_trung.update(await doc_bai_trung(page))
+            if chi_trung and not ky_trung:
+                return da_xoa                       # không có bài trùng → xong ngay
             for _ in range(_TRAN_XOA + 5):          # +5 lượt dành cho bài bị bỏ qua
                 if da_xoa >= _TRAN_XOA:
                     break
@@ -490,7 +549,9 @@ async def _xoa(acc_name, c_user, so_ngay, headless) -> int:
                 # Tải lại cho DOM sạch, CUỘN cho nạp đủ danh sách, rồi quét tiếp.
                 await _tai_selling(page)
             try:
-                con_lai = len(loc_can_xoa(await _doc_rows(page, hom_nay), so_ngay))
+                _rows = await _doc_rows(page, hom_nay, ky_trung)
+                con_lai = (sum(1 for b in _rows if b["trung"]) if chi_trung
+                           else len(loc_can_xoa(_rows, so_ngay)))
                 if con_lai:
                     nut = await page.locator('[aria-label^="Lựa chọn khác cho"]').count()
                     so_dong = await page.evaluate(_JS_DEM_DONG)
@@ -550,3 +611,22 @@ def xoa_bai_cu(acc_name: str, c_user: str = "", so_ngay: int = 3,
     # kế tiếp trong ngày phải dọn TIẾP (28/10 Mai Tùng: 51 bài quá hạn, xóa 30, còn 28).
     kq["cham_tran"] = kq["da_xoa"] >= _TRAN_XOA
     return kq
+
+
+def xoa_bai_trung(acc_name: str, c_user: str = "", headless=None) -> int:
+    """CHỈ xóa bài bị Facebook cảnh báo trùng ("có vẻ giống một bài niêm yết khác
+    nên chúng tôi không đăng") — gọi NGAY SAU mỗi phiên đăng Marketplace, vì bài trùng
+    sinh ra đúng lúc đăng; chờ phiên dọn đầu ngày hôm sau thì nó nằm đó cả ngày.
+    Không đụng bài quá hạn. Một lượt trình duyệt; không có bài trùng thì về ngay.
+    Trả số bài đã xóa. Lỗi cookie → CookieDeadError; lỗi khác → log, trả 0."""
+    if not _XOA_DA_DO_DOM:
+        return 0
+    try:
+        return asyncio.run(_xoa(acc_name, c_user, 0,
+                                HEADLESS if headless is None else headless,
+                                chi_trung=True))
+    except CookieDeadError:
+        raise
+    except Exception as e:
+        logger.warning(f"⚠️  Xóa bài trùng [{acc_name}] lỗi (bỏ qua): {e}")
+        return 0

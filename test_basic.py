@@ -4014,6 +4014,37 @@ check("đọc trọn thẻ bài (leo tới khối lớn nhất chỉ chứa 1 ng
       and "n === 1" in _mc._JS_LEO_THE and "n > 1" in _mc._JS_LEO_THE)
 check("phiên dọn chạy cả khi chỉ có bài trùng (không có bài quá hạn)",
       "if ep_thu or not can_xoa:" in _src_mc)
+# 28/10 (Dang Xuan Duy): ở khổ HẸP Facebook KHÔNG hiện dòng cảnh báo trùng (0 lần),
+# khổ RỘNG thì có (6 bài) → mọi phiên dọn ghi "bị cảnh báo trùng: 0". Đọc cảnh báo
+# ở khổ rộng, nhận ra CÙNG bài ở khổ hẹp bằng (tiêu đề, giá, ngày).
+_the_hep = "BÁN 3PN Parkhill - Hướng Đông Nam\n338\xa0₫\nCòn hàng · Ngày niêm yết: 27/10\nĐánh dấu là hết hàng"
+_the_rong = f"{_CB_TRUNG}\nBÁN 3PN Parkhill - Hướng Đông Nam\n338\xa0₫\nCòn hàng · Ngày niêm yết: 27/10"
+check("chữ ký thẻ (tiêu đề, giá, ngày) khớp CÙNG một bài ở khổ rộng (có cảnh báo) và khổ hẹp",
+      _mc.chu_ky_the(_the_hep) == _mc.chu_ky_the(_the_rong)
+      == ("BÁN 3PN Parkhill - Hướng Đông Nam", "338\xa0₫", "Ngày niêm yết: 27/10"))
+check("chữ ký thẻ phân biệt 2 bài cùng tiêu đề + ngày nhưng khác giá ngẫu nhiên",
+      _mc.chu_ky_the(_the_hep) != _mc.chu_ky_the(_the_hep.replace("338", "180")))
+_than_dbt = _src_mc[_src_mc.index("async def doc_bai_trung"):_src_mc.index("async def _cuon_tai_het")]
+check("đọc bài trùng ở khổ RỘNG rồi trả về khổ HẸP (cuộn nạp lại) để xóa",
+      "set_viewport_size(VIEWPORT_RONG)" in _than_dbt and "set_viewport_size(VIEWPORT_HEP)" in _than_dbt
+      and _than_dbt.index("VIEWPORT_RONG)") < _than_dbt.index("VIEWPORT_HEP)")
+      and "await _cuon_tai_het(page)" in _than_dbt)
+check("lượt đọc và lượt xóa đều dùng chữ ký bài trùng đọc ở khổ rộng",
+      "ky_trung = await doc_bai_trung(page)" in _src_mc
+      and "ky_trung.update(await doc_bai_trung(page))" in _than_xoa_mc
+      and "chu_ky_the(row_text) in ky_trung" in _than_xoa_mc)
+check("chế độ chỉ xóa bài trùng KHÔNG đụng bài quá hạn",
+      "qua_han = (not chi_trung) and" in _than_xoa_mc
+      and "chi_trung=True" in _src_mc[_src_mc.index("def xoa_bai_trung"):])
+_sch_dt = Path("scheduler.py").read_text(encoding="utf-8")
+_rms_dt = _sch_dt[_sch_dt.index("def _run_marketplace_slot"):]
+_rms_dt = _rms_dt[:_rms_dt.index("\ndef ")]
+check("sau mỗi phiên đăng Marketplace: xóa bài trùng ngay (chỉ khi bật tự xóa)",
+      "_don_trung_sau_dang(acc_name, c_user_v)" in _rms_dt
+      and _rms_dt.index("db.ghi_nhan_phien_dang(acc_name, True")
+          < _rms_dt.index("_don_trung_sau_dang(acc_name, c_user_v)")
+      and 'db.get_setting("mkt_xoa_bat"' in
+          _sch_dt[_sch_dt.index("def _don_trung_sau_dang"):_sch_dt.index("def _run_marketplace_slot")])
 _src_sch_dmk = Path("scheduler.py").read_text(encoding="utf-8")
 check("scheduler ghi tổng kết dọn cả khi xóa được 0 bài",
       "dọn Market: xóa {kq.get('da_xoa', 0)}/" in

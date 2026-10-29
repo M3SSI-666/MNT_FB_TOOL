@@ -10,6 +10,27 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.74.2 — 29/10/2026
+
+**Tự xóa bài bị cảnh báo trùng — giờ mới thật sự xóa được**
+
+Bài có dòng **"Bài niêm yết này có vẻ giống một bài niêm yết khác nên chúng tôi không
+đăng…"** (mục *Cần chú ý*) chưa bao giờ bị xóa. Đo thật trên nick Dang Xuan Duy: ở
+**khổ màn hình hẹp** — nơi phần mềm đọc danh sách và bấm xóa — Facebook **KHÔNG hiện
+dòng cảnh báo này** (0 lần); ở khổ rộng thì có (6 bài). Nên mọi phiên dọn đều ghi
+"bị cảnh báo trùng: 0".
+
+- **Đọc cảnh báo ở khổ rộng**, ghi lại tiêu đề + giá + ngày niêm yết từng bài bị
+  cảnh báo (giá Marketplace là số ngẫu nhiên nên bộ ba này chỉ khớp đúng 1 bài), rồi
+  **xóa đúng bài đó ở khổ hẹp**.
+- **Xóa bài trùng NGAY sau mỗi phiên đăng Marketplace** (chỉ bài trùng, không đụng bài
+  cũ) — bài trùng sinh ra đúng lúc đăng, không còn phải nằm chờ tới hôm sau. Phiên
+  Market đầu ngày vẫn xóa cả bài quá hạn lẫn bài trùng. Có xóa thì báo Telegram.
+
+> Cập nhật xong **Dừng → Run** lại runner các mảng.
+
+---
+
 ## v2.74.1 — 28/10/2026
 
 **Tự xóa bài niêm yết: xóa được bài "Đang hoạt động" + dọn tiếp khi còn nhiều bài cũ**

@@ -502,6 +502,31 @@ def _don_mkt_dau_ngay(acc_name: str, c_user: str):
         logger.warning(f"⚠️  Báo Telegram dọn Market [{acc_name}] lỗi: {e}")
 
 
+def _don_trung_sau_dang(acc_name: str, c_user: str):
+    """Sau mỗi phiên đăng Marketplace: xóa bài bị Facebook cảnh báo trùng ("có vẻ
+    giống một bài niêm yết khác nên chúng tôi không đăng"). Bài đó không được hiển
+    thị, Facebook bảo xóa rồi đăng lại — giữ chỉ làm loãng trang bán. Chỉ khi bật tự
+    xóa; KHÔNG đụng bài quá hạn (việc của phiên dọn đầu ngày). Lỗi thì bỏ qua — bài
+    vừa đăng xong rồi, không được làm hỏng kết quả phiên."""
+    try:
+        if (db.get_setting("mkt_xoa_bat", "0") or "0").strip() not in ("1", "true", "True"):
+            return
+        import market_cleanup
+        n = market_cleanup.xoa_bai_trung(acc_name, c_user)
+        if n:
+            logger.info(f"🧹 [{acc_name}] sau phiên Market: xóa {n} bài bị cảnh báo trùng")
+            try:
+                import thong_bao
+                thong_bao.bao_don_mkt(acc_name, {"da_xoa": n, "can_xoa": n, "trung": n},
+                                      int(db.get_setting("mkt_xoa_sau_ngay", "3") or 3))
+            except Exception:
+                pass
+    except CookieDeadError:
+        _mark_cookie_dead(acc_name, c_user)
+    except Exception as e:
+        logger.warning(f"⚠️  Xóa bài trùng sau phiên [{acc_name}] lỗi (bỏ qua): {e}")
+
+
 def _run_marketplace_slot(item: dict):
     """Slot đã bị chuyển thành phiên đăng Marketplace.
 
@@ -553,6 +578,9 @@ def _run_marketplace_slot(item: dict):
         _update_status(sid, f"✅ {done} 🛒 ({so_nhom} nhóm)")
         logger.info(f"✅ STT {stt} Marketplace xong: {so_nhom} nhóm")
         db.ghi_nhan_phien_dang(acc_name, True, c_user=_cu(item))
+        # Bài bị Facebook cảnh báo TRÙNG sinh ra đúng lúc đăng → xóa NGAY sau phiên,
+        # không để nằm tới phiên dọn đầu ngày hôm sau.
+        _don_trung_sau_dang(acc_name, c_user_v)
     except CookieDeadError:
         ts2 = datetime.now().strftime("%H:%M")
         _update_status(sid, f"❌ {ts2} Cookie hết hạn")
