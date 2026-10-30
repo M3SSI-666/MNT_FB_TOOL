@@ -451,8 +451,9 @@ def _can_reset_dau_ngay(first_run: bool, da_lam: str, hom_nay: str) -> bool:
 
 def _don_mkt_dau_ngay(acc_name: str, c_user: str):
     """Phiên Marketplace ĐẦU TIÊN trong ngày của acc: dọn (tự xóa) bài niêm yết
-    quá hạn + bị cảnh báo trùng TRƯỚC khi đăng, báo Telegram kênh Marketplace,
-    đánh dấu "hôm nay đã dọn" để các phiên Marketplace sau trong ngày bỏ qua.
+    quá hạn + bị cảnh báo trùng TRƯỚC khi đăng, đánh dấu "hôm nay đã dọn" để các
+    phiên Marketplace sau trong ngày bỏ qua. Chỉ ghi log — KHÔNG báo Telegram (người
+    dùng bỏ ngày 30/10: không cần nữa).
 
     Chỉ khi bật tự xóa (db.den_gio_xoa_mkt kiểm cờ bật + marketplace% + ngày).
     Lỗi dọn KHÔNG chặn việc đăng và KHÔNG tính vào sức khoẻ acc; riêng cookie
@@ -495,11 +496,6 @@ def _don_mkt_dau_ngay(acc_name: str, c_user: str):
                 db.ghi_nhan_xoa_mkt(acc_name, c_user=c_user)
             except Exception:
                 pass
-    try:
-        import thong_bao
-        thong_bao.bao_don_mkt(acc_name, kq, so_ngay)
-    except Exception as e:
-        logger.warning(f"⚠️  Báo Telegram dọn Market [{acc_name}] lỗi: {e}")
 
 
 def _don_trung_sau_dang(acc_name: str, c_user: str):
@@ -515,12 +511,6 @@ def _don_trung_sau_dang(acc_name: str, c_user: str):
         n = market_cleanup.xoa_bai_trung(acc_name, c_user)
         if n:
             logger.info(f"🧹 [{acc_name}] sau phiên Market: xóa {n} bài bị cảnh báo trùng")
-            try:
-                import thong_bao
-                thong_bao.bao_don_mkt(acc_name, {"da_xoa": n, "can_xoa": n, "trung": n},
-                                      int(db.get_setting("mkt_xoa_sau_ngay", "3") or 3))
-            except Exception:
-                pass
     except CookieDeadError:
         _mark_cookie_dead(acc_name, c_user)
     except Exception as e:

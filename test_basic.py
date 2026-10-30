@@ -4057,10 +4057,12 @@ _src_sch_dmk = Path("scheduler.py").read_text(encoding="utf-8")
 check("scheduler ghi tổng kết dọn cả khi xóa được 0 bài",
       "dọn Market: xóa {kq.get('da_xoa', 0)}/" in
       _src_sch_dmk[_src_sch_dmk.index("def _don_mkt_dau_ngay"):])
-# Bộ báo Telegram cũ (soan_xoa_mkt/bao_xoa_mkt, có chạy thử) đã gỡ ở v2.65.0;
-# 28/10 người dùng muốn báo lại — nay là bao_don_mkt, luôn xóa thật.
-check("không còn bộ báo dọn cũ (soan_xoa_mkt/bao_xoa_mkt)",
-      not hasattr(_tb, "soan_xoa_mkt") and not hasattr(_tb, "bao_xoa_mkt"))
+# Báo Telegram khi dọn bài: bản cũ (soan_xoa_mkt/bao_xoa_mkt) gỡ ở v2.65.0; bản
+# 28/10 (soan_tin_don_mkt/bao_don_mkt) người dùng bỏ ngày 30/10 — không cần nữa.
+check("dọn bài KHÔNG còn báo Telegram (cả bộ cũ lẫn bộ 28/10 đều đã gỡ)",
+      not any(hasattr(_tb, f) for f in ("soan_xoa_mkt", "bao_xoa_mkt",
+                                         "soan_tin_don_mkt", "bao_don_mkt"))
+      and "bao_don_mkt" not in _src_sch_mkt and "bao_xoa_mkt" not in _src_sch_mkt)
 check("dọn luôn xóa thật (chay_thu=False), không còn mkt_xoa_chay_thu",
       "bao_xoa_mkt" not in _src_sch_mkt and "chay_thu=False" in _src_sch_mkt
       and "mkt_xoa_chay_thu" not in _src_sch_mkt)
@@ -4073,29 +4075,18 @@ check("phiên Marketplace dọn TRƯỚC rồi mới đăng",
       "_don_mkt_dau_ngay(acc_name, c_user_v)" in _than_rms
       and _than_rms.index("_don_mkt_dau_ngay(acc_name, c_user_v)")
           < _than_rms.index("post_marketplace(acc_name="))
-check("dọn đầu ngày: kiểm 'hôm nay đã dọn chưa', đánh dấu, báo Telegram",
-      "db.den_gio_xoa_mkt(acc_name" in _than_dmk and "db.ghi_nhan_xoa_mkt(acc_name" in _than_dmk
-      and "thong_bao.bao_don_mkt(acc_name" in _than_dmk)
+check("dọn đầu ngày: kiểm 'hôm nay đã dọn chưa' rồi đánh dấu",
+      "db.den_gio_xoa_mkt(acc_name" in _than_dmk and "db.ghi_nhan_xoa_mkt(acc_name" in _than_dmk)
 check("dọn lỗi KHÔNG chặn đăng (chỉ cookie chết mới ném ra)",
       "except CookieDeadError:\n        raise" in _than_dmk and "vẫn đăng" in _than_dmk)
 check("bỏ worker dọn chạy theo nhịp giờ trong vòng lặp runner",
       "def _xoa_mkt_worker" not in _src_sch_mkt and "target=_xoa_mkt_worker" not in _src_sch_mkt)
-_tin_dmk = _tb.soan_tin_don_mkt("Máy công ty", "Dang Xuan Duy", "28/10/2026",
-                                {"tong": 38, "qua_han": [{}] * 8, "trung": 4,
-                                 "can_xoa": 12, "da_xoa": 12}, 2)
-check("tin Telegram dọn Market: máy · acc · ngày · số bài đã dọn (quá hạn / trùng)",
-      "Máy công ty" in _tin_dmk and "Dang Xuan Duy" in _tin_dmk and "28/10/2026" in _tin_dmk
-      and "Số bài đã dọn: <b>12</b>" in _tin_dmk and "quá 2 ngày: 8" in _tin_dmk
-      and "bị cảnh báo trùng: 4" in _tin_dmk and "Còn" not in _tin_dmk)
 # 28/10 Mai Tùng: 51 bài quá hạn, mỗi phiên xóa tối đa 30 → còn 28 phải đợi tới mai.
 # Chạm trần thì KHÔNG đánh dấu "hôm nay đã dọn" → phiên Marketplace sau dọn tiếp.
 check("dọn chạm trần số bài/phiên → phiên Marketplace sau trong ngày dọn TIẾP",
       'kq["cham_tran"] = kq["da_xoa"] >= _TRAN_XOA' in _src_mc
       and 'if kq.get("cham_tran"):' in _than_dmk
       and _than_dmk.index('if kq.get("cham_tran"):') < _than_dmk.index("db.ghi_nhan_xoa_mkt(acc_name"))
-check("tin Telegram báo 'phiên sau dọn tiếp' khi còn bài cũ",
-      "dọn tiếp" in _tb.soan_tin_don_mkt("M", "A", "28/10/2026",
-                                         {"can_xoa": 51, "da_xoa": 30, "cham_tran": True}, 2))
 check("menu không có mục xóa → log các mục THẬT của menu để biết tên đúng",
       "menu không có mục xóa bài — các mục:" in _src_mc)
 # Đo thật 28/10 (Alex Tường, bài 14/10 "Đang hoạt động"): menu 12 mục, CÓ "Xóa bài
@@ -4107,9 +4098,6 @@ check("xóa bài: CHỜ menu hiện ra rồi mới tìm mục xóa (không chờ
 check("mở trang bài niêm yết thì đóng khung chat / hộp mã PIN đè lên bài dưới cùng",
       "_dismiss_pin_dialog(page)" in _src_mc[_src_mc.index("async def _tai_selling"):
                                            _src_mc.index("async def _mo_selling")])
-check("tin Telegram báo còn bài chưa xóa được",
-      "Còn 3 bài chưa xóa được" in _tb.soan_tin_don_mkt(
-          "M", "A", "28/10/2026", {"can_xoa": 5, "da_xoa": 2}, 2))
 _cd_mkt = db.doc_cai_dat_mkt()
 check("MKT mặc định có mkt_xoa_bat=0 / sau_ngay=3 (KHÔNG còn chay_thu)",
       _cd_mkt.get("mkt_xoa_bat") == "0" and _cd_mkt.get("mkt_xoa_sau_ngay") == "3"

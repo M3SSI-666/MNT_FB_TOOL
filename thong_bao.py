@@ -178,43 +178,6 @@ def bao_tin_mkt(acc_name: str, tin_moi: list) -> bool:
     return bool(kq and kq.get("ok"))
 
 
-def soan_tin_don_mkt(ten_may: str, acc_name: str, ngay: str, kq: dict,
-                     so_ngay: int) -> str:
-    """Tin báo đã dọn Market đầu ngày (HTML). Tách riêng để kiểm thử không gọi mạng.
-    `kq` là kết quả market_cleanup.xoa_bai_cu: {tong, qua_han, trung, can_xoa, da_xoa}."""
-    da_xoa  = int(kq.get("da_xoa") or 0)
-    can_xoa = int(kq.get("can_xoa") or 0)
-    qua_han = len(kq.get("qua_han") or [])
-    trung   = int(kq.get("trung") or 0)
-    dong = [f"🧹 <b>{ten_may}</b> · Đã dọn Market acc <b>{acc_name}</b> ngày {ngay}",
-            f"Số bài đã dọn: <b>{da_xoa}</b>"
-            + (f"/{can_xoa}" if can_xoa and can_xoa != da_xoa else "")
-            + f" (quá {so_ngay} ngày: {qua_han} · bị cảnh báo trùng: {trung})",
-            f"Bài niêm yết đọc được: {int(kq.get('tong') or 0)}"]
-    if kq.get("cham_tran"):
-        dong.append("🔁 Còn bài cũ — phiên Marketplace sau trong ngày dọn tiếp")
-    elif can_xoa > da_xoa:
-        dong.append(f"⚠️ Còn {can_xoa - da_xoa} bài chưa xóa được — xem log ô Bán/Thuê")
-    return "\n".join(dong)
-
-
-def bao_don_mkt(acc_name: str, kq: dict, so_ngay: int) -> bool:
-    """Báo đã dọn Market đầu ngày cho 1 acc — vào KÊNH RIÊNG Marketplace (cùng
-    kênh báo tin khách). Trả True nếu đã gửi."""
-    import datetime as _dt
-    c = cau_hinh_mkt()
-    if not (c["bat"] and c["token"] and c["chat_id"]):
-        return False
-    kq_ = _goi_api("sendMessage",
-                   {"chat_id": c["chat_id"],
-                    "text": soan_tin_don_mkt(c["ten_may"], acc_name,
-                                             _dt.date.today().strftime("%d/%m/%Y"),
-                                             kq or {}, so_ngay),
-                    "parse_mode": "HTML", "disable_web_page_preview": "true"},
-                   token=c["token"])
-    return bool(kq_ and kq_.get("ok"))
-
-
 def gui_file(duong_dan, chu_thich: str = "", chat_id: str = "") -> tuple[bool, str]:
     """
     Gửi một file lên Telegram. Dùng cho bản sao lưu hằng ngày.

@@ -10,6 +10,21 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.74.5 — 30/10/2026
+
+**Bỏ tin báo Telegram khi dọn bài niêm yết**
+
+Dọn bài (phiên Marketplace đầu ngày, và xóa bài bị cảnh báo trùng sau mỗi phiên
+đăng) **không gửi tin Telegram nữa** — chỉ ghi log, xem ở trang **Logs → ô Bán/Thuê**
+(dòng `🧹 … dọn Market: xóa X/Y bài` và `🧹 … sau phiên Market: xóa N bài bị cảnh
+báo trùng`). Việc dọn vẫn chạy y như cũ.
+
+Kênh Telegram Marketplace vẫn **báo tin nhắn khách** như trước.
+
+> Cập nhật xong **Dừng → Run** lại runner các mảng.
+
+---
+
 ## v2.74.4 — 29/10/2026
 
 **Vá: bài trùng cuối cùng của mục "Cần chú ý" bị sót**
