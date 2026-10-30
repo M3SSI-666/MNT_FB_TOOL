@@ -138,6 +138,20 @@ def bien_the_lien_he(duong_dan: list, thu_muc_ra: str, sdt: str,
     return ra
 
 
+def dan_sdt_neu_can(local_photos: list, temp_dir, sdt: str):
+    """Tiện ích dùng chung cho các poster: nếu có `sdt` + có ảnh thì dán số ĐT
+    vào góc (qua bien_the_lien_he), ảnh ra lưu trong temp_dir/bt. Trả (photos,
+    temp_dir). Không có sdt/ảnh → trả nguyên, không đụng gì."""
+    sdt = (sdt or "").strip()
+    if not local_photos or not sdt:
+        return local_photos, temp_dir
+    import tempfile as _tempfile
+    if temp_dir is None:
+        temp_dir = _tempfile.mkdtemp(prefix="mnt_bt_")
+    out = bien_the_lien_he(local_photos, os.path.join(temp_dir, "bt"), sdt)
+    return out, temp_dir
+
+
 # Chạy trực tiếp để xem thử: python mkt_anh.py <ảnh> "0333 194 822"
 if __name__ == "__main__":                            # pragma: no cover
     import sys

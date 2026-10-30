@@ -576,9 +576,13 @@ def post_via_crosspost(
     c_user:          str = "",
     loai_comment:    str = "",
     page_uid:        str = "",
+    bien_the_sdt:    str = "",
 ) -> bool:
     """
     Hàm đồng bộ — gọi từ scheduler (chạy trong thread).
+
+    `bien_the_sdt`: có số thì DÁN SỐ ĐT vào góc mỗi ảnh (dùng chung mkt_anh với
+    Marketplace); rỗng = giữ ảnh gốc.
 
     Args:
         acc_name:        Tên acc VD "Ngô Quang Hùng"
@@ -608,8 +612,14 @@ def post_via_crosspost(
             logger.info(f"  📥 Download ảnh...")
             local_photos, temp_dir = smart_download(image_url)
             logger.info(f"  → {len(local_photos)} ảnh đã tải")
+            # Biến thể ảnh: dán số ĐT vào góc (nếu bật ở cài đặt Gen) — đăng nhóm.
+            if bien_the_sdt:
+                import mkt_anh
+                local_photos, temp_dir = mkt_anh.dan_sdt_neu_can(
+                    local_photos, temp_dir, bien_the_sdt)
+                logger.info(f"  🏷️  Đã dán số ĐT lên ảnh ({bien_the_sdt})")
         except Exception as e:
-            logger.warning(f"  ⚠️  Không download được ảnh: {e}")
+            logger.warning(f"  ⚠️  Không download/biến thể được ảnh: {e}")
 
     try:
         ok = asyncio.run(_run_crosspost(

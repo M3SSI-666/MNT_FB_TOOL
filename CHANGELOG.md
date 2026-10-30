@@ -10,6 +10,23 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.75.0 — 31/10/2026
+
+**Biến thể ảnh (dán số ĐT) cho bài ĐĂNG NHÓM — cài khi Gen lịch**
+
+Giống Marketplace, giờ bài **đăng nhóm** cũng dán được số ĐT lên góc ảnh. Mở
+dialog **Gen lịch** của một mảng → có ô **"Biến thể ảnh (chỉ bài đăng nhóm)"**:
+tick **Dán số ĐT lên ảnh** + nhập số. Khi đăng nhóm, mỗi ảnh được dán số vào 1
+góc (vùng an toàn) — dùng chung module với Marketplace (`mkt_anh`).
+
+- **Chỉ áp cho bài đăng nhóm** (Page-chéo + VIA). **Không** áp cho tường Page /
+  Marketplace (Marketplace đã có cài đặt riêng ở tab của nó).
+- Để trống số = tắt. Cài đặt lưu theo từng mảng (nhớ cho lần Gen sau).
+
+> Cập nhật xong **khởi động lại app** rồi **Gen lại lịch** để bật biến thể.
+
+---
+
 ## v2.74.5 — 30/10/2026
 
 **Bỏ tin báo Telegram khi dọn bài niêm yết**

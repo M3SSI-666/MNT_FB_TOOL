@@ -7122,6 +7122,52 @@ _ajs_cn = Path("static/js/app.js").read_text(encoding="utf-8")
 check("bảng Tài khoản có cột 'Chặn nhóm' (ô tick)",
       'key:"chan_nhom"' in _ajs_cn and 'label:"Chặn nhóm"' in _ajs_cn)
 
+# ── Biến thể ảnh (dán số ĐT) cho bài ĐĂNG NHÓM — dùng chung mkt_anh ──────────
+import mkt_anh as _mka
+from PIL import Image as _PILImg2
+import tempfile as _tf2, shutil as _sh2
+_bt_dir = Path(_tf2.gettempdir()) / "mnt_bt_test"
+_sh2.rmtree(_bt_dir, ignore_errors=True); _bt_dir.mkdir(parents=True, exist_ok=True)
+_bt_img = _bt_dir / "x.jpg"
+_PILImg2.new("RGB", (600, 400), (200, 200, 200)).save(_bt_img)
+check("dan_sdt_neu_can: không số / không ảnh → giữ nguyên",
+      _mka.dan_sdt_neu_can([str(_bt_img)], None, "")[0] == [str(_bt_img)]
+      and _mka.dan_sdt_neu_can([], None, "0333")[0] == [])
+_out_bt, _td_bt = _mka.dan_sdt_neu_can([str(_bt_img)], None, "0333 194 822")
+check("dan_sdt_neu_can: có số → trả 1 ảnh có thật (biến thể hoặc gốc nếu lỗi)",
+      len(_out_bt) == 1 and Path(_out_bt[0]).exists())
+_sh2.rmtree(_bt_dir, ignore_errors=True)
+
+# Gen lưu biến thể vào gen_prefs; scheduler đọc lại để dán số lúc đăng NHÓM.
+db.upsert_content({"loai": "thue", "ma_content": "BTC", "noi_dung": "x", "su_dung": "Có"})
+_rbt = _client.post("/api/schedule/thue/gen", json={
+    "start": "08:00", "end": "14:00", "keyword_pool": ["kw"],
+    "bien_the_bat": 1, "bien_the_sdt": "0333 194 822",
+    "acc_settings": [{"ten": "BTAcc", "c_user": "bt1", "page": "", "nghi": 12,
+                      "first_group_url": "123", "mode": "Page", "contents": ["BTC"]}]}).get_json()
+import json as _json_bt
+_pref_bt = _json_bt.loads(db.get_setting("gen_prefs_thue", "") or "{}")
+check("Gen lưu biến thể ảnh vào gen_prefs (bật + số)",
+      _rbt.get("ok") and _pref_bt.get("bien_the_bat") == 1
+      and _pref_bt.get("bien_the_sdt") == "0333 194 822")
+db.replace_schedules("thue", [])
+with db._conn() as _c_bt:
+    _c_bt.execute("DELETE FROM content WHERE loai='thue' AND ma_content='BTC'")
+
+# Nối đúng: 2 poster nhóm nhận biến thể; scheduler truyền ĐÚNG 2 lần (đăng nhóm),
+# KHÔNG truyền cho tường Page/Marketplace; dialog Gen có ô biến thể.
+check("2 poster NHÓM nhận bien_the_sdt + dùng mkt_anh.dan_sdt_neu_can",
+      "bien_the_sdt" in Path("page_via_poster.py").read_text(encoding="utf-8")
+      and "dan_sdt_neu_can" in Path("page_via_poster.py").read_text(encoding="utf-8")
+      and "bien_the_sdt" in Path("via_poster.py").read_text(encoding="utf-8")
+      and "dan_sdt_neu_can" in Path("via_poster.py").read_text(encoding="utf-8"))
+check("scheduler truyền bien_the_sdt ĐÚNG 2 chỗ đăng nhóm (không tường Page)",
+      "_page_bien_the_sdt" in _sched_src
+      and _sched_src.count("bien_the_sdt=_page_bien_the_sdt()") == 2)
+check("dialog Gen có ô biến thể ảnh (bật + SĐT) + gửi lên khi gen",
+      'id="gen-bt-bat"' in _ajs_cn and 'id="gen-bt-sdt"' in _ajs_cn
+      and "bien_the_bat:" in _ajs_cn and "bien_the_sdt:" in _ajs_cn)
+
 # scheduler đăng ĐÚNG ảnh đã chốt (item['anh_dang']); lịch cũ mới roll động.
 check("scheduler: 4 chỗ đăng dùng _anh_dang_cho(item, ct, c_user_v) + ưu tiên anh_dang",
       _sched_src.count("_anh_dang_cho(item, ct, c_user_v") == 4

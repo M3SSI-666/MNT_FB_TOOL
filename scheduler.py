@@ -146,6 +146,22 @@ def _anh_dang_cho(item: dict, ct: dict, c_user: str, dung_con_tro: bool) -> str:
                           ct.get("ma_thu_vien"), dung_con_tro)
 
 
+def _page_bien_the_sdt() -> str:
+    """Số ĐT để DÁN lên ảnh bài ĐĂNG NHÓM của mảng này — lấy từ cài đặt Biến thể
+    ảnh lưu lúc Gen lịch (gen_prefs_<LOAI>). Tắt / chưa đặt → '' (không dán).
+    Chỉ áp cho đăng nhóm, không áp tường Page / Marketplace."""
+    try:
+        import json as _json
+        raw = db.get_setting(f"gen_prefs_{LOAI}", "")
+        if raw:
+            p = _json.loads(raw)
+            if p.get("bien_the_bat"):
+                return (p.get("bien_the_sdt") or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
 def _attempt_post(item: dict) -> str:
     """Thực hiện đăng 1 dòng lịch. Trả về hậu tố trạng thái khi thành công,
     raise exception khi thất bại (để lớp ngoài phân loại và quyết định retry)."""
@@ -198,6 +214,7 @@ def _attempt_post(item: dict) -> str:
             # Link bài vừa đăng được lưu vào danh sách comment của ĐÚNG loại
             # lịch đang chạy — lưu nhầm thì acc homestay đi comment bài bán nhà.
             loai_comment=LOAI,
+            bien_the_sdt=_page_bien_the_sdt(),
         )
         if not count:
             # Lưới an toàn. Mọi bước hỏng trong poster nay đều ném LoiBuoc kèm
@@ -231,6 +248,7 @@ def _attempt_post(item: dict) -> str:
             # Page của nó) vào comment đẩy bài — xem `la_chinh_chu`.
             loai_comment=LOAI,
             page_uid=(acc_data or {}).get("page_uid", ""),
+            bien_the_sdt=_page_bien_the_sdt(),
         )
         if not count:
             raise Exception("Via thất bại")

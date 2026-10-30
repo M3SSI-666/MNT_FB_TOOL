@@ -2506,11 +2506,15 @@ def api_schedule_gen(loai):
     set_setting(f"xoay_anh_{loai}", datetime.now().date().isoformat())
 
     # Lưu thiết lập gần nhất để lần gen sau prefill (thay cho hardcode mặc định).
+    # Biến thể ảnh (dán số ĐT vào góc) — CHỈ áp cho bài ĐĂNG NHÓM; scheduler đọc
+    # lại từ đây lúc đăng (xem scheduler._page_bien_the_sdt).
     set_setting(f"gen_prefs_{loai}", json.dumps({
-        "start":       start_str,
-        "end":         end_str,
-        "first_group": (acc_settings[0].get("first_group_url", "") or "").strip(),
-        "keyword":     ",".join(keyword_pool),
+        "start":        start_str,
+        "end":          end_str,
+        "first_group":  (acc_settings[0].get("first_group_url", "") or "").strip(),
+        "keyword":      ",".join(keyword_pool),
+        "bien_the_bat": 1 if body.get("bien_the_bat") else 0,
+        "bien_the_sdt": (body.get("bien_the_sdt") or "").strip(),
     }, ensure_ascii=False))
 
     return jsonify({"ok": True, "total": len(schedule),

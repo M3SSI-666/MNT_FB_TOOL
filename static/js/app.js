@@ -3927,6 +3927,18 @@ async function openGenSchedule(loai){
                     placeholder="https://www.facebook.com/groups/...">
             </div>
             <div class="field-group"><label>Từ khóa (cách nhau dấu phẩy)</label><input id="gen-kw" value="${vKw}"></div>
+            <div class="field-group">
+                <label>Biến thể ảnh <span style="color:var(--text-muted);font-weight:400">(chỉ bài ĐĂNG NHÓM)</span></label>
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                    <label style="display:flex;gap:6px;align-items:center;white-space:nowrap;cursor:pointer">
+                        <input type="checkbox" id="gen-bt-bat" ${p.bien_the_bat?"checked":""} style="width:16px;height:16px;cursor:pointer">
+                        <span>Dán số ĐT lên ảnh</span>
+                    </label>
+                    <input id="gen-bt-sdt" class="input" value="${_escapeHtml(p.bien_the_sdt||"")}"
+                           placeholder="Số điện thoại dán lên ảnh, vd 0333 194 822" style="flex:1;min-width:200px">
+                </div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Mỗi ảnh bài <b>đăng nhóm</b> được dán số ĐT vào 1 góc (vùng an toàn) — như Marketplace. Để trống số = tắt. Không áp cho tường Page.</div>
+            </div>
             ${_renderNhip(res.nhip, res.accs)}
             <div style="font-size:12px;color:var(--text-muted)">Content (${res.contents.length} cái đang Sử dụng) tự rải <b>xen kẽ</b>: mỗi acc quay đều đủ các content, hai dòng đăng liền nhau tránh trùng nhau.${res.contents.length<4?` <span style="color:var(--warning)">Ít hơn 4 content thì không tránh hết trùng được — bật thêm content ở tab Content.</span>`:""}</div>
             <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Cài đặt từng tài khoản</div>
@@ -4010,6 +4022,8 @@ async function runGen(){
                 start:document.getElementById("gen-start")?.value||"05:00",
                 end:document.getElementById("gen-end")?.value||"03:00",
                 keyword_pool:kwPool, acc_settings:accSettings,
+                bien_the_bat: document.getElementById("gen-bt-bat")?.checked ? 1 : 0,
+                bien_the_sdt: (document.getElementById("gen-bt-sdt")?.value||"").trim(),
             });
         }
         if(res.ok){ Toast.success(`✅ Đã tạo ${res.total} dòng${res.nuoi?` · 🌱 ${res.nuoi} nuôi`:""}${res.page?` · 📄 ${res.page} page`:""}${res.comment?` · 💬 ${res.comment} comment`:""}${res.marketplace?` · 🛒 ${res.marketplace} MKT`:""} (${res.from}→${res.to})`); closeGen(); loadSchedule(_genLoai); }

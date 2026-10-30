@@ -1189,9 +1189,13 @@ def post_page_via(
     image_url:       str = "",
     c_user:          str = "",
     loai_comment:    str = "",
+    bien_the_sdt:    str = "",
 ) -> bool:
     """
     Hàm sync — gọi từ scheduler hoặc script độc lập.
+
+    `bien_the_sdt`: có số thì DÁN SỐ ĐT vào góc mỗi ảnh (dùng chung mkt_anh với
+    Marketplace); rỗng = giữ ảnh gốc. Scheduler quyết bật/tắt theo cài đặt Gen.
 
     Args:
         acc_name:        Tên acc cá nhân VD "Ngô Quang Hùng"
@@ -1216,8 +1220,15 @@ def post_page_via(
             logger.info(f"  📥 Download ảnh...")
             local_photos, temp_dir = smart_download(image_url)
             logger.info(f"  → {len(local_photos)} ảnh đã tải")
+            # Biến thể ảnh: dán số ĐT vào góc (nếu bật ở cài đặt Gen). Chỉ cho
+            # bài ĐĂNG NHÓM — đúng phạm vi Duong chọn.
+            if bien_the_sdt:
+                import mkt_anh
+                local_photos, temp_dir = mkt_anh.dan_sdt_neu_can(
+                    local_photos, temp_dir, bien_the_sdt)
+                logger.info(f"  🏷️  Đã dán số ĐT lên ảnh ({bien_the_sdt})")
         except Exception as e:
-            logger.warning(f"  ⚠️  Không download được ảnh: {e}")
+            logger.warning(f"  ⚠️  Không download/biến thể được ảnh: {e}")
 
     if not first_group_uid:
         logger.error("❌ Thiếu first_group_uid — không biết mở composer ở nhóm nào")
