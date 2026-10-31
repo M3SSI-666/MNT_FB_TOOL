@@ -914,6 +914,73 @@ def _quen_canh_bao(page):
 CHO_SAU_DANG_GIAY = (72, 78)
 
 
+def cho_sau_dang_giay() -> tuple:
+    """Khoảng (min, max) giây lướt feed HẠ NHIỆT sau khi đăng chéo — chỉnh được ở
+    tab Vận hành (settings `cho_sau_dang_min` / `cho_sau_dang_max`). Để trống =
+    mặc định CHO_SAU_DANG_GIAY.
+
+    CẢNH BÁO: quãng này KHÔNG chỉ để "nghỉ" — bước dò spam ăn nhờ chính nó (xem
+    ghi chú sự cố 03/10 ngay trên). Rút quá ngắn là mất cửa sổ phát hiện FB gỡ
+    bài, nên ÉP SÀN 30s dù người dùng nhập thấp hơn."""
+    lo, hi = CHO_SAU_DANG_GIAY
+    try:
+        import db as _db
+        _lo = (_db.get_setting("cho_sau_dang_min", "") or "").strip()
+        _hi = (_db.get_setting("cho_sau_dang_max", "") or "").strip()
+        if _lo:
+            lo = int(float(_lo))
+        if _hi:
+            hi = int(float(_hi))
+    except Exception:
+        lo, hi = CHO_SAU_DANG_GIAY
+    lo = max(30, lo)           # sàn cứng: dưới 30s là mất cửa sổ dò spam
+    hi = max(lo, hi)
+    return (lo, hi)
+
+
+# Đếm ảnh ĐÃ lên trong composer: ưu tiên preview blob (ảnh vừa chọn FB render
+# bằng URL blob:), rồi tới bộ đếm chữ "Ảnh · X/Y" nếu trang có. Dùng để chờ theo
+# THỰC TẾ thay vì ngồi đủ một quãng cố định.
+_JS_DEM_ANH_LEN = r"""() => {
+  const dlg = document.querySelector('[role=dialog]') || document;
+  let n = dlg.querySelectorAll('img[src^="blob:"]').length;
+  const m = (dlg.innerText || '').match(/Ảnh\s*·\s*(\d+)\s*\/\s*\d+/);
+  if (m) n = Math.max(n, parseInt(m[1], 10));
+  return n;
+}"""
+
+
+async def cho_upload_xong(page, so_anh: int, cap_ms: int = None) -> int:
+    """Chờ ảnh lên XONG trong composer rồi đi tiếp NGAY, thay vì đợi một quãng
+    cố định (bản cũ: `max(6000, số_ảnh*3500)` — đợi thừa khi mạng nhanh).
+
+    Trần = `cap_ms` (mặc định = đúng công thức cũ) nên KHÔNG BAO GIỜ chậm hơn bản
+    cũ; dò không ra (bộ đếm kẹt dưới số ảnh) thì rơi về đợi đủ trần. Luôn có SÀN
+    ~2,5s cho FB kịp dựng preview. Trả số ảnh dò được cuối cùng."""
+    import time as _t
+    so_anh = max(1, int(so_anh or 1))
+    if cap_ms is None:
+        cap_ms = max(6000, so_anh * 3500)
+    # Sàn theo số ảnh: dù preview hiện nhanh cũng chờ tối thiểu chừng này cho ảnh
+    # kịp lên server (FB render preview blob NGAY khi chọn file, trước khi tải
+    # xong) — tránh bấm tiếp quá sớm. Vẫn nhỏ hơn hẳn trần cũ.
+    san_ms = min(cap_ms, max(3000, so_anh * 800))
+    await asyncio.sleep(san_ms / 1000)
+    het = _t.monotonic() + max(0, cap_ms - san_ms) / 1000
+    on = n = 0
+    while _t.monotonic() < het:
+        n = await page.evaluate(_JS_DEM_ANH_LEN)
+        if n >= so_anh:
+            on += 1
+            if on >= 2:          # ổn định 2 nhịp mới chắc là xong
+                break
+        else:
+            on = 0
+        await asyncio.sleep(1.0)
+    await human_delay(600, 1200)
+    return n
+
+
 async def kiem_vi_pham(page, acc_name: str, sau_viec: str = "phiên",
                        c_user: str = "") -> bool:
     """Sau mỗi phiên đăng bài / comment: xem Facebook có vừa gỡ gì không.

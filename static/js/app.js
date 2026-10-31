@@ -403,7 +403,7 @@ async function loadRunnerStatus(){
         if(!Object.keys(_hienChromeMap).length) await napHienChrome();
         // Cấu hình Telegram cũng chỉ nạp một lần: hàm này chạy lặp lại theo chu
         // kỳ, nạp mỗi vòng sẽ xoá mất chữ người dùng đang gõ dở vào ô Token.
-        if(!_tgDaNap){ _tgDaNap = true; tgNap(); tgmktNap(); slNap(); lmNap(); }
+        if(!_tgDaNap){ _tgDaNap = true; tgNap(); tgmktNap(); slNap(); lmNap(); hnNap(); }
         const res=await API.runStatus();
         _runnerStatus=res;
         renderRunnerGrid();
@@ -578,6 +578,38 @@ async function tgLuu(){
             tg_chat_id:     chatId,
             tg_gio_tom_tat: el("tg-gio").value.trim() || "08:00",
         });
+    }catch(e){ Toast.error(e.message); }
+}
+
+async function hnNap(){
+    try{
+        const s  = (await API.settings()).data || {};
+        const el = id => document.getElementById(id);
+        if(!el("hn-min")) return;
+        el("hn-min").value = s.cho_sau_dang_min || "";
+        el("hn-max").value = s.cho_sau_dang_max || "";
+    }catch(e){}
+}
+
+async function hnLuu(){
+    const el  = id => document.getElementById(id);
+    const kq  = document.getElementById("hn-kq");
+    let lo = parseInt(el("hn-min").value, 10);
+    let hi = parseInt(el("hn-max").value, 10);
+    const data = {
+        cho_sau_dang_min: isNaN(lo) ? "" : Math.max(30, lo),
+        cho_sau_dang_max: isNaN(hi) ? "" : Math.max(30, hi),
+    };
+    // min > max thì hoán đổi cho khỏi lẫn (backend cũng tự sửa, nhưng hiện đúng).
+    if(data.cho_sau_dang_min !== "" && data.cho_sau_dang_max !== ""
+       && data.cho_sau_dang_min > data.cho_sau_dang_max){
+        [data.cho_sau_dang_min, data.cho_sau_dang_max] = [data.cho_sau_dang_max, data.cho_sau_dang_min];
+    }
+    el("hn-min").value = data.cho_sau_dang_min;
+    el("hn-max").value = data.cho_sau_dang_max;
+    try{
+        await API.saveSettings(data);
+        if(kq){ kq.textContent = "Đã lưu ✓"; setTimeout(()=>{ if(kq) kq.textContent=""; }, 2000); }
     }catch(e){ Toast.error(e.message); }
 }
 

@@ -1023,7 +1023,7 @@ check("thu link từ trang thông báo sau khi đăng",
       "[b] Trang thông báo" in _src_pvp2)
 _i_sw   = _src_pvp2.index("await _switch_to_page(page, ctx, page_uid)")
 _i_dang = _src_pvp2.index("Thêm nhóm → tìm")
-_i_luot = _src_pvp2.index("random.randint(*CHO_SAU_DANG_GIAY)")
+_i_luot = _src_pvp2.index("random.randint(*cho_sau_dang_giay())")
 _i_thu  = _src_pvp2.index("[b] Trang thông báo")
 # Thứ tự này LÀ cơ chế: chuyển Page → đăng → lướt feed (chờ + canh spam) → thu.
 # Đảo bất kỳ cặp nào là hỏng: thu trước khi lướt thì chưa có thông báo, lướt
@@ -1648,10 +1648,24 @@ check("quãng chờ sau khi đăng quanh 75 giây",
 # vẫn có thể hụt (phiên A đo 02/10 mới được 7/9 ở giây 76), nhưng ít hơn hẳn.
 check("quãng chờ chạm được mốc 76 giây",
       max(_fbc2.CHO_SAU_DANG_GIAY) >= 76)
-check("Page lướt feed đúng bằng cửa sổ dò spam",
-      "random.randint(*CHO_SAU_DANG_GIAY)" in _src_pvp2)
+
+# cho_sau_dang_giay(): đọc settings (chỉnh được ở tab Vận hành), mặc định khi để
+# trống, và ÉP SÀN 30s để không ai rút cụt mất cửa sổ dò spam.
+import db as _db_hn
+_db_hn.set_setting("cho_sau_dang_min", ""); _db_hn.set_setting("cho_sau_dang_max", "")
+check("hạ nhiệt: để trống -> mặc định (72,78)", _fbc2.cho_sau_dang_giay() == (72, 78))
+_db_hn.set_setting("cho_sau_dang_min", "50"); _db_hn.set_setting("cho_sau_dang_max", "60")
+check("hạ nhiệt: đọc đúng settings", _fbc2.cho_sau_dang_giay() == (50, 60))
+_db_hn.set_setting("cho_sau_dang_min", "10"); _db_hn.set_setting("cho_sau_dang_max", "20")
+check("hạ nhiệt: ép sàn tối thiểu 30s", _fbc2.cho_sau_dang_giay() == (30, 30))
+_db_hn.set_setting("cho_sau_dang_min", "90"); _db_hn.set_setting("cho_sau_dang_max", "40")
+_r_hn = _fbc2.cho_sau_dang_giay()
+check("hạ nhiệt: min>max vẫn ra khoảng hợp lệ", _r_hn[0] <= _r_hn[1] and _r_hn[0] >= 30)
+_db_hn.set_setting("cho_sau_dang_min", ""); _db_hn.set_setting("cho_sau_dang_max", "")
+check("Page lướt feed đúng bằng cửa sổ dò spam (quãng chỉnh được)",
+      "random.randint(*cho_sau_dang_giay())" in _src_pvp2)
 # Lướt feed phải ĐỨNG TRƯỚC dò spam, nếu không thì cửa sổ bằng 0.
-_i_luot = _src_pvp2.index("random.randint(*CHO_SAU_DANG_GIAY)")
+_i_luot = _src_pvp2.index("random.randint(*cho_sau_dang_giay())")
 _i_dospam = _src_pvp2.index('kiem_vi_pham(page, acc_name, "phiên đăng Page"')
 check("lướt feed trước, dò spam sau", _i_luot < _i_dospam)
 # Con số sống ở MỘT nơi, cạnh chính hàm phụ thuộc vào nó.
@@ -3540,7 +3554,7 @@ check("VIA thu link từ trang thông báo", "thu_tu_thong_bao" in _src_via)
 check("VIA lưu link vào danh sách comment", "them_comment_posts" in _src_via)
 check("post_via_crosspost nhận loai_comment + page_uid",
       "loai_comment:    str" in _src_via and "page_uid:        str" in _src_via)
-check("VIA dùng cửa sổ chờ thông báo như Page", "random.randint(*CHO_SAU_DANG_GIAY)" in _src_via)
+check("VIA dùng cửa sổ chờ thông báo như Page", "random.randint(*cho_sau_dang_giay())" in _src_via)
 check("VIA KHÔNG like trong cooldown (max_likes=0, không có max_likes=1)",
       "max_likes=1" not in _src_via and "max_likes=0" in _src_via)
 _i_via = _src_sch_mode.index('if mode == "VIA":')

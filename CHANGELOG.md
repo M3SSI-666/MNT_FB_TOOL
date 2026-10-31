@@ -10,6 +10,28 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.76.2 — 01/11/2026
+
+**Tối ưu tốc độ: chờ upload ảnh theo THỰC TẾ + thời gian hạ nhiệt chỉnh được**
+
+Hai tinh chỉnh sau khi đo thực tế một phiên đăng (~3,4 phút):
+
+- **Chờ upload ảnh theo thực tế thay vì đợi cố định.** Bản cũ cứ đợi đủ một quãng
+  ước lượng (`số_ảnh × 3,5s`) dù ảnh đã lên xong. Giờ tool **dò ảnh đã lên** rồi
+  đi tiếp ngay, lấy quãng cũ làm **trần** (nên không bao giờ chậm hơn). Bài **≤5
+  ảnh** nhanh hơn ~**10–13s/phiên**; bài nhiều ảnh (FB chỉ hiện ~5 preview) giữ
+  nguyên — **an toàn tuyệt đối**, không bao giờ bấm tiếp khi ảnh chưa lên đủ.
+- **Thời gian hạ nhiệt sau đăng chỉnh được.** Tab **Vận hành** có ô mới
+  *"⏱️ Thời gian hạ nhiệt sau đăng chéo"* (từ … đến … giây). Để trống = mặc định
+  **72–78s**. Phần mềm **ép sàn tối thiểu 30s** — quãng này là cửa sổ phát hiện
+  Facebook gỡ bài, rút cụt là mất an toàn, nên không cho để quá thấp.
+
+> Cập nhật xong khởi động lại app. Khâu đăng chính (chọn nhóm, hạ nhiệt) không
+> nên rút thêm — xem giải thích trong app; đòn bẩy tăng sản lượng là chạy nhiều
+> acc song song, không phải rút ngắn từng phiên.
+
+---
+
 ## v2.76.1 — 01/11/2026
 
 **Vá gấp: bài đăng chéo CÓ ẢNH không đọc được nhóm (lỗi của v2.76.0)**

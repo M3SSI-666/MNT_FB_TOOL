@@ -36,7 +36,7 @@ from utils import logger, jitter_ms, CookieDeadError, LoiBuoc, ChanNhomError
 from fb_common import (kiem_vi_pham, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, danh_dau_da_dang, browser_launch_kwargs,
                        human_delay, jwait, clipboard_paste, browse_and_like, CHO_SAU_DANG_GIAY,
-                       chon_va_tick_nhom_cheo)
+                       chon_va_tick_nhom_cheo, cho_upload_xong, cho_sau_dang_giay)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -263,9 +263,10 @@ async def _run_crosspost(
                             await btn.click()
                         fc = await fc_info.value
                         await fc.set_files(local_photos)
-                        wait_ms = max(6000, len(local_photos) * 3500)
-                        logger.info(f"    ⏳ Chờ upload {wait_ms // 1000}s...")
-                        await _human_delay(wait_ms, wait_ms + 2000)
+                        _cap = max(6000, len(local_photos) * 3500)
+                        logger.info(f"    ⏳ Chờ upload (tối đa {_cap // 1000}s)...")
+                        _n = await cho_upload_xong(page, len(local_photos), _cap)
+                        logger.info(f"    ✅ {_n}/{len(local_photos)} ảnh đã lên")
                         uploaded = True
                         break
                 except (PWTimeout, Exception):
@@ -413,7 +414,7 @@ async def _run_crosspost(
             await page.goto("https://www.facebook.com/",
                             wait_until="domcontentloaded", timeout=30000)
             await _jwait(page, 1500)
-            _luot = random.randint(*CHO_SAU_DANG_GIAY)
+            _luot = random.randint(*cho_sau_dang_giay())
             logger.info(f"  [5/5] 📜 Lướt feed {_luot}s (không like — vừa hạ nhiệt, "
                         f"vừa chờ thông báo, vừa là cửa sổ dò spam)...")
             await _browse_and_like(page, duration_sec=_luot, max_likes=0)

@@ -508,6 +508,26 @@
 
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px" id="runner-grid"></div>
 
+                <!-- Thời gian hạ nhiệt sau đăng chéo -->
+                <div style="margin-top:22px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);max-width:620px;padding:14px 18px">
+                    <div style="font-size:13px;font-weight:700;margin-bottom:4px">⏱️ Thời gian hạ nhiệt sau đăng chéo</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">
+                        Sau khi đăng, nick lướt feed một quãng ngẫu nhiên trong khoảng này — vừa giống
+                        người thật, vừa là cửa sổ để phát hiện Facebook gỡ bài. Để trống = mặc định
+                        <b>72–78s</b>. <b>Không nên để quá thấp</b> (phần mềm ép sàn tối thiểu 30s).
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                        <span style="font-size:12px">Từ</span>
+                        <input class="input" id="hn-min" type="number" min="30" max="600" placeholder="72"
+                               style="width:90px" onchange="hnLuu()">
+                        <span style="font-size:12px">đến</span>
+                        <input class="input" id="hn-max" type="number" min="30" max="600" placeholder="78"
+                               style="width:90px" onchange="hnLuu()">
+                        <span style="font-size:12px">giây</span>
+                        <span id="hn-kq" style="font-size:11px;color:var(--accent);margin-left:8px"></span>
+                    </div>
+                </div>
+
                 <!-- Báo về Telegram -->
                 <div style="margin-top:28px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);max-width:620px">
 
