@@ -35,7 +35,8 @@ from config import HEADLESS
 from utils import logger, jitter_ms, CookieDeadError, LoiBuoc, ChanNhomError
 from fb_common import (kiem_vi_pham, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, danh_dau_da_dang, browser_launch_kwargs,
-                       human_delay, jwait, clipboard_paste, browse_and_like, CHO_SAU_DANG_GIAY)
+                       human_delay, jwait, clipboard_paste, browse_and_like, CHO_SAU_DANG_GIAY,
+                       chon_va_tick_nhom_cheo)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -308,113 +309,11 @@ async def _run_crosspost(
             # Chờ tối đa 3s để "Anonymous post" dialog xuất hiện rồi dismiss
             await _dismiss_anon_dialog(page, wait_ms=3000)
 
-            # Gõ từ khóa
-            await _human_delay(1000, 1500)
-            search_input = None
-            for sel in [
-                "input[placeholder*='Tìm kiếm nhóm']",
-                "input[placeholder*='Search groups']",
-                "div[role='dialog'] input:not([role='combobox'])",
-                "div[role='dialog'] input[type='text']",
-                "div[role='dialog'] input",
-            ]:
-                try:
-                    el = await page.wait_for_selector(sel, timeout=4000, state="visible")
-                    if el:
-                        tag = await el.evaluate("e => e.tagName")
-                        if tag.lower() == "input":
-                            search_input = el
-                            break
-                except PWTimeout:
-                    continue
-            if not search_input:
-                logger.error(f"  ❌ Không tìm thấy ô tìm kiếm nhóm!")
-                await ctx.close()
-                raise LoiBuoc("Không thấy ô tìm nhóm ở bước đăng chéo")
-
-            await search_input.click()
-            await _human_delay(400, 600)
-            await search_input.fill(search_kw)
-            await _human_delay(2500, 3500)
-
-
-            # Tick từng nhóm — dùng search_input.evaluate() để traverse từ đúng element
-            total_checked = 0
-            for scroll_round in range(8):
-                rows = await search_input.evaluate("""(si) => {
-                    // Đi lên từ đúng search input (trong panel Thêm nhóm)
-                    // tìm container chứa danh sách nhóm
-                    let container = si.parentElement;
-                    for (let i = 0; i < 15 && container && container !== document.body; i++) {
-                        const cbs = container.querySelectorAll(
-                            '[role="checkbox"], input[type="checkbox"]'
-                        );
-                        if (cbs.length > 0) break;
-                        container = container.parentElement;
-                    }
-                    if (!container || container === document.body) return [];
-
-                    // Tìm tất cả item chưa chọn
-                    let candidates = Array.from(
-                        container.querySelectorAll('[role="checkbox"][aria-checked="false"]')
-                    );
-                    if (candidates.length === 0)
-                        candidates = Array.from(
-                            container.querySelectorAll('input[type="checkbox"]:not(:checked)')
-                        );
-
-                    // Với mỗi checkbox, tìm row cha có kích thước thực để click
-                    const result = [];
-                    const seen = new Set();
-                    for (const cb of candidates) {
-                        let row = cb.parentElement;
-                        for (let i = 0; i < 10 && row && row !== container; i++) {
-                            const r = row.getBoundingClientRect();
-                            if (r.width > 100 && r.height > 30 &&
-                                r.top >= 0 && r.bottom <= window.innerHeight) {
-                                if (!seen.has(row)) {
-                                    seen.add(row);
-                                    result.push({
-                                        x: r.left + r.width / 2,
-                                        y: r.top + r.height / 2
-                                    });
-                                }
-                                break;
-                            }
-                            row = row.parentElement;
-                        }
-                    }
-                    return result;
-                }""")
-
-                if rows:
-                    for pos in rows:
-                        await page.mouse.click(pos["x"], pos["y"])
-                        await asyncio.sleep(0.35)
-                    total_checked += len(rows)
-                    logger.info(f"    ✓ Round {scroll_round+1}: tick {len(rows)} nhóm (tổng: {total_checked})")
-                else:
-                    logger.info(f"    ⚠️  Round {scroll_round+1}: không tìm được row nào — dừng")
-                    break
-
-                await page.mouse.wheel(0, 400)
-                await asyncio.sleep(0.5)
-
-                remaining = await search_input.evaluate("""(si) => {
-                    let container = si.parentElement;
-                    for (let i = 0; i < 15 && container && container !== document.body; i++) {
-                        if (container.querySelectorAll('[role="checkbox"], input[type="checkbox"]').length > 0) break;
-                        container = container.parentElement;
-                    }
-                    if (!container || container === document.body) return 0;
-                    return container.querySelectorAll('[role="checkbox"][aria-checked="false"]').length
-                        + container.querySelectorAll('input[type="checkbox"]:not(:checked)').length;
-                }""")
-                if remaining == 0:
-                    break
-
-            logger.info(f"    → Đã tick {total_checked} nhóm")
-            _groups_posted = total_checked
+            # Chọn nhóm: QUÉT cả list đã tham gia → lọc từ khoá → XOAY VÒNG.
+            # (Thay cách cũ: gõ từ khoá rồi tick HẾT nhóm hiện ra — không lọc.)
+            # Facebook chặn tối đa 9 nhóm/lần đăng chéo.
+            _groups_posted = await chon_va_tick_nhom_cheo(
+                page, search_kw, c_user, loai_comment, 9)
 
             # Click "Xong"
             await _human_delay(800, 1200)

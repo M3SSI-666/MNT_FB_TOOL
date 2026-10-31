@@ -389,6 +389,15 @@ def init_db():
             vi_tri          INTEGER DEFAULT 0,
             PRIMARY KEY (c_user, thu_vien_id)
         );
+        -- nhom_con_tro = con trỏ XOAY VÒNG chọn nhóm khi ĐĂNG CHÉO (Page/VIA),
+        -- theo (nick + mảng). Mỗi phiên bốc tiếp các nhóm KẾ TIẾP hợp từ khoá để
+        -- phủ đều mọi nhóm, không dồn mấy nhóm Facebook xếp lên đầu.
+        CREATE TABLE IF NOT EXISTS nhom_con_tro (
+            c_user          TEXT NOT NULL,
+            loai            TEXT NOT NULL DEFAULT '',
+            vi_tri          INTEGER DEFAULT 0,
+            PRIMARY KEY (c_user, loai)
+        );
 
         -- ── UID / Nhóm ───────────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS uid_groups (
@@ -3130,6 +3139,58 @@ def chon_nhom_marketplace(nhom: list[dict], chuoi_tu_khoa: str,
     bo = set(range(len(nhom))) - set(lay)
     return ([nhom[i] for i in lay],
             [x for i, x in enumerate(nhom) if i in bo])
+
+
+def _nhom_con_tro_tien(c_user: str, loai: str, buoc: int, n: int) -> int:
+    """Vị trí BẮT ĐẦU bốc nhóm lần này (trong [0, n)) rồi đẩy con trỏ += buoc.
+
+    Con trỏ theo (nick + mảng): mỗi nick xoay vòng độc lập. Lần đầu chưa có con
+    trỏ thì gieo lệch theo nick để nhiều acc KHÔNG cùng bắt đầu ở nhóm 0 (đỡ dồn
+    khi nhiều acc cùng đăng chung một cụm nhóm). Giữ bộ đếm TĂNG DẦN, chỉ lấy dư
+    (mod n) lúc đọc — vì n (số nhóm hợp từ khoá) có thể đổi giữa các phiên."""
+    if n <= 0:
+        return 0
+    buoc = max(1, int(buoc or 1))
+    with _conn() as con:
+        r = con.execute(
+            "SELECT vi_tri FROM nhom_con_tro WHERE c_user=? AND loai=?",
+            (c_user, loai)).fetchone()
+        cur = (sum(ord(ch) for ch in (c_user or "")) if r is None
+               else int(r["vi_tri"]))
+        start = cur % n
+        nxt = cur + buoc
+        con.execute(
+            "INSERT INTO nhom_con_tro (c_user, loai, vi_tri) VALUES (?,?,?) "
+            "ON CONFLICT(c_user, loai) DO UPDATE SET vi_tri=excluded.vi_tri",
+            (c_user, loai, nxt))
+        return start
+
+
+def chon_nhom_xoay_vong(nhom: list[dict], chuoi_tu_khoa: str, so_toi_da: int,
+                        c_user: str, loai: str = "") -> list[dict]:
+    """Chọn nhóm để tick khi ĐĂNG CHÉO (Page/VIA), kiểu XOAY VÒNG + xáo thứ tự.
+
+    `nhom`: [{"ten": <tên nhóm>, "i": <chỉ số trên màn hình>}] theo thứ tự quét.
+
+    Khác `chon_nhom_marketplace` (bốc ngẫu nhiên thuần): ở đây lọc theo từ khoá
+    rồi XOAY VÒNG theo con trỏ của nick — mỗi phiên bốc tiếp `so_toi_da` nhóm kế
+    tiếp trong danh sách ĐÃ SẮP ỔN ĐỊNH (theo tên chuẩn hoá). Qua vài phiên MỌI
+    nhóm hợp từ khoá đều tới lượt, không dồn vào mấy nhóm Facebook xếp lên đầu.
+
+    Thứ tự TICK thì xáo ngẫu nhiên: thứ tự cố định cũng là một dấu vết nhận ra
+    máy. Trả danh sách CHỌN (đã xáo thứ tự). Không nhóm nào khớp → trả []."""
+    khop = [x for x in nhom if khop_tu_khoa(x.get("ten", ""), chuoi_tu_khoa)]
+    n = len(khop)
+    k = max(0, int(so_toi_da or 0))
+    if n == 0 or k == 0:
+        return []
+    # Sắp ỔN ĐỊNH theo tên chuẩn hoá → con trỏ xoay vòng có nghĩa giữa các phiên,
+    # không phụ thuộc thứ tự Facebook trả về (đổi liên tục).
+    pool = sorted(khop, key=lambda x: chuan_hoa(x.get("ten", "")))
+    start = _nhom_con_tro_tien(c_user, loai, k, n)
+    lay = [pool[(start + j) % n] for j in range(min(k, n))]
+    random.shuffle(lay)
+    return lay
 
 
 def doc_cai_dat_mkt() -> dict:

@@ -49,7 +49,8 @@ from utils import logger, ComposerBiChan, jitter_ms, CookieDeadError, LoiBuoc, C
 from fb_common import (kiem_vi_pham, composer_bi_chan, chua_dang_nhap, find_profile_dir, dong_dialog_canh_bao, cho_composer_dong,
                        bat_dau_canh_dialog, dismiss_anon_dialog, dong_hop_cookie, danh_dau_da_dang, browser_launch_kwargs,
                        human_delay, jwait, clipboard_paste, browse_and_like,
-                       CHO_SAU_DANG_GIAY, danh_dau_vao_page, dung_neu_dinh_spam)
+                       CHO_SAU_DANG_GIAY, danh_dau_vao_page, dung_neu_dinh_spam,
+                       chon_va_tick_nhom_cheo)
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
 _UA = (
@@ -70,9 +71,9 @@ _UA = (
 _find_profile_dir = find_profile_dir
 
 
-# Trần số nhóm chọn được trong MỘT lần đăng chéo. Facebook tự chặn ở khoảng
-# này; click thêm không ăn và còn có thể làm tắt ô đã chọn.
-GIOI_HAN_NHOM_CHEO = 10
+# Trần số nhóm chọn được trong MỘT lần đăng chéo. Facebook ghi rõ trong dialog
+# "Đăng trong tối đa 9 nhóm mà bạn tham gia" — tick quá 9 không ăn.
+GIOI_HAN_NHOM_CHEO = 9
 
 
 # Vỏ mỏng gọi sang fb_common — TRƯỚC ĐÂY LÀ NĂM BẢN SAO NGUYÊN VĂN.
@@ -524,106 +525,10 @@ async def _run_page_via(
             # Chờ tối đa 3s để "Anonymous post" dialog xuất hiện rồi dismiss
             await _dismiss_anon_dialog(page, wait_ms=3000)
 
-            # Gõ từ khóa
-            await _human_delay(1000, 1500)
-            search_input = None
-            for sel in [
-                "input[placeholder*='Tìm kiếm nhóm']",
-                "input[placeholder*='Search groups']",
-                "input[placeholder*='Tìm kiếm']",
-                "input[placeholder*='Search']",
-                "div[role='dialog'] input",
-                "input[type='text']",
-            ]:
-                try:
-                    el = await page.wait_for_selector(sel, timeout=4000, state="visible")
-                    if el:
-                        tag = await el.evaluate("e => e.tagName")
-                        if tag.lower() == "input":
-                            search_input = el
-                            break
-                except PWTimeout:
-                    continue
-            if not search_input:
-                logger.error(f"  ❌ Không tìm thấy ô tìm kiếm nhóm!")
-                await ctx.close()
-                raise LoiBuoc("Không thấy ô tìm nhóm ở bước đăng chéo")
-
-            await search_input.click()
-            await _human_delay(400, 600)
-            await search_input.fill(search_kw)
-            await _human_delay(2500, 3500)
-
-
-            # ── Tick nhóm ─────────────────────────────────────────────────
-            # Click TỪNG Ô MỘT rồi đếm lại để xác minh, thay vì lấy toạ độ cả
-            # loạt rồi click hàng loạt.
-            #
-            # Bản cũ hỏng nặng với từ khoá rộng. Log thật của lịch Thuê (từ khoá
-            # "smart", khớp rất nhiều nhóm):
-            #     Round 1: tick 10 nhóm (tổng: 10)
-            #     Round 2..8: tick 2 nhóm mỗi round  (tổng: 24)
-            #     → Đã tick 8 nhóm          ← click 24 lần, thật ra chỉ 8 nhóm
-            # Hai lỗi cùng lúc:
-            #   1. Vòng lặp chỉ dừng khi tick HẾT nhóm khớp từ khoá. Từ khoá hẹp
-            #      ("Homestay Times City" → 9 nhóm) thì hết ngay; từ khoá rộng
-            #      thì không bao giờ hết nên chạy đủ 8 round.
-            #   2. Facebook giới hạn số nhóm đăng chéo một lần. Chạm trần rồi
-            #      click thêm không ăn, mà toạ độ lấy từ trước nên click trúng
-            #      hàng ĐÃ tick → toggle TẮT. Số nhóm tụt từ 10 xuống 8.
-            _JS_DEM_TICK = """() =>
-                document.querySelectorAll('[role="checkbox"][aria-checked="true"]').length
-                + document.querySelectorAll('input[type="checkbox"]:checked').length"""
-
-            # Một ô CHƯA tick đang nằm trọn trong khung nhìn — lấy đúng một cái,
-            # click xong sẽ hỏi lại, nên danh sách có xô lệch cũng không sai.
-            _JS_O_CHUA_TICK = """() => {
-                const cbs = document.querySelectorAll(
-                    '[role="checkbox"][aria-checked="false"], input[type="checkbox"]:not(:checked)');
-                for (const cb of cbs) {
-                    const row = cb.closest('li') || cb.parentElement;
-                    if (!row) continue;
-                    const r = row.getBoundingClientRect();
-                    if (r.width <= 0 || r.height <= 0) continue;
-                    if (r.top < 0 || r.bottom > window.innerHeight) continue;
-                    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-                }
-                return null;
-            }"""
-
-            da_tick   = await page.evaluate(_JS_DEM_TICK)
-            khong_len = 0          # số lần liên tiếp thao tác mà số tick không tăng
-            for _ in range(40):    # trần cứng, tránh treo nếu FB đổi giao diện
-                if da_tick >= GIOI_HAN_NHOM_CHEO:
-                    logger.info(f"    ⏹ Đạt trần {GIOI_HAN_NHOM_CHEO} nhóm — dừng tick")
-                    break
-
-                o = await page.evaluate(_JS_O_CHUA_TICK)
-                if o is None:                       # hết ô trong khung nhìn → cuộn
-                    await page.mouse.wheel(0, 400)
-                    await asyncio.sleep(0.5)
-                    khong_len += 1
-                    if khong_len >= 3:
-                        break
-                    continue
-
-                await page.mouse.click(o["x"], o["y"])
-                await asyncio.sleep(0.35)
-                moi = await page.evaluate(_JS_DEM_TICK)
-                if moi > da_tick:
-                    da_tick, khong_len = moi, 0
-                else:
-                    # Click không ăn: hoặc đã chạm trần của Facebook, hoặc vừa
-                    # bấm nhầm làm tắt một ô. Thử vài lần rồi dừng hẳn — bản cũ
-                    # cứ click tiếp và tự bỏ tick nhóm đã chọn.
-                    khong_len += 1
-                    if khong_len >= 3:
-                        logger.info(f"    ⏹ Click không làm tăng số nhóm "
-                                    f"({khong_len} lần) — dừng, giữ {da_tick} nhóm")
-                        break
-
-            _groups_posted = da_tick
-            logger.info(f"    → Đã tick {_groups_posted} nhóm")
+            # Chọn nhóm: QUÉT cả list đã tham gia → lọc từ khoá → XOAY VÒNG.
+            # (Thay cách cũ gõ từ khoá vào ô tìm rồi tick theo thứ tự FB trả.)
+            _groups_posted = await chon_va_tick_nhom_cheo(
+                page, search_kw, c_user, loai_comment, GIOI_HAN_NHOM_CHEO)
 
             # Click "Xong"
             await _human_delay(800, 1200)

@@ -10,6 +10,31 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.76.0 — 31/10/2026
+
+**Đăng chéo: chọn nhóm kiểu XOAY VÒNG — phủ đều mọi nhóm, không dồn mấy nhóm top**
+
+Đổi hẳn cách chọn nhóm khi **đăng chéo** (Page-chéo + VIA). Trước đây: gõ từ khoá
+vào ô "Tìm kiếm nhóm" rồi tick theo thứ tự Facebook trả — phiên nào cũng trúng
+đúng mấy nhóm Facebook xếp lên đầu, lại lệ thuộc khớp mờ của Facebook.
+
+Giờ: khi bấm **Thêm nhóm**, tool **quét CẢ danh sách nhóm đã tham gia** (cuộn tải
+hết), **tự khớp từ khoá** (bỏ dấu, không phân biệt hoa thường — dùng chung cách
+khớp với Marketplace), rồi **xoay vòng** theo con trỏ của từng nick: mỗi phiên
+bốc tiếp các nhóm KẾ TIẾP hợp từ khoá. Qua vài phiên **mọi nhóm hợp từ khoá đều
+tới lượt**, không dồn vào một cụm — an toàn hơn với Facebook.
+
+- **Ghi log tên nhóm đã chọn mỗi phiên** để kiểm toán (nhìn được đăng vào đâu).
+- Thứ tự tick **xáo ngẫu nhiên** (thứ tự cố định cũng là dấu vết nhận ra máy).
+- Con trỏ xoay vòng **gieo lệch theo nick** → nhiều acc không cùng bắt đầu một
+  chỗ. Nhiều từ khoá cách nhau bằng dấu phẩy (VD `Times, Time`) — khớp 1 là đủ.
+- Trần **9 nhóm/lần** (đúng giới hạn Facebook ghi trong dialog, trước để 10).
+
+> Cập nhật xong **khởi động lại app**. Logic áp dụng ngay cho các phiên đăng chéo
+> kế tiếp, không cần Gen lại lịch.
+
+---
+
 ## v2.75.0 — 31/10/2026
 
 **Biến thể ảnh (dán số ĐT) cho bài ĐĂNG NHÓM — cài khi Gen lịch**

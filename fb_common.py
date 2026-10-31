@@ -20,7 +20,7 @@ import unicodedata
 import asyncio
 import random
 
-from utils import logger, jitter_ms
+from utils import logger, jitter_ms, LoiBuoc
 from config import PROFILES_DIR
 
 # ── User-Agent Chrome 124 ─────────────────────────────────────────────────────
@@ -1375,3 +1375,148 @@ async def browse_and_like(page, duration_sec: int, max_likes: int = 1):
             pass
 
     logger.info(f"    ✅ Browse xong — liked {liked} bài")
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Chọn nhóm khi ĐĂNG CHÉO (Page/VIA) — dùng chung cho page_via_poster & via_poster
+#  ------------------------------------------------------------------------------
+#  Bản cũ: gõ từ khoá vào ô "Tìm kiếm nhóm" rồi tick theo thứ tự Facebook trả →
+#  phiên nào cũng trúng đúng mấy nhóm top, lại lệ thuộc khớp mờ của Facebook.
+#  Bản mới: QUÉT CẢ danh sách nhóm đã tham gia (dialog hiện sẵn, không cần gõ),
+#  tự khớp từ khoá, rồi XOAY VÒNG theo con trỏ của nick để phủ đều mọi nhóm.
+# ═════════════════════════════════════════════════════════════════════════════
+
+# Cuộn container dài nhất trong dialog xuống đáy để Facebook dựng thêm nhóm ra
+# DOM (list tải thêm khi cuộn). Trả scrollHeight để biết đã kịch đáy chưa.
+_JS_CUON_DS_NHOM = r"""() => {
+    const dlg = document.querySelector('[role=dialog]') || document.body;
+    let sc = null, cao = 0;
+    for (const el of dlg.querySelectorAll('*')) {
+        if (el.scrollHeight > el.clientHeight + 40 && el.clientHeight > 120
+            && el.scrollHeight > cao) { sc = el; cao = el.scrollHeight; }
+    }
+    if (!sc) return 0;
+    sc.scrollTop = sc.scrollHeight;
+    return sc.scrollHeight;
+}"""
+
+_JS_CUON_DAU_NHOM = r"""() => {
+    const dlg = document.querySelector('[role=dialog]') || document.body;
+    let sc = null, cao = 0;
+    for (const el of dlg.querySelectorAll('*')) {
+        if (el.scrollHeight > el.clientHeight + 40 && el.clientHeight > 120
+            && el.scrollHeight > cao) { sc = el; cao = el.scrollHeight; }
+    }
+    if (sc) sc.scrollTop = 0;
+}"""
+
+# Quét MỌI checkbox trong dialog chọn nhóm: đọc CẢ DÒNG chữ (tên nhóm nằm ở dòng
+# đầu), gắn data-mnt / data-mnt-bam để tick ĐÚNG hàng (đánh số rồi lấy phần tử
+# theo chỉ số từ selector khác sẽ lệch hàng — tick nhầm mà vẫn báo thành công).
+# Giống market_poster._JS_NHOM.
+_JS_QUET_NHOM_CHEO = r"""() => {
+  const nhin = e => {const b=e.getBoundingClientRect(); return b.width>0&&b.height>0;};
+  const dlg = document.querySelector('[role=dialog]') || document;
+  const ra = []; let i = 0;
+  for (const el of dlg.querySelectorAll('input[type=checkbox],[role=checkbox]')) {
+    let t = el, chu = '';
+    for (let k = 0; k < 8 && t; k++) {
+      t = t.parentElement; if (!t) break;
+      const c = (t.innerText || '').trim().replace(/\s+/g, ' ');
+      if (c && c.length > 3 && c.length < 160) { chu = c; break; }
+    }
+    // Input thật hay bị div phủ lên; bấm thẳng vào nó là bấm chỗ không nhận
+    // click. Tìm tổ tiên bấm được gần nhất.
+    let bam = el, p = el;
+    for (let k = 0; k < 5 && p; k++) {
+      p = p.parentElement; if (!p) break;
+      const r = p.getAttribute('role');
+      if (p.tagName === 'LABEL' || r === 'button' || r === 'checkbox') { bam = p; break; }
+    }
+    el.setAttribute('data-mnt', String(i));
+    bam.setAttribute('data-mnt-bam', String(i));
+    ra.push({i, chu, hien: nhin(el),
+             tick: el.type === 'checkbox' ? !!el.checked
+                   : el.getAttribute('aria-checked') === 'true'});
+    i++;
+  }
+  return ra;
+}"""
+
+# Một ô tick đọc theo nhãn data-mnt, để kiểm chứng TỪNG cú bấm.
+_JS_MOT_O_NHOM = """(n) => {
+    const e = document.querySelector('[data-mnt="' + n + '"]');
+    if (!e) return null;
+    return e.type === 'checkbox' ? !!e.checked
+           : e.getAttribute('aria-checked') === 'true';
+}"""
+
+# Cắt phần đuôi Facebook thêm sau tên nhóm ("... Lần truy cập gần nhất của bạn:
+# ..." / "... Bạn là thành viên") cho gọn log kiểm toán + khớp từ khoá chính xác
+# (không dính chữ boilerplate). _JS đã gộp \s nên tên và đuôi cách nhau 1 space.
+_RE_DUOI_NHOM = re.compile(
+    r"\s*(?:Lần truy cập|Last visit|Bạn là thành viên|You're a member).*$", re.I)
+
+
+def _ten_nhom_sach(chu: str) -> str:
+    return _RE_DUOI_NHOM.sub("", (chu or "").strip()).strip()
+
+
+async def chon_va_tick_nhom_cheo(page, search_kw: str, c_user: str,
+                                 loai: str, gioi_han: int) -> int:
+    """Dialog 'Thêm nhóm' đang mở: quét HẾT nhóm đã tham gia, lọc theo từ khoá,
+    bốc XOAY VÒNG theo con trỏ của nick rồi tick (kiểm chứng từng ô). Trả số nhóm
+    đã tick thật. Không đọc được nhóm nào → LoiBuoc; khớp 0 nhóm → trả 0 (chỉ
+    đăng nhóm gốc, KHÔNG lỗi)."""
+    import db as _db
+
+    # Cuộn tải hết nhóm ra DOM (list tải thêm khi cuộn).
+    await human_delay(1000, 1500)
+    cao_truoc = -1
+    for _ in range(15):
+        cao = await page.evaluate(_JS_CUON_DS_NHOM)
+        await asyncio.sleep(0.7)
+        if cao and cao == cao_truoc:
+            break
+        cao_truoc = cao
+    await page.evaluate(_JS_CUON_DAU_NHOM)
+    await human_delay(1000, 1500)
+
+    ds = await page.evaluate(_JS_QUET_NHOM_CHEO)
+    nhom = [{"ten": _ten_nhom_sach(x.get("chu")), "i": x["i"]}
+            for x in ds if (x.get("chu") or "").strip()]
+    if not nhom:
+        raise LoiBuoc("Không đọc được nhóm nào ở dialog Thêm nhóm")
+
+    chon = _db.chon_nhom_xoay_vong(nhom, search_kw, gioi_han, c_user, loai)
+    if not chon:
+        logger.warning(f"  ⚠️  Không nhóm nào khớp từ khoá {search_kw!r} trong "
+                       f"{len(nhom)} nhóm đã tham gia — chỉ đăng nhóm gốc")
+        return 0
+
+    logger.info(f"    🎯 Khớp {len(chon)}/{len(nhom)} nhóm (xoay vòng): "
+                + " | ".join(c["ten"][:40] for c in chon))
+
+    da = 0
+    for c in chon:
+        if da >= gioi_han:
+            break
+        i = c["i"]
+        if ds[i]["tick"]:          # đã tick sẵn (hiếm) → tính luôn
+            da += 1
+            continue
+        try:
+            o = await page.query_selector(f'[data-mnt-bam="{i}"]')
+            if not o:
+                continue
+            await o.scroll_into_view_if_needed()
+            await human_delay(400, 800)
+            await o.click()
+            await human_delay(500, 900)
+            if await page.evaluate(_JS_MOT_O_NHOM, i):
+                da += 1
+        except Exception as e:
+            logger.debug(f"    tick nhóm {i} hỏng: {str(e)[:50]}")
+
+    logger.info(f"    → Đã tick {da} nhóm")
+    return da

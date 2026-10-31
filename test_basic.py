@@ -6136,6 +6136,50 @@ check("hạn mức 0 -> không chọn nhóm nào",
       db.chon_nhom_marketplace(_ds, "Times City", 0)[0] == [])
 
 
+# ── Chọn nhóm XOAY VÒNG cho đăng chéo Page/VIA (db.chon_nhom_xoay_vong) ───────
+# Khác Marketplace (ngẫu nhiên thuần): xoay vòng theo con trỏ của nick để phủ
+# đều mọi nhóm hợp từ khoá qua nhiều phiên, không dồn mấy nhóm top.
+_dsx = [{"ten": t, "i": i} for i, t in enumerate(_NHOM_THAT)]
+_kw_xv = db.MKT_MAC_DINH["mkt_tu_khoa"]
+_khop_all = {x["ten"] for x in _dsx if db.khop_tu_khoa(x["ten"], _kw_xv)}  # 26
+
+_sel9 = db.chon_nhom_xoay_vong(_dsx, "Times City", 9, "zz_xv_sel", "t")
+check("xoay vòng: đúng 9 nhóm khi hạn mức 9", len(_sel9) == 9)
+check("xoay vòng: không trùng nhóm trong 1 phiên",
+      len({c["i"] for c in _sel9}) == len(_sel9))
+check("xoay vòng: mọi nhóm chọn đều khớp từ khoá",
+      all(db.khop_tu_khoa(c["ten"], "Times City") for c in _sel9))
+check("xoay vòng: hạn mức 0 -> rỗng",
+      db.chon_nhom_xoay_vong(_dsx, "Times City", 0, "zz_xv", "t") == [])
+check("xoay vòng: từ khoá rỗng -> rỗng",
+      db.chon_nhom_xoay_vong(_dsx, "", 9, "zz_xv", "t") == [])
+
+# PHỦ ĐỀU: 26 nhóm khớp, mỗi phiên 9 → sau 3 phiên (27 suất) union phải phủ HẾT.
+with db._conn() as _c:
+    _c.execute("DELETE FROM nhom_con_tro WHERE c_user=?", ("zz_xv_phu",))
+_phu = set()
+for _ in range(3):
+    _phu |= {c["ten"] for c in
+             db.chon_nhom_xoay_vong(_dsx, _kw_xv, 9, "zz_xv_phu", "t")}
+check("xoay vòng: 3 phiên phủ hết mọi nhóm khớp", _phu == _khop_all)
+
+# Con trỏ tiến đúng bước và vòng lại; lần đầu gieo lệch theo nick (trong [0,n)).
+with db._conn() as _c:
+    _c.execute("DELETE FROM nhom_con_tro WHERE c_user=?", ("zz_xv_ct",))
+_ct_a = db._nhom_con_tro_tien("zz_xv_ct", "t", 9, 26)
+_ct_b = db._nhom_con_tro_tien("zz_xv_ct", "t", 9, 26)
+check("xoay vòng: con trỏ lần đầu nằm trong [0, n)", 0 <= _ct_a < 26)
+check("xoay vòng: con trỏ tiến đúng bước (mod n)", _ct_b == (_ct_a + 9) % 26)
+
+# Lệch pha theo nick: hai nick khác nhau KHÔNG cùng bắt đầu ở nhóm 0 (đỡ dồn khi
+# nhiều acc cùng cụm nhóm). Gieo theo tổng mã ký tự nên hai tên khác dễ lệch.
+with db._conn() as _c:
+    _c.execute("DELETE FROM nhom_con_tro WHERE c_user IN ('zz_pha_A','zz_pha_B')")
+check("xoay vòng: hai nick lệch pha xuất phát",
+      db._nhom_con_tro_tien("zz_pha_A", "t", 9, 26)
+      != db._nhom_con_tro_tien("zz_pha_B", "t", 9, 26))
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Giấy phép — đăng nhập Gmail, mỗi tài khoản một máy
 # ═══════════════════════════════════════════════════════════════════════════
