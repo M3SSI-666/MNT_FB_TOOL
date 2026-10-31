@@ -1386,39 +1386,43 @@ async def browse_and_like(page, duration_sec: int, max_likes: int = 1):
 #  tự khớp từ khoá, rồi XOAY VÒNG theo con trỏ của nick để phủ đều mọi nhóm.
 # ═════════════════════════════════════════════════════════════════════════════
 
-# Cuộn container dài nhất trong dialog xuống đáy để Facebook dựng thêm nhóm ra
-# DOM (list tải thêm khi cuộn). Trả scrollHeight để biết đã kịch đáy chưa.
+# Khung cuộn của danh sách nhóm = tổ tiên cuộn được GẦN NHẤT của một checkbox.
+# Đi lên từ chính checkbox (KHÔNG dò theo '[role=dialog]' đầu tiên): khi bài có
+# ảnh, dialog composer là dialog thứ nhất còn bảng "Thêm nhóm" là dialog thứ
+# hai — dò theo dialog đầu sẽ trượt sang composer (không có nhóm nào).
 _JS_CUON_DS_NHOM = r"""() => {
-    const dlg = document.querySelector('[role=dialog]') || document.body;
-    let sc = null, cao = 0;
-    for (const el of dlg.querySelectorAll('*')) {
-        if (el.scrollHeight > el.clientHeight + 40 && el.clientHeight > 120
-            && el.scrollHeight > cao) { sc = el; cao = el.scrollHeight; }
+    const cb = document.querySelector('input[type=checkbox],[role=checkbox]');
+    if (!cb) return 0;
+    let el = cb;
+    while (el) {
+        if (el.scrollHeight > el.clientHeight + 40 && el.clientHeight > 120) {
+            el.scrollTop = el.scrollHeight; return el.scrollHeight;
+        }
+        el = el.parentElement;
     }
-    if (!sc) return 0;
-    sc.scrollTop = sc.scrollHeight;
-    return sc.scrollHeight;
+    return 0;
 }"""
 
 _JS_CUON_DAU_NHOM = r"""() => {
-    const dlg = document.querySelector('[role=dialog]') || document.body;
-    let sc = null, cao = 0;
-    for (const el of dlg.querySelectorAll('*')) {
-        if (el.scrollHeight > el.clientHeight + 40 && el.clientHeight > 120
-            && el.scrollHeight > cao) { sc = el; cao = el.scrollHeight; }
+    const cb = document.querySelector('input[type=checkbox],[role=checkbox]');
+    if (!cb) return;
+    let el = cb;
+    while (el) {
+        if (el.scrollHeight > el.clientHeight + 40 && el.clientHeight > 120) {
+            el.scrollTop = 0; return;
+        }
+        el = el.parentElement;
     }
-    if (sc) sc.scrollTop = 0;
 }"""
 
-# Quét MỌI checkbox trong dialog chọn nhóm: đọc CẢ DÒNG chữ (tên nhóm nằm ở dòng
-# đầu), gắn data-mnt / data-mnt-bam để tick ĐÚNG hàng (đánh số rồi lấy phần tử
-# theo chỉ số từ selector khác sẽ lệch hàng — tick nhầm mà vẫn báo thành công).
-# Giống market_poster._JS_NHOM.
+# Quét MỌI checkbox trên trang (KHÔNG bó trong dialog đầu — xem lý do ở
+# _JS_CUON_DS_NHOM): đọc CẢ DÒNG chữ (tên nhóm nằm ở dòng đầu), gắn data-mnt /
+# data-mnt-bam để tick ĐÚNG hàng (đánh số rồi lấy phần tử theo chỉ số từ selector
+# khác sẽ lệch hàng — tick nhầm mà vẫn báo thành công). Giống market_poster._JS_NHOM.
 _JS_QUET_NHOM_CHEO = r"""() => {
   const nhin = e => {const b=e.getBoundingClientRect(); return b.width>0&&b.height>0;};
-  const dlg = document.querySelector('[role=dialog]') || document;
   const ra = []; let i = 0;
-  for (const el of dlg.querySelectorAll('input[type=checkbox],[role=checkbox]')) {
+  for (const el of document.querySelectorAll('input[type=checkbox],[role=checkbox]')) {
     let t = el, chu = '';
     for (let k = 0; k < 8 && t; k++) {
       t = t.parentElement; if (!t) break;
@@ -1470,15 +1474,31 @@ async def chon_va_tick_nhom_cheo(page, search_kw: str, c_user: str,
     đăng nhóm gốc, KHÔNG lỗi)."""
     import db as _db
 
-    # Cuộn tải hết nhóm ra DOM (list tải thêm khi cuộn).
-    await human_delay(1000, 1500)
-    cao_truoc = -1
-    for _ in range(15):
-        cao = await page.evaluate(_JS_CUON_DS_NHOM)
-        await asyncio.sleep(0.7)
-        if cao and cao == cao_truoc:
+    async def _dem_cb():
+        return await page.evaluate(
+            "() => document"
+            ".querySelectorAll('input[type=checkbox],[role=checkbox]').length")
+
+    # CHỜ danh sách nhóm hiện ra trước đã: dialog dựng chậm (nhất là sau upload
+    # ảnh). Bản cũ gõ vào ô tìm nên vô tình ép render + chờ; bản mới phải tự chờ,
+    # không là quét trúng lúc list rỗng → "không đọc được nhóm nào".
+    await human_delay(800, 1200)
+    for _ in range(25):                 # tối đa ~25×0.8 = 20s
+        if await _dem_cb() > 0:
             break
-        cao_truoc = cao
+        await asyncio.sleep(0.8)
+
+    # Cuộn tải hết nhóm ra DOM (list tải thêm khi cuộn). Dừng khi SỐ NHÓM không
+    # còn tăng — chắc hơn là đo theo chiều cao (chiều cao đứng yên mà vẫn đang
+    # nạp).
+    so_truoc = -1
+    for _ in range(25):
+        await page.evaluate(_JS_CUON_DS_NHOM)
+        await asyncio.sleep(0.7)
+        so = await _dem_cb()
+        if so > 0 and so == so_truoc:
+            break
+        so_truoc = so
     await page.evaluate(_JS_CUON_DAU_NHOM)
     await human_delay(1000, 1500)
 
@@ -1486,6 +1506,18 @@ async def chon_va_tick_nhom_cheo(page, search_kw: str, c_user: str,
     nhom = [{"ten": _ten_nhom_sach(x.get("chu")), "i": x["i"]}
             for x in ds if (x.get("chu") or "").strip()]
     if not nhom:
+        # Chẩn đoán: có bao nhiêu dialog / checkbox trên trang, text mỗi dialog.
+        try:
+            info = await page.evaluate(r"""() => {
+                const dlgs = [...document.querySelectorAll('[role=dialog]')].map(d => ({
+                    cb: d.querySelectorAll('input[type=checkbox],[role=checkbox]').length,
+                    txt: (d.innerText||'').replace(/\s+/g,' ').slice(0,80)}));
+                return {tong_cb: document.querySelectorAll('input[type=checkbox],[role=checkbox]').length,
+                        so_dialog: dlgs.length, dialogs: dlgs};
+            }""")
+            logger.warning(f"  🔎 Chẩn đoán dialog nhóm: {info}")
+        except Exception:
+            pass
         raise LoiBuoc("Không đọc được nhóm nào ở dialog Thêm nhóm")
 
     chon = _db.chon_nhom_xoay_vong(nhom, search_kw, gioi_han, c_user, loai)

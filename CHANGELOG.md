@@ -10,6 +10,28 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.76.1 — 01/11/2026
+
+**Vá gấp: bài đăng chéo CÓ ẢNH không đọc được nhóm (lỗi của v2.76.0)**
+
+v2.76.0 chọn nhóm xoay vòng chỉ dò trong `[role=dialog]` ĐẦU TIÊN. Khi bài **có
+ảnh**, dialog soạn bài (composer) là dialog thứ nhất, còn bảng **"Thêm nhóm"** là
+dialog thứ hai → dò nhầm sang composer, không thấy nhóm nào → phiên báo *"Không
+đọc được nhóm nào ở dialog Thêm nhóm"* và **không đăng được**. Hầu hết bài thật
+đều có ảnh nên lỗi này ảnh hưởng gần như toàn bộ phiên đăng chéo.
+
+- Sửa: quét checkbox trên **toàn trang**, tìm khung cuộn bằng cách **đi lên từ
+  chính checkbox** (không phụ thuộc dialog nào).
+- Thêm bước **chờ danh sách nhóm hiện ra** trước khi quét (dialog dựng chậm, nhất
+  là sau khi upload nhiều ảnh), và cuộn tải theo **số nhóm tăng** thay vì theo
+  chiều cao.
+- Khi vẫn không thấy nhóm, ghi **log chẩn đoán** (số dialog / số checkbox).
+
+> **Nên cập nhật ngay nếu đang ở v2.76.0.** Đo thực tế 1 phiên đăng chéo (có ảnh,
+> tick 9 nhóm, đăng + hạ nhiệt): **~3,4 phút/phiên**.
+
+---
+
 ## v2.76.0 — 31/10/2026
 
 **Đăng chéo: chọn nhóm kiểu XOAY VÒNG — phủ đều mọi nhóm, không dồn mấy nhóm top**
