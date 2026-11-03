@@ -1642,27 +1642,23 @@ check("đăng xong ra feed Page lướt + thả tim",
 # Hai test dưới chốt sự phụ thuộc đó lại: bước lướt feed sau khi đăng KHÔNG
 # được rút ngắn mà không sửa luôn bước dò spam.
 import fb_common as _fbc2
-check("quãng chờ sau khi đăng quanh 75 giây",
-      _fbc2.CHO_SAU_DANG_GIAY == (72, 78))
+check("quãng chờ sau khi đăng 70-80 giây (trung bình 75)",
+      _fbc2.CHO_SAU_DANG_GIAY == (70, 80))
 # Phải bám mốc 76s — dưới mốc đó là chắc chắn hụt link mỗi phiên. Trên mốc thì
 # vẫn có thể hụt (phiên A đo 02/10 mới được 7/9 ở giây 76), nhưng ít hơn hẳn.
 check("quãng chờ chạm được mốc 76 giây",
       max(_fbc2.CHO_SAU_DANG_GIAY) >= 76)
 
-# cho_sau_dang_giay(): đọc settings (chỉnh được ở tab Vận hành), mặc định khi để
-# trống, và ÉP SÀN 30s để không ai rút cụt mất cửa sổ dò spam.
+# cho_sau_dang_giay(): CỐ ĐỊNH 70-80s, không còn chỉnh trên bảng điều khiển —
+# settings cũ cho_sau_dang_min/max (v2.76.2) có còn trong DB cũng bị bỏ qua.
 import db as _db_hn
-_db_hn.set_setting("cho_sau_dang_min", ""); _db_hn.set_setting("cho_sau_dang_max", "")
-check("hạ nhiệt: để trống -> mặc định (72,78)", _fbc2.cho_sau_dang_giay() == (72, 78))
-_db_hn.set_setting("cho_sau_dang_min", "50"); _db_hn.set_setting("cho_sau_dang_max", "60")
-check("hạ nhiệt: đọc đúng settings", _fbc2.cho_sau_dang_giay() == (50, 60))
 _db_hn.set_setting("cho_sau_dang_min", "10"); _db_hn.set_setting("cho_sau_dang_max", "20")
-check("hạ nhiệt: ép sàn tối thiểu 30s", _fbc2.cho_sau_dang_giay() == (30, 30))
-_db_hn.set_setting("cho_sau_dang_min", "90"); _db_hn.set_setting("cho_sau_dang_max", "40")
-_r_hn = _fbc2.cho_sau_dang_giay()
-check("hạ nhiệt: min>max vẫn ra khoảng hợp lệ", _r_hn[0] <= _r_hn[1] and _r_hn[0] >= 30)
+check("hạ nhiệt: cố định (70,80), bỏ qua settings cũ", _fbc2.cho_sau_dang_giay() == (70, 80))
 _db_hn.set_setting("cho_sau_dang_min", ""); _db_hn.set_setting("cho_sau_dang_max", "")
-check("Page lướt feed đúng bằng cửa sổ dò spam (quãng chỉnh được)",
+_src_idx_hn = open("templates/index.html", encoding="utf-8").read()
+check("bảng điều khiển KHÔNG còn ô hạ nhiệt", 'id="hn-min"' not in _src_idx_hn
+      and "hnLuu" not in open("static/js/app.js", encoding="utf-8").read())
+check("Page lướt feed đúng bằng cửa sổ dò spam",
       "random.randint(*cho_sau_dang_giay())" in _src_pvp2)
 # Lướt feed phải ĐỨNG TRƯỚC dò spam, nếu không thì cửa sổ bằng 0.
 _i_luot = _src_pvp2.index("random.randint(*cho_sau_dang_giay())")

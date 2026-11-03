@@ -10,6 +10,20 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.76.3 — 03/11/2026
+
+**Hạ nhiệt sau đăng chéo: cố định 70–80s, bỏ ô chỉnh trên bảng điều khiển**
+
+- Bỏ ô *"⏱️ Thời gian hạ nhiệt sau đăng chéo"* ở tab **Vận hành** (thêm ở v2.76.2).
+- Sau mỗi lần đăng chéo (Page-chéo + VIA), nick lướt feed **ngẫu nhiên 70–80 giây**
+  (trước: 72–78s). Vẫn trung bình ~75s, vẫn chạm mốc 76s để thông báo đăng chéo
+  về đủ và để kịp dò cảnh báo gỡ bài.
+- Số đã nhập ở ô cũ (nếu có) bị bỏ qua.
+
+> Cập nhật xong **Dừng → Run** lại runner các mảng.
+
+---
+
 ## v2.76.2 — 01/11/2026
 
 **Tối ưu tốc độ: chờ upload ảnh theo THỰC TẾ + thời gian hạ nhiệt chỉnh được**

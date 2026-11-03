@@ -890,7 +890,8 @@ def _quen_canh_bao(page):
 #      không có gì mà đọc.
 #
 # 72-78 giây (trung bình 75) là mức Duong chốt ngày 04/10, nâng từ 60-70 để bám
-# sát mốc 76s.
+# sát mốc 76s. Ngày 03/11 nới thành 70-80 (vẫn trung bình 75, vẫn chạm 76s) cho
+# ngẫu nhiên hơn — và cố định ở đây, KHÔNG cho chỉnh trên bảng điều khiển.
 #
 # KHÔNG phải là bảo đảm, đừng hiểu nhầm: hai phiên đo ngày 02/10 lệch nhau hẳn
 # ở cùng mốc 76 giây — phiên B về đủ 9/9, phiên A mới được 7/9. Chờ thêm chỉ
@@ -911,31 +912,17 @@ def _quen_canh_bao(page):
 # Sự cố ngày 03/10, ghi lại để không lặp: bản v2.33.0 bỏ 85 giây chờ ở đây để
 # rút ngắn phiên mà KHÔNG nhận ra bước dò spam đang ăn nhờ chính quãng đó —
 # cửa sổ tụt từ ~100-115 giây xuống ~17-28 giây, không có gì báo.
-CHO_SAU_DANG_GIAY = (72, 78)
+CHO_SAU_DANG_GIAY = (70, 80)
 
 
 def cho_sau_dang_giay() -> tuple:
-    """Khoảng (min, max) giây lướt feed HẠ NHIỆT sau khi đăng chéo — chỉnh được ở
-    tab Vận hành (settings `cho_sau_dang_min` / `cho_sau_dang_max`). Để trống =
-    mặc định CHO_SAU_DANG_GIAY.
+    """Khoảng (min, max) giây lướt feed HẠ NHIỆT sau khi đăng chéo — cố định
+    CHO_SAU_DANG_GIAY (70-80s, random trong khoảng). v2.76.2 từng cho chỉnh ở
+    tab Vận hành; 03/11 bỏ ô đó theo yêu cầu, settings cũ (nếu có) bị bỏ qua.
 
     CẢNH BÁO: quãng này KHÔNG chỉ để "nghỉ" — bước dò spam ăn nhờ chính nó (xem
-    ghi chú sự cố 03/10 ngay trên). Rút quá ngắn là mất cửa sổ phát hiện FB gỡ
-    bài, nên ÉP SÀN 30s dù người dùng nhập thấp hơn."""
-    lo, hi = CHO_SAU_DANG_GIAY
-    try:
-        import db as _db
-        _lo = (_db.get_setting("cho_sau_dang_min", "") or "").strip()
-        _hi = (_db.get_setting("cho_sau_dang_max", "") or "").strip()
-        if _lo:
-            lo = int(float(_lo))
-        if _hi:
-            hi = int(float(_hi))
-    except Exception:
-        lo, hi = CHO_SAU_DANG_GIAY
-    lo = max(30, lo)           # sàn cứng: dưới 30s là mất cửa sổ dò spam
-    hi = max(lo, hi)
-    return (lo, hi)
+    ghi chú sự cố 03/10 ngay trên). Đừng rút ngắn."""
+    return CHO_SAU_DANG_GIAY
 
 
 # Đếm ảnh ĐÃ lên trong composer: ưu tiên preview blob (ảnh vừa chọn FB render
