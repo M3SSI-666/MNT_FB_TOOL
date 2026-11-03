@@ -10,6 +10,24 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.76.5 — 03/11/2026
+
+**Marketplace: ô "Xóa bài quá … ngày" nhập được 0**
+
+Bản cũ không cho nhập dưới 1, và nếu gõ **0** thì phần mềm âm thầm lưu thành **3**.
+Giờ nhập được 0:
+
+- **0** = ở phiên Marketplace đầu ngày, xóa **mọi bài từ hôm qua trở về trước**, chỉ
+  giữ bài đăng trong hôm nay — rồi mới đăng bài mới.
+- **1** = giữ bài hôm nay + hôm qua; **2** = giữ thêm hôm kia; …
+
+Tuổi bài tính theo **ngày lịch** của "Ngày niêm yết", không theo 24 giờ. Mỗi phiên xóa
+tối đa 30 bài; còn nhiều hơn thì các phiên sau trong ngày dọn tiếp.
+
+> Cập nhật xong **tắt / mở lại app**, nhập số ngày rồi bấm **Lưu**.
+
+---
+
 ## v2.76.4 — 03/11/2026
 
 **Từ khoá chọn nhóm: khớp dấu thông minh, loại trừ bằng dấu trừ, tự gộp từ trùng**

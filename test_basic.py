@@ -4120,6 +4120,15 @@ check("UI Marketplace tự xóa chỉ còn ô bật + số ngày (đã bỏ Ch�
 check("app.js nạp + lưu cài đặt tự xóa (không còn mkt-xoa-chay-thu)",
       "mkt_xoa_bat:" in _ajs_mkt4 and "mkt-xoa-sau-ngay" in _ajs_mkt4
       and "mkt-xoa-chay-thu" not in _ajs_mkt4)
+# Nhập 0 = xóa mọi bài từ HÔM QUA trở về trước (giữ bài hôm nay). Bản cũ
+# `parseInt(..) || 3` biến 0 thành 3 mà không báo gì.
+check("ô 'Xóa bài quá … ngày' cho nhập 0 (không bị đổi thành 3)",
+      'id="mkt-xoa-sau-ngay" type="number" min="0"' in _html_mkt4
+      and 'parseInt(el("mkt-xoa-sau-ngay").value) || 3' not in _ajs_mkt4)
+import market_cleanup as _mc0
+_bai0 = [{"tuoi": 0}, {"tuoi": 1}, {"tuoi": 5}, {"tuoi": None}]
+check("xóa quá 0 ngày: bỏ bài hôm qua trở về trước, GIỮ bài hôm nay",
+      [b["tuoi"] for b in _mc0.loc_qua_han(_bai0, 0)] == [1, 5])
 
 _src_mi = Path("market_inbox.py").read_text(encoding="utf-8")
 check("market_inbox CHỈ đọc danh sách, KHÔNG gọi click lên hội thoại",
