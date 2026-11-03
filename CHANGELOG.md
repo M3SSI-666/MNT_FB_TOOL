@@ -10,6 +10,31 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.76.4 — 03/11/2026
+
+**Từ khoá chọn nhóm: khớp dấu thông minh, loại trừ bằng dấu trừ, tự gộp từ trùng**
+
+Áp cho ô **Từ khóa** ở dialog **Gen lịch** (đăng chéo Page/VIA) và từ khoá Marketplace.
+
+- **Khớp dấu theo cách gõ.** Gõ **không dấu** (`cong`) → khớp mọi kiểu như trước
+  (cả nhóm đặt tên không dấu). Gõ **có dấu** (`Cộng`) → chỉ khớp đúng "Cộng", **không
+  dính** "Công ty", "Cổng"…; `Làng` không còn dính "Láng Hạ". Chữ hoa / thường vẫn
+  không phân biệt.
+- **Loại nhóm bằng dấu trừ.** VD `time, -homestay`: chọn nhóm có "time" nhưng bỏ mọi
+  nhóm có "homestay". Từ loại trừ áp cho **mọi dòng lịch**. Chỉ nhập từ loại trừ thì
+  Gen báo lỗi.
+- **Tự gộp từ trùng** khi Gen: `Times,Times,times,time` → `Times,time`.
+- Vòng xoay nhóm không còn bị xô thứ tự bởi đuôi "4K thành viên · 326 bài viết"
+  (đổi theo ngày) dính vào tên nhóm.
+- Log đổi chữ "tìm …" thành "lọc nhóm theo …" (đã bỏ gõ ô tìm từ v2.76.0). Dialog Gen
+  có dòng hướng dẫn ngay dưới ô Từ khóa.
+
+> **Gợi ý:** trải đều nhất là **1 từ khóa rộng** — mảng Times City nhập `time` là phủ
+> hết (khớp cả Times City, Timescity, Time City). Cập nhật xong **tắt / mở lại app**
+> rồi **Gen lại lịch** để áp từ khóa mới.
+
+---
+
 ## v2.76.3 — 03/11/2026
 
 **Hạ nhiệt sau đăng chéo: cố định 70–80s, bỏ ô chỉnh trên bảng điều khiển**

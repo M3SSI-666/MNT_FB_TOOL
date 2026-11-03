@@ -3926,7 +3926,8 @@ async function openGenSchedule(loai){
                 <input id="gen-first-group" type="text" value="${vFirst}"
                     placeholder="https://www.facebook.com/groups/...">
             </div>
-            <div class="field-group"><label>Từ khóa (cách nhau dấu phẩy)</label><input id="gen-kw" value="${vKw}"></div>
+            <div class="field-group"><label>Từ khóa (cách nhau dấu phẩy)</label><input id="gen-kw" value="${vKw}" placeholder="VD: time, -homestay">
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Không phân biệt hoa/thường. Gõ <b>không dấu</b> (<code>cong</code>) = khớp mọi kiểu dấu; gõ <b>có dấu</b> (<code>Cộng</code>) = chỉ khớp đúng dấu, không dính "Công"/"Cổng". Nhóm được chọn nếu tên <b>chứa</b> từ khóa (<code>time</code> khớp cả Times City, Timescity, Time City). Thêm dấu trừ để <b>loại</b> nhóm: <code>-homestay</code>. Trải đều nhất: <b>1 từ khóa rộng</b>; tránh từ quá ngắn không dấu dễ khớp nhầm (<code>lang</code> khớp cả "Láng Hạ").</div></div>
             <div class="field-group">
                 <label>Biến thể ảnh <span style="color:var(--text-muted);font-weight:400">(chỉ bài ĐĂNG NHÓM)</span></label>
                 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">

@@ -494,7 +494,7 @@ async def _run_page_via(
         # BƯỚC 6 — Thêm nhóm → gõ từ khóa → tick → Đăng
         # ════════════════════════════════════════════════════════════════
         await dung_neu_dinh_spam(page, acc_name, "vừa soạn xong bài", c_user=c_user)
-        logger.info(f"  [5/5] ➕ Thêm nhóm → tìm \"{search_kw}\" → tick → Đăng...")
+        logger.info(f"  [5/5] ➕ Thêm nhóm → lọc nhóm theo \"{search_kw}\" → tick → Đăng...")
 
         # Click "+ Thêm nhóm"
         await _human_delay(1000, 1500)

@@ -2270,6 +2270,14 @@ def api_schedule_gen(loai):
     end_str      = body.get("end",   "03:00")
     keyword_pool = body.get("keyword_pool", [])
     acc_settings = body.get("acc_settings", [])
+    # Gộp từ trùng ("Times,Times,times" là MỘT từ — so khớp không phân biệt hoa
+    # thường / dấu) và tách từ LOẠI TRỪ ("-homestay") ra khỏi vòng xoay từ khoá.
+    keyword_pool = db.tach_tu_khoa(",".join(str(k) for k in (keyword_pool or [])))
+    _tk_loai_tru = [k for k in keyword_pool if db.la_tu_loai_tru(k)]
+    _tk_thuong   = [k for k in keyword_pool if not db.la_tu_loai_tru(k)]
+    if keyword_pool and not _tk_thuong:
+        return jsonify({"ok": False, "error": "Từ khoá chỉ có từ loại trừ (-...) — "
+                        "cần ít nhất 1 từ khoá thường, VD: time, -homestay"})
 
     def parse_hhmm(s, dh, dm):
         try:
@@ -2353,9 +2361,16 @@ def api_schedule_gen(loai):
     # Từ khoá: XEN KẼ theo thứ tự thời gian của cả bảng, và mỗi nick quay đều
     # đủ các từ khoá (xem xep_lich.rai_tu_khoa). Bản cũ chia theo nick nên ba
     # nick liền nhau dùng chung một từ khoá — bảng thành cụm 3 dòng trùng nhau.
+    #
+    # Từ LOẠI TRỪ ("-homestay") không xoay vòng như từ khoá thường mà gắn vào
+    # MỌI dòng (VD "time,-homestay") để dòng nào cũng bỏ nhóm homestay.
     from xep_lich import rai_tu_khoa
-    rai_tu_khoa(schedule, keyword_pool,
+    rai_tu_khoa(schedule, _tk_thuong,
                 can=lambda r: r.get("mode") in ("Via", "Page", "Hybrid"))
+    if _tk_loai_tru:
+        for r in schedule:
+            if r.get("tu_khoa"):
+                r["tu_khoa"] = ",".join([r["tu_khoa"]] + _tk_loai_tru)
 
     # ── Nuôi nick: chuyển một số slot của acc bật nuôi thành phiên nuôi ──
     # Nick càng non → chuyển càng nhiều (đăng ít, nuôi nhiều). Đọc thẳng từ DB

@@ -1022,7 +1022,7 @@ check("KHÔNG còn thu link ở đầu phiên",
 check("thu link từ trang thông báo sau khi đăng",
       "[b] Trang thông báo" in _src_pvp2)
 _i_sw   = _src_pvp2.index("await _switch_to_page(page, ctx, page_uid)")
-_i_dang = _src_pvp2.index("Thêm nhóm → tìm")
+_i_dang = _src_pvp2.index("Thêm nhóm → lọc nhóm theo")
 _i_luot = _src_pvp2.index("random.randint(*cho_sau_dang_giay())")
 _i_thu  = _src_pvp2.index("[b] Trang thông báo")
 # Thứ tự này LÀ cơ chế: chuyển Page → đăng → lướt feed (chờ + canh spam) → thu.
@@ -6060,6 +6060,40 @@ check("khớp một trong nhiều từ khoá",
       db.khop_tu_khoa("Chợ Làng Time City - Park Hill", "Times City, Time City"))
 check("không khớp thì trả False",
       db.khop_tu_khoa("Phòng trọ Kim Giang - Linh Đàm", "Times City, Time City") is False)
+check("'time' khớp cả Times / Timescity / Time City, không phân biệt hoa thường",
+      all(db.khop_tu_khoa(n, "Time") for n in
+          ("CHỢ CƯ DÂN TIMES CITY", "Cư dân T6 Timescity", "Chợ Royal City - Time City")))
+check("từ loại trừ: '-homestay' bỏ nhóm homestay dù khớp 'time'",
+      db.khop_tu_khoa("HOMESTAY TIMES CITY", "time, -homestay") is False
+      and db.khop_tu_khoa("Chợ Làng Times City", "time, -homestay"))
+check("gõ CÓ dấu 'Cộng' → chỉ khớp đúng 'Cộng', không dính 'Công' / 'Cổng'",
+      db.khop_tu_khoa("Cộng Đồng Cư Dân Times City", "Cộng")
+      and db.khop_tu_khoa("CỘNG ĐỒNG TIMES", "cộng")
+      and not db.khop_tu_khoa("Công ty BĐS Times City", "Cộng")
+      and not db.khop_tu_khoa("Cổng Times City - Minh Khai", "Cộng"))
+check("gõ KHÔNG dấu 'cong' → khớp mọi kiểu (cả nhóm viết không dấu)",
+      all(db.khop_tu_khoa(n, "cong") for n in
+          ("Cộng Đồng Cư Dân", "Công ty BĐS", "Cong dong cu dan")))
+check("có dấu: 'Làng' không dính 'Láng Hạ'",
+      db.khop_tu_khoa("Chợ Làng Times City", "Làng")
+      and not db.khop_tu_khoa("Chung cư Láng Hạ", "Làng"))
+import unicodedata
+check("có dấu: chữ dựng sẵn / tổ hợp (NFC/NFD) vẫn khớp nhau",
+      db.khop_tu_khoa(unicodedata.normalize("NFD", "Cộng đồng"), "Cộng"))
+check("loại trừ có dấu: '-Công' chỉ bỏ 'Công', giữ 'Cộng'",
+      db.khop_tu_khoa("Cộng đồng Times", "time, -Công")
+      and not db.khop_tu_khoa("Công ty Times", "time, -Công"))
+check("tách từ khoá: 'Cộng' và 'cong' là 2 từ khác nhau",
+      db.tach_tu_khoa("Cộng, cong, CỘNG") == ["Cộng", "cong"])
+check("chỉ có từ loại trừ → không khớp gì",
+      db.khop_tu_khoa("Chợ Làng Times City", "-homestay") is False)
+check("tách từ khoá: 'homestay' và '-homestay' là 2 từ khác nhau",
+      db.tach_tu_khoa("homestay, -homestay, -Homestay") == ["homestay", "-homestay"])
+import fb_common as _fbc_tn
+check("tên nhóm: cắt đuôi 'NK thành viên · N bài viết' (đổi theo ngày)",
+      _fbc_tn._ten_nhom_sach("Chợ Làng Times 4K thành viên · 326 bài viết") == "Chợ Làng Times"
+      and _fbc_tn._ten_nhom_sach("Làng Times City 37K thành viên · 1,1K bài") == "Làng Times City"
+      and _fbc_tn._ten_nhom_sach("Cư dân 458 Minh Khai") == "Cư dân 458 Minh Khai")
 
 # Facebook viết "43,5K" kiểu Việt Nam: PHẨY là dấu thập phân khi có hậu tố K,
 # còn CHẤM là phân cách hàng nghìn khi không có. Lẫn hai thứ là sai nghìn lần.
@@ -6539,7 +6573,7 @@ check("dòng không cần từ khoá để trống, không làm lệch vòng",
 _d1 = [{"ten_acc": "A"}]; _rtk(_d1, [])
 check("không có từ khoá → không gán gì", "tu_khoa" not in _d1[0])
 check("Gen lịch dùng cách chia mới, bỏ con trỏ theo nick",
-      "rai_tu_khoa(schedule, keyword_pool" in Path("server.py").read_text(encoding="utf-8")
+      "rai_tu_khoa(schedule, _tk_thuong" in Path("server.py").read_text(encoding="utf-8")
       and "keyword_cursor" not in Path("server.py").read_text(encoding="utf-8"))
 
 # ── Content TRẢI ĐỀU + XEN KẼ (xep_lich.rai_content) ──────────────────────────
@@ -7204,6 +7238,26 @@ _pref_bt = _json_bt.loads(db.get_setting("gen_prefs_thue", "") or "{}")
 check("Gen lưu biến thể ảnh vào gen_prefs (bật + số)",
       _rbt.get("ok") and _pref_bt.get("bien_the_bat") == 1
       and _pref_bt.get("bien_the_sdt") == "0333 194 822")
+db.replace_schedules("thue", [])
+
+# Gen gộp từ khoá trùng (hoa/thường) và gắn từ LOẠI TRỪ vào MỌI dòng, không
+# cho nó thành một từ khoá riêng trong vòng xoay.
+_rlt = _client.post("/api/schedule/thue/gen", json={
+    "start": "08:00", "end": "14:00",
+    "keyword_pool": ["Times", "Times", "times", "time", "-homestay"],
+    "acc_settings": [{"ten": "BTAcc", "c_user": "bt1", "page": "", "nghi": 12,
+                      "first_group_url": "123", "mode": "Page", "contents": ["BTC"]}]}).get_json()
+_tk_lt = {r.get("tu_khoa") for r in db.get_schedules("thue") if r.get("tu_khoa")}
+check("Gen: gộp từ trùng + gắn '-homestay' vào mọi dòng",
+      _rlt.get("ok") and _tk_lt == {"Times,-homestay", "time,-homestay"})
+_pref_lt = _json_bt.loads(db.get_setting("gen_prefs_thue", "") or "{}")
+check("Gen: lưu ô từ khoá đã gộp trùng", _pref_lt.get("keyword") == "Times,time,-homestay")
+_rlt2 = _client.post("/api/schedule/thue/gen", json={
+    "start": "08:00", "end": "14:00", "keyword_pool": ["-homestay"],
+    "acc_settings": [{"ten": "BTAcc", "c_user": "bt1", "page": "", "nghi": 12,
+                      "first_group_url": "123", "mode": "Page", "contents": ["BTC"]}]}).get_json()
+check("Gen: chỉ có từ loại trừ → báo lỗi, không gen",
+      _rlt2.get("ok") is False and "loại trừ" in (_rlt2.get("error") or ""))
 db.replace_schedules("thue", [])
 with db._conn() as _c_bt:
     _c_bt.execute("DELETE FROM content WHERE loai='thue' AND ma_content='BTC'")

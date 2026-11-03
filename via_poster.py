@@ -279,7 +279,7 @@ async def _run_crosspost(
         # ════════════════════════════════════════════════════════════════
         # BƯỚC 5 — Thêm nhóm → gõ từ khóa → tick → Đăng
         # ════════════════════════════════════════════════════════════════
-        logger.info(f"  [4/5] ➕ Thêm nhóm → tìm \"{search_kw}\" → tick → Đăng...")
+        logger.info(f"  [4/5] ➕ Thêm nhóm → lọc nhóm theo \"{search_kw}\" → tick → Đăng...")
 
         # Click "+ Thêm nhóm"
         await _human_delay(1000, 1500)

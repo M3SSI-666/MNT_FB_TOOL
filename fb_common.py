@@ -1513,7 +1513,8 @@ _JS_MOT_O_NHOM = """(n) => {
 # ..." / "... Bạn là thành viên") cho gọn log kiểm toán + khớp từ khoá chính xác
 # (không dính chữ boilerplate). _JS đã gộp \s nên tên và đuôi cách nhau 1 space.
 _RE_DUOI_NHOM = re.compile(
-    r"\s*(?:Lần truy cập|Last visit|Bạn là thành viên|You're a member).*$", re.I)
+    r"\s*(?:Lần truy cập|Last visit|Bạn là thành viên|You're a member"
+    r"|[\d.,]+\s*[KMkm]?\s*(?:thành viên|members)).*$", re.I)
 
 
 def _ten_nhom_sach(chu: str) -> str:

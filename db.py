@@ -3069,16 +3069,40 @@ def chuan_hoa(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", s)
 
 
+def chuan_hoa_giu_dau(s: str) -> str:
+    """Như `chuan_hoa` nhưng GIỮ dấu tiếng Việt: chữ thường, NFC, bỏ khoảng
+    trắng / ký tự đặc biệt. Dùng khi từ khoá được gõ CÓ DẤU (xem khop_tu_khoa)."""
+    s = unicodedata.normalize("NFC", (s or "").lower())
+    return "".join(c for c in s if c.isalnum())
+
+
+def _co_dau(tk: str) -> bool:
+    """Từ khoá có dấu tiếng Việt không ("Cộng" có, "cong" / "Times" không)."""
+    return any(ord(c) > 127 for c in chuan_hoa_giu_dau(tk))
+
+
 def tach_tu_khoa(chuoi: str) -> list[str]:
-    """Tách ô Từ khoá thành danh sách — khớp MỘT cái là đủ."""
+    """Tách ô Từ khoá thành danh sách — khớp MỘT cái là đủ.
+
+    Từ có dấu trừ đứng đầu ("-homestay") là từ LOẠI TRỪ, giữ nguyên dấu trừ;
+    "homestay" và "-homestay" là hai từ khác nhau, không gộp. "Cộng" và "cong"
+    cũng KHÁC nhau (gõ có dấu = khớp đúng dấu), chỉ gộp khác hoa / thường."""
     ra, da_co = [], set()
     for phan in (chuoi or "").split(","):
         p = phan.strip()
-        k = chuan_hoa(p)
-        if k and k not in da_co:
+        k = chuan_hoa_giu_dau(p.lstrip("-"))
+        if not k:
+            continue
+        k = ("-" if la_tu_loai_tru(p) else "") + k
+        if k not in da_co:
             da_co.add(k)
             ra.append(p)
     return ra
+
+
+def la_tu_loai_tru(tk: str) -> bool:
+    """"-homestay" → True: tên nhóm chứa "homestay" thì KHÔNG chọn."""
+    return (tk or "").strip().startswith("-")
 
 
 def khop_tu_khoa(ten_nhom: str, chuoi_tu_khoa: str) -> bool:
@@ -3086,11 +3110,36 @@ def khop_tu_khoa(ten_nhom: str, chuoi_tu_khoa: str) -> bool:
 
     Từ khoá rỗng trả về False chứ KHÔNG phải True: rỗng nghĩa là chưa cấu hình,
     mà coi đó là "khớp tất cả" thì tick sạch mọi nhóm — đúng cái phải tránh.
+
+    Khớp kiểu CHỨA, không phân biệt hoa thường / khoảng trắng: "time" khớp cả
+    "Times City", "Timescity", "Time City".
+
+    DẤU, khớp thông minh theo cách gõ:
+      - gõ KHÔNG dấu ("cong") → bỏ dấu cả hai bên, khớp mọi kiểu: "Cộng đồng",
+        "Công ty", "Cong dong" (nhóm đặt tên không dấu vẫn không sót);
+      - gõ CÓ dấu ("Cộng") → khớp ĐÚNG dấu: "Cộng đồng" có, "Công ty" / "Cổng"
+        không (đổi lại bỏ qua nhóm viết không dấu).
+
+    Từ LOẠI TRỪ ("-homestay"): tên nhóm chứa nó thì bỏ, dù khớp từ khoá khác.
+    Chỉ có từ loại trừ mà không có từ khoá thường → không khớp gì (như rỗng).
     """
     ten = chuan_hoa(ten_nhom)
     if not ten:
         return False
-    return any(chuan_hoa(tk) in ten for tk in tach_tu_khoa(chuoi_tu_khoa))
+    ten_dau = chuan_hoa_giu_dau(ten_nhom)
+
+    def _chua(tk):
+        tk = tk.strip().lstrip("-")
+        if _co_dau(tk):
+            k = chuan_hoa_giu_dau(tk)
+            return bool(k) and k in ten_dau
+        k = chuan_hoa(tk)
+        return bool(k) and k in ten
+
+    tks = tach_tu_khoa(chuoi_tu_khoa)
+    if any(_chua(t) for t in tks if la_tu_loai_tru(t)):
+        return False
+    return any(_chua(t) for t in tks if not la_tu_loai_tru(t))
 
 
 # "43,5K thành viên" · "3,6K thành viên" · "950 thành viên" · "1.234 thành viên"
