@@ -956,7 +956,14 @@ async def cho_upload_xong(page, so_anh: int, cap_ms: int = None) -> int:
     het = _t.monotonic() + max(0, cap_ms - san_ms) / 1000
     on = n = 0
     while _t.monotonic() < het:
-        n = await page.evaluate(_JS_DEM_ANH_LEN)
+        # Bọc try/except: page.evaluate CÓ THỂ ném (vd "Execution context was
+        # destroyed" khi FB re-render composer lúc upload). Nếu để lọt ra ngoài,
+        # khối gọi upload bắt bằng `except Exception: continue` rồi bấm nút ảnh
+        # LẦN NỮA → đính trùng ảnh. Lỗi dò thì coi như chưa xong, đợi tiếp tới trần.
+        try:
+            n = await page.evaluate(_JS_DEM_ANH_LEN)
+        except Exception:
+            n = 0
         if n >= so_anh:
             on += 1
             if on >= 2:          # ổn định 2 nhịp mới chắc là xong

@@ -10,6 +10,33 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.76.6 — 03/11/2026
+
+**Vá: lỗi mở Chrome không còn phạt oan acc + runner tự khởi động lại**
+
+Sự cố 03/11: tiến trình runner chạy lâu bị cạn tài nguyên mở Chrome — suốt ~1
+tiếng mọi lần mở trình duyệt đều báo *"Target page, context or browser has been
+closed"*, trong khi acc hoàn toàn khỏe (vào test tay vẫn đăng 9/9 nhóm). Hậu quả:
+3 acc Times City bị cho **nghỉ oan** vì "5 lỗi liên tiếp".
+
+- **Không phạt oan nữa.** Bộ sức khỏe sinh ra để bắt *Facebook chặn acc*, và đã
+  có cơ chế bỏ qua lỗi máy/mạng — nhưng danh sách nhận diện còn thiếu. Nay xếp
+  các lỗi **mở trình duyệt / mất kết nối driver** (`…has been closed`,
+  `Target closed`, `launch_persistent…`, `reading from the driver`) vào nhóm
+  *tạm thời* → **không tính vào sức khỏe acc**. Lỗi Facebook thật (không thấy
+  nút, composer bị chặn) vẫn tính như cũ.
+- **Runner tự khởi động lại.** Gặp **5 lần liên tiếp** không mở được Chrome, runner
+  tự đẻ một tiến trình mới (sạch, mở Chrome lại bình thường) rồi thoát — thay vì
+  đứng hỏng cả tiếng tới khi phát hiện. Có chốt an toàn: chỉ tự restart nếu đã
+  chạy > 20 phút, tối đa 3 lần (tránh vòng lặp khi lỗi toàn máy).
+- **Vá phụ:** bước chờ upload ảnh không còn ném lỗi ra ngoài (tránh trường hợp
+  hiếm bị đính trùng ảnh khi Facebook re-render giữa chừng).
+
+> Cập nhật xong khởi động lại app để các runner nhận bản vá. Acc đang bị nghỉ oan
+> sẽ tự chạy lại ở slot kế tiếp (Chrome đã mở được bình thường).
+
+---
+
 ## v2.76.5 — 03/11/2026
 
 **Marketplace: ô "Xóa bài quá … ngày" nhập được 0**

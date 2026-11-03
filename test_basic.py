@@ -178,10 +178,28 @@ check("post_via_crosspost ném lỗi thật lên",
           acc_name="T", search_kw="k", message="m", first_group_uid="2")))
 
 _src_sch = Path("scheduler.py").read_text(encoding="utf-8")
-_i_tran  = _src_sch.find('if cat == "transient":\n                logger.warning')
+# Nhánh transient phải thoát (return) TRƯỚC khi chạm _bao_suc_khoe. Mỏ neo bằng
+# câu cảnh báo riêng của nhánh đó (bền hơn so khớp đúng dòng kế tiếp — nhánh có
+# thể chèn thêm việc, vd đếm lỗi mở Chrome để tự restart).
+_i_tran  = _src_sch.find("lỗi máy/mạng — KHÔNG tính vào sức khoẻ")
+_i_ret   = _src_sch.find("return", _i_tran)
 _i_suc   = _src_sch.find("_bao_suc_khoe(stt, acc_name,")
 check("scheduler thoát sớm khi lỗi transient, trước khi ghi sức khoẻ",
-      _i_tran != -1 and _i_suc != -1 and _i_tran < _i_suc)
+      _i_tran != -1 and _i_suc != -1 and _i_tran < _i_ret < _i_suc)
+
+# Lỗi MỞ Chrome (hạ tầng) phải là 'transient' để KHÔNG phạt oan acc. Sự cố
+# 03/11: "Target page... has been closed" bị xếp 'other' → tính vào sức khoẻ →
+# 3 acc Times City nghỉ oan dù vào test tay vẫn đăng 9/9 nhóm bình thường.
+from utils import classify_error as _ce
+check("lỗi mở Chrome 'Target page…closed' → transient",
+      _ce(Exception("BrowserType.launch_persistent_context: Target page, "
+                    "context or browser has been closed"))[0] == "transient")
+check("lỗi 'Target closed' → transient",
+      _ce(Exception("Target closed"))[0] == "transient")
+check("lỗi 'reading from the driver' → transient",
+      _ce(Exception("Connection closed while reading from the driver"))[0] == "transient")
+check("lỗi FB thật 'Không tìm thấy nút' vẫn 'selector' (vẫn tính sức khoẻ)",
+      _ce(Exception("Không tìm thấy nút Đăng"))[0] == "selector")
 
 # ── Chốt "một loại lịch — một runner" ──────────────────────────────────────
 # Bộ quét runner mồ côi dò bằng dòng lệnh, mà WMI trả CommandLine = null cho

@@ -145,6 +145,17 @@ def classify_error(exc) -> tuple:
         return ("ratelimit", "Bị giới hạn — thử lại sau")
     if any(k in msg for k in ("timeout", "timed out", "net::", "connection", "econn", "reset", "unreachable")):
         return ("transient", "Lỗi mạng/tạm thời")
+    # Lỗi MỞ TRÌNH DUYỆT / mất kết nối driver — hạ tầng của MÁY, KHÔNG phải acc.
+    # Playwright ném nhiều câu CHỮ KHÁC NHAU cho cùng bản chất "Chrome không mở
+    # nổi": "...has been closed", "Target closed", "launch_persistent_context: ...",
+    # "...reading from the driver". Bản cũ chỉ bắt được "Connection closed..."
+    # (có chữ 'connection' ở trên) nên câu "Target page, context or browser has
+    # been closed" của 03/11 lọt lưới → bị coi là lỗi acc → phạt oan 3 acc nghỉ.
+    # Gom hết về transient để bộ sức khoẻ BỎ QUA (xem scheduler: transient → return).
+    if any(k in msg for k in ("has been closed", "target closed", "target page, context",
+                              "browser has been closed", "launch_persistent",
+                              "reading from the driver", "browser closed")):
+        return ("transient", "Không mở được trình duyệt")
     if any(k in msg for k in ("selector", "not found", "no element", "không tìm thấy nút", "đổi giao diện")):
         return ("selector", "Không thấy nút (FB đổi giao diện?)")
     return ("other", str(exc)[:50])

@@ -55,6 +55,75 @@ if _start_delay > 0:
     time.sleep(_start_delay)
 
 
+# ── Tự khởi động lại khi liên tiếp KHÔNG MỞ ĐƯỢC CHROME ───────────────────────
+# Tiến trình chạy lâu có lúc cạn tài nguyên spawn Chrome: 03/11 suốt ~1 tiếng mọi
+# launch_persistent_context đều ném "Target page... has been closed" trong khi
+# vòng kiểm lịch vẫn chạy đều. Một tiến trình MỚI mở Chrome lại bình thường →
+# runner tự đẻ bản mới rồi thoát. Dùng lại server._lenh_con để ĐÚNG lệnh cho cả
+# bản dev lẫn bản biên dịch (Nuitka đặt sys.executable thành path GIẢ).
+_MO_CHROME_LOI    = 0                   # số lần LIÊN TIẾP không mở được Chrome
+_MO_CHROME_LOCK   = threading.Lock()
+_NGUONG_RESTART   = 5                   # đủ bấy nhiêu lần liên tiếp thì tự restart
+_TU_KHI_CHAY      = time.monotonic()
+_MIN_UPTIME       = 20 * 60             # chỉ tự restart nếu đã chạy > 20 phút
+_RESTART_GEN      = int(os.environ.get("SCHEDULER_RESTART_GEN", "0"))
+_MAX_RESTART_GEN  = 3                   # chặn vòng restart vô tận (lỗi toàn máy)
+
+# Bản MỚI đẻ từ self-restart: chờ tiến trình cũ chết + nhả khoá rồi mới giành khoá.
+if os.environ.get("SCHEDULER_RESTART_HANDOFF") == "1":
+    logger.info("♻️  Khởi động lại sau sự cố mở Chrome — chờ 6s nhường khoá...")
+    time.sleep(6)
+
+
+def _la_loi_mo_chrome(e) -> bool:
+    """Lỗi MỞ trình duyệt / mất kết nối driver (hạ tầng), không phải lỗi acc."""
+    msg = str(e).lower()
+    return any(k in msg for k in ("has been closed", "target closed", "target page, context",
+                                  "browser has been closed", "launch_persistent",
+                                  "reading from the driver", "browser closed"))
+
+
+def _ghi_nhan_mo_chrome(thanh_cong: bool):
+    """Đếm số lần LIÊN TIẾP không mở được Chrome; mở được 1 lần là reset về 0."""
+    global _MO_CHROME_LOI
+    with _MO_CHROME_LOCK:
+        _MO_CHROME_LOI = 0 if thanh_cong else _MO_CHROME_LOI + 1
+
+
+def _nen_tu_restart() -> bool:
+    with _MO_CHROME_LOCK:
+        du_loi = _MO_CHROME_LOI >= _NGUONG_RESTART
+    return (du_loi
+            and (time.monotonic() - _TU_KHI_CHAY) > _MIN_UPTIME
+            and _RESTART_GEN < _MAX_RESTART_GEN)
+
+
+def _tu_khoi_dong_lai():
+    """Đẻ một runner MỚI cùng loại rồi THOÁT tiến trình này (os._exit để nhả khoá
+    ngay). Lệnh lấy từ server._lenh_con → đúng cho cả bản biên dịch."""
+    import subprocess
+    try:
+        import server
+        cmd   = server._lenh_con("scheduler.py", LOAI)
+        flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        env   = {**os.environ,
+                 "SCHEDULER_RESTART_HANDOFF": "1",
+                 "SCHEDULER_RESTART_GEN":     str(_RESTART_GEN + 1)}
+        logger.error(f"♻️  [{LOAI}] {_MO_CHROME_LOI} lần liên tiếp KHÔNG mở được "
+                     f"Chrome — đẻ runner mới rồi thoát (gen {_RESTART_GEN + 1}).")
+        proc = subprocess.Popen(cmd, cwd=os.path.dirname(os.path.abspath(__file__)),
+                                creationflags=flags, env=env)
+        try:
+            from pathlib import Path as _P
+            (_P(os.path.dirname(os.path.abspath(__file__))) /
+             f".runner_{LOAI}.pid").write_text(str(proc.pid))
+        except Exception:
+            pass
+        os._exit(0)          # nhả khoá ngay; bản mới chờ 6s rồi giành khoá
+    except Exception as e:
+        logger.error(f"❌ Tự khởi động lại thất bại, chạy tiếp: {e}")
+
+
 # ── Helpers ───────────────────────────────────────────────────
 
 def _parse_schedule_time(gio_dang: str):
@@ -744,6 +813,7 @@ def _run_one(item: dict):
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             suffix = _attempt_post(item)
+            _ghi_nhan_mo_chrome(True)      # đăng xong ⇒ Chrome mở được ⇒ reset đếm
             done   = datetime.now().strftime("%H:%M")
             _update_status(sid, f"✅ {done}{suffix}")
             logger.info(f"✅ STT {stt} hoàn thành{suffix}")
@@ -836,6 +906,10 @@ def _run_one(item: dict):
             # đường khác: ComposerBiChan và "bài bị gỡ" đều có nhánh riêng ở
             # trên. Một cái timeout mạng thì không phải bằng chứng gì về acc cả.
             if cat == "transient":
+                # Lỗi MỞ Chrome thì đếm (liên tiếp đủ ngưỡng → runner tự restart).
+                # Lỗi mạng khác không đếm — restart không chữa được timeout mạng.
+                if _la_loi_mo_chrome(e):
+                    _ghi_nhan_mo_chrome(False)
                 logger.warning(
                     f"🖥️  STT {stt}: lỗi máy/mạng — KHÔNG tính vào sức khoẻ "
                     f"acc '{acc_name}'")
@@ -1047,6 +1121,11 @@ def main():
                 last_refresh_check = time.time()
 
             logger.info(f"⏰ [{now.strftime('%H:%M:%S')}] Kiểm tra lịch {LOAI}...")
+
+            # Liên tiếp không mở được Chrome (tiến trình cạn tài nguyên) → tự đẻ
+            # runner mới rồi thoát. Không trở lại sau dòng này.
+            if _nen_tu_restart():
+                _tu_khoi_dong_lai()
 
             # Acc dính spam đã nghỉ đủ giờ thì trả lịch về 'Chờ' để chạy MỘT
             # phiên thăm dò. Vẫn giữ trạng thái Spam — được thì phiên đó tự thả,
