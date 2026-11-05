@@ -7,8 +7,16 @@ Công cụ tự động đăng bài Facebook (nhóm + tường Page) bằng Play
 - Windows 10/11
 - Python 3.11+ (nhớ tick **Add Python to PATH** khi cài)
 
-## Cài đặt (máy mới)
-Chạy **`INSTALL.bat`** — tự cài:
+## Cài đặt (máy mới) — MỘT file, tự cài hết
+Tải **`SETUP.bat`** (mở link → Ctrl+S → lưu) rồi bấm đúp:
+
+https://raw.githubusercontent.com/M3SSI-666/MNT_FB_TOOL/main/SETUP.bat
+
+Nó tự làm: cài **Python 3.13** nếu chưa có (python.org, cài riêng cho user, không cần
+Admin) → cài **git** nếu chưa có → tải code về `%USERPROFILE%\MNT_FB_TOOL` → cài
+thư viện + Chromium → tạo lối tắt **MNT FB AutoPost** ngoài Desktop → **mở app**.
+
+Máy đã có Python + git thì cũng có thể chạy **`INSTALL.bat`** trong thư mục code — tự cài:
 1. Python packages (`flask`, `playwright`, `openpyxl`…)
 2. Chromium cho Playwright
 

@@ -35,7 +35,7 @@ if errorlevel 1 (
 
 :: Cai packages
 echo [1/2] Dang cai Python packages...
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 if errorlevel 1 (
     echo [LOI] Cai packages that bai!
     pause
@@ -45,7 +45,7 @@ echo.
 
 :: Cai Playwright browser
 echo [2/2] Dang cai Chromium browser cho Playwright...
-playwright install chromium
+python -m playwright install chromium
 if errorlevel 1 (
     echo [LOI] Cai Playwright that bai!
     pause
@@ -60,4 +60,5 @@ echo  BUOC CUOI:
 echo   Chay RUN_APP.bat de khoi dong phan mem (mo cua so app).
 echo   Tat phan mem: bam nut X o goc tren cua so.
 echo ============================================================
-pause
+if /i not "%~1"=="tu_dong" pause
+exit /b 0
