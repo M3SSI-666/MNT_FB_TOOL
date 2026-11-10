@@ -12,7 +12,28 @@ cho vừa "khung chữ". Khung mặc định căn giữa vùng bên phải (kh�
 nhân vật trái, bong bóng phải ~60%); ảnh nào đã ghim vị trí thì theo tv_bo.khung.
 """
 import os
+import re
 import json
+
+# Emoji / ký hiệu hình mà font Baloo 2 KHÔNG có glyph (ghép vào sẽ ra ô vuông).
+# Bỏ hẳn khi ghép chữ lên ảnh hook — emoji vẫn giữ nguyên trong NỘI DUNG bài,
+# chỉ lược ở ảnh bìa cho sạch. (Gạch "–", chữ Việt… KHÔNG nằm trong dải này.)
+_RE_EMOJI = re.compile(
+    "["
+    "\U0001F000-\U0001FAFF"     # hầu hết emoji/pictograph (🏡 🔹 🔥 ⭐…)
+    "\U00002600-\U000027BF"     # misc symbols + dingbats (☎ ✔ ✅ ☀…)
+    "\U00002B00-\U00002BFF"     # sao/mũi tên (⭐ ⬆…)
+    "\U00002300-\U000023FF"     # ⌚ ⏰ ⌛…
+    "\U0000FE00-\U0000FE0F"     # variation selector (kèm sau emoji)
+    "\U000020E3"                # keycap
+    "]+", flags=re.UNICODE)
+
+
+def _lam_sach_dong(t: str) -> str:
+    """Bỏ emoji + gộp khoảng trắng thừa (do emoji để lại) trên MỘT dòng."""
+    t = _RE_EMOJI.sub("", t)
+    t = re.sub(r"[ \t]{2,}", " ", t)
+    return t.strip()
 
 FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "Baloo2.ttf")
 MAU_CHU   = (24, 40, 78)        # xanh tím than
@@ -49,8 +70,10 @@ def _load_font(size):
 
 
 def _cac_dong(tieu_de):
-    """Tách tiêu đề theo xuống dòng NGƯỜI DÙNG gõ; bỏ dòng trống đầu/cuối."""
-    lines = (tieu_de or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    """Tách tiêu đề theo xuống dòng NGƯỜI DÙNG gõ; bỏ emoji từng dòng; bỏ dòng
+    trống đầu/cuối (dòng chỉ có emoji → rỗng → thành khoảng cách hoặc bị bỏ)."""
+    raw = (tieu_de or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    lines = [_lam_sach_dong(l) for l in raw]
     while lines and not lines[0].strip():
         lines.pop(0)
     while lines and not lines[-1].strip():

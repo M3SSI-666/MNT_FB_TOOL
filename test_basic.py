@@ -5445,6 +5445,11 @@ _hook.ghep_tieu_de(str(_bg_hk), "BÁN 3PN\nGIÁ 11 TỶ", "", str(_out_hk))
 check("ghep_tieu_de ra ảnh đúng kích thước nền", _ImHk.open(_out_hk).size == (1000, 560))
 check("ghep_tieu_de có vẽ chữ (ảnh khác nền trắng)",
       _ImHk.open(_out_hk).convert("L").getextrema()[0] < 250)
+# Bỏ emoji (font hook không có glyph → ô vuông) nhưng giữ chữ Việt + gạch "–".
+check("hook bỏ emoji, giữ chữ Việt + gạch –",
+      _hook._lam_sach_dong("🏡 Homestay – Times City ⭐") == "Homestay – Times City"
+      and _hook._cac_dong("🔹 A\n🏡 B") == ["A", "B"]
+      and _hook._cac_dong("🏠 CHO THUÊ 3PN") == ["CHO THUÊ 3PN"])
 # chen_anh_hook_dau: chèn hook làm ảnh #1, GIỮ thứ tự ảnh content phía sau.
 _lp_hk, _td_hk = _hook.chen_anh_hook_dau(["/x/a.jpg", "/x/b.jpg"], None, "ABC", str(_bg_hk), "")
 check("chen_anh_hook_dau: hook là ảnh #1, ảnh content dồn xuống #2,#3",
