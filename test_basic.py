@@ -5381,6 +5381,46 @@ check("nhập Excel content giữ tiêu đề",
 with db._conn() as _c_tdm:
     _c_tdm.execute("DELETE FROM content WHERE ma_content IN ('TDM1','TDM2')")
 
+# ── Ảnh hook: cột tick "Hook" + ô "Tiêu đề hook" theo content ──────────────
+with db._conn() as _c_hk:
+    _cot_ct_hk = {r[1] for r in _c_hk.execute("PRAGMA table_info(content)").fetchall()}
+    _cot_bo_hk = {r[1] for r in _c_hk.execute("PRAGMA table_info(tv_bo)").fetchall()}
+check("content có cột dung_hook + tieu_de_hook", {"dung_hook", "tieu_de_hook"} <= _cot_ct_hk)
+check("tv_bo có cột khung (vùng chữ ảnh hook)", "khung" in _cot_bo_hk)
+check("bảng Content: cột Hook nằm GIỮA Tiêu đề Market và Sử dụng",
+      _bang_ct.index(">Tiêu đề Market Place</th>") < _bang_ct.index(">Hook</th>")
+      < _bang_ct.index(">Sử dụng</th>"))
+check("hàng Content có checkbox Hook + form có ô Tiêu đề hook",
+      "contentSetHook(" in _ajs_mkt and 'id="ce_hook"' in _ajs_mkt
+      and 'id="ce_hooktd"' in _ajs_mkt and "tieu_de_hook:" in _ajs_mkt)
+_cid_hk = db.upsert_content({"loai": "homestay", "ma_content": "HK1", "noi_dung": "nd"})
+check("API tick Hook → coerce về 1",
+      _client.post(f"/api/content/{_cid_hk}/field",
+                   json={"field": "dung_hook", "value": True}).get_json().get("ok") is True
+      and any(r["id"] == _cid_hk and r["dung_hook"] == 1 for r in db.get_content("homestay")))
+_r_hktd = _client.post(f"/api/content/{_cid_hk}/field",
+                       json={"field": "tieu_de_hook", "value": "BÁN 3PN\nGIÁ 11 TỶ"}).get_json()
+check("API lưu Tiêu đề hook, giữ nguyên xuống dòng",
+      _r_hktd.get("ok") is True
+      and any(r["id"] == _cid_hk and r["tieu_de_hook"] == "BÁN 3PN\nGIÁ 11 TỶ"
+              for r in db.get_content("homestay")))
+_cid_hk2 = db.upsert_content({"loai": "homestay", "ma_content": "HK2", "noi_dung": "x",
+                              "dung_hook": 1, "tieu_de_hook": "CHO THUÊ 2PN"})
+check("form (upsert_content) lưu dung_hook + tieu_de_hook",
+      any(r["id"] == _cid_hk2 and r["dung_hook"] == 1 and r["tieu_de_hook"] == "CHO THUÊ 2PN"
+          for r in db.get_content("homestay")))
+# Vùng chữ (khung) lưu theo từng ảnh hook qua tv_bo.khung.
+_mh_hk = db.tv_mang_hook_id()
+_bh_hk = db.tv_bo_upsert({"mang_id": _mh_hk, "ma": "", "link_anh": "/media/thuvien/hook1.jpg",
+                          "su_dung": "Có"})
+db.tv_bo_update_field(_bh_hk, "khung", '{"x":0.37,"y":0.17,"w":0.57,"h":0.4}')
+check("tv_bo.khung lưu được vùng chữ cho ảnh hook",
+      any(b["id"] == _bh_hk and '"x":0.37' in (b.get("khung") or "")
+          for b in db.tv_bo_list(_mh_hk)))
+with db._conn() as _c_hk2:
+    _c_hk2.execute("DELETE FROM content WHERE ma_content IN ('HK1','HK2')")
+db.tv_bo_xoa(_bh_hk)
+
 # Bộ đăng: tiêu đề lấy từ content, KHÔNG từ cài đặt; thiếu thì dừng TRƯỚC khi
 # tải ảnh / mở trình duyệt.
 _src_mp = Path("market_poster.py").read_text(encoding="utf-8")
@@ -6932,12 +6972,21 @@ with db._conn() as _c_tv:
 check("init_db tạo bảng tv_mang + tv_bo + tv_con_tro",
       {"tv_mang", "tv_bo", "tv_con_tro"} <= _bang_tv)
 
-# DB: tab (mang) CRUD + giữ thứ tự.
+# Tab HỆ THỐNG "Ảnh hook": init_db tự tạo, luôn đứng đầu, đánh dấu he_thong=1.
+_tabs0 = db.tv_mang_list()
+check("tab hệ thống 'Ảnh hook' tự có + đứng đầu + he_thong=1",
+      bool(_tabs0) and _tabs0[0]["ten"] == db.TEN_TAB_HOOK and _tabs0[0]["he_thong"] == 1)
+check("tv_mang_hook_id trả đúng id tab hệ thống",
+      db.tv_mang_hook_id() == _tabs0[0]["id"])
+
+# DB: tab (mang) CRUD + giữ thứ tự (bỏ qua tab hệ thống khi so sánh thứ tự thêm).
 _m1 = db.tv_mang_them("3PN")
 _m2 = db.tv_mang_them("Duplex")
 check("thêm tab bộ ảnh, có id", isinstance(_m1, int) and _m1 > 0)
-check("list tab giữ đúng thứ tự thêm",
-      [m["ten"] for m in db.tv_mang_list()] == ["3PN", "Duplex"])
+check("list tab thường giữ đúng thứ tự thêm",
+      [m["ten"] for m in db.tv_mang_list() if not m["he_thong"]] == ["3PN", "Duplex"])
+check("tab hệ thống vẫn đứng đầu khi đã có tab thường",
+      db.tv_mang_list()[0]["ten"] == db.TEN_TAB_HOOK)
 db.tv_mang_doi_ten(_m2, "Đập thông")
 check("đổi tên tab", any(m["id"] == _m2 and m["ten"] == "Đập thông" for m in db.tv_mang_list()))
 
@@ -6965,6 +7014,27 @@ check("xoá dòng ảnh", all(b["id"] != _b1 for b in db.tv_bo_list(_m1)))
 db.tv_mang_xoa(_m2)
 check("xoá tab thì xoá luôn dòng ảnh bên trong",
       all(m["id"] != _m2 for m in db.tv_mang_list()) and db.tv_bo_list(_m2) == [])
+
+# Tab hệ thống "Ảnh hook" KHÔNG xoá / KHÔNG đổi tên được (DB chặn).
+_hid = db.tv_mang_hook_id()
+_chan_xoa = False
+try: db.tv_mang_xoa(_hid)
+except ValueError: _chan_xoa = True
+check("DB chặn xoá tab hệ thống 'Ảnh hook'",
+      _chan_xoa and any(m["id"] == _hid for m in db.tv_mang_list()))
+_chan_ten = False
+try: db.tv_mang_doi_ten(_hid, "Đổi bừa")
+except ValueError: _chan_ten = True
+check("DB chặn đổi tên tab hệ thống 'Ảnh hook'",
+      _chan_ten and any(m["id"] == _hid and m["ten"] == db.TEN_TAB_HOOK
+                        for m in db.tv_mang_list()))
+# reorder có lỡ đẩy tab hệ thống xuống → vẫn nhảy về đầu.
+db.tv_mang_reorder([_m1, _hid])
+check("reorder giữ tab hệ thống luôn ở đầu", db.tv_mang_list()[0]["id"] == _hid)
+# API cũng chặn xoá tab hệ thống (trả ok=False, còn nguyên tab).
+check("API chặn xoá tab hệ thống 'Ảnh hook'",
+      _client.post("/api/thuvien/mang/xoa", json={"id": _hid}).get_json().get("ok") is False
+      and any(m["id"] == _hid for m in db.tv_mang_list()))
 
 # API: endpoint hoạt động qua test client (dùng DB tạm).
 check("API thêm tab bộ ảnh",
@@ -7333,6 +7403,7 @@ server.MEDIA_DIR = _st.MEDIA_DIR = _md_tv
 _cfg_tv.THUVIEN_MEDIA_DIR = str(_md_tv / "thuvien")
 try:
     for _m in db.tv_mang_list():
+        if _m["he_thong"]: continue        # giữ tab hệ thống 'Ảnh hook'
         db.tv_mang_xoa(_m["id"])
     _u = lambda b: _st.save_thuvien_image(b, "x.jpg")
     _a1, _a2, _a3, _a4 = _u(b"anh-1"), _u(b"anh-2"), _u(b"anh-3"), _u(b"anh-4")
@@ -7357,6 +7428,7 @@ try:
 
     # "Máy mới": thư viện trống, không có file ảnh, không có content đó.
     for _m in db.tv_mang_list():
+        if _m["he_thong"]: continue        # giữ tab hệ thống 'Ảnh hook'
         db.tv_mang_xoa(_m["id"])
     for _f in (_md_tv / "thuvien").iterdir():
         _f.unlink()
@@ -7367,7 +7439,9 @@ try:
     _ds_tv = {m["ten"]: m["id"] for m in db.tv_mang_list()}
     _bo_tv = db.tv_bo_list(_ds_tv.get("1PN", -1))
     check("Nhập thư viện: tạo lại đủ tab, kể cả tab chưa có bộ ảnh",
-          _r_im.get("ok") and set(_ds_tv) == {"1PN", "Rỗng"} and _r_im["tab_moi"] == 2)
+          _r_im.get("ok")
+          and {k for k in _ds_tv if k != db.TEN_TAB_HOOK} == {"1PN", "Rỗng"}
+          and _r_im["tab_moi"] == 2)
     check("Nhập thư viện: đủ 3 bộ, giữ thứ tự / mã / Sử dụng / ghi chú",
           [(b["ma"], b["su_dung"], b["ghi_chu"]) for b in _bo_tv]
           == [("A1", "Có", "bộ có mã"), ("", "Có", ""), ("A3", "Không", "")])
@@ -7413,12 +7487,17 @@ try:
     check("Nhập THÊM lần 2 cùng file: không nhân đôi (nhận ra bộ theo ảnh)",
           _r_k2.get("ok") and _r_k2["them"] == 0 and _r_k2["bo_qua"] == 4
           and len(db.tv_bo_list(_tk)) == 6)
-    # Kéo thả đổi vị trí tab thư viện (trái ↔ phải).
-    _ids_tab = [m["id"] for m in db.tv_mang_list()]
-    _r_ro = _client.post("/api/thuvien/mang/reorder", json={"ids": _ids_tab[::-1]}).get_json()
-    check("Thư viện: kéo thả đổi vị trí tab → lưu đúng thứ tự mới",
-          _r_ro.get("ok") and [m["id"] for m in db.tv_mang_list()] == _ids_tab[::-1]
-          and len(_ids_tab) >= 2)
+    # Kéo thả đổi vị trí tab thư viện (trái ↔ phải). Tab hệ thống luôn giữ đầu,
+    # chỉ các tab THƯỜNG mới đổi chỗ.
+    _ids_thuong = [m["id"] for m in db.tv_mang_list() if not m["he_thong"]]
+    _hid_tv = db.tv_mang_hook_id()
+    _r_ro = _client.post("/api/thuvien/mang/reorder",
+                         json={"ids": _ids_thuong[::-1]}).get_json()
+    _sau_ro = [m["id"] for m in db.tv_mang_list()]
+    check("Thư viện: kéo thả đổi vị trí tab → lưu đúng thứ tự mới, tab hệ thống vẫn đầu",
+          _r_ro.get("ok") and _sau_ro[0] == _hid_tv
+          and [i for i in _sau_ro if i != _hid_tv] == _ids_thuong[::-1]
+          and len(_ids_thuong) >= 2)
     _r_ic = _nhap(_bk_ct, "/api/content/import-zip", loai="thue")
     _ct_tv = db.get_content_by_code("TV-CT1", "thue") or {}
     check("Backup content mang theo Mã thư viện — sang máy mới trỏ đúng thư viện (theo tên)",
@@ -7432,6 +7511,7 @@ try:
 finally:
     server.MEDIA_DIR, _st.MEDIA_DIR, _cfg_tv.THUVIEN_MEDIA_DIR = _goc_tv
     for _m in db.tv_mang_list():
+        if _m["he_thong"]: continue        # giữ tab hệ thống 'Ảnh hook'
         db.tv_mang_xoa(_m["id"])
 
 # ── Mã content có dấu cách thừa ("P062806 ") — gặp thật 23/10 ───────────────

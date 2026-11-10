@@ -1401,9 +1401,12 @@ def api_content_field(content_id):
     body  = request.json or {}
     field = body.get("field", "")
     value = body.get("value", "")
-    safe  = {"ma_content","noi_dung","link_anh","su_dung","tieu_de_mkt","ghi_chu","ma_thu_vien"}
+    safe  = {"ma_content","noi_dung","link_anh","su_dung","tieu_de_mkt","ghi_chu",
+             "ma_thu_vien","dung_hook","tieu_de_hook"}
     if field not in safe:
         return jsonify({"ok": False, "error": f"Field không hợp lệ: {field}"})
+    if field == "dung_hook":                       # checkbox → chỉ 0/1
+        value = 1 if value in (1, "1", True, "true", "Có") else 0
     # Sử dụng là tập ĐÓNG: chỉ "Có"/"Không". Giá trị lạ (gõ tay, nhập Excel) làm
     # content âm thầm rơi khỏi Gen (chỉ lấy su_dung="Có") — chặn tại cửa ghi.
     if field == "ma_content":
@@ -1501,16 +1504,23 @@ def api_tv_mang_doi_ten():
     if any(m["id"] != mid and (m["ten"] or "").lower() == ten.lower()
            for m in db.tv_mang_list()):
         return jsonify({"ok": False, "error": f'Đã có bộ ảnh "{ten}"'})
-    db.tv_mang_doi_ten(mid, ten)
+    try:
+        db.tv_mang_doi_ten(mid, ten)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)})
     return jsonify({"ok": True})
 
 
 @app.route("/api/thuvien/mang/xoa", methods=["POST"])
 def api_tv_mang_xoa():
     try:
-        db.tv_mang_xoa(int((request.json or {}).get("id")))
+        mid = int((request.json or {}).get("id"))
     except (TypeError, ValueError):
         return jsonify({"ok": False, "error": "Thiếu bộ ảnh"})
+    try:
+        db.tv_mang_xoa(mid)
+    except ValueError as e:        # tab hệ thống 'Ảnh hook' — không xoá được
+        return jsonify({"ok": False, "error": str(e)})
     return jsonify({"ok": True})
 
 
@@ -1620,7 +1630,9 @@ def api_tv_export_zip():
     from openpyxl import Workbook
     from openpyxl.styles import Font
 
-    mang = db.tv_mang_list()
+    # Tab hệ thống ("Ảnh hook") tự sinh ở mọi máy qua init_db nên KHÔNG đưa vào
+    # backup — tránh nhân đôi / lệch id khi nhập ở máy khác.
+    mang = [m for m in db.tv_mang_list() if not m.get("he_thong")]
     if not mang:
         return jsonify({"ok": False, "error": "Thư viện ảnh đang trống — chưa có gì để xuất"})
 

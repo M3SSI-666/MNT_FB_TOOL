@@ -2158,8 +2158,9 @@ async function loadContent(loai){
         const res=await API.content(loai);
         // Danh sách thư viện ảnh cho dropdown "Mã thư viện" (dùng cả ở form sửa).
         try{ _tvMangCache=((await (await fetch("/api/thuvien/mang")).json()).data)||[]; }catch(e){}
+        // Bỏ tab hệ thống "Ảnh hook" khỏi dropdown — nó không phải album ảnh bài.
         const tvOpts=(sel)=>`<option value="">— Mã thư viện —</option>`+
-            _tvMangCache.map(m=>`<option value="${m.id}" ${String(sel||"")===String(m.id)?"selected":""}>${_escapeHtml(m.ten)}</option>`).join("");
+            _tvMangCache.filter(m=>!m.he_thong).map(m=>`<option value="${m.id}" ${String(sel||"")===String(m.id)?"selected":""}>${_escapeHtml(m.ten)}</option>`).join("");
         const total=res.data.length, active=res.data.filter(r=>r.su_dung==="Có").length;
         const box=document.getElementById("content-summary");
         if(box) box.innerHTML=[{l:"Tổng",v:total},{l:"Đang dùng",v:active,c:"var(--success)"},{l:"Dừng",v:total-active}]
@@ -2219,6 +2220,15 @@ async function loadContent(loai){
                 <!-- Tiêu đề Market Place: inline edit. Trống thì slot Marketplace
                      của content này bị bỏ qua (scheduler báo rõ lý do). -->
                 ${ec(r,"tieu_de_mkt","font-size:12px;max-width:200px;word-break:break-word")}
+
+                <!-- Dùng ảnh hook: tick nhanh. Bật thì khi đăng ghép 1 ảnh hook
+                     (kèm Tiêu đề hook) chèn làm ảnh đầu bài. -->
+                <td style="text-align:center;padding:4px 6px">
+                    <input type="checkbox" ${r.dung_hook?"checked":""}
+                        onchange="contentSetHook(${r.id}, this.checked)"
+                        title="Dùng ảnh hook cho content này"
+                        style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)">
+                </td>
 
                 <!-- Sử dụng: inline edit -->
                 <td class="editable" data-id="${r.id}" data-field="su_dung" data-val="${r.su_dung||""}"
@@ -2362,8 +2372,13 @@ function openContentEdit(data){
             </div>
         </div>
         <div class="field-group"><label>Mã thư viện ảnh <span style="font-weight:400;color:var(--text-muted);font-size:11px">— nếu cột Ảnh trên bỏ trống thì bốc ngẫu nhiên 1 bộ ảnh từ thư viện này</span></label>
-            <select id="ce_tv"><option value="">— Mã thư viện —</option>${_tvMangCache.map(m=>`<option value="${m.id}" ${String(data.ma_thu_vien||"")===String(m.id)?"selected":""}>${_escapeHtml(m.ten)}</option>`).join("")}</select></div>
+            <select id="ce_tv"><option value="">— Mã thư viện —</option>${_tvMangCache.filter(m=>!m.he_thong).map(m=>`<option value="${m.id}" ${String(data.ma_thu_vien||"")===String(m.id)?"selected":""}>${_escapeHtml(m.ten)}</option>`).join("")}</select></div>
         <div class="field-group"><label>Tiêu đề Market Place <span style="font-weight:400;color:var(--text-muted);font-size:11px">— tiêu đề bài niêm yết khi đăng Marketplace; để trống thì content này không đăng Marketplace được</span></label><input id="ce_tdm" value="${(data.tieu_de_mkt||"").replace(/"/g,"&quot;")}"></div>
+        <div class="field-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="ce_hook" ${data.dung_hook?"checked":""} style="width:16px;height:16px;accent-color:var(--accent)">
+            Dùng ảnh hook <span style="font-weight:400;color:var(--text-muted);font-size:11px">— khi đăng, ghép 1 ảnh hook (kèm tiêu đề dưới) chèn làm ảnh đầu bài</span></label></div>
+        <div class="field-group"><label>Tiêu đề hook <span style="font-weight:400;color:var(--text-muted);font-size:11px">— chữ ghép lên ảnh hook; muốn xuống dòng ở đâu thì Enter ở đó</span>
+            <textarea id="ce_hooktd" rows="3" style="width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;color:var(--text-primary);font-size:13px;line-height:1.5;resize:vertical;outline:none;font-family:inherit">${_escapeHtml(data.tieu_de_hook||"")}</textarea></label></div>
         <div class="field-group"><label>Ghi chú</label><input id="ce_note" value="${data.ghi_chu||""}"></div>`;
     document.getElementById("cedit-overlay").style.display="block";
     document.getElementById("cedit-panel").style.display="flex";
@@ -2422,6 +2437,8 @@ async function saveContentEdit(){
         link_anh:   (window._ceImgUrls||[]).join(", "),
         ma_thu_vien:document.getElementById("ce_tv")?.value||"",
         tieu_de_mkt:(document.getElementById("ce_tdm")?.value||"").trim(),
+        dung_hook:  document.getElementById("ce_hook")?.checked ? 1 : 0,
+        tieu_de_hook:(document.getElementById("ce_hooktd")?.value||""),
         ghi_chu:    document.getElementById("ce_note")?.value||"",
     };
     if(!data.id) delete data.id;
@@ -2444,6 +2461,15 @@ async function contentSetThuVien(id, value){
     try{
         const r = await API.updateContentField(parseInt(id), "ma_thu_vien", value);
         if(r.ok) Toast.success(value ? "Đã gán thư viện ảnh" : "Đã bỏ gán thư viện");
+        else Toast.error(r.error);
+    }catch(e){ Toast.error(e.message); }
+}
+
+// Tick nhanh "Dùng ảnh hook" cho content (cột Hook ở bảng Content).
+async function contentSetHook(id, on){
+    try{
+        const r = await API.updateContentField(parseInt(id), "dung_hook", on ? 1 : 0);
+        if(r.ok) Toast.success(on ? "Bật ảnh hook cho content" : "Tắt ảnh hook");
         else Toast.error(r.error);
     }catch(e){ Toast.error(e.message); }
 }
@@ -2493,8 +2519,18 @@ async function loadThuVien(){
 
 function tvRenderTabs(){
     const box = document.getElementById("tv-tabs"); if(!box) return;
-    let html = _tvMang.map(m=>{
+    // Tab hệ thống (he_thong=1, "Ảnh hook") luôn xếp đầu dù mảng có lệch thứ tự.
+    const ds = [..._tvMang].sort((a,b)=>(b.he_thong?1:0)-(a.he_thong?1:0));
+    let html = ds.map(m=>{
         const active = m.id === _tvCur;
+        if(m.he_thong){
+            // Thư viện ảnh hook: cố định đầu, KHÔNG kéo thả / đổi tên / xoá.
+            return `<div class="content-tab ${active?"active":""} content-tab--hethong"
+                         onclick="tvChon(${m.id})"
+                         title="Thư viện ảnh hook — không xoá/đổi tên được">
+                        <span>📌 ${_escapeHtml(m.ten)}</span>
+                    </div>`;
+        }
         return `<div class="content-tab ${active?"active":""}" onclick="tvChon(${m.id})"
                      draggable="true" data-tv="${m.id}" title="Kéo thả để đổi vị trí"
                      ondragstart="tvTabKeo(event,${m.id})" ondragover="tvTabQua(event)"

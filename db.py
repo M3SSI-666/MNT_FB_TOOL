@@ -186,6 +186,10 @@ TT_LICH_X_TU_DONG = "X😴"
 # trong keep của reset_schedules_to_wait nên sáng hôm sau tự về "Chờ".
 TT_LICH_NGHI_SPAM = "Nghỉ Spam"
 
+# Tab thư viện HỆ THỐNG: ảnh nền hook (bong bóng rỗng) để ghép "Tiêu đề hook".
+# Luôn đứng ĐẦU danh sách tab, KHÔNG xoá / KHÔNG đổi tên (cột tv_mang.he_thong=1).
+TEN_TAB_HOOK = "Ảnh hook"
+
 # ── Nghỉ bao lâu giữa hai nhóm khi đi tham gia nhóm ────────────────────────
 # VỪA THAM GIA một nhóm mới thì nghỉ lâu hơn hẳn: đó là hành động Facebook đếm.
 # Bấm tham gia liên tiếp là dấu hiệu máy chạy rõ nhất, và cũng là thứ làm nick
@@ -793,6 +797,30 @@ def init_db():
                             (", ".join([hook] + con_lai), r["id"]))
             con.execute("ALTER TABLE content DROP COLUMN link_anh_hook")
             print("  ↪ Đã gộp ảnh hook vào danh sách ảnh, bỏ cột link_anh_hook")
+
+        # ── Thư viện "Ảnh hook" — tab HỆ THỐNG ────────────────────────────
+        # Ảnh nền hook (bong bóng rỗng) để ghép Tiêu đề hook lên. Đứng ĐẦU mọi
+        # tab (order_idx=-1), đánh dấu he_thong=1 để KHÔNG xoá / KHÔNG đổi tên.
+        _add_col("tv_mang", "he_thong", "he_thong INTEGER DEFAULT 0")
+        if con.execute("SELECT id FROM tv_mang WHERE he_thong=1").fetchone() is None:
+            # Nếu đã có tab trùng tên (tạo tay trước đây) thì NÂNG nó lên hệ
+            # thống thay vì tạo trùng; không có thì tạo mới.
+            _cu = con.execute("SELECT id FROM tv_mang WHERE lower(ten)=lower(?)",
+                              (TEN_TAB_HOOK,)).fetchone()
+            if _cu:
+                con.execute("UPDATE tv_mang SET he_thong=1, order_idx=-1 WHERE id=?",
+                            (_cu["id"],))
+            else:
+                con.execute("INSERT INTO tv_mang (ten, order_idx, he_thong) "
+                            "VALUES (?, -1, 1)", (TEN_TAB_HOOK,))
+            print("  ↪ Đã tạo thư viện hệ thống 'Ảnh hook'")
+
+        # Cờ bật ảnh hook + tiêu đề hook THEO CONTENT; khung chữ THEO ảnh hook.
+        # dung_hook=1 → khi đăng, ghép Tiêu đề hook lên 1 ảnh hook và chèn đầu bài.
+        # tv_bo.khung = JSON vùng chữ {x,y,w,h} (tỉ lệ 0..1); rỗng = căn giữa mặc định.
+        _add_col("content", "dung_hook",    "dung_hook INTEGER DEFAULT 0")
+        _add_col("content", "tieu_de_hook", "tieu_de_hook TEXT DEFAULT ''")
+        _add_col("tv_bo",   "khung",        "khung TEXT DEFAULT ''")
     print(f"✅ DB initialized: {DB_PATH}")
 
 
@@ -1974,9 +2002,22 @@ def delete_content(content_id: int):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def tv_mang_list() -> list[dict]:
+    # Tab hệ thống (he_thong=1, vd "Ảnh hook") LUÔN đứng đầu, rồi tới các tab
+    # thường theo order_idx. Ghim bằng CASE để kéo-thả có lỡ đổi order_idx thì
+    # tab hệ thống vẫn không bị đẩy xuống.
     with _conn() as con:
         return [dict(r) for r in con.execute(
-            "SELECT * FROM tv_mang ORDER BY order_idx, id").fetchall()]
+            "SELECT * FROM tv_mang "
+            "ORDER BY CASE WHEN he_thong=1 THEN 0 ELSE 1 END, order_idx, id"
+        ).fetchall()]
+
+
+def tv_mang_hook_id():
+    """id của tab hệ thống 'Ảnh hook' (None nếu chưa có — init_db luôn tạo)."""
+    with _conn() as con:
+        r = con.execute(
+            "SELECT id FROM tv_mang WHERE he_thong=1 ORDER BY id LIMIT 1").fetchone()
+        return r["id"] if r else None
 
 
 def tv_mang_them(ten: str) -> int:
@@ -1989,14 +2030,20 @@ def tv_mang_them(ten: str) -> int:
 
 def tv_mang_doi_ten(mang_id: int, ten: str):
     with _conn() as con:
+        r = con.execute("SELECT he_thong FROM tv_mang WHERE id=?", (mang_id,)).fetchone()
+        if r and r["he_thong"]:
+            raise ValueError(f'Không đổi tên được thư viện hệ thống "{TEN_TAB_HOOK}"')
         con.execute("UPDATE tv_mang SET ten=? WHERE id=?",
                     ((ten or "").strip(), mang_id))
 
 
 def tv_mang_xoa(mang_id: int):
     """Xoá một tab + mọi bộ ảnh trong đó + con trỏ roll của nó (ảnh trên ổ đĩa
-    giữ nguyên)."""
+    giữ nguyên). Tab hệ thống ('Ảnh hook') KHÔNG xoá được."""
     with _conn() as con:
+        r = con.execute("SELECT he_thong FROM tv_mang WHERE id=?", (mang_id,)).fetchone()
+        if r and r["he_thong"]:
+            raise ValueError(f'Không xoá được thư viện hệ thống "{TEN_TAB_HOOK}"')
         con.execute("DELETE FROM tv_bo WHERE mang_id=?", (mang_id,))
         con.execute("DELETE FROM tv_con_tro WHERE thu_vien_id=?", (mang_id,))
         con.execute("DELETE FROM tv_mang WHERE id=?", (mang_id,))
@@ -2035,17 +2082,25 @@ def tv_bo_xoa(bo_id: int):
 
 
 def tv_bo_update_field(bo_id: int, field: str, value):
-    if field not in ("ma", "su_dung", "ghi_chu", "link_anh"):
+    if field not in ("ma", "su_dung", "ghi_chu", "link_anh", "khung"):
         raise ValueError(f"Field không hợp lệ: {field}")
     with _conn() as con:
         con.execute(f"UPDATE tv_bo SET {field}=? WHERE id=?", (value, bo_id))
 
 
 def tv_mang_reorder(ordered_ids: list[int]):
-    """Đổi thứ tự các TAB thư viện (kéo thả tab trái ↔ phải)."""
+    """Đổi thứ tự các TAB thư viện (kéo thả tab trái ↔ phải). Tab hệ thống
+    ('Ảnh hook') bị bỏ qua và luôn giữ order_idx=-1 để nằm đầu."""
     with _conn() as con:
-        for idx, mid in enumerate(ordered_ids):
+        he = {r["id"] for r in
+              con.execute("SELECT id FROM tv_mang WHERE he_thong=1").fetchall()}
+        idx = 0
+        for mid in ordered_ids:
+            if mid in he:
+                continue
             con.execute("UPDATE tv_mang SET order_idx=? WHERE id=?", (idx, mid))
+            idx += 1
+        con.execute("UPDATE tv_mang SET order_idx=-1 WHERE he_thong=1")
 
 
 def tv_bo_reorder(ordered_ids: list[int]):
