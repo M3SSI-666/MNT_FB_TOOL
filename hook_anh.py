@@ -17,9 +17,10 @@ import json
 FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "Baloo2.ttf")
 MAU_CHU   = (24, 40, 78)        # xanh tím than
 WGHT      = 800                 # Baloo 2 là variable font — ép nét đậm
-LINE_SP   = 1.18                # giãn dòng
+LINE_SP   = 1.14                # giãn dòng (dòng có chữ)
+BLANK_SP  = 0.45                # dòng TRỐNG chỉ chiếm ~0.45 chiều cao → khỏi phí chỗ, chữ to hơn
 # Khung chữ mặc định (tỉ lệ 0..1 theo kích thước ảnh) — vùng bong bóng bên phải.
-KHUNG_MAC_DINH = {"x": 0.36, "y": 0.15, "w": 0.58, "h": 0.43}
+KHUNG_MAC_DINH = {"x": 0.35, "y": 0.13, "w": 0.60, "h": 0.47}
 
 
 def _doc_khung(khung, W, H):
@@ -57,34 +58,67 @@ def _cac_dong(tieu_de):
     return lines or [""]
 
 
+def _wrap_dong(d, f, t, bw):
+    """Ngắt MỘT dòng người dùng cho vừa bề ngang bw — chỉ ngắt thêm khi dòng QUÁ
+    dài (giữ nguyên chỗ xuống dòng người dùng gõ). Dòng trống trả [''] để làm
+    khoảng cách."""
+    if not t.strip():
+        return [""]
+    out, cur = [], ""
+    for w in t.split(" "):
+        thu = (cur + " " + w).strip()
+        if not cur or d.textlength(thu, font=f) <= bw:
+            cur = thu
+        else:
+            out.append(cur); cur = w
+    if cur:
+        out.append(cur)
+    return out
+
+
 def ghep_tieu_de(bg_path, tieu_de, khung, out_path):
-    """Ghép tiêu đề (giữ xuống dòng) lên ảnh nền bg_path → lưu PNG ra out_path.
-    Tự co chữ TO NHẤT mà vẫn vừa khung, căn giữa cân mép trên/dưới."""
+    """Ghép tiêu đề (giữ xuống dòng người dùng) lên ảnh nền → lưu PNG ra out_path.
+
+    Cân cỡ chữ cho DỄ ĐỌC: phóng to nhất có thể; dòng quá dài TỰ NGẮT thêm cho
+    khỏi phải thu nhỏ cả cụm vì một dòng dài; dòng trống chỉ chiếm ~nửa chiều cao
+    (khỏi phí chỗ). Căn giữa cân mép trên/dưới."""
     from PIL import Image, ImageDraw
     im = Image.open(bg_path).convert("RGB")
     W, H = im.size
     d = ImageDraw.Draw(im)
     bx, by, bw, bh = _doc_khung(khung, W, H)
     lines = _cac_dong(tieu_de)
-    max_px = int(H * 0.16)              # trần cỡ chữ: content ít vẫn to mà không quá khổ
+    max_px = int(H * 0.20)              # trần cỡ chữ: content ít vẫn to mà không quá khổ
 
-    # Phóng chữ to nhất mà mọi dòng vừa bề ngang và tổng cao vừa khung.
-    size, best = 14, _load_font(14)
+    def _bo_cuc(f):
+        """(các dòng đã ngắt, chiều cao từng dòng, bề rộng lớn nhất) cho 1 cỡ chữ."""
+        a, de = f.getmetrics(); base = a + de
+        rows, hs = [], []
+        for t in lines:
+            for r in _wrap_dong(d, f, t, bw):
+                rows.append(r)
+                hs.append(base * LINE_SP if r.strip() else base * LINE_SP * BLANK_SP)
+        widest = max([d.textlength(r, font=f) for r in rows if r.strip()] or [0])
+        return rows, hs, widest
+
+    # Phóng chữ TO NHẤT mà sau khi ngắt dòng vẫn vừa bề ngang và tổng cao vừa khung.
+    size, best, best_rows, best_hs = 14, _load_font(14), None, None
     while size < max_px:
         f = _load_font(size)
-        a, de = f.getmetrics(); lh = (a + de) * LINE_SP
-        widest = max(d.textlength(t, font=f) for t in lines)
-        if widest > bw or lh * len(lines) > bh:
+        rows, hs, widest = _bo_cuc(f)
+        if widest > bw or sum(hs) > bh:
             break
-        best, size = f, size + 2
+        best, best_rows, best_hs, size = f, rows, hs, size + 2
 
-    f = best
-    a, de = f.getmetrics(); lh = (a + de) * LINE_SP
-    y = by + (bh - lh * len(lines)) / 2          # căn giữa dọc
-    for t in lines:
-        x = bx + (bw - d.textlength(t, font=f)) / 2   # căn giữa ngang
-        d.text((x, y), t, font=f, fill=MAU_CHU)
-        y += lh
+    if best_rows is None:              # cỡ nhỏ nhất vẫn tràn → cứ vẽ ở 14px
+        best_rows, best_hs, _ = _bo_cuc(best)
+
+    y = by + (bh - sum(best_hs)) / 2             # căn giữa dọc
+    for r, h in zip(best_rows, best_hs):
+        if r.strip():
+            x = bx + (bw - d.textlength(r, font=best)) / 2   # căn giữa ngang
+            d.text((x, y), r, font=best, fill=MAU_CHU)
+        y += h
     im.save(out_path)
     return out_path
 
