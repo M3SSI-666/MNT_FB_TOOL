@@ -678,9 +678,14 @@ def _run_marketplace_slot(item: dict):
         # Ảnh ĐÃ CHỐT lúc Gen (cột "Mã ảnh" = "<thư viện> - <mã bộ>"); con trỏ roll đã tiến
         # tại Gen nên ở đây KHÔNG tiến lại. Lịch cũ không có thì roll động như cũ.
         anh = _anh_dang_cho(item, ct, c_user_v, dung_con_tro=True)
+        hook_bg, hook_khung = _anh_hook_cho(ct, c_user_v)
         so_nhom = post_marketplace(acc_name=acc_name, message=content,
                                    image_url=anh, c_user=c_user_v,
-                                   tieu_de=tieu_de)
+                                   tieu_de=tieu_de,
+                                   # Ảnh hook: ghép Tiêu đề hook → chèn làm ảnh #1.
+                                   anh_hook_bg=hook_bg,
+                                   anh_hook_tieu_de=(ct.get("tieu_de_hook") or "") if hook_bg else "",
+                                   anh_hook_khung=hook_khung)
         done = datetime.now().strftime("%H:%M")
         _update_status(sid, f"✅ {done} 🛒 ({so_nhom} nhóm)")
         logger.info(f"✅ STT {stt} Marketplace xong: {so_nhom} nhóm")

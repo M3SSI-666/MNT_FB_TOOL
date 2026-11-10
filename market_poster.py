@@ -523,7 +523,9 @@ async def _run_marketplace(acc_name: str, message: str, local_photos: list,
 # ─────────────────────────────────────────────────────────────────────────────
 
 def post_marketplace(acc_name: str, message: str, image_url: str = "",
-                     c_user: str = "", tieu_de: str = "") -> int:
+                     c_user: str = "", tieu_de: str = "",
+                     anh_hook_bg: str = "", anh_hook_tieu_de: str = "",
+                     anh_hook_khung: str = "") -> int:
     """
     Hàm đồng bộ — gọi từ scheduler (chạy trong thread).
 
@@ -566,6 +568,20 @@ def post_marketplace(acc_name: str, message: str, image_url: str = "",
         logger.info(f"  📥 {len(local_photos)} ảnh đã chuẩn bị")
     except Exception as e:
         logger.warning(f"  ⚠️  Chuẩn bị ảnh hỏng: {e}")
+
+    # Ảnh hook: ghép Tiêu đề hook lên 1 ảnh nền hook → CHÈN LÀM ẢNH #1 của bài
+    # niêm yết (ảnh content dồn xuống #2,#3…). Lỗi gì cũng bỏ qua, không chết phiên.
+    if anh_hook_tieu_de and anh_hook_bg:
+        try:
+            import hook_anh
+            if temp_dir is None:
+                import tempfile as _tf
+                temp_dir = _tf.mkdtemp(prefix="mnt_mkt_")
+            local_photos, temp_dir = hook_anh.chen_anh_hook_dau(
+                local_photos, temp_dir, anh_hook_tieu_de, anh_hook_bg, anh_hook_khung)
+            logger.info("  🪝 Đã chèn ảnh hook làm ảnh #1")
+        except Exception as e:
+            logger.warning(f"  ⚠️  Không ghép được ảnh hook: {e}")
 
     try:
         return asyncio.run(_run_marketplace(

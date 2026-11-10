@@ -5492,8 +5492,11 @@ _src_sc = Path("scheduler.py").read_text(encoding="utf-8")
 check("post_page_via + post_via_crosspost nhận tham số hook + gọi chen_anh_hook_dau",
       "anh_hook_tieu_de" in _src_pv and "chen_anh_hook_dau" in _src_pv
       and "anh_hook_tieu_de" in _src_vi and "chen_anh_hook_dau" in _src_vi)
-check("scheduler truyền ảnh hook vào cả 2 mode (Page + Via)",
-      _src_sc.count("anh_hook_bg=hook_bg") == 2 and "_anh_hook_cho(" in _src_sc)
+check("scheduler truyền ảnh hook vào cả 3 kênh (Page + Via + Marketplace)",
+      _src_sc.count("anh_hook_bg=hook_bg") == 3 and "_anh_hook_cho(" in _src_sc)
+_src_mk = Path("market_poster.py").read_text(encoding="utf-8")
+check("market_poster nhận tham số hook + chèn ảnh hook #1 cho Marketplace",
+      "anh_hook_tieu_de" in _src_mk and "chen_anh_hook_dau" in _src_mk)
 # Công cụ "ghim vị trí chữ": nút 📍 chỉ ở tab hook, modal kéo khung, lưu tv_bo.khung.
 _ajs_hz = Path("static/js/app.js").read_text(encoding="utf-8")
 check("có công cụ ghim vị trí chữ (openHookZone) + nút chỉ ở tab hook",

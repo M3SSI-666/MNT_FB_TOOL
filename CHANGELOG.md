@@ -10,6 +10,15 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.77.3 — 10/11/2026
+
+**Ảnh hook cho Marketplace**
+
+Bài niêm yết Marketplace giờ cũng dùng ảnh hook: content bật **Hook** + có
+**Content Hook** thì khi đăng Marketplace, phần mềm chèn ảnh hook (kèm tiêu đề)
+làm **ảnh số 1** của bài niêm yết, ảnh của content dồn xuống sau — giống đăng
+chéo nhóm. (Tường Page tạm thời chưa áp.)
+
 ## v2.77.2 — 10/11/2026
 
 **Ảnh hook: tự ướm chữ vào bong bóng, chữ to & dễ đọc hơn, tự bỏ emoji**
