@@ -8,6 +8,14 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 > cập nhật hay lùi, vì chúng nằm ngoài phần mã nguồn. Trước mỗi lần cập nhật,
 > phần mềm tự sao lưu dữ liệu vào `%LOCALAPPDATA%\MNT FB AutoPost\backup`.
 
+## v2.77.7 — 11/11/2026
+
+**Ảnh hook: đổi màu chữ trong bong bóng sang màu đỏ**
+
+Chữ ghép vào bong bóng ảnh hook giờ là **màu đỏ tươi** thay cho xanh tím than,
+cho nổi bật và bắt mắt hơn. Áp dụng ngay cho các ảnh hook sinh ra sau khi cập
+nhật (đăng chéo Page/Via và Marketplace).
+
 ## v2.77.6 — 10/11/2026
 
 **Backup content: xuất/nhập cả cột Hook và Content Hook**

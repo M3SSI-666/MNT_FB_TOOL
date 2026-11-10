@@ -36,7 +36,7 @@ def _lam_sach_dong(t: str) -> str:
     return t.strip()
 
 FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "Baloo2.ttf")
-MAU_CHU   = (24, 40, 78)        # xanh tím than
+MAU_CHU   = (211, 28, 28)       # đỏ tươi
 WGHT      = 800                 # Baloo 2 là variable font — ép nét đậm
 LINE_SP   = 1.14                # giãn dòng (dòng có chữ)
 BLANK_SP  = 0.45                # dòng TRỐNG chỉ chiếm ~0.45 chiều cao → khỏi phí chỗ, chữ to hơn
