@@ -449,6 +449,14 @@ async def _run_marketplace(acc_name: str, message: str, local_photos: list,
                 _ci.append({"name": name, "value": ck[name], "domain": ".facebook.com",
                             "path": "/", "httpOnly": False, "secure": True, "sameSite": "None"})
         await ctx.add_cookies(_ci)
+        # Marketplace PHẢI đăng bằng nick CÁ NHÂN. Phiên đăng chéo / comment trước
+        # đó chuyển sang vai Page bằng cookie `i_user`, và cookie này có thể còn
+        # nằm trong profile (đo 10/11: Mai Tùng còn i_user sau khi đóng Chrome) →
+        # mở Marketplace dưới vai Page, không có trang tạo bài niêm yết. Xóa hẳn.
+        try:
+            await ctx.clear_cookies(name="i_user")
+        except Exception as e:
+            logger.warning(f"  ⚠️  Không xóa được cookie vai Page (i_user): {e}")
         await page.set_viewport_size({"width": 1400, "height": 1000})
 
         # ── [1/5] Khởi động: lướt newsfeed cá nhân ──────────────────────

@@ -4148,6 +4148,15 @@ _bai0 = [{"tuoi": 0}, {"tuoi": 1}, {"tuoi": 5}, {"tuoi": None}]
 check("xóa quá 0 ngày: bỏ bài hôm qua trở về trước, GIỮ bài hôm nay",
       [b["tuoi"] for b in _mc0.loc_qua_han(_bai0, 0)] == [1, 5])
 
+# Marketplace PHẢI đăng bằng nick cá nhân: xóa cookie vai Page (i_user) còn sót
+# từ phiên đăng chéo/comment trước — đo 10/11 Mai Tùng mở Marketplace dưới vai
+# Page, không có ô tải ảnh, phiên hỏng.
+_src_mp_iu = Path("market_poster.py").read_text(encoding="utf-8")
+check("Marketplace xóa cookie vai Page (i_user) trước khi đăng",
+      'clear_cookies(name="i_user")' in _src_mp_iu
+      and _src_mp_iu.index('clear_cookies(name="i_user")')
+          < _src_mp_iu.index('Khởi động: lướt newsfeed'))
+
 _src_mi = Path("market_inbox.py").read_text(encoding="utf-8")
 check("market_inbox CHỈ đọc danh sách, KHÔNG gọi click lên hội thoại",
       ".click(" not in _src_mi and "click()" not in _src_mi)

@@ -8,6 +8,26 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 > cập nhật hay lùi, vì chúng nằm ngoài phần mã nguồn. Trước mỗi lần cập nhật,
 > phần mềm tự sao lưu dữ liệu vào `%LOCALAPPDATA%\MNT FB AutoPost\backup`.
 
+## v2.77.4 — 10/11/2026
+
+**Vá: Marketplace luôn đăng bằng nick CÁ NHÂN, không bị kẹt vai Page**
+
+Phiên đăng chéo / comment chuyển nick sang vai Page bằng cookie `i_user`, và cookie
+này có thể **còn nằm lại trong profile** sau khi đóng Chrome. Phiên Marketplace kế
+tiếp mở lại profile đó thì vẫn đang ở **vai Page** — Page không tạo được bài niêm
+yết, không có ô tải ảnh → phiên hỏng (*"set_input_files: Timeout … input[type=file]"*).
+Đo thật 10/11 trên Mai Tùng.
+
+- Phiên Marketplace giờ **xóa cookie vai Page ngay khi mở trình duyệt**, trước mọi
+  bước — chắc chắn lướt feed + đăng bằng nick cá nhân. Đăng chéo / comment vẫn
+  chuyển Page như cũ.
+- Đã chạy thực chiến sau khi vá: Mai Tùng đăng Marketplace thành công, tick 20/20
+  nhóm, ảnh hook ở vị trí #1.
+
+> Cập nhật xong **tắt / mở lại app** để runner nhận bản vá.
+
+---
+
 ---
 
 ## v2.77.3 — 10/11/2026
