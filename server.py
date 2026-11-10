@@ -1609,6 +1609,7 @@ EXPORT_TV_COLUMNS = [
     ("link_anh", "Ảnh"),          # trong file chỉ chứa tên file
     ("su_dung",  "Sử dụng"),
     ("ghi_chu",  "Ghi chú"),
+    ("khung",    "Khung chữ"),    # vị trí chữ ảnh hook (JSON tỉ lệ); rỗng = tự ướm
 ]
 
 
@@ -1630,9 +1631,11 @@ def api_tv_export_zip():
     from openpyxl import Workbook
     from openpyxl.styles import Font
 
-    # Tab hệ thống ("Ảnh hook") tự sinh ở mọi máy qua init_db nên KHÔNG đưa vào
-    # backup — tránh nhân đôi / lệch id khi nhập ở máy khác.
-    mang = [m for m in db.tv_mang_list() if not m.get("he_thong")]
+    # Tab thường: luôn xuất (kể cả rỗng). Tab hệ thống "Ảnh hook" tự sinh ở mọi
+    # máy, nên CHỈ xuất khi nó CÓ ẢNH (ảnh hook đáng mang theo; nhập về sẽ ghép
+    # vào đúng tab Ảnh hook sẵn có theo tên, không tạo tab trùng).
+    mang = [m for m in db.tv_mang_list()
+            if (not m.get("he_thong")) or db.tv_bo_list(m["id"])]
     if not mang:
         return jsonify({"ok": False, "error": "Thư viện ảnh đang trống — chưa có gì để xuất"})
 
@@ -1658,9 +1661,10 @@ def api_tv_export_zip():
                     if p.exists():
                         anh_can_dong[ten] = str(p)
             ws.append([m["ten"] or "", b.get("ma") or "", ", ".join(ten_anh),
-                       b.get("su_dung") or "Có", b.get("ghi_chu") or ""])
+                       b.get("su_dung") or "Có", b.get("ghi_chu") or "",
+                       b.get("khung") or ""])
             so_bo += 1
-    for col, w in zip("ABCDE", (18, 18, 60, 10, 30)):
+    for col, w in zip("ABCDEF", (18, 18, 60, 10, 30, 22)):
         ws.column_dimensions[col].width = w
     ws.freeze_panes = "A2"
 
@@ -1828,7 +1832,8 @@ def api_tv_import_zip():
         ma_da_co[tid].add(ma.lower())
         db.tv_bo_upsert({"mang_id": tid, "ma": ma, "link_anh": ", ".join(urls),
                          "su_dung": su_dung if su_dung in ("Có", "Không") else "Có",
-                         "ghi_chu": d.get("ghi_chu", "")})
+                         "ghi_chu": d.get("ghi_chu", ""),
+                         "khung": d.get("khung", "")})
         da_co[tid].add(dau)
         them += 1
 

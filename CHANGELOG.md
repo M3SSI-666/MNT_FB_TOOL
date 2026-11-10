@@ -8,6 +8,15 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 > cập nhật hay lùi, vì chúng nằm ngoài phần mã nguồn. Trước mỗi lần cập nhật,
 > phần mềm tự sao lưu dữ liệu vào `%LOCALAPPDATA%\MNT FB AutoPost\backup`.
 
+## v2.77.5 — 10/11/2026
+
+**Backup thư viện ảnh: xuất/nhập cả ảnh trong tab "Ảnh hook"**
+
+Trước đây sao lưu bỏ qua tab Ảnh hook. Giờ nút **Xuất/Nhập backup** mang theo
+luôn ảnh hook (kèm **vị trí chữ đã ghim**). Nhập ở máy khác, ảnh hook về đúng
+tab "Ảnh hook" sẵn có — không tạo tab trùng. (Tab Ảnh hook rỗng thì không đưa
+vào backup.)
+
 ## v2.77.4 — 10/11/2026
 
 **Vá: Marketplace luôn đăng bằng nick CÁ NHÂN, không bị kẹt vai Page**

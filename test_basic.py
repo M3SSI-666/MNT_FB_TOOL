@@ -7599,6 +7599,21 @@ try:
     check("Nhập file không phải backup thư viện → báo rõ",
           "không phải file backup Thư viện" in (_nhap(_bk_ct, "/api/thuvien/import-zip")
                                                 .get("error") or ""))
+    # Backup/restore ẢNH HOOK (tab hệ thống): có ảnh thì XUẤT kèm; NHẬP về đúng
+    # tab Ảnh hook sẵn có (khớp theo tên, không tạo tab trùng) + GIỮ vị trí ghim.
+    _hid_bk = db.tv_mang_hook_id()
+    _ahk = _u(b"anh-hook-zzz")
+    db.tv_bo_upsert({"mang_id": _hid_bk, "ma": "HK1", "link_anh": _ahk, "su_dung": "Có",
+                     "khung": '{"x":0.3,"y":0.2,"w":0.5,"h":0.4}'})
+    _bk_h = Path(_client.get("/api/thuvien/export-zip").get_json()["path"]).read_bytes()
+    for _b in db.tv_bo_list(_hid_bk):          # giả máy mới: tab hook rỗng
+        db.tv_bo_xoa(_b["id"])
+    _nhap(_bk_h, "/api/thuvien/import-zip")
+    check("Backup/restore ảnh hook: xuất+nhập về đúng tab Ảnh hook + giữ vị trí ghim (khung)",
+          any(b.get("ma") == "HK1" and '"x":0.3' in (b.get("khung") or "")
+              for b in db.tv_bo_list(_hid_bk)))
+    for _b in db.tv_bo_list(_hid_bk):          # dọn tab hook
+        db.tv_bo_xoa(_b["id"])
     if _ct_tv.get("id"):
         db.delete_content(_ct_tv["id"])
 finally:
