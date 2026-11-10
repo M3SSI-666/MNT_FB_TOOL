@@ -1858,6 +1858,11 @@ EXPORT_CONTENT_COLUMNS = [
     # Cột CUỐI để không xô thứ tự cột cũ. Ghi TÊN tab thư viện, không ghi id —
     # id là số tự tăng của từng máy, sang máy khác là lệch (xem sao lưu thư viện).
     ("ma_thu_vien", "Mã thư viện"),
+    # Hook: cờ bật + chữ ghép lên ảnh hook. Thêm ở CUỐI để không xô cột cũ (nhập
+    # đọc theo TÊN cột nên vị trí không quan trọng; backup cũ thiếu 2 cột này vẫn
+    # nhập bình thường, mặc định tắt Hook).
+    ("dung_hook",    "Hook"),
+    ("tieu_de_hook", "Content Hook"),
 ]
 
 

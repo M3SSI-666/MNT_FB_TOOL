@@ -2433,14 +2433,19 @@ def import_content(records: list[dict], loai: str) -> tuple[int, int]:
             seen.add(ma)
             con.execute(
                 "INSERT INTO content (loai, ma_content, noi_dung, link_anh, "
-                "su_dung, tieu_de_mkt, ma_thu_vien, ghi_chu, order_idx) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "su_dung, tieu_de_mkt, ma_thu_vien, ghi_chu, dung_hook, "
+                "tieu_de_hook, order_idx) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (loai, ma, rec.get("noi_dung", "") or "",
                  rec.get("link_anh", "") or "",
                  rec.get("su_dung", "Có") or "Có",
                  (rec.get("tieu_de_mkt", "") or "").strip(),
                  str(rec.get("ma_thu_vien", "") or "").strip(),
-                 rec.get("ghi_chu", "") or "", nxt)
+                 rec.get("ghi_chu", "") or "",
+                 # Hook: Excel ghi "0"/"1" (hoặc "Có") → về 0/1. Backup cũ không
+                 # có cột này thì rec rỗng → mặc định tắt (0).
+                 1 if str(rec.get("dung_hook", "")).strip() in ("1", "Có", "True", "true") else 0,
+                 rec.get("tieu_de_hook", "") or "", nxt)
             )
             nxt += 1
             added += 1

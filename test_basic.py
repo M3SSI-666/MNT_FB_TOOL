@@ -5390,6 +5390,17 @@ check("nhập Excel content giữ tiêu đề",
 with db._conn() as _c_tdm:
     _c_tdm.execute("DELETE FROM content WHERE ma_content IN ('TDM1','TDM2')")
 
+# Backup content: xuất/nhập cả cột Hook (dung_hook) + Content Hook (tieu_de_hook).
+check("xuất Excel content CÓ cột Hook + Content Hook",
+      {"dung_hook", "tieu_de_hook"} <= set(_cot_xuat))
+db.import_content([{"ma_content": "HKB1", "noi_dung": "x", "dung_hook": "1",
+                    "tieu_de_hook": "BÁN 3PN\nGIÁ 11 TỶ"}], "homestay")
+_rhkb = next((r for r in db.get_content("homestay") if r["ma_content"] == "HKB1"), None)
+check("nhập content khôi phục Hook (coerce 0/1) + Content Hook (giữ xuống dòng)",
+      bool(_rhkb) and _rhkb["dung_hook"] == 1 and _rhkb["tieu_de_hook"] == "BÁN 3PN\nGIÁ 11 TỶ")
+with db._conn() as _c_hkb:
+    _c_hkb.execute("DELETE FROM content WHERE ma_content='HKB1'")
+
 # ── Ảnh hook: cột tick "Hook" + ô "Tiêu đề hook" theo content ──────────────
 with db._conn() as _c_hk:
     _cot_ct_hk = {r[1] for r in _c_hk.execute("PRAGMA table_info(content)").fetchall()}

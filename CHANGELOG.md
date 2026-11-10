@@ -8,6 +8,15 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 > cập nhật hay lùi, vì chúng nằm ngoài phần mã nguồn. Trước mỗi lần cập nhật,
 > phần mềm tự sao lưu dữ liệu vào `%LOCALAPPDATA%\MNT FB AutoPost\backup`.
 
+## v2.77.6 — 10/11/2026
+
+**Backup content: xuất/nhập cả cột Hook và Content Hook**
+
+Sao lưu content giờ mang theo cả **cờ Hook** (bật/tắt) và **Content Hook** (chữ
+ghép lên ảnh hook) — trước đây hai cột này không nằm trong backup nên chuyển máy
+là mất. (Tiêu đề Market Place vốn đã có sẵn trong backup.) Backup cũ thiếu hai
+cột này vẫn nhập bình thường, mặc định tắt Hook.
+
 ## v2.77.5 — 10/11/2026
 
 **Backup thư viện ảnh: xuất/nhập cả ảnh trong tab "Ảnh hook"**
