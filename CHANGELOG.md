@@ -10,6 +10,29 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.77.0 — 10/11/2026
+
+**Ảnh hook: ghép tiêu đề lên ảnh bìa, tự chèn làm ảnh đầu bài**
+
+Thêm "ảnh hook" để câu tương tác: một ảnh nền (nhân vật + bong bóng) có tiêu đề
+bạn tự gõ, được tự chèn làm **ảnh số 1** của bài — ảnh của content dồn xuống 2,
+3…
+
+Cách dùng:
+- Vào **Thư viện ảnh** → tab **"Ảnh hook"** (luôn ở đầu, không xoá/đổi tên được)
+  → đẩy các ảnh nền hook (ảnh đã có sẵn bong bóng rỗng) vào.
+- Ở **Content**: tick cột **Hook** cho content muốn dùng, rồi điền **Tiêu đề
+  hook** (gõ xuống dòng thoải mái) trong ô sửa content.
+- Khi đăng chéo nhóm (Page/Via): phần mềm bốc ngẫu nhiên 1 ảnh hook, ghép tiêu
+  đề (chữ xanh tím than, tự co cho vừa bong bóng) rồi chèn làm ảnh đầu bài.
+
+Lưu ý:
+- Chưa đẩy ảnh hook nào, hoặc ghép lỗi → bài **vẫn đăng bình thường** (không có
+  hook), không bao giờ làm hỏng phiên đăng.
+- Bản này áp cho **đăng chéo nhóm**; tường Page và Marketplace sẽ bổ sung sau.
+- Vị trí chữ đang dùng khung căn giữa mặc định (hợp ảnh hook đúng mẫu). Công cụ
+  kéo-ghim vị trí chữ cho từng ảnh sẽ có ở bản sau.
+
 ## v2.76.6 — 03/11/2026
 
 **Vá: lỗi mở Chrome không còn phạt oan acc + runner tự khởi động lại**
