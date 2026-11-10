@@ -2678,6 +2678,8 @@ async function tvLoadBang(){
                 style="${style||"font-size:12px;color:var(--text-secondary)"}"
                 onclick="tvStartFieldEdit(this)">${val||"-"}</td>`;
         };
+        // Tab "Ảnh hook" (hệ thống) mới có nút 📍 ghim vị trí chữ lên từng ảnh.
+        const _laHook = !!(_tvMang.find(m=>m.id===_tvCur)||{}).he_thong;
         tbody.innerHTML = rows.map((r,i)=>{
             const imgs=(r.link_anh||"").split(",").map(s=>s.trim()).filter(Boolean);
             const encImgs=encodeURIComponent(JSON.stringify(imgs));
@@ -2701,6 +2703,8 @@ async function tvLoadBang(){
                     onclick="tvStartFieldEdit(this)">${r.su_dung||"-"}</td>
                 ${ec(r,"ghi_chu","font-size:12px;color:var(--text-muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap")}
                 <td style="text-align:center;white-space:nowrap;padding:4px 6px">
+                    ${_laHook && imgs.length ? `<button title="Ghim vị trí chữ lên ảnh hook này" style="background:var(--accent-light);color:var(--accent);border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;margin-right:3px"
+                        onclick="openHookZone(${r.id},'${encodeURIComponent(imgs[0])}','${encodeURIComponent(r.khung||'')}')">📍</button>` : ''}
                     <button title="Chỉnh sửa" style="background:var(--accent-light);color:var(--accent);border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;margin-right:3px"
                         onclick='tvOpenEdit(${JSON.stringify(r).replace(/"/g,"&quot;")})'>✏️</button>
                     <button title="Xoá" style="background:var(--danger-light);color:var(--danger);border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px"
@@ -2714,6 +2718,76 @@ async function tvLoadBang(){
 const _tvReorder = ids => fetch("/api/thuvien/bo/reorder",{method:"POST",
     headers:{"Content-Type":"application/json"},body:JSON.stringify({ids})}).then(r=>r.json());
 async function tvDrop(e,t){ return _rowDrop(e,t,"tv-table",_tvReorder); }
+
+// ── Ghim vị trí chữ lên 1 ảnh hook: kéo/chỉnh khung → lưu tv_bo.khung ────────
+// Mỗi ảnh hook bong bóng một chỗ, nên khung chữ ghim riêng theo ảnh. Toạ độ lưu
+// dạng TỈ LỆ {x,y,w,h} (0..1) để đúng với mọi kích thước ảnh khi đăng.
+function openHookZone(boId, imgUrlEnc, khungEnc){
+    const imgUrl = decodeURIComponent(imgUrlEnc||"");
+    let k; try{ k = JSON.parse(decodeURIComponent(khungEnc||"")); }catch(e){ k=null; }
+    if(!k || typeof k.x!=="number") k = {x:0.35,y:0.13,w:0.60,h:0.47};   // mặc định (khớp hook_anh)
+    const ov = document.createElement("div");
+    ov.id = "hookzone-ov";
+    ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:10000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:20px";
+    ov.innerHTML = `
+      <div style="color:#fff;font-weight:600;text-align:center">Kéo khung xanh vào trong bong bóng — chữ Content Hook sẽ ghép vào đây.<br>
+        <span style="font-weight:400;color:#bbb;font-size:12px">Kéo giữa khung để di chuyển · kéo góc dưới-phải để co giãn</span></div>
+      <div style="position:relative;line-height:0">
+        <img id="hz-img" src="${imgUrl}" style="display:block;max-width:88vw;max-height:68vh;user-select:none;-webkit-user-drag:none;border-radius:4px">
+        <div id="hz-box" style="position:absolute;border:2px solid #4b8bff;background:rgba(75,139,255,.14);cursor:move;box-sizing:border-box">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#16285a;font-weight:800;text-align:center;font-size:14px;line-height:1.2;pointer-events:none;text-shadow:0 0 4px #fff,0 0 4px #fff">CHỮ HOOK<br>Ở ĐÂY</div>
+          <div id="hz-handle" style="position:absolute;right:-8px;bottom:-8px;width:16px;height:16px;background:#4b8bff;border:2px solid #fff;border-radius:3px;cursor:se-resize"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button onclick="closeHookZone()" style="padding:8px 18px;border:none;border-radius:8px;background:#555;color:#fff;cursor:pointer;font-weight:600">Huỷ</button>
+        <button id="hz-save" style="padding:8px 18px;border:none;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer;font-weight:600">💾 Lưu vị trí</button>
+      </div>`;
+    document.body.appendChild(ov);
+    const img = ov.querySelector("#hz-img"), box = ov.querySelector("#hz-box");
+    function place(){
+        const w=img.clientWidth, h=img.clientHeight;
+        box.style.left=(k.x*w)+"px"; box.style.top=(k.y*h)+"px";
+        box.style.width=(k.w*w)+"px"; box.style.height=(k.h*h)+"px";
+    }
+    if(img.complete && img.clientWidth) place(); else img.onload = place;
+
+    let drag=null;
+    box.addEventListener("mousedown",e=>{
+        if(e.target.id==="hz-handle") drag={m:"rs",sx:e.clientX,sy:e.clientY,w:box.offsetWidth,h:box.offsetHeight};
+        else drag={m:"mv",sx:e.clientX,sy:e.clientY,l:box.offsetLeft,t:box.offsetTop};
+        e.preventDefault();
+    });
+    ov.addEventListener("mousemove",e=>{
+        if(!drag) return;
+        const w=img.clientWidth, h=img.clientHeight, dx=e.clientX-drag.sx, dy=e.clientY-drag.sy;
+        if(drag.m==="mv"){
+            box.style.left=Math.max(0,Math.min(drag.l+dx,w-box.offsetWidth))+"px";
+            box.style.top =Math.max(0,Math.min(drag.t+dy,h-box.offsetHeight))+"px";
+        }else{
+            box.style.width =Math.max(40,Math.min(drag.w+dx,w-box.offsetLeft))+"px";
+            box.style.height=Math.max(30,Math.min(drag.h+dy,h-box.offsetTop))+"px";
+        }
+    });
+    ov.addEventListener("mouseup",()=>{drag=null;});
+    ov.addEventListener("click",e=>{ if(e.target===ov) closeHookZone(); });   // bấm nền tối = huỷ
+
+    ov.querySelector("#hz-save").onclick = async ()=>{
+        const w=img.clientWidth, h=img.clientHeight;
+        if(!w || !h){ Toast.error("Ảnh chưa tải xong"); return; }
+        const val=JSON.stringify({
+            x:+(box.offsetLeft/w).toFixed(3),  y:+(box.offsetTop/h).toFixed(3),
+            w:+(box.offsetWidth/w).toFixed(3), h:+(box.offsetHeight/h).toFixed(3)});
+        try{
+            const r=await (await fetch("/api/thuvien/bo/field",{method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({id:boId,field:"khung",value:val})})).json();
+            if(r.ok){ Toast.success("Đã lưu vị trí chữ cho ảnh hook"); closeHookZone(); }
+            else Toast.error(r.error);
+        }catch(e){ Toast.error(e.message); }
+    };
+}
+function closeHookZone(){ const o=document.getElementById("hookzone-ov"); if(o) o.remove(); }
 
 function tvStartFieldEdit(td){
     if(td.classList.contains("editing")) return;

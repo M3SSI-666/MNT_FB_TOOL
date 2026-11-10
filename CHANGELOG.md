@@ -10,6 +10,21 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.77.2 — 10/11/2026
+
+**Ảnh hook: tự ướm chữ vào bong bóng, chữ to & dễ đọc hơn, tự bỏ emoji**
+
+- **Tự ướm chữ vào bong bóng:** phần mềm **tự dò vùng bong bóng** của từng ảnh
+  hook rồi đặt Content Hook vào giữa cho cân — khỏi canh tay từng ảnh. Ảnh không
+  có bong bóng thì dùng khung căn giữa mặc định.
+- **Cỡ chữ cân hơn:** dòng trống bớt chiếm chỗ, dòng quá dài tự xuống dòng thêm →
+  chữ **to và dễ đọc hơn** khi Content Hook dài.
+- **Tự bỏ emoji** khi ghép lên ảnh hook (phông chữ hook không vẽ được emoji, để
+  lại thành ô vuông). Emoji trong nội dung bài vẫn giữ nguyên.
+- **Ghim vị trí chữ thủ công (tùy chọn):** trong tab **"Ảnh hook"**, mỗi ảnh có
+  nút 📍 — kéo khung vào đúng chỗ nếu muốn tự canh. Đã ghim tay thì ưu tiên theo
+  ghim.
+
 ## v2.77.1 — 10/11/2026
 
 **Ảnh hook: thêm cột "Content Hook" sửa chữ ngay ở bảng Content**

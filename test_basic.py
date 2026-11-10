@@ -5450,6 +5450,17 @@ check("hook bỏ emoji, giữ chữ Việt + gạch –",
       _hook._lam_sach_dong("🏡 Homestay – Times City ⭐") == "Homestay – Times City"
       and _hook._cac_dong("🔹 A\n🏡 B") == ["A", "B"]
       and _hook._cac_dong("🏠 CHO THUÊ 3PN") == ["CHO THUÊ 3PN"])
+# Tự ướm bong bóng: nền màu + ô TRẮNG lớn ở giữa (không chạm biên) → dò ra khung
+# nằm trong vùng trắng đó; nền trắng tràn 4 biên → None (không nhầm nền).
+_bgdet = _ImHk.new("RGB", (600, 400), (40, 120, 220))
+for _yy in range(90, 310):
+    for _xx in range(180, 520):
+        _bgdet.putpixel((_xx, _yy), (255, 255, 255))
+_kh_det = _hook._do_bong_bong(_bgdet)
+check("_do_bong_bong dò ra vùng trắng lớn (khung nằm trong vùng đó)",
+      bool(_kh_det) and 0.25 < _kh_det["x"] < 0.45 and _kh_det["w"] > 0.3)
+check("_do_bong_bong: trắng tràn 4 biên → None (không nhầm nền thành bong bóng)",
+      _hook._do_bong_bong(_ImHk.new("RGB", (400, 300), (255, 255, 255))) is None)
 # chen_anh_hook_dau: chèn hook làm ảnh #1, GIỮ thứ tự ảnh content phía sau.
 _lp_hk, _td_hk = _hook.chen_anh_hook_dau(["/x/a.jpg", "/x/b.jpg"], None, "ABC", str(_bg_hk), "")
 check("chen_anh_hook_dau: hook là ảnh #1, ảnh content dồn xuống #2,#3",
@@ -5483,6 +5494,13 @@ check("post_page_via + post_via_crosspost nhận tham số hook + gọi chen_anh
       and "anh_hook_tieu_de" in _src_vi and "chen_anh_hook_dau" in _src_vi)
 check("scheduler truyền ảnh hook vào cả 2 mode (Page + Via)",
       _src_sc.count("anh_hook_bg=hook_bg") == 2 and "_anh_hook_cho(" in _src_sc)
+# Công cụ "ghim vị trí chữ": nút 📍 chỉ ở tab hook, modal kéo khung, lưu tv_bo.khung.
+_ajs_hz = Path("static/js/app.js").read_text(encoding="utf-8")
+check("có công cụ ghim vị trí chữ (openHookZone) + nút chỉ ở tab hook",
+      "function openHookZone" in _ajs_hz and "function closeHookZone" in _ajs_hz
+      and "_laHook" in _ajs_hz and "openHookZone(" in _ajs_hz)
+check("lưu khung qua /api/thuvien/bo/field (field=khung)",
+      'field:"khung"' in _ajs_hz and "/api/thuvien/bo/field" in _ajs_hz)
 
 # Bộ đăng: tiêu đề lấy từ content, KHÔNG từ cài đặt; thiếu thì dừng TRƯỚC khi
 # tải ảnh / mở trình duyệt.

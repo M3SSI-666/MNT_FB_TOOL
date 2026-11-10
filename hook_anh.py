@@ -99,16 +99,71 @@ def _wrap_dong(d, f, t, bw):
     return out
 
 
+def _do_bong_bong(im):
+    """TỰ ƯỚM vùng bong bóng = blob TRẮNG lớn nhất KHÔNG dính nhiều biên ảnh
+    (ruột bong bóng). Trả khung {x,y,w,h} tỉ lệ (đã thụt vào tránh viền lồi lõm
+    của mây), hoặc None nếu không chắc. Thuần PIL: thu nhỏ ảnh rồi loang vùng."""
+    from collections import deque
+    W0, H0 = im.size
+    if W0 < 2 or H0 < 2:
+        return None
+    sc = min(1.0, 320.0 / max(W0, H0))              # thu nhỏ cho nhanh
+    w = max(2, int(W0 * sc)); h = max(2, int(H0 * sc))
+    data = list(im.convert("RGB").resize((w, h)).getdata())
+    white = [1 if (p[0] > 205 and p[1] > 205 and p[2] > 205) else 0 for p in data]
+    seen = bytearray(w * h)
+    best = None                                      # (area, x0, y0, x1, y1)
+    for s in range(w * h):
+        if seen[s] or not white[s]:
+            continue
+        q = deque([s]); seen[s] = 1
+        area = 0; x0 = x1 = s % w; y0 = y1 = s // w; border = set()
+        while q:
+            i = q.popleft(); area += 1
+            x = i % w; y = i // w
+            if x < x0: x0 = x
+            if x > x1: x1 = x
+            if y < y0: y0 = y
+            if y > y1: y1 = y
+            if x == 0: border.add(0)
+            if x == w - 1: border.add(1)
+            if y == 0: border.add(2)
+            if y == h - 1: border.add(3)
+            if x + 1 < w and not seen[i+1] and white[i+1]: seen[i+1] = 1; q.append(i+1)
+            if x > 0     and not seen[i-1] and white[i-1]: seen[i-1] = 1; q.append(i-1)
+            if y + 1 < h and not seen[i+w] and white[i+w]: seen[i+w] = 1; q.append(i+w)
+            if y > 0     and not seen[i-w] and white[i-w]: seen[i-w] = 1; q.append(i-w)
+        if len(border) >= 3:                         # dính >=3 biên → giống nền, bỏ
+            continue
+        if best is None or area > best[0]:
+            best = (area, x0, y0, x1, y1)
+    if not best or best[0] < 0.04 * w * h:           # không có / blob quá nhỏ
+        return None
+    _, x0, y0, x1, y1 = best
+    bw_ = x1 - x0 + 1; bh_ = y1 - y0 + 1
+    ix = 0.13 * bw_; iy = 0.13 * bh_                 # thụt vào tránh viền mây lồi lõm
+    fx = (x0 + ix) / w; fy = (y0 + iy) / h
+    fw = (bw_ - 2 * ix) / w; fh = (bh_ - 2 * iy) / h
+    if fw < 0.15 or fh < 0.10:
+        return None
+    return {"x": round(fx, 3), "y": round(fy, 3), "w": round(fw, 3), "h": round(fh, 3)}
+
+
 def ghep_tieu_de(bg_path, tieu_de, khung, out_path):
     """Ghép tiêu đề (giữ xuống dòng người dùng) lên ảnh nền → lưu PNG ra out_path.
 
-    Cân cỡ chữ cho DỄ ĐỌC: phóng to nhất có thể; dòng quá dài TỰ NGẮT thêm cho
-    khỏi phải thu nhỏ cả cụm vì một dòng dài; dòng trống chỉ chiếm ~nửa chiều cao
-    (khỏi phí chỗ). Căn giữa cân mép trên/dưới."""
+    Vị trí chữ: ưu tiên `khung` đã GHIM TAY; chưa ghim thì TỰ ƯỚM vào bong bóng
+    (_do_bong_bong); dò không ra thì dùng khung căn giữa mặc định. Cân cỡ chữ cho
+    DỄ ĐỌC: phóng to nhất có thể; dòng quá dài TỰ NGẮT thêm; dòng trống chỉ chiếm
+    ~nửa chiều cao. Căn giữa cân mép trên/dưới."""
     from PIL import Image, ImageDraw
     im = Image.open(bg_path).convert("RGB")
     W, H = im.size
     d = ImageDraw.Draw(im)
+    if not (khung and str(khung).strip()):           # chưa ghim tay → tự ướm bong bóng
+        auto = _do_bong_bong(im)
+        if auto:
+            khung = auto
     bx, by, bw, bh = _doc_khung(khung, W, H)
     lines = _cac_dong(tieu_de)
     max_px = int(H * 0.20)              # trần cỡ chữ: content ít vẫn to mà không quá khổ
