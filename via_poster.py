@@ -477,6 +477,9 @@ def post_via_crosspost(
     loai_comment:    str = "",
     page_uid:        str = "",
     bien_the_sdt:    str = "",
+    anh_hook_bg:     str = "",
+    anh_hook_tieu_de:str = "",
+    anh_hook_khung:  str = "",
 ) -> bool:
     """
     Hàm đồng bộ — gọi từ scheduler (chạy trong thread).
@@ -520,6 +523,19 @@ def post_via_crosspost(
                 logger.info(f"  🏷️  Đã dán số ĐT lên ảnh ({bien_the_sdt})")
         except Exception as e:
             logger.warning(f"  ⚠️  Không download/biến thể được ảnh: {e}")
+
+    # Ảnh hook: ghép Tiêu đề hook lên 1 ảnh nền hook → CHÈN LÀM ẢNH #1 (ảnh
+    # content dồn xuống #2, #3…). Chạy cả khi content KHÔNG có ảnh riêng. Lỗi gì
+    # cũng bỏ qua, không chết phiên.
+    if anh_hook_tieu_de and anh_hook_bg:
+        try:
+            import hook_anh
+            from storage import cleanup_temp   # để finally dọn được temp dù image_url rỗng
+            local_photos, temp_dir = hook_anh.chen_anh_hook_dau(
+                local_photos, temp_dir, anh_hook_tieu_de, anh_hook_bg, anh_hook_khung)
+            logger.info("  🪝 Đã chèn ảnh hook làm ảnh #1")
+        except Exception as e:
+            logger.warning(f"  ⚠️  Không ghép được ảnh hook: {e}")
 
     try:
         ok = asyncio.run(_run_crosspost(

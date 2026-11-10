@@ -5421,6 +5421,53 @@ with db._conn() as _c_hk2:
     _c_hk2.execute("DELETE FROM content WHERE ma_content IN ('HK1','HK2')")
 db.tv_bo_xoa(_bh_hk)
 
+# ── Ảnh hook: module ghép chữ (hook_anh) + bốc ảnh + nối poster ─────────────
+import tempfile as _tf_hk
+check("font Baloo 2 kèm trong dự án", Path("fonts/Baloo2.ttf").exists())
+import hook_anh as _hook
+from PIL import Image as _ImHk
+# Ghép chữ lên nền trắng → ra PNG đúng kích thước nền, CÓ chữ (xuất hiện điểm tối).
+_bg_hk = Path(_tf_hk.mkdtemp()) / "bg.png"
+_ImHk.new("RGB", (1000, 560), (255, 255, 255)).save(_bg_hk)
+_out_hk = Path(_tf_hk.mkdtemp()) / "hook.png"
+_hook.ghep_tieu_de(str(_bg_hk), "BÁN 3PN\nGIÁ 11 TỶ", "", str(_out_hk))
+check("ghep_tieu_de ra ảnh đúng kích thước nền", _ImHk.open(_out_hk).size == (1000, 560))
+check("ghep_tieu_de có vẽ chữ (ảnh khác nền trắng)",
+      _ImHk.open(_out_hk).convert("L").getextrema()[0] < 250)
+# chen_anh_hook_dau: chèn hook làm ảnh #1, GIỮ thứ tự ảnh content phía sau.
+_lp_hk, _td_hk = _hook.chen_anh_hook_dau(["/x/a.jpg", "/x/b.jpg"], None, "ABC", str(_bg_hk), "")
+check("chen_anh_hook_dau: hook là ảnh #1, ảnh content dồn xuống #2,#3",
+      len(_lp_hk) == 3 and _lp_hk[0].endswith("hook_00.png")
+      and _lp_hk[1:] == ["/x/a.jpg", "/x/b.jpg"])
+check("chen_anh_hook_dau: thiếu tiêu đề hoặc ảnh nền → trả NGUYÊN list (không chèn)",
+      _hook.chen_anh_hook_dau(["a"], None, "", str(_bg_hk), "")[0] == ["a"]
+      and _hook.chen_anh_hook_dau(["a"], None, "ABC", "/khong/ton/tai.jpg", "")[0] == ["a"])
+# db.chon_anh_hook: bốc ngẫu nhiên 1 ảnh từ thư viện 'Ảnh hook'.
+_hid_pk = db.tv_mang_hook_id()
+_bh_pk = db.tv_bo_upsert({"mang_id": _hid_pk, "ma": "", "link_anh": "/media/thuvien/hk.jpg",
+                          "su_dung": "Có", "khung": '{"x":0.4}'})
+_pick = db.chon_anh_hook()
+check("chon_anh_hook: có ảnh → trả link ảnh đầu + khung",
+      bool(_pick) and _pick["link_anh"] == "/media/thuvien/hk.jpg" and '"x":0.4' in _pick["khung"])
+db.tv_bo_update_field(_bh_pk, "su_dung", "Không")
+check("chon_anh_hook: ảnh su_dung='Không' → bỏ qua (None nếu không còn ảnh nào)",
+      db.chon_anh_hook() is None)
+db.tv_bo_xoa(_bh_pk)
+# scheduler._anh_hook_cho: content tắt Hook / thiếu tiêu đề → ('','').
+check("_anh_hook_cho: tắt Hook → rỗng",
+      scheduler._anh_hook_cho({"dung_hook": 0, "tieu_de_hook": "X"}, "cu") == ("", ""))
+check("_anh_hook_cho: bật Hook nhưng thiếu tiêu đề → rỗng",
+      scheduler._anh_hook_cho({"dung_hook": 1, "tieu_de_hook": "  "}, "cu") == ("", ""))
+# Poster nhận tham số ảnh hook + chèn đầu; scheduler truyền vào CẢ 2 mode.
+_src_pv = Path("page_via_poster.py").read_text(encoding="utf-8")
+_src_vi = Path("via_poster.py").read_text(encoding="utf-8")
+_src_sc = Path("scheduler.py").read_text(encoding="utf-8")
+check("post_page_via + post_via_crosspost nhận tham số hook + gọi chen_anh_hook_dau",
+      "anh_hook_tieu_de" in _src_pv and "chen_anh_hook_dau" in _src_pv
+      and "anh_hook_tieu_de" in _src_vi and "chen_anh_hook_dau" in _src_vi)
+check("scheduler truyền ảnh hook vào cả 2 mode (Page + Via)",
+      _src_sc.count("anh_hook_bg=hook_bg") == 2 and "_anh_hook_cho(" in _src_sc)
+
 # Bộ đăng: tiêu đề lấy từ content, KHÔNG từ cài đặt; thiếu thì dừng TRƯỚC khi
 # tải ảnh / mở trình duyệt.
 _src_mp = Path("market_poster.py").read_text(encoding="utf-8")

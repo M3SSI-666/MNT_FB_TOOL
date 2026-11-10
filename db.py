@@ -2152,6 +2152,22 @@ def chon_bo_anh(c_user: str, thu_vien_id, dung_con_tro: bool) -> str:
     return (bo[idx].get("link_anh") or "").strip()
 
 
+def chon_anh_hook(c_user: str = "") -> dict | None:
+    """Bốc NGẪU NHIÊN 1 ảnh nền hook từ thư viện HỆ THỐNG 'Ảnh hook'
+    (su_dung='Có', có ảnh). Trả {'link_anh': <url ảnh đầu>, 'khung': <json vùng
+    chữ>} hoặc None nếu chưa có ảnh hook nào. Dùng khi content bật Hook lúc đăng."""
+    hid = tv_mang_hook_id()
+    if not hid:
+        return None
+    bo = [b for b in tv_bo_list(hid)
+          if (b.get("su_dung") or "").strip() == "Có" and (b.get("link_anh") or "").strip()]
+    if not bo:
+        return None
+    b = random.choice(bo)
+    url0 = (b.get("link_anh") or "").split(",")[0].strip()
+    return {"link_anh": url0, "khung": b.get("khung") or ""}
+
+
 def anh_cho_bai(c_user: str, link_anh: str, ma_thu_vien, dung_con_tro: bool) -> str:
     """Ảnh để đăng cho MỘT bài, theo luật ưu tiên:
       - Cột Ảnh (link_anh) có ảnh       → luôn dùng chính ảnh đó (bỏ qua thư viện).

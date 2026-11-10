@@ -215,6 +215,26 @@ def _anh_dang_cho(item: dict, ct: dict, c_user: str, dung_con_tro: bool) -> str:
                           ct.get("ma_thu_vien"), dung_con_tro)
 
 
+def _anh_hook_cho(ct: dict, c_user: str) -> tuple:
+    """(đường dẫn ảnh nền hook local, khung) nếu content này bật Hook + có Tiêu
+    đề hook; ('', '') nếu không. Bốc NGẪU NHIÊN 1 ảnh từ thư viện 'Ảnh hook'.
+    Lỗi gì cũng trả ('','') để KHÔNG chặn đăng — đăng thiếu hook còn hơn không
+    đăng. Poster sẽ ghép Tiêu đề hook lên ảnh này và chèn làm ảnh #1."""
+    try:
+        if not ct.get("dung_hook") or not (ct.get("tieu_de_hook") or "").strip():
+            return "", ""
+        bg = db.chon_anh_hook(c_user)
+        if not bg:
+            return "", ""
+        from config import MEDIA_DIR
+        p = MEDIA_DIR.parent / (bg.get("link_anh", "").lstrip("/"))
+        if not p.exists():
+            return "", ""
+        return str(p), (bg.get("khung") or "")
+    except Exception:
+        return "", ""
+
+
 def _page_bien_the_sdt() -> str:
     """Số ĐT để DÁN lên ảnh bài ĐĂNG NHÓM của mảng này — lấy từ cài đặt Biến thể
     ảnh lưu lúc Gen lịch (gen_prefs_<LOAI>). Tắt / chưa đặt → '' (không dán).
@@ -275,6 +295,7 @@ def _attempt_post(item: dict) -> str:
         c_user_v  = _c_user_cua(item, acc_data)
         # Ảnh ĐÃ CHỐT lúc Gen (cột "Mã ảnh"); lịch cũ không có thì bốc ngẫu nhiên.
         anh = _anh_dang_cho(item, ct, c_user_v, dung_con_tro=False)
+        hook_bg, hook_khung = _anh_hook_cho(ct, c_user_v)
         count = post_page_via(
             acc_name=acc_name, page_uid=page_uid,
             first_group_uid=first_uid, search_kw=tu_khoa,
@@ -284,6 +305,10 @@ def _attempt_post(item: dict) -> str:
             # lịch đang chạy — lưu nhầm thì acc homestay đi comment bài bán nhà.
             loai_comment=LOAI,
             bien_the_sdt=_page_bien_the_sdt(),
+            # Ảnh hook: ghép Tiêu đề hook lên ảnh nền → chèn làm ảnh #1.
+            anh_hook_bg=hook_bg,
+            anh_hook_tieu_de=(ct.get("tieu_de_hook") or "") if hook_bg else "",
+            anh_hook_khung=hook_khung,
         )
         if not count:
             # Lưới an toàn. Mọi bước hỏng trong poster nay đều ném LoiBuoc kèm
@@ -307,6 +332,7 @@ def _attempt_post(item: dict) -> str:
         c_user_v  = _c_user_cua(item, acc_data)
         # Ảnh ĐÃ CHỐT lúc Gen (cột "Mã ảnh"); lịch cũ không có thì bốc ngẫu nhiên.
         anh = _anh_dang_cho(item, ct, c_user_v, dung_con_tro=False)
+        hook_bg, hook_khung = _anh_hook_cho(ct, c_user_v)
         count = post_via_crosspost(
             acc_name=acc_name, search_kw=tu_khoa,
             message=content, image_url=anh,
@@ -318,6 +344,10 @@ def _attempt_post(item: dict) -> str:
             loai_comment=LOAI,
             page_uid=(acc_data or {}).get("page_uid", ""),
             bien_the_sdt=_page_bien_the_sdt(),
+            # Ảnh hook: ghép Tiêu đề hook lên ảnh nền → chèn làm ảnh #1.
+            anh_hook_bg=hook_bg,
+            anh_hook_tieu_de=(ct.get("tieu_de_hook") or "") if hook_bg else "",
+            anh_hook_khung=hook_khung,
         )
         if not count:
             raise Exception("Via thất bại")
