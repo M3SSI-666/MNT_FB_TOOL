@@ -2230,6 +2230,12 @@ async function loadContent(loai){
                         style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)">
                 </td>
 
+                <!-- Content Hook: chữ sẽ ghi vào bong bóng (nhiều dòng). Sửa
+                     inline bằng textarea — giống ô Nội dung. -->
+                <td class="editable" data-id="${r.id}" data-field="tieu_de_hook" data-val="${(r.tieu_de_hook||"").replace(/"/g,"&quot;")}"
+                    style="font-size:12px;color:var(--text-secondary);max-width:200px;white-space:pre-wrap;word-break:break-word;padding:6px 8px"
+                    onclick="startContentNdEdit(this)">${r.tieu_de_hook||"-"}</td>
+
                 <!-- Sử dụng: inline edit -->
                 <td class="editable" data-id="${r.id}" data-field="su_dung" data-val="${r.su_dung||""}"
                     style="text-align:center;font-weight:600;font-size:12px;color:${suDung?"var(--success)":"var(--text-muted)"}"
@@ -2254,6 +2260,7 @@ function startContentNdEdit(td){
     if(td.classList.contains("editing")) return;
     td.classList.add("editing");
     const id=td.dataset.id, val=td.dataset.val||"";
+    const field=td.dataset.field||"noi_dung";   // dùng chung: Nội dung + Content Hook
     const ta=document.createElement("textarea");
     ta.value=val==="-"?"":val;
     ta.style.cssText="width:100%;min-height:120px;background:var(--bg-input);border:1px solid var(--accent);border-radius:4px;padding:6px;color:var(--text-primary);font-size:12px;line-height:1.5;resize:vertical;outline:none;font-family:inherit";
@@ -2264,7 +2271,7 @@ function startContentNdEdit(td){
         if(nv===val) return;
         td.classList.add("saving");
         try{
-            const r=await API.updateContentField(parseInt(id),"noi_dung",nv);
+            const r=await API.updateContentField(parseInt(id),field,nv);
             td.classList.remove("saving");
             if(r.ok){td.classList.add("saved");setTimeout(()=>td.classList.remove("saved"),1200);}
             else Toast.error(r.error);

@@ -5390,9 +5390,20 @@ check("tv_bo có cột khung (vùng chữ ảnh hook)", "khung" in _cot_bo_hk)
 check("bảng Content: cột Hook nằm GIỮA Tiêu đề Market và Sử dụng",
       _bang_ct.index(">Tiêu đề Market Place</th>") < _bang_ct.index(">Hook</th>")
       < _bang_ct.index(">Sử dụng</th>"))
+check("bảng Content: cột 'Content Hook' nằm GIỮA Hook và Sử dụng",
+      _bang_ct.index(">Hook</th>") < _bang_ct.index(">Content Hook</th>")
+      < _bang_ct.index(">Sử dụng</th>"))
 check("hàng Content có checkbox Hook + form có ô Tiêu đề hook",
       "contentSetHook(" in _ajs_mkt and 'id="ce_hook"' in _ajs_mkt
       and 'id="ce_hooktd"' in _ajs_mkt and "tieu_de_hook:" in _ajs_mkt)
+# Cột 'Content Hook' ở bảng = ô sửa inline nhiều dòng (tái dùng startContentNdEdit),
+# lưu đúng field tieu_de_hook (không còn hard-code 'noi_dung').
+check("cột Content Hook: ô editable field tieu_de_hook + dùng startContentNdEdit",
+      'data-field="tieu_de_hook"' in _ajs_mkt and "startContentNdEdit" in _ajs_mkt)
+_khoi_nd = _ajs_mkt[_ajs_mkt.index("function startContentNdEdit"):
+                    _ajs_mkt.index("function startContentFieldEdit")]
+check("startContentNdEdit lưu theo data-field (dùng chung Nội dung + Content Hook)",
+      "td.dataset.field" in _khoi_nd and 'updateContentField(parseInt(id),field,nv)' in _khoi_nd)
 _cid_hk = db.upsert_content({"loai": "homestay", "ma_content": "HK1", "noi_dung": "nd"})
 check("API tick Hook → coerce về 1",
       _client.post(f"/api/content/{_cid_hk}/field",

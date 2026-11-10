@@ -10,6 +10,15 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 
 ---
 
+## v2.77.1 — 10/11/2026
+
+**Ảnh hook: thêm cột "Content Hook" sửa chữ ngay ở bảng Content**
+
+Chữ ghép vào bong bóng (Tiêu đề hook) giờ có cột riêng **"Content Hook"** ở bảng
+Content, nằm giữa cột **Hook** và **Sử dụng** — bấm vào là sửa ngay tại bảng, gõ
+xuống dòng thoải mái, khỏi phải mở form. Sửa ở bảng hay trong form Sửa content
+đều cùng một chỗ.
+
 ## v2.77.0 — 10/11/2026
 
 **Ảnh hook: ghép tiêu đề lên ảnh bìa, tự chèn làm ảnh đầu bài**
