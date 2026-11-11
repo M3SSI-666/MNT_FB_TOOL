@@ -5541,9 +5541,10 @@ with db._conn() as _c_hk:
 check("scheduler dùng hook ĐÃ CHỐT của dòng lịch trước, lịch cũ mới chọn động",
       "db.hook_theo_id((item or {}).get(\"anh_hook\")) or db.chon_anh_hook(c_user)" in Path("scheduler.py").read_text(encoding="utf-8")
       and Path("scheduler.py").read_text(encoding="utf-8").count("_anh_hook_cho(ct, c_user_v, item)") == 3)
-check("Gen lịch chốt hook (phan_bo_hook) + bảng lịch hiện badge 🪝",
+check("Gen lịch chốt hook (phan_bo_hook) + bảng lịch hiện badge Hook (không emoji 🪝 — Win10 ra ô vuông)",
       "db.phan_bo_hook(loai, _dong_dang)" in Path("server.py").read_text(encoding="utf-8")
-      and "r.ma_hook" in Path("static/js/app.js").read_text(encoding="utf-8"))
+      and "r.ma_hook" in Path("static/js/app.js").read_text(encoding="utf-8")
+      and '">🪝' not in Path("static/js/app.js").read_text(encoding="utf-8"))
 # scheduler._anh_hook_cho: content tắt Hook / thiếu tiêu đề → ('','').
 check("_anh_hook_cho: tắt Hook → rỗng",
       scheduler._anh_hook_cho({"dung_hook": 0, "tieu_de_hook": "X"}, "cu") == ("", ""))

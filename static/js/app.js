@@ -3914,9 +3914,10 @@ function renderScheduleTable(loai,data){
         // "Bộ ảnh-<mã>" (vàng) = bốc từ Thư viện ảnh. Trống = dòng không đăng ảnh
         // (comment/nuôi) hoặc lịch cũ gen trước tính năng này. Chỉ để xem, không sửa.
         const _ma=(r.ma_anh||"").toString(), _laBo=!!_ma && _ma!=="Ảnh";   // nhãn bộ ảnh thư viện = "<tên thư viện> - <mã bộ>"
-        // Ảnh hook chốt lúc Gen (trải đều lần lượt) — badge hồng "🪝 <mã>" cạnh Mã ảnh.
+        // Ảnh hook chốt lúc Gen (trải đều lần lượt) — badge hồng "Hook <mã>" cạnh Mã ảnh.
+        // KHÔNG dùng emoji 🪝: Unicode 13, Windows 10 không có glyph → hiện ô vuông.
         const _hk=(r.ma_hook||"").toString();
-        const _hkBadge=_hk?` <span class="badge" title="Ảnh hook (ảnh #1 của bài) — chốt lúc Gen, trải đều lần lượt" style="background:#4a1d3a;color:#f9a8d4">🪝 ${_escapeHtml(_hk)}</span>`:"";
+        const _hkBadge=_hk?` <span class="badge" title="Ảnh hook (ảnh #1 của bài) — chốt lúc Gen, trải đều lần lượt" style="background:#4a1d3a;color:#f9a8d4">Hook ${_escapeHtml(_hk)}</span>`:"";
         const maAnhCell=(_ma||_hk)
             ? `<td style="text-align:center;font-size:11px;white-space:nowrap">${_ma?`<span class="badge" style="${_laBo?"background:#3a2f12;color:#fcd34d":"background:#17303f;color:#93c5fd"}">${_escapeHtml(_ma)}</span>`:""}${_hkBadge}</td>`
             : `<td style="text-align:center;color:var(--text-muted)">-</td>`;

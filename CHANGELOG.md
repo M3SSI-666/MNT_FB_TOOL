@@ -8,6 +8,18 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 > cập nhật hay lùi, vì chúng nằm ngoài phần mã nguồn. Trước mỗi lần cập nhật,
 > phần mềm tự sao lưu dữ liệu vào `%LOCALAPPDATA%\MNT FB AutoPost\backup`.
 
+## v2.77.9 — 11/11/2026
+
+**Vá giao diện: badge ảnh hook trên bảng lịch hiện ô vuông**
+
+Badge ảnh hook ở cột "Mã ảnh" dùng emoji 🪝 — emoji mới (Unicode 13), Windows 10
+chưa có hình nên hiện thành **ô vuông** trước số ảnh. Nay ghi bằng chữ: **"Hook 31"**,
+**"Hook 1"**… Thứ tự ảnh hook không đổi.
+
+> Cập nhật xong mở lại app là thấy.
+
+---
+
 ## v2.77.8 — 11/11/2026
 
 **Ảnh hook: TRẢI ĐỀU LẦN LƯỢT, chốt ngay lúc Gen lịch (bỏ bốc ngẫu nhiên)**
