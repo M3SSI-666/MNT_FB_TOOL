@@ -2530,6 +2530,11 @@ def api_schedule_gen(loai):
             r["ma_anh"], r["anh_dang"] = "", ""
     db.phan_bo_anh(loai, _dong_dang, _ct_map,
                    lambda r: cu_cua.get(r["ten_acc"], "") or r["ten_acc"])
+    # Ảnh HOOK: chốt luôn lúc Gen, TRẢI ĐỀU LẦN LƯỢT theo thời gian cả lịch (xem
+    # db.phan_bo_hook) — hiện cạnh "Mã ảnh" trên bảng lịch.
+    for r in schedule:
+        r.setdefault("anh_hook", ""); r.setdefault("ma_hook", "")
+    db.phan_bo_hook(loai, _dong_dang)
 
     # Trả khoá nội bộ về tên hiển thị, và ghi c_user vào từng dòng.
     for r in schedule:

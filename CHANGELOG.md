@@ -8,6 +8,28 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 > cập nhật hay lùi, vì chúng nằm ngoài phần mã nguồn. Trước mỗi lần cập nhật,
 > phần mềm tự sao lưu dữ liệu vào `%LOCALAPPDATA%\MNT FB AutoPost\backup`.
 
+## v2.77.8 — 11/11/2026
+
+**Ảnh hook: TRẢI ĐỀU LẦN LƯỢT, chốt ngay lúc Gen lịch (bỏ bốc ngẫu nhiên)**
+
+Thứ cần đa dạng là các bài **lần lượt xuất hiện trong nhóm khu vực**, bất kể của
+nick nào. Bản cũ bốc ngẫu nhiên nên hai bài liền nhau hay trùng ảnh hook.
+
+- **Chốt ảnh hook lúc Gen lịch**, theo **thứ tự thời gian của cả lịch**: bài 1 →
+  ảnh 1, bài 2 → ảnh 2, … hết ảnh mới quay lại ảnh 1. Hai bài liền nhau **không bao
+  giờ trùng hook**, mọi ảnh được dùng đều nhau (mô phỏng lịch Bán thật: 555 bài/ngày,
+  30 ảnh → mỗi ảnh 18–19 lần, 0 lần trùng liền nhau).
+- Bảng lịch hiện badge hồng **🪝 <số ảnh>** cạnh cột "Mã ảnh" — xem trước được.
+- **Mỗi đầu ngày** xoay tiếp ảnh hook cho các dòng đang Chờ, **nối tiếp** chỗ hôm
+  trước dừng (không quay về ảnh 1).
+- Áp cho dòng đăng chéo nhóm + Marketplace có content bật Hook. Ảnh đã chốt bị tắt /
+  xoá, hoặc lịch Gen trước bản này → tự lấy ảnh kế tiếp, không làm hỏng phiên.
+
+> Cập nhật xong **tắt / mở lại app** rồi **Gen lại lịch** để thấy badge hook (không
+> Gen lại thì sáng mai bước xoay đầu ngày cũng tự chốt).
+
+---
+
 ## v2.77.7 — 11/11/2026
 
 **Ảnh hook: đổi màu chữ trong bong bóng sang màu đỏ**

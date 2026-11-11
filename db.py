@@ -624,6 +624,11 @@ def init_db():
         #              logic chọn ảnh động như cũ (db.anh_cho_bai), không đổi hành vi.
         _add_col("schedules", "ma_anh",   "ma_anh TEXT DEFAULT ''")
         _add_col("schedules", "anh_dang", "anh_dang TEXT DEFAULT ''")
+        # Ảnh HOOK chốt lúc Gen (xem phan_bo_hook): anh_hook = id ảnh trong tab
+        # "Ảnh hook", ma_hook = mã hiển thị. Trống = dòng không dùng hook, hoặc
+        # lịch cũ → lúc đăng rơi về chọn động (chon_anh_hook).
+        _add_col("schedules", "anh_hook", "anh_hook TEXT DEFAULT ''")
+        _add_col("schedules", "ma_hook",  "ma_hook TEXT DEFAULT ''")
         # Mã content có dấu cách thừa ở đầu/cuối (gõ tay: "P062806 ") — Gen lịch
         # ghi mã đã cắt, còn bảng content giữ nguyên dấu cách → tra content theo
         # mã trượt: cột Mã ảnh trống, lúc đăng báo "Không có content". Gặp thật
@@ -2152,20 +2157,89 @@ def chon_bo_anh(c_user: str, thu_vien_id, dung_con_tro: bool) -> str:
     return (bo[idx].get("link_anh") or "").strip()
 
 
-def chon_anh_hook(c_user: str = "") -> dict | None:
-    """Bốc NGẪU NHIÊN 1 ảnh nền hook từ thư viện HỆ THỐNG 'Ảnh hook'
-    (su_dung='Có', có ảnh). Trả {'link_anh': <url ảnh đầu>, 'khung': <json vùng
-    chữ>} hoặc None nếu chưa có ảnh hook nào. Dùng khi content bật Hook lúc đăng."""
+def _ds_anh_hook() -> list:
+    """Các ảnh trong tab hệ thống 'Ảnh hook' đang dùng được (su_dung='Có', có
+    ảnh), ĐÚNG thứ tự trong tab."""
     hid = tv_mang_hook_id()
     if not hid:
-        return None
-    bo = [b for b in tv_bo_list(hid)
-          if (b.get("su_dung") or "").strip() == "Có" and (b.get("link_anh") or "").strip()]
-    if not bo:
-        return None
-    b = random.choice(bo)
+        return []
+    return [b for b in tv_bo_list(hid)
+            if (b.get("su_dung") or "").strip() == "Có" and (b.get("link_anh") or "").strip()]
+
+
+def _hook_ra(b: dict) -> dict:
     url0 = (b.get("link_anh") or "").split(",")[0].strip()
     return {"link_anh": url0, "khung": b.get("khung") or ""}
+
+
+def chon_anh_hook(c_user: str = "") -> dict | None:
+    """DỰ PHÒNG cho dòng lịch CHƯA chốt ảnh hook (lịch Gen trước v2.77.8): bốc
+    ảnh KẾ TIẾP theo con trỏ chung `hook_con_tro` — vẫn lần lượt, không ngẫu
+    nhiên. Lịch Gen từ v2.77.8 đã chốt sẵn hook từng dòng (xem phan_bo_hook).
+
+    Trả {'link_anh': <url ảnh đầu>, 'khung': <json vùng chữ>} hoặc None nếu
+    chưa có ảnh hook nào."""
+    bo = _ds_anh_hook()
+    if not bo:
+        return None
+    try:
+        cur = max(0, int(get_setting("hook_con_tro", "0") or 0))
+    except ValueError:
+        cur = 0
+    set_setting("hook_con_tro", str(cur + 1))
+    return _hook_ra(bo[cur % len(bo)])
+
+
+def hook_theo_id(hook_id) -> dict | None:
+    """Ảnh hook ĐÃ CHỐT lúc Gen (schedules.anh_hook). Ảnh đã bị xoá / tắt Sử
+    dụng / mất ảnh → None (nơi gọi rơi về chon_anh_hook)."""
+    try:
+        hid = int(str(hook_id or "").strip())
+    except ValueError:
+        return None
+    for b in _ds_anh_hook():
+        if b["id"] == hid:
+            return _hook_ra(b)
+    return None
+
+
+def phan_bo_hook(loai: str, rows: list) -> int:
+    """CHỐT ảnh hook cho MỘT LƯỢT dòng lịch (cả lịch lúc Gen, hoặc các dòng 'Chờ'
+    lúc xoay đầu ngày) — TRẢI ĐỀU LẦN LƯỢT theo THỜI GIAN của cả lịch: dòng dùng
+    hook thứ 1 lấy ảnh 1, thứ 2 lấy ảnh 2, … hết N ảnh quay lại ảnh 1. Nên hai
+    bài liền nhau (bất kể nick nào) không trùng ảnh hook, và mọi ảnh được dùng
+    đều nhau (lệch nhau tối đa 1 lần).
+
+    Vòng NỐI TIẾP giữa các lượt (con trỏ chung `hook_con_tro`): Gen / đầu ngày
+    hôm sau đi tiếp từ chỗ hôm trước dừng, không quay về ảnh 1.
+
+    Dòng dùng hook = dòng đăng (dang_bai / marketplace) có content bật Hook +
+    có Content Hook. Gán tại chỗ r["anh_hook"] (id) + r["ma_hook"] (mã hiển
+    thị); dòng khác để trống. `rows` theo thứ tự thời gian. Trả số dòng có hook."""
+    bo = _ds_anh_hook()
+    with _conn() as con:
+        hook_ct = {(r["ma_content"] or "").strip() for r in con.execute(
+            "SELECT ma_content FROM content WHERE loai=? AND dung_hook=1 "
+            "AND TRIM(COALESCE(tieu_de_hook,''))!=''", (loai,)).fetchall()}
+    try:
+        cur = max(0, int(get_setting("hook_con_tro", "0") or 0))
+    except ValueError:
+        cur = 0
+    n = 0
+    for r in rows:
+        dung = (bo and (r.get("hoat_dong") or "dang_bai") in ("dang_bai", "marketplace")
+                and (r.get("ma_content") or "").strip() in hook_ct)
+        if not dung:
+            r["anh_hook"], r["ma_hook"] = "", ""
+            continue
+        b = bo[cur % len(bo)]
+        cur += 1
+        n += 1
+        r["anh_hook"] = str(b["id"])
+        r["ma_hook"] = (b.get("ma") or "").strip() or f"#{b['id']}"
+    if n:
+        set_setting("hook_con_tro", str(cur))
+    return n
 
 
 def anh_cho_bai(c_user: str, link_anh: str, ma_thu_vien, dung_con_tro: bool) -> str:
@@ -2368,10 +2442,14 @@ def xoay_ma_anh(loai: str, hom_nay=None) -> int:
     n = phan_bo_anh(loai, rows, cts,
                     lambda r: (r.get("c_user") or "").strip() or r.get("ten_acc") or "",
                     hom_nay=hom_nay)
+    # Ảnh hook cũng xoay mỗi ngày — lần lượt nối tiếp vòng hôm trước.
+    phan_bo_hook(loai, rows)
     if rows:
         with _conn() as con:
-            con.executemany("UPDATE schedules SET ma_anh=?, anh_dang=? WHERE id=?",
-                            [(r["ma_anh"], r["anh_dang"], r["id"]) for r in rows])
+            con.executemany(
+                "UPDATE schedules SET ma_anh=?, anh_dang=?, anh_hook=?, ma_hook=? WHERE id=?",
+                [(r["ma_anh"], r["anh_dang"], r["anh_hook"], r["ma_hook"], r["id"])
+                 for r in rows])
     return n
 
 
@@ -2713,6 +2791,8 @@ def replace_schedules(loai: str, rows: list[dict]):
                 # mặc định để executemany không vỡ khi row không khai báo.
                 r.setdefault("ma_anh", "")
                 r.setdefault("anh_dang", "")
+                r.setdefault("anh_hook", "")
+                r.setdefault("ma_hook", "")
                 # Mỗi dòng mang c_user của nick — nơi dựng dòng biết thì truyền
                 # thẳng; không thì suy từ tên + Page (xem `tim_c_user`).
                 if not (r.get("c_user") or "").strip():
@@ -2721,10 +2801,10 @@ def replace_schedules(loai: str, rows: list[dict]):
                 """INSERT INTO schedules
                    (loai, stt, ma_content, ten_acc, ten_page, gio_dang,
                     ma_nhom, tu_khoa, mode, trang_thai, hoat_dong, c_user,
-                    ma_anh, anh_dang)
+                    ma_anh, anh_dang, anh_hook, ma_hook)
                    VALUES (:loai,:stt,:ma_content,:ten_acc,:ten_page,:gio_dang,
                            :ma_nhom,:tu_khoa,:mode,:trang_thai,:hoat_dong,:c_user,
-                           :ma_anh,:anh_dang)""",
+                           :ma_anh,:anh_dang,:anh_hook,:ma_hook)""",
                 rows
             )
 

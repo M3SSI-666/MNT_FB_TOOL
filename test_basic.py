@@ -5489,7 +5489,7 @@ check("chen_anh_hook_dau: hook là ảnh #1, ảnh content dồn xuống #2,#3",
 check("chen_anh_hook_dau: thiếu tiêu đề hoặc ảnh nền → trả NGUYÊN list (không chèn)",
       _hook.chen_anh_hook_dau(["a"], None, "", str(_bg_hk), "")[0] == ["a"]
       and _hook.chen_anh_hook_dau(["a"], None, "ABC", "/khong/ton/tai.jpg", "")[0] == ["a"])
-# db.chon_anh_hook: bốc ngẫu nhiên 1 ảnh từ thư viện 'Ảnh hook'.
+# db.chon_anh_hook: bốc 1 ảnh từ thư viện "Ảnh hook" (xoay vòng theo nick).
 _hid_pk = db.tv_mang_hook_id()
 _bh_pk = db.tv_bo_upsert({"mang_id": _hid_pk, "ma": "", "link_anh": "/media/thuvien/hk.jpg",
                           "su_dung": "Có", "khung": '{"x":0.4}'})
@@ -5500,6 +5500,50 @@ db.tv_bo_update_field(_bh_pk, "su_dung", "Không")
 check("chon_anh_hook: ảnh su_dung='Không' → bỏ qua (None nếu không còn ảnh nào)",
       db.chon_anh_hook() is None)
 db.tv_bo_xoa(_bh_pk)
+# Ảnh hook TRẢI ĐỀU LẦN LƯỢT theo THỜI GIAN cả lịch (không random, không theo
+# nick): cái cần đa dạng là các bài LẦN LƯỢT xuất hiện trong nhóm, bất kể nick.
+_bh_xv = [db.tv_bo_upsert({"mang_id": _hid_pk, "ma": str(i + 1), "link_anh": f"/media/thuvien/xv{i}.jpg",
+                           "su_dung": "Có", "khung": ""}) for i in range(3)]
+db.set_setting("hook_con_tro", "0")
+_seq_a = [db.chon_anh_hook("nickA")["link_anh"] for _ in range(6)]
+check("chon_anh_hook (dự phòng lịch cũ): lần lượt — 3 ảnh đủ vòng rồi mới lặp",
+      len(set(_seq_a[:3])) == 3 and _seq_a[3:] == _seq_a[:3])
+# phan_bo_hook: chốt lúc Gen cho cả lịch theo thứ tự thời gian, qua mọi nick.
+db.upsert_content({"loai": "thue", "ma_content": "HK1", "noi_dung": "x", "su_dung": "Có",
+                   "dung_hook": 1, "tieu_de_hook": "CHO THUÊ"})
+db.upsert_content({"loai": "thue", "ma_content": "KHK", "noi_dung": "x", "su_dung": "Có"})
+db.set_setting("hook_con_tro", "0")
+_rows_hk = [{"ten_acc": a, "ma_content": m, "hoat_dong": h} for a, m, h in (
+    ("A", "HK1", "dang_bai"), ("B", "HK1", "dang_bai"), ("A", "HK1", "comment"),
+    ("C", "KHK", "dang_bai"), ("B", "HK1", "marketplace"), ("C", "HK1", "dang_bai"),
+    ("A", "HK1", "dang_bai"))]
+_n_hk = db.phan_bo_hook("thue", _rows_hk)
+_ma_hk = [r["ma_hook"] for r in _rows_hk]
+check("phan_bo_hook: trải LẦN LƯỢT theo thời gian qua mọi nick (1,2,3,1,2)",
+      _n_hk == 5 and _ma_hk == ["1", "2", "", "", "3", "1", "2"])
+check("phan_bo_hook: comment / content không bật Hook → không có hook",
+      _rows_hk[2]["anh_hook"] == "" and _rows_hk[3]["anh_hook"] == "")
+check("phan_bo_hook: hai bài liền nhau KHÔNG trùng hook",
+      all(a != b for a, b in zip([m for m in _ma_hk if m], [m for m in _ma_hk if m][1:])))
+_rows_hk2 = [{"ten_acc": "A", "ma_content": "HK1", "hoat_dong": "dang_bai"}]
+db.phan_bo_hook("thue", _rows_hk2)
+check("phan_bo_hook: lượt sau (đầu ngày / Gen lại) NỐI TIẾP vòng, không quay về ảnh 1",
+      _rows_hk2[0]["ma_hook"] == "3")
+check("hook_theo_id: lấy đúng ảnh đã chốt",
+      (db.hook_theo_id(_rows_hk[0]["anh_hook"]) or {}).get("link_anh") == "/media/thuvien/xv0.jpg")
+db.tv_bo_update_field(_bh_xv[0], "su_dung", "Không")
+check("hook_theo_id: ảnh đã chốt bị tắt Sử dụng → None (rơi về chọn động)",
+      db.hook_theo_id(_rows_hk[0]["anh_hook"]) is None)
+for _b in _bh_xv:
+    db.tv_bo_xoa(_b)
+with db._conn() as _c_hk:
+    _c_hk.execute("DELETE FROM content WHERE loai='thue' AND ma_content IN ('HK1','KHK')")
+check("scheduler dùng hook ĐÃ CHỐT của dòng lịch trước, lịch cũ mới chọn động",
+      "db.hook_theo_id((item or {}).get(\"anh_hook\")) or db.chon_anh_hook(c_user)" in Path("scheduler.py").read_text(encoding="utf-8")
+      and Path("scheduler.py").read_text(encoding="utf-8").count("_anh_hook_cho(ct, c_user_v, item)") == 3)
+check("Gen lịch chốt hook (phan_bo_hook) + bảng lịch hiện badge 🪝",
+      "db.phan_bo_hook(loai, _dong_dang)" in Path("server.py").read_text(encoding="utf-8")
+      and "r.ma_hook" in Path("static/js/app.js").read_text(encoding="utf-8"))
 # scheduler._anh_hook_cho: content tắt Hook / thiếu tiêu đề → ('','').
 check("_anh_hook_cho: tắt Hook → rỗng",
       scheduler._anh_hook_cho({"dung_hook": 0, "tieu_de_hook": "X"}, "cu") == ("", ""))

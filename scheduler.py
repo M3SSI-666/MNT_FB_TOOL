@@ -215,7 +215,7 @@ def _anh_dang_cho(item: dict, ct: dict, c_user: str, dung_con_tro: bool) -> str:
                           ct.get("ma_thu_vien"), dung_con_tro)
 
 
-def _anh_hook_cho(ct: dict, c_user: str) -> tuple:
+def _anh_hook_cho(ct: dict, c_user: str, item: dict = None) -> tuple:
     """(đường dẫn ảnh nền hook local, khung) nếu content này bật Hook + có Tiêu
     đề hook; ('', '') nếu không. Bốc NGẪU NHIÊN 1 ảnh từ thư viện 'Ảnh hook'.
     Lỗi gì cũng trả ('','') để KHÔNG chặn đăng — đăng thiếu hook còn hơn không
@@ -223,7 +223,9 @@ def _anh_hook_cho(ct: dict, c_user: str) -> tuple:
     try:
         if not ct.get("dung_hook") or not (ct.get("tieu_de_hook") or "").strip():
             return "", ""
-        bg = db.chon_anh_hook(c_user)
+        # Ảnh hook ĐÃ CHỐT lúc Gen (cột anh_hook, trải đều lần lượt cả lịch);
+        # lịch cũ chưa chốt / ảnh đã bị xoá-tắt → lấy ảnh kế tiếp theo vòng chung.
+        bg = db.hook_theo_id((item or {}).get("anh_hook")) or db.chon_anh_hook(c_user)
         if not bg:
             return "", ""
         from config import MEDIA_DIR
@@ -295,7 +297,7 @@ def _attempt_post(item: dict) -> str:
         c_user_v  = _c_user_cua(item, acc_data)
         # Ảnh ĐÃ CHỐT lúc Gen (cột "Mã ảnh"); lịch cũ không có thì bốc ngẫu nhiên.
         anh = _anh_dang_cho(item, ct, c_user_v, dung_con_tro=False)
-        hook_bg, hook_khung = _anh_hook_cho(ct, c_user_v)
+        hook_bg, hook_khung = _anh_hook_cho(ct, c_user_v, item)
         count = post_page_via(
             acc_name=acc_name, page_uid=page_uid,
             first_group_uid=first_uid, search_kw=tu_khoa,
@@ -332,7 +334,7 @@ def _attempt_post(item: dict) -> str:
         c_user_v  = _c_user_cua(item, acc_data)
         # Ảnh ĐÃ CHỐT lúc Gen (cột "Mã ảnh"); lịch cũ không có thì bốc ngẫu nhiên.
         anh = _anh_dang_cho(item, ct, c_user_v, dung_con_tro=False)
-        hook_bg, hook_khung = _anh_hook_cho(ct, c_user_v)
+        hook_bg, hook_khung = _anh_hook_cho(ct, c_user_v, item)
         count = post_via_crosspost(
             acc_name=acc_name, search_kw=tu_khoa,
             message=content, image_url=anh,
@@ -678,7 +680,7 @@ def _run_marketplace_slot(item: dict):
         # Ảnh ĐÃ CHỐT lúc Gen (cột "Mã ảnh" = "<thư viện> - <mã bộ>"); con trỏ roll đã tiến
         # tại Gen nên ở đây KHÔNG tiến lại. Lịch cũ không có thì roll động như cũ.
         anh = _anh_dang_cho(item, ct, c_user_v, dung_con_tro=True)
-        hook_bg, hook_khung = _anh_hook_cho(ct, c_user_v)
+        hook_bg, hook_khung = _anh_hook_cho(ct, c_user_v, item)
         so_nhom = post_marketplace(acc_name=acc_name, message=content,
                                    image_url=anh, c_user=c_user_v,
                                    tieu_de=tieu_de,
