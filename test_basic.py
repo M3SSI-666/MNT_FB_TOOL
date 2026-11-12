@@ -5494,13 +5494,24 @@ check("_mau_vien: chữ sáng → viền đậm; chữ đậm → viền sáng",
       and _hook._mau_vien(_hook.MAU_TOI) == (255, 255, 255))
 check("_mau_nen: đọc đúng màu trung bình vùng nền",
       _hook._mau_nen(_ImHk.new("RGB", (80, 80), (11, 19, 34)), 0, 0, 80, 80) == (11, 19, 34))
-# Khung chữ MẶC ĐỊNH căn GIỮA + chừa lề: bó trong khung vuông giữa ảnh để FB cắt
-# vuông không mất chữ (ảnh 1280x720 → vùng chữ nằm trong cột giữa, cân hai bên).
-_bx_tt, _by_tt, _bw_tt, _bh_tt = _hook._khung_trung_tam(1280, 720)
+# Khung chữ MẶC ĐỊNH căn GIỮA, lề 4 phía CÂN ĐỐI (lề ngang ≈ lề dọc), không sát
+# mép (ảnh 1600x900: lề ngang ~8% = 128px ≈ lề dọc ~14% = 126px).
+_bx_tt, _by_tt, _bw_tt, _bh_tt = _hook._khung_trung_tam(1600, 900)
 check("_khung_trung_tam: căn giữa ngang (lề trái ≈ lề phải, không sát mép)",
-      abs(_bx_tt - (1280 - _bw_tt - _bx_tt)) <= 1 and _bx_tt > 0)
-check("_khung_trung_tam: bề ngang bó trong khung vuông giữa ảnh (an toàn cắt vuông)",
-      _bx_tt >= (1280 - 720) / 2 and _bx_tt + _bw_tt <= (1280 + 720) / 2)
+      abs(_bx_tt - (1600 - _bw_tt - _bx_tt)) <= 1 and _bx_tt > 0)
+check("_khung_trung_tam: lề ngang ≈ lề dọc (cân đối 4 phía, không còn hẹp ngang)",
+      _by_tt > 0 and abs(_bx_tt - _by_tt) <= 0.04 * 1600 and _bw_tt > 0.78 * 1600)
+# _xep_dong: wrap=False GIỮ ĐÚNG số dòng người dùng gõ (không tự thêm dòng).
+from PIL import ImageDraw as _IDrawHk
+_dw_hk = _IDrawHk.Draw(_ImHk.new("RGB", (10, 10)))
+_fnt_hk = _hook._load_font(40)
+check("_xep_dong wrap=False: giữ nguyên đúng số dòng người dùng gõ",
+      _hook._xep_dong(_dw_hk, _fnt_hk, ["AAA", "BBB", "CCC", "DDD"], 999999, False)
+      == ["AAA", "BBB", "CCC", "DDD"])
+check("_xep_dong wrap=True + khung rộng: dòng ngắn KHÔNG bị ngắt thêm",
+      _hook._xep_dong(_dw_hk, _fnt_hk, ["AAA BBB", "CCC"], 999999, True) == ["AAA BBB", "CCC"])
+check("_xep_dong wrap=True + khung HẸP: dòng dài bị ngắt ra nhiều dòng",
+      len(_hook._xep_dong(_dw_hk, _fnt_hk, ["AAA BBB CCC DDD EEE"], 60, True)) > 1)
 # Nền navy tối → ghép chữ phải có điểm chữ SÁNG (vàng gold) nổi trên nền tối.
 _bg_dk = Path(_tf_hk.mkdtemp()) / "dk.png"
 _ImHk.new("RGB", (1000, 560), (11, 19, 34)).save(_bg_dk)

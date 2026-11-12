@@ -50,18 +50,17 @@ BLANK_SP  = 0.45                # dòng TRỐNG chỉ chiếm ~0.45 chiều cao 
 # Khung dự phòng khi khung GHIM TAY bị hỏng (tỉ lệ 0..1) — căn giữa, chừa lề.
 KHUNG_MAC_DINH = {"x": 0.17, "y": 0.15, "w": 0.66, "h": 0.70}
 
-# Vùng chữ MẶC ĐỊNH (khi không ghim tay) = hình chữ nhật căn GIỮA ảnh, chừa lề 4
-# phía. Bề ngang bó trong CẠNH VUÔNG giữa ảnh (= min(W,H)) để chữ sống sót khi
-# Facebook/Marketplace cắt ảnh về khung vuông ở giữa.
-SAFE_NGANG = 0.86      # bề ngang vùng chữ = 86% cạnh vuông giữa ảnh
-SAFE_DOC   = 0.72      # chiều cao vùng chữ = 72% chiều cao ảnh
+# Vùng chữ MẶC ĐỊNH (khi không ghim tay) = hình chữ nhật căn GIỮA ảnh, LỀ 4 PHÍA
+# CÂN ĐỐI (lề ngang ≈ lề dọc). Chữ dùng phần giữa, không chạm mép để FB đỡ cắt.
+# Giữ ĐÚNG số dòng người dùng gõ (xem ghep_tieu_de: ưu tiên KHÔNG tự ngắt dòng).
+LE_NGANG = 0.08        # lề mỗi bên NGANG = 8% bề rộng ảnh → vùng chữ rộng 84%
+SAFE_DOC = 0.72        # chiều cao vùng chữ = 72% chiều cao ảnh (lề dọc ~14%)
 
 
 def _khung_trung_tam(W, H):
-    """(bx,by,bw,bh) pixel của vùng chữ căn GIỮA ảnh, đã chừa lề an toàn."""
-    canh = min(W, H)
-    bw = canh * SAFE_NGANG
-    bh = min(H * SAFE_DOC, canh * SAFE_NGANG)
+    """(bx,by,bw,bh) pixel của vùng chữ căn GIỮA ảnh; lề ngang ≈ lề dọc."""
+    bw = W * (1 - 2 * LE_NGANG)
+    bh = H * SAFE_DOC
     return int((W - bw) / 2), int((H - bh) / 2), int(bw), int(bh)
 
 
@@ -209,13 +208,22 @@ def _mau_vien(mau_chu):
     return (25, 25, 25) if _do_sang(mau_chu) > 140 else (255, 255, 255)
 
 
+def _xep_dong(d, f, lines, bw, wrap):
+    """Danh sách dòng SẼ VẼ cho một cỡ chữ. wrap=False → GIỮ NGUYÊN đúng số dòng
+    người dùng gõ; wrap=True → tự ngắt những dòng quá dài cho vừa bề ngang bw."""
+    rows = []
+    for t in lines:
+        rows.extend(_wrap_dong(d, f, t, bw) if wrap else [t])
+    return rows
+
+
 def ghep_tieu_de(bg_path, tieu_de, khung, out_path):
     """Ghép tiêu đề (giữ xuống dòng người dùng) lên ảnh nền → lưu PNG ra out_path.
 
     Vị trí chữ: có `khung` GHIM TAY thì theo khung; mặc định CĂN GIỮA ảnh, chừa
-    lề 4 phía để FB không cắt mất chữ (_khung_trung_tam). Cân cỡ chữ cho DỄ ĐỌC:
-    phóng to nhất có thể; dòng quá dài TỰ NGẮT thêm; dòng trống chỉ chiếm ~nửa
-    chiều cao. Căn giữa cân mép trên/dưới."""
+    lề 4 phía cân đối (_khung_trung_tam). GIỮ ĐÚNG số dòng người dùng gõ, phóng
+    chữ to nhất còn vừa khung; chỉ khi MỘT dòng quá dài mới tự ngắt dự phòng; dòng
+    trống chỉ chiếm ~nửa chiều cao. Căn giữa cân mép trên/dưới."""
     from PIL import Image, ImageDraw
     im = Image.open(bg_path).convert("RGB")
     W, H = im.size
@@ -227,28 +235,35 @@ def ghep_tieu_de(bg_path, tieu_de, khung, out_path):
     lines = _cac_dong(tieu_de)
     max_px = int(H * 0.20)              # trần cỡ chữ: content ít vẫn to mà không quá khổ
 
-    def _bo_cuc(f):
-        """(các dòng đã ngắt, chiều cao từng dòng, bề rộng lớn nhất) cho 1 cỡ chữ."""
+    def _bo_cuc(f, wrap):
+        """(các dòng, chiều cao từng dòng, bề rộng lớn nhất) cho 1 cỡ chữ.
+        wrap=False → GIỮ đúng số dòng người dùng gõ; wrap=True → tự ngắt dòng dài."""
         a, de = f.getmetrics(); base = a + de
-        rows, hs = [], []
-        for t in lines:
-            for r in _wrap_dong(d, f, t, bw):
-                rows.append(r)
-                hs.append(base * LINE_SP if r.strip() else base * LINE_SP * BLANK_SP)
+        rows = _xep_dong(d, f, lines, bw, wrap)
+        hs = [base * LINE_SP if r.strip() else base * LINE_SP * BLANK_SP for r in rows]
         widest = max([d.textlength(r, font=f) for r in rows if r.strip()] or [0])
         return rows, hs, widest
 
-    # Phóng chữ TO NHẤT mà sau khi ngắt dòng vẫn vừa bề ngang và tổng cao vừa khung.
-    size, best, best_rows, best_hs = 14, _load_font(14), None, None
-    while size < max_px:
-        f = _load_font(size)
-        rows, hs, widest = _bo_cuc(f)
-        if widest > bw or sum(hs) > bh:
-            break
-        best, best_rows, best_hs, size = f, rows, hs, size + 2
+    def _phong_to(wrap):
+        """Cỡ chữ TO NHẤT còn vừa khung (None nếu cỡ nhỏ nhất đã tràn ngang)."""
+        best = brows = bhs = None
+        s = 14
+        while s < max_px:
+            f = _load_font(s)
+            rows, hs, widest = _bo_cuc(f, wrap)
+            if widest > bw or sum(hs) > bh:
+                break
+            best, brows, bhs, s = f, rows, hs, s + 2
+        return best, brows, bhs
 
-    if best_rows is None:              # cỡ nhỏ nhất vẫn tràn → cứ vẽ ở 14px
-        best_rows, best_hs, _ = _bo_cuc(best)
+    # ƯU TIÊN giữ ĐÚNG số dòng người dùng gõ (KHÔNG tự ngắt). Chỉ khi MỘT dòng
+    # quá dài so với khung (hiếm) mới bật tự ngắt dự phòng cho khỏi tràn.
+    best, best_rows, best_hs = _phong_to(wrap=False)
+    if best_rows is None:
+        best, best_rows, best_hs = _phong_to(wrap=True)
+    if best_rows is None:              # vẫn tràn ở cỡ nhỏ nhất → vẽ ở 14px (có ngắt)
+        best = _load_font(14)
+        best_rows, best_hs, _ = _bo_cuc(best, wrap=True)
 
     mau_chu = _mau_chu_tu_nen(_mau_nen(im, bx, by, bw, bh))   # màu chữ nổi nhất theo nền
     vien = _mau_vien(mau_chu)                    # viền ngược sáng-tối với chữ

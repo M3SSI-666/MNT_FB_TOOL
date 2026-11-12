@@ -8,6 +8,15 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 > cập nhật hay lùi, vì chúng nằm ngoài phần mã nguồn. Trước mỗi lần cập nhật,
 > phần mềm tự sao lưu dữ liệu vào `%LOCALAPPDATA%\MNT FB AutoPost\backup`.
 
+## v2.77.13 — 12/11/2026
+
+**Ảnh hook: giữ đúng số dòng đã gõ + chữ rộng cân đối hơn**
+
+Trước đây dòng dài bị tự ngắt làm 4 dòng gõ tay thành 5–6 dòng trên ảnh, và lề
+ngang quá rộng khiến chữ bị bó hẹp ở giữa. Nay: **giữ đúng số dòng bạn gõ** (chỉ
+tự ngắt khi một dòng quá dài so với khung), và **lề ngang cân với lề dọc** (~8%
+mỗi bên) nên chữ trải rộng, to và dễ đọc hơn. Chiều dọc giữ như cũ.
+
 ## v2.77.12 — 12/11/2026
 
 **Ảnh hook: nhúng sẵn 50 nền marketing, tự thay ảnh hook cũ**
