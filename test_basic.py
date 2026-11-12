@@ -5481,6 +5481,26 @@ check("_do_bong_bong dò ra vùng trắng lớn (khung nằm trong vùng đó)",
       bool(_kh_det) and 0.25 < _kh_det["x"] < 0.45 and _kh_det["w"] > 0.3)
 check("_do_bong_bong: trắng tràn 4 biên → None (không nhầm nền thành bong bóng)",
       _hook._do_bong_bong(_ImHk.new("RGB", (400, 300), (255, 255, 255))) is None)
+# Viền chữ tương phản theo nền: nền tối → viền trắng, nền sáng → viền đậm.
+check("_mau_vien: nền xám tối → viền trắng",
+      _hook._mau_vien(_ImHk.new("RGB", (80, 80), (89, 89, 89)), 0, 0, 80, 80) == (255, 255, 255))
+check("_mau_vien: nền kem sáng → viền đậm",
+      _hook._mau_vien(_ImHk.new("RGB", (80, 80), (245, 240, 230)), 0, 0, 80, 80) == (25, 25, 25))
+# Khung chữ MẶC ĐỊNH căn GIỮA + chừa lề: bó trong khung vuông giữa ảnh để FB cắt
+# vuông không mất chữ (ảnh 1280x720 → vùng chữ nằm trong cột giữa, cân hai bên).
+_bx_tt, _by_tt, _bw_tt, _bh_tt = _hook._khung_trung_tam(1280, 720)
+check("_khung_trung_tam: căn giữa ngang (lề trái ≈ lề phải, không sát mép)",
+      abs(_bx_tt - (1280 - _bw_tt - _bx_tt)) <= 1 and _bx_tt > 0)
+check("_khung_trung_tam: bề ngang bó trong khung vuông giữa ảnh (an toàn cắt vuông)",
+      _bx_tt >= (1280 - 720) / 2 and _bx_tt + _bw_tt <= (1280 + 720) / 2)
+# Nền xám tối → ghép chữ phải có điểm VIỀN SÁNG để chữ đỏ nổi lên, đọc được.
+_bg_dk = Path(_tf_hk.mkdtemp()) / "dk.png"
+_ImHk.new("RGB", (1000, 560), (89, 89, 89)).save(_bg_dk)
+_out_dk = Path(_tf_hk.mkdtemp()) / "dk_out.png"
+_hook.ghep_tieu_de(str(_bg_dk), "SĂN NGAY\nCĂN HỘ", "", str(_out_dk))
+_px_dk = list(_ImHk.open(_out_dk).convert("RGB").getdata())
+check("ghep_tieu_de nền tối: có điểm viền SÁNG (chữ nổi trên nền xám)",
+      any(r > 230 and g > 230 and b > 230 for r, g, b in _px_dk))
 # chen_anh_hook_dau: chèn hook làm ảnh #1, GIỮ thứ tự ảnh content phía sau.
 _lp_hk, _td_hk = _hook.chen_anh_hook_dau(["/x/a.jpg", "/x/b.jpg"], None, "ABC", str(_bg_hk), "")
 check("chen_anh_hook_dau: hook là ảnh #1, ảnh content dồn xuống #2,#3",

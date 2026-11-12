@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-hook_anh.py — Ghép "Tiêu đề hook" lên ảnh nền hook (bong bóng rỗng).
+hook_anh.py — Ghép "Tiêu đề hook" (Content Hook) lên ảnh nền hook.
 
 Dùng ở luồng đăng: content bật Hook → bốc 1 ảnh nền hook từ thư viện 'Ảnh hook'
-→ ghép tiêu đề vào bong bóng → CHÈN LÀM ẢNH #1 của bài, ảnh content dồn xuống
+→ ghép tiêu đề CĂN GIỮA ảnh → CHÈN LÀM ẢNH #1 của bài, ảnh content dồn xuống
 #2, #3… Mọi lỗi (thiếu Pillow/font, ảnh hỏng) đều nuốt gọn ở `chen_anh_hook_dau`
 để KHÔNG làm chết phiên đăng — đăng thiếu hook còn hơn không đăng.
 
-Chữ: MỘT màu xanh tím than, font Baloo 2 (kèm trong fonts/), tự co + xuống dòng
-cho vừa "khung chữ". Khung mặc định căn giữa vùng bên phải (khớp ảnh hook mẫu:
-nhân vật trái, bong bóng phải ~60%); ảnh nào đã ghim vị trí thì theo tv_bo.khung.
+Nền hook nên là ẢNH CHỮ NHẬT ĐƠN GIẢN (đơn sắc hoặc hoạ tiết nhẹ, KHÔNG nhân
+vật nổi bật). Chữ: một màu đỏ, font Baloo 2 (kèm trong fonts/), tự co + xuống
+dòng cho CÂN ĐỐI GIỮA ảnh, chừa lề 4 phía để Facebook (nhất là Marketplace cắt
+ảnh vuông ở giữa) không cắt mất chữ. Ảnh nào ghim vị trí tay thì theo tv_bo.khung.
 """
 import os
 import re
@@ -40,8 +41,22 @@ MAU_CHU   = (211, 28, 28)       # đỏ tươi
 WGHT      = 800                 # Baloo 2 là variable font — ép nét đậm
 LINE_SP   = 1.14                # giãn dòng (dòng có chữ)
 BLANK_SP  = 0.45                # dòng TRỐNG chỉ chiếm ~0.45 chiều cao → khỏi phí chỗ, chữ to hơn
-# Khung chữ mặc định (tỉ lệ 0..1 theo kích thước ảnh) — vùng bong bóng bên phải.
-KHUNG_MAC_DINH = {"x": 0.35, "y": 0.13, "w": 0.60, "h": 0.47}
+# Khung dự phòng khi khung GHIM TAY bị hỏng (tỉ lệ 0..1) — căn giữa, chừa lề.
+KHUNG_MAC_DINH = {"x": 0.17, "y": 0.15, "w": 0.66, "h": 0.70}
+
+# Vùng chữ MẶC ĐỊNH (khi không ghim tay) = hình chữ nhật căn GIỮA ảnh, chừa lề 4
+# phía. Bề ngang bó trong CẠNH VUÔNG giữa ảnh (= min(W,H)) để chữ sống sót khi
+# Facebook/Marketplace cắt ảnh về khung vuông ở giữa.
+SAFE_NGANG = 0.86      # bề ngang vùng chữ = 86% cạnh vuông giữa ảnh
+SAFE_DOC   = 0.72      # chiều cao vùng chữ = 72% chiều cao ảnh
+
+
+def _khung_trung_tam(W, H):
+    """(bx,by,bw,bh) pixel của vùng chữ căn GIỮA ảnh, đã chừa lề an toàn."""
+    canh = min(W, H)
+    bw = canh * SAFE_NGANG
+    bh = min(H * SAFE_DOC, canh * SAFE_NGANG)
+    return int((W - bw) / 2), int((H - bh) / 2), int(bw), int(bh)
 
 
 def _doc_khung(khung, W, H):
@@ -149,22 +164,37 @@ def _do_bong_bong(im):
     return {"x": round(fx, 3), "y": round(fy, 3), "w": round(fw, 3), "h": round(fh, 3)}
 
 
+VIEN_TI_LE = 0.07      # bề dày viền chữ = 7% cỡ chữ (viền mảnh, gọn)
+
+
+def _mau_vien(im, bx, by, bw, bh):
+    """Màu VIỀN chữ chọn theo độ sáng vùng nền NGAY SAU chữ: nền tối → viền
+    trắng, nền sáng → viền đậm. Nhờ viền tương phản, chữ đỏ đọc rõ trên MỌI nền
+    (kể cả xám tối), không bị chìm."""
+    from PIL import ImageStat
+    x0 = max(0, bx); y0 = max(0, by)
+    x1 = min(im.width, bx + bw); y1 = min(im.height, by + bh)
+    if x1 <= x0 or y1 <= y0:
+        return (255, 255, 255)
+    lum = ImageStat.Stat(im.crop((x0, y0, x1, y1)).convert("L")).mean[0]
+    return (255, 255, 255) if lum < 150 else (25, 25, 25)
+
+
 def ghep_tieu_de(bg_path, tieu_de, khung, out_path):
     """Ghép tiêu đề (giữ xuống dòng người dùng) lên ảnh nền → lưu PNG ra out_path.
 
-    Vị trí chữ: ưu tiên `khung` đã GHIM TAY; chưa ghim thì TỰ ƯỚM vào bong bóng
-    (_do_bong_bong); dò không ra thì dùng khung căn giữa mặc định. Cân cỡ chữ cho
-    DỄ ĐỌC: phóng to nhất có thể; dòng quá dài TỰ NGẮT thêm; dòng trống chỉ chiếm
-    ~nửa chiều cao. Căn giữa cân mép trên/dưới."""
+    Vị trí chữ: có `khung` GHIM TAY thì theo khung; mặc định CĂN GIỮA ảnh, chừa
+    lề 4 phía để FB không cắt mất chữ (_khung_trung_tam). Cân cỡ chữ cho DỄ ĐỌC:
+    phóng to nhất có thể; dòng quá dài TỰ NGẮT thêm; dòng trống chỉ chiếm ~nửa
+    chiều cao. Căn giữa cân mép trên/dưới."""
     from PIL import Image, ImageDraw
     im = Image.open(bg_path).convert("RGB")
     W, H = im.size
     d = ImageDraw.Draw(im)
-    if not (khung and str(khung).strip()):           # chưa ghim tay → tự ướm bong bóng
-        auto = _do_bong_bong(im)
-        if auto:
-            khung = auto
-    bx, by, bw, bh = _doc_khung(khung, W, H)
+    if khung and str(khung).strip():                 # có ghim tay → theo khung
+        bx, by, bw, bh = _doc_khung(khung, W, H)
+    else:                                            # mặc định → căn giữa, chừa lề
+        bx, by, bw, bh = _khung_trung_tam(W, H)
     lines = _cac_dong(tieu_de)
     max_px = int(H * 0.20)              # trần cỡ chữ: content ít vẫn to mà không quá khổ
 
@@ -191,11 +221,14 @@ def ghep_tieu_de(bg_path, tieu_de, khung, out_path):
     if best_rows is None:              # cỡ nhỏ nhất vẫn tràn → cứ vẽ ở 14px
         best_rows, best_hs, _ = _bo_cuc(best)
 
+    vien = _mau_vien(im, bx, by, bw, bh)         # viền tương phản theo nền
+    sw = max(2, round(getattr(best, "size", 40) * VIEN_TI_LE))
     y = by + (bh - sum(best_hs)) / 2             # căn giữa dọc
     for r, h in zip(best_rows, best_hs):
         if r.strip():
             x = bx + (bw - d.textlength(r, font=best)) / 2   # căn giữa ngang
-            d.text((x, y), r, font=best, fill=MAU_CHU)
+            d.text((x, y), r, font=best, fill=MAU_CHU,
+                   stroke_width=sw, stroke_fill=vien)
         y += h
     im.save(out_path)
     return out_path

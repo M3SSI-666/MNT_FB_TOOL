@@ -8,6 +8,16 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 > cập nhật hay lùi, vì chúng nằm ngoài phần mã nguồn. Trước mỗi lần cập nhật,
 > phần mềm tự sao lưu dữ liệu vào `%LOCALAPPDATA%\MNT FB AutoPost\backup`.
 
+## v2.77.10 — 12/11/2026
+
+**Ảnh hook: chữ căn giữa nền + viền tương phản (bỏ kiểu bong bóng)**
+
+Ảnh hook giờ hợp với nền **ảnh chữ nhật đơn giản** (đơn sắc hoặc hoạ tiết nhẹ,
+không nhân vật nổi bật): Content Hook được viết **căn giữa ảnh**, chừa lề 4 phía
+để Facebook/Marketplace cắt vuông ở giữa **không cắt mất chữ**. Chữ đỏ kèm **viền
+tự chọn theo nền** (nền tối → viền trắng, nền sáng → viền đậm) nên đọc rõ trên
+mọi nền. Bỏ cơ chế dò bong bóng tự động.
+
 ## v2.77.9 — 11/11/2026
 
 **Vá giao diện: badge ảnh hook trên bảng lịch hiện ô vuông**
