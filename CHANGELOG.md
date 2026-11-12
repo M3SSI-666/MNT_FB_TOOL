@@ -8,6 +8,15 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 > cập nhật hay lùi, vì chúng nằm ngoài phần mã nguồn. Trước mỗi lần cập nhật,
 > phần mềm tự sao lưu dữ liệu vào `%LOCALAPPDATA%\MNT FB AutoPost\backup`.
 
+## v2.77.11 — 12/11/2026
+
+**Ảnh hook: màu chữ TỰ CHỌN theo nền cho nổi nhất**
+
+Thay vì cố định một màu, chữ hook giờ **tự chọn màu theo nền** để luôn bật: nền
+tối lạnh/đỏ/tím/trung tính → **chữ vàng gold**; nền tối ấm vàng-nâu-đồng → **chữ
+trắng** (khỏi chìm cùng tông); nền sáng → **chữ xanh đen**. Vẫn kèm viền tương
+phản. Hợp với bộ nền marketing tối (thử 50 nền: 39 ra gold, 11 ra trắng).
+
 ## v2.77.10 — 12/11/2026
 
 **Ảnh hook: chữ căn giữa nền + viền tương phản (bỏ kiểu bong bóng)**

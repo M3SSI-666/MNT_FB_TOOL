@@ -8,9 +8,10 @@ Dùng ở luồng đăng: content bật Hook → bốc 1 ảnh nền hook từ t
 để KHÔNG làm chết phiên đăng — đăng thiếu hook còn hơn không đăng.
 
 Nền hook nên là ẢNH CHỮ NHẬT ĐƠN GIẢN (đơn sắc hoặc hoạ tiết nhẹ, KHÔNG nhân
-vật nổi bật). Chữ: một màu đỏ, font Baloo 2 (kèm trong fonts/), tự co + xuống
-dòng cho CÂN ĐỐI GIỮA ảnh, chừa lề 4 phía để Facebook (nhất là Marketplace cắt
-ảnh vuông ở giữa) không cắt mất chữ. Ảnh nào ghim vị trí tay thì theo tv_bo.khung.
+vật nổi bật). Chữ: font Baloo 2 (kèm trong fonts/), MÀU TỰ CHỌN theo nền cho nổi
+nhất (_mau_chu_tu_nen: nền tối → vàng gold / trắng; nền sáng → xanh đen) + viền
+tương phản, tự co + xuống dòng CÂN ĐỐI GIỮA ảnh, chừa lề 4 phía để Facebook (nhất
+là Marketplace cắt ảnh vuông ở giữa) không cắt mất chữ. Ghim tay thì theo tv_bo.khung.
 """
 import os
 import re
@@ -37,7 +38,12 @@ def _lam_sach_dong(t: str) -> str:
     return t.strip()
 
 FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "Baloo2.ttf")
-MAU_CHU   = (211, 28, 28)       # đỏ tươi
+# Màu chữ TỰ CHỌN theo nền (_mau_chu_tu_nen). Nền tối (như 50 nền marketing) →
+# chữ sáng: VÀNG GOLD cho nền lạnh/đỏ/tím/trung tính (bật nhất), TRẮNG cho nền
+# ẤM vàng-nâu (khỏi chìm cùng tông). Nền sáng (hiếm) → chữ XANH ĐEN.
+MAU_GOLD  = (255, 209, 64)      # vàng gold — nổi nhất trên nền tối lạnh/đỏ/tím
+MAU_TRANG = (255, 255, 255)     # trắng — nền tối ẤM vàng-nâu
+MAU_TOI   = (20, 28, 56)        # xanh đen — khi nền sáng
 WGHT      = 800                 # Baloo 2 là variable font — ép nét đậm
 LINE_SP   = 1.14                # giãn dòng (dòng có chữ)
 BLANK_SP  = 0.45                # dòng TRỐNG chỉ chiếm ~0.45 chiều cao → khỏi phí chỗ, chữ to hơn
@@ -167,17 +173,40 @@ def _do_bong_bong(im):
 VIEN_TI_LE = 0.07      # bề dày viền chữ = 7% cỡ chữ (viền mảnh, gọn)
 
 
-def _mau_vien(im, bx, by, bw, bh):
-    """Màu VIỀN chữ chọn theo độ sáng vùng nền NGAY SAU chữ: nền tối → viền
-    trắng, nền sáng → viền đậm. Nhờ viền tương phản, chữ đỏ đọc rõ trên MỌI nền
-    (kể cả xám tối), không bị chìm."""
+def _do_sang(rgb):
+    """Độ sáng cảm thụ (0..255) của một màu."""
+    return 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
+
+
+def _mau_nen(im, bx, by, bw, bh):
+    """(r,g,b) TRUNG BÌNH của vùng nền ngay sau chữ — để chọn màu chữ/viền."""
     from PIL import ImageStat
     x0 = max(0, bx); y0 = max(0, by)
     x1 = min(im.width, bx + bw); y1 = min(im.height, by + bh)
     if x1 <= x0 or y1 <= y0:
-        return (255, 255, 255)
-    lum = ImageStat.Stat(im.crop((x0, y0, x1, y1)).convert("L")).mean[0]
-    return (255, 255, 255) if lum < 150 else (25, 25, 25)
+        return (0, 0, 0)
+    return tuple(int(v) for v in ImageStat.Stat(im.crop((x0, y0, x1, y1)).convert("RGB")).mean)
+
+
+def _mau_chu_tu_nen(nen):
+    """Chọn MÀU CHỮ nổi nhất trên màu nền `nen` (r,g,b):
+    - nền SÁNG (độ sáng ≥150) → chữ xanh đen;
+    - nền TỐI + ẤM vàng-nâu-olive (hue 12–95, có sắc) → chữ TRẮNG (khỏi chìm
+      cùng tông);
+    - nền TỐI còn lại (xanh dương/đỏ/tím/teal/trung tính) → chữ VÀNG GOLD."""
+    import colorsys
+    if _do_sang(nen) >= 150:
+        return MAU_TOI
+    h, s, _v = colorsys.rgb_to_hsv(nen[0] / 255.0, nen[1] / 255.0, nen[2] / 255.0)
+    if s > 0.20 and 12 <= h * 360 <= 95:         # nền ấm vàng-nâu-olive
+        return MAU_TRANG
+    return MAU_GOLD
+
+
+def _mau_vien(mau_chu):
+    """Viền chữ = NGƯỢC độ sáng chữ (chữ sáng → viền đậm, chữ đậm → viền sáng)
+    để mép chữ luôn tách khỏi nền, đọc rõ trên mọi nền."""
+    return (25, 25, 25) if _do_sang(mau_chu) > 140 else (255, 255, 255)
 
 
 def ghep_tieu_de(bg_path, tieu_de, khung, out_path):
@@ -221,13 +250,14 @@ def ghep_tieu_de(bg_path, tieu_de, khung, out_path):
     if best_rows is None:              # cỡ nhỏ nhất vẫn tràn → cứ vẽ ở 14px
         best_rows, best_hs, _ = _bo_cuc(best)
 
-    vien = _mau_vien(im, bx, by, bw, bh)         # viền tương phản theo nền
+    mau_chu = _mau_chu_tu_nen(_mau_nen(im, bx, by, bw, bh))   # màu chữ nổi nhất theo nền
+    vien = _mau_vien(mau_chu)                    # viền ngược sáng-tối với chữ
     sw = max(2, round(getattr(best, "size", 40) * VIEN_TI_LE))
     y = by + (bh - sum(best_hs)) / 2             # căn giữa dọc
     for r, h in zip(best_rows, best_hs):
         if r.strip():
             x = bx + (bw - d.textlength(r, font=best)) / 2   # căn giữa ngang
-            d.text((x, y), r, font=best, fill=MAU_CHU,
+            d.text((x, y), r, font=best, fill=mau_chu,
                    stroke_width=sw, stroke_fill=vien)
         y += h
     im.save(out_path)
