@@ -5517,6 +5517,35 @@ check("chen_anh_hook_dau: hook là ảnh #1, ảnh content dồn xuống #2,#3",
 check("chen_anh_hook_dau: thiếu tiêu đề hoặc ảnh nền → trả NGUYÊN list (không chèn)",
       _hook.chen_anh_hook_dau(["a"], None, "", str(_bg_hk), "")[0] == ["a"]
       and _hook.chen_anh_hook_dau(["a"], None, "ABC", "/khong/ton/tai.jpg", "")[0] == ["a"])
+# db.seed_hook_nen_mac_dinh: nạp bộ nền mặc định kèm app (1 lần/máy), DỌN ảnh cũ.
+_nguon_seed = Path(_tf_hk.mkdtemp())
+for _i in range(2):
+    _ImHk.new("RGB", (60, 40), (20, 30, 50)).save(_nguon_seed / ("nen_%d.jpg" % _i))
+_hid_sd = db.tv_mang_hook_id()
+_old_sd = db.tv_bo_upsert({"mang_id": _hid_sd, "ma": "", "link_anh": "/media/thuvien/cu.jpg", "su_dung": "Có"})
+db.set_setting("hook_nen_seeded", "")
+_n_sd = db.seed_hook_nen_mac_dinh(nguon_dir=str(_nguon_seed), force=True)
+_rows_sd = db.tv_bo_list(_hid_sd)
+check("seed nền hook: DỌN ảnh cũ + nạp đúng số nền mới (su_dung='Có')",
+      _n_sd == 2 and len(_rows_sd) == 2
+      and all(r["su_dung"] == "Có" for r in _rows_sd)
+      and all((r["link_anh"] or "").startswith("/media/thuvien/") for r in _rows_sd)
+      and not any(r["id"] == _old_sd for r in _rows_sd))
+import os as _os_sd
+_mnt_sd = _os_sd.environ.pop("MNT_TEST", None)
+try:
+    _again_sd = db.seed_hook_nen_mac_dinh(nguon_dir=str(_nguon_seed))   # cờ=1 → bỏ qua
+finally:
+    if _mnt_sd is not None:
+        _os_sd.environ["MNT_TEST"] = _mnt_sd
+check("seed nền hook: đã seed rồi (cờ=1) → chạy lại KHÔNG nạp lại",
+      db.get_setting("hook_nen_seeded") == "1" and _again_sd == 0
+      and len(db.tv_bo_list(_hid_sd)) == 2)
+check("seed nền hook: chế độ test (không force) → bỏ qua, không đụng dữ liệu",
+      db.seed_hook_nen_mac_dinh(nguon_dir=str(_nguon_seed)) == 0)
+for _r in db.tv_bo_list(_hid_sd):          # dọn sạch để test hook phía sau bắt đầu rỗng
+    db.tv_bo_xoa(_r["id"])
+db.set_setting("hook_nen_seeded", "")
 # db.chon_anh_hook: bốc 1 ảnh từ thư viện "Ảnh hook" (xoay vòng theo nick).
 _hid_pk = db.tv_mang_hook_id()
 _bh_pk = db.tv_bo_upsert({"mang_id": _hid_pk, "ma": "", "link_anh": "/media/thuvien/hk.jpg",

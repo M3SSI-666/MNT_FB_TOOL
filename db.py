@@ -827,6 +827,13 @@ def init_db():
         _add_col("content", "tieu_de_hook", "tieu_de_hook TEXT DEFAULT ''")
         _add_col("tv_bo",   "khung",        "khung TEXT DEFAULT ''")
     print(f"✅ DB initialized: {DB_PATH}")
+    # Nạp bộ nền hook mặc định (1 lần/máy) — SAU khi transaction migration đóng.
+    try:
+        _n_seed = seed_hook_nen_mac_dinh()
+        if _n_seed:
+            print(f"  ↪ Đã nạp {_n_seed} nền hook mặc định (dọn ảnh hook cũ)")
+    except Exception as _e:
+        print(f"  ⚠️  Nạp nền hook mặc định lỗi (bỏ qua): {_e}")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -2084,6 +2091,57 @@ def tv_bo_upsert(data: dict) -> int:
 def tv_bo_xoa(bo_id: int):
     with _conn() as con:
         con.execute("DELETE FROM tv_bo WHERE id=?", (bo_id,))
+
+
+def seed_hook_nen_mac_dinh(nguon_dir=None, force: bool = False) -> int:
+    """MỘT LẦN mỗi máy: DỌN SẠCH ảnh cũ trong tab 'Ảnh hook' rồi NẠP bộ nền mặc
+    định (50 nền marketing tối) đóng gói kèm phần mềm ở thư mục `hook_nen/`.
+
+    - Chặn chạy lại bằng cờ settings 'hook_nen_seeded'. Bỏ qua khi chạy test
+      (MNT_TEST) trừ khi `force=True` (test gọi thẳng với nguồn riêng).
+    - XÓA ảnh hook cũ là CÓ CHỦ Ý (Duong chốt): nền cũ kiểu nhân vật+bong bóng
+      không hợp bố cục căn giữa mới. Xóa cả bản ghi lẫn file trên đĩa.
+    Trả số nền đã nạp."""
+    import os, shutil, hashlib
+    if not force:
+        if os.environ.get("MNT_TEST"):
+            return 0
+        if get_setting("hook_nen_seeded") == "1":
+            return 0
+    from config import THUVIEN_MEDIA_DIR, BASE_DIR
+    if nguon_dir is None:
+        nguon_dir = os.path.join(str(BASE_DIR), "hook_nen")
+    if not os.path.isdir(nguon_dir):
+        return 0                              # chưa có bộ nền → để lần sau thử lại
+    hid = tv_mang_hook_id()
+    if not hid:
+        return 0
+    # 1) Dọn sạch ảnh hook CŨ (bản ghi + file trên đĩa)
+    from storage import delete_image
+    for bo in tv_bo_list(hid):
+        for u in (bo.get("link_anh") or "").split(","):
+            u = u.strip()
+            if u:
+                delete_image(u)
+        tv_bo_xoa(bo["id"])
+    # 2) Nạp bộ nền mặc định (tên file trên đĩa = 12-hex ổn định theo tên nguồn)
+    exts = {".jpg", ".jpeg", ".png", ".webp"}
+    dest_dir = Path(THUVIEN_MEDIA_DIR); dest_dir.mkdir(parents=True, exist_ok=True)
+    n = 0
+    for f in sorted(os.listdir(nguon_dir)):
+        ext = os.path.splitext(f)[1].lower()
+        if ext not in exts:
+            continue
+        ten = hashlib.md5(f.encode("utf-8")).hexdigest()[:12] + ext
+        try:
+            shutil.copyfile(os.path.join(nguon_dir, f), dest_dir / ten)
+        except OSError:
+            continue
+        tv_bo_upsert({"mang_id": hid, "ma": "", "link_anh": "/media/thuvien/" + ten,
+                      "su_dung": "Có", "ghi_chu": "", "khung": ""})
+        n += 1
+    set_setting("hook_nen_seeded", "1")
+    return n
 
 
 def tv_bo_update_field(bo_id: int, field: str, value):

@@ -8,6 +8,18 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 > cập nhật hay lùi, vì chúng nằm ngoài phần mã nguồn. Trước mỗi lần cập nhật,
 > phần mềm tự sao lưu dữ liệu vào `%LOCALAPPDATA%\MNT FB AutoPost\backup`.
 
+## v2.77.12 — 12/11/2026
+
+**Ảnh hook: nhúng sẵn 50 nền marketing, tự thay ảnh hook cũ**
+
+Phần mềm giờ **đóng gói sẵn 50 nền marketing tối** (navy, xanh lá, teal, đỏ rượu,
+nâu-đồng, tím…). Khi cập nhật lên bản này, **mỗi máy tự nạp 50 nền vào tab "Ảnh
+hook"** — khỏi phải import tay từng máy.
+
+⚠️ **Lưu ý:** việc nạp này **tự dọn sạch ảnh hook CŨ** (kiểu nhân vật + bong bóng)
+vì không còn hợp bố cục chữ căn giữa mới. Chạy **một lần** mỗi máy. Nếu muốn giữ
+ảnh hook cũ, hãy sao lưu thư viện trước khi cập nhật.
+
 ## v2.77.11 — 12/11/2026
 
 **Ảnh hook: màu chữ TỰ CHỌN theo nền cho nổi nhất**
