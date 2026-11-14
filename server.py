@@ -117,11 +117,19 @@ def _exe_dang_chay():
 
 
 def _lenh_con(ten_file_py, *tham_so):
-    """Câu lệnh để khởi chạy một tiến trình con của phần mềm."""
+    """Câu lệnh để khởi chạy một tiến trình con của phần mềm.
+
+    Chạy thẳng thì dùng ĐƯỜNG DẪN TUYỆT ĐỐI của file .py (BASE_DIR), không dùng
+    tên trần. Lý do — gặp thật 14/11/2026: máy chạy SONG SONG hai phần mềm (MNT
+    AutoPost + Scale Tool, bản tách ra từ chính mã này). Tên trần
+    "scheduler.py" thì dòng lệnh runner của hai bên giống hệt nhau, và bước
+    "dọn runner lạ" lúc mở bên này diệt luôn runner bên kia (Scale Tool đã diệt
+    4 runner của MNT). Đường dẫn tuyệt đối = dấu hiệu riêng của bản cài này.
+    """
     if DA_BIEN_DICH:
         # server.exe --lam scheduler homestay
         return [_exe_dang_chay(), "--lam", Path(ten_file_py).stem, *tham_so]
-    return [sys.executable, "-X", "utf8", ten_file_py, *tham_so]
+    return [sys.executable, "-X", "utf8", str(BASE_DIR / ten_file_py), *tham_so]
 
 
 # Tên tiến trình cần soi khi đi tìm runner mồ côi.
@@ -138,8 +146,11 @@ def _dau_hieu(ten_file_py, *them):
     Dò nhầm chuỗi thì không tìm ra runner nào để diệt.
     """
     goc = Path(ten_file_py).stem
-    return ((f"--lam {goc}", *them) if DA_BIEN_DICH
-            else (f"{goc}.py", *them))
+    # LUÔN kèm đường dẫn của CHÍNH bản cài này (file .py tuyệt đối, hoặc file
+    # exe đang chạy) — không bao giờ nhận nhầm runner của phần mềm khác cùng
+    # chạy trên máy (Scale Tool). Xem `_lenh_con`.
+    return ((_exe_dang_chay(), f"--lam {goc}", *them) if DA_BIEN_DICH
+            else (str(BASE_DIR / f"{goc}.py"), *them))
 
 
 # Link kho code. Phải khớp REPO_URL trong UPDATE.bat — hai nơi lệch nhau thì

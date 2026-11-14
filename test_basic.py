@@ -3313,10 +3313,29 @@ check("đang ở bản mới nhất thì không mời gì",
 #     đã biên dịch server.exe  --lam scheduler homestay
 # Sai chỗ này thì bấm nút Chạy runner là lỗi 500 — đã xảy ra thật khi thử bản
 # biên dịch đầu tiên.
-check("chạy thẳng: lệnh runner gọi đúng file .py",
-      server._lenh_con("scheduler.py", "homestay")[1:] == ["-X", "utf8", "scheduler.py", "homestay"])
-check("chạy thẳng: dấu hiệu runner là tên file .py",
-      server._dau_hieu("scheduler.py", "homestay") == ("scheduler.py", "homestay"))
+check("chạy thẳng: lệnh runner gọi đúng file .py (đường dẫn TUYỆT ĐỐI của bản cài này)",
+      server._lenh_con("scheduler.py", "homestay")[1:]
+      == ["-X", "utf8", str(server.BASE_DIR / "scheduler.py"), "homestay"])
+check("chạy thẳng: dấu hiệu runner là đường dẫn tuyệt đối file .py",
+      server._dau_hieu("scheduler.py", "homestay")
+      == (str(server.BASE_DIR / "scheduler.py"), "homestay"))
+
+# Hai phần mềm chạy SONG SONG trên một máy (MNT AutoPost + Scale Tool) — gặp thật
+# 14/11/2026: mở Scale Tool thì bước "dọn runner lạ" diệt sạch 4 runner của MNT,
+# vì dòng lệnh "python scheduler.py homestay" của hai bên giống hệt nhau. Dấu hiệu
+# đi tìm giờ kèm đường dẫn bản cài: runner của phần mềm KHÁC không bao giờ khớp.
+_ds_gia = [(111, r'"C:\Python\python.exe" -X utf8 scheduler.py homestay'),
+           (222, r'"C:\Python\python.exe" -X utf8 C:\Users\X\Desktop\Scale_Tool\scheduler.py thue'),
+           (333, '"C:\\Python\\python.exe" -X utf8 '
+                 + str(server.BASE_DIR / "scheduler.py") + " ban")]
+check("dọn runner: KHÔNG nhận runner của phần mềm khác cùng máy",
+      server._loc_pid(_ds_gia, server._dau_hieu("scheduler.py")) == [333])
+_bat_kpdl = Path("KHOI_PHUC_DU_LIEU.bat").read_text(encoding="utf-8", errors="replace")
+check("KHOI_PHUC_DU_LIEU.bat KHÔNG diệt theo tên tiến trình (pythonw.exe / server.exe)",
+      "taskkill /f /im" not in _bat_kpdl.lower() and "dung_het.py" in _bat_kpdl
+      and ":8080" in _bat_kpdl)
+check("KHOI_PHUC.bat chỉ diệt runner trong thư mục của chính nó",
+      "%~dp0scheduler.py" in Path("KHOI_PHUC.bat").read_text(encoding="utf-8", errors="replace"))
 check("chạy thẳng: soi tiến trình python",
       server._TEN_TIEN_TRINH == ["python.exe", "pythonw.exe"])
 # Lệnh khởi chạy và dấu hiệu đi tìm PHẢI khớp nhau, không thì khởi chạy được

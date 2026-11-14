@@ -8,6 +8,17 @@ Mỗi mục dưới đây là một bản có thể cài. Nút **Cập nhật** 
 > cập nhật hay lùi, vì chúng nằm ngoài phần mã nguồn. Trước mỗi lần cập nhật,
 > phần mềm tự sao lưu dữ liệu vào `%LOCALAPPDATA%\MNT FB AutoPost\backup`.
 
+## v2.77.14 — 15/11/2026
+
+**Chạy chung máy với phần mềm khác mà không tắt runner của nhau**
+
+Trước đây, lúc mở/đóng phần mềm, bước "dọn runner lạ" tắt **mọi** runner trên
+máy có dòng lệnh `scheduler.py` — kể cả runner của một phần mềm khác cùng mã gốc
+đang chạy song song (Scale Tool). Đã gặp thật: mở Scale Tool là 4 runner của MNT
+bị tắt. Nay runner chạy bằng **đường dẫn đầy đủ của thư mục cài** và chỉ dọn đúng
+runner của mình. `KHOI_PHUC_DU_LIEU.bat` cũng thôi tắt mọi `pythonw.exe` trên
+máy — chỉ dừng đúng server cổng 8080 + runner của bản này.
+
 ## v2.77.13 — 12/11/2026
 
 **Ảnh hook: giữ đúng số dòng đã gõ + chữ rộng cân đối hơn**
